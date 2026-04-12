@@ -70,6 +70,7 @@
     "highlight.js": "^11.11.1",
     "js-yaml": "^4.1.1",
     "mode-watcher": "^1.1.0",
+    "random-words": "^2.0.1",
     "svelte-exmarkdown": "^5.0.2",
     "svelte-sonner": "^1.0.1",
     "tailwind-variants": "^1.0.0",
