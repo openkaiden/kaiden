@@ -23,7 +23,6 @@ import type { IconSize } from 'svelte-fa';
 
 import { configurationProperties } from '/@/stores/configurationProperties';
 import { EventStore } from '/@/stores/event-store';
-import { createNavigationFlowsEntry } from '/@/stores/navigation/navigation-registry-flows.svelte';
 
 import { createNavigationAgentWorkspacesEntry } from './navigation-registry-agent-workspaces.svelte';
 import { createNavigationExtensionEntry, createNavigationExtensionGroup } from './navigation-registry-extension.svelte';
@@ -73,7 +72,6 @@ const init = (): void => {
   */
   values.push(createNavigationAgentWorkspacesEntry());
   values.push(createNavigationMcpEntry());
-  values.push(createNavigationFlowsEntry());
   values.push(createNavigationSkillsEntry());
   values.push(createNavigationRagEntry());
   values.push(createNavigationExtensionEntry());
