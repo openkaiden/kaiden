@@ -136,6 +136,7 @@
     "lint-staged": "^16.2.7",
     "minimist": "^1.2.8",
     "msw": "^2.12.7",
+    "mustache": "^4.2.0",
     "prettier": "^3.8.0",
     "proxy": "^2.2.0",
     "typescript": "5.9.3",
