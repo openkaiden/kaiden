@@ -721,8 +721,8 @@ importers:
   packages/renderer:
     dependencies:
       '@ai-sdk/svelte':
-        specifier: ^4.0.156
-        version: 4.0.156(svelte@5.47.0)(zod@4.3.6)
+        specifier: ^4.0.158
+        version: 4.0.158(svelte@5.47.0)(zod@4.3.6)
       '@ai-sdk/ui-utils':
         specifier: ^1.2.11
         version: 1.2.11(zod@4.3.6)
@@ -987,8 +987,8 @@ packages:
     resolution: {integrity: sha512-oGMAgGoQdBXbZqNG0Ze56CHjDZ1IDYOwGYxYjO5KLSlz5HiNQ9udIXsPZ61VWaHGZ5XW/jyjmr6t2xz2jGVwbQ==}
     engines: {node: '>=18'}
 
-  '@ai-sdk/svelte@4.0.156':
-    resolution: {integrity: sha512-16mGvs96rRuCd5RzhokKQ/UB/uckCPKyuA7pBM20dNp0xq3Y2A/6d1JTacVpk3eldZqYeON5jfVr6FNhk63yOQ==}
+  '@ai-sdk/svelte@4.0.158':
+    resolution: {integrity: sha512-SJl8YWjDRxHy6m9UDxNLYqUiyQ9nZbJL8P3gBn5g9zFU5fjX+MXN6aFiAs4B9vSXoB8Nv1J9ckZbv56glOUnHA==}
     peerDependencies:
       svelte: ^5.31.0
 
@@ -2868,6 +2868,12 @@ packages:
 
   ai@6.0.156:
     resolution: {integrity: sha512-uyi/5LYbugHQxZsR2PeAFOZEL4WqKkzZw4pv0nQvvdgxgVOsM7snOmGrYkp5fShxH/vnd08SXvHCVTX7oUW7xQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  ai@6.0.158:
+    resolution: {integrity: sha512-gLTp1UXFtMqKUi3XHs33K7UFglbvojkxF/aq337TxnLGOhHIW9+GyP2jwW4hYX87f1es+wId3VQoPRRu9zEStQ==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -7886,10 +7892,10 @@ snapshots:
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/svelte@4.0.156(svelte@5.47.0)(zod@4.3.6)':
+  '@ai-sdk/svelte@4.0.158(svelte@5.47.0)(zod@4.3.6)':
     dependencies:
       '@ai-sdk/provider-utils': 4.0.23(zod@4.3.6)
-      ai: 6.0.156(zod@4.3.6)
+      ai: 6.0.158(zod@4.3.6)
       svelte: 5.47.0
     transitivePeerDependencies:
       - zod
@@ -9976,6 +9982,14 @@ snapshots:
       indent-string: 4.0.0
 
   ai@6.0.156(zod@4.3.6):
+    dependencies:
+      '@ai-sdk/gateway': 3.0.95(zod@4.3.6)
+      '@ai-sdk/provider': 3.0.8
+      '@ai-sdk/provider-utils': 4.0.23(zod@4.3.6)
+      '@opentelemetry/api': 1.9.0
+      zod: 4.3.6
+
+  ai@6.0.158(zod@4.3.6):
     dependencies:
       '@ai-sdk/gateway': 3.0.95(zod@4.3.6)
       '@ai-sdk/provider': 3.0.8
