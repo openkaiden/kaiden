@@ -27,9 +27,7 @@ import { ClaudeProviderSymbol, SecretStorageSymbol } from '/@/inject/symbol';
 
 import { ClaudeInferenceManager, TOKENS_KEY } from './claude-inference-manager';
 
-vi.mock(import('@ai-sdk/anthropic'), () => ({
-  createAnthropic: vi.fn(),
-}));
+vi.mock(import('@ai-sdk/anthropic'));
 
 vi.mock(import('@anthropic-ai/sdk'));
 
