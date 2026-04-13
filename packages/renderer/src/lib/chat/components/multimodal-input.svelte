@@ -460,7 +460,7 @@ $effect((): (() => void) | void => {
       bind:ref={textareaRef}
       placeholder="Send a message..."
       bind:value={():string => input, setInput}
-      class="max-h-[calc(25dvh)] min-h-[24px] resize-none overflow-y-auto border-0 bg-transparent text-base! shadow-none focus-visible:ring-0"
+      class="max-h-[calc(25dvh)] min-h-[24px] resize-none overflow-y-auto border-0 bg-transparent dark:bg-transparent text-base! shadow-none focus-visible:ring-0"
       rows={2}
       autofocus
       onpaste={handlePaste}
