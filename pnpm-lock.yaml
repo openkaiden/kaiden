@@ -811,7 +811,7 @@ importers:
         version: 5.47.0
       svelte-check:
         specifier: ^4.3.5
-        version: 4.4.4(picomatch@4.0.3)(svelte@5.47.0)(typescript@5.9.3)
+        version: 4.4.4(picomatch@4.0.4)(svelte@5.47.0)(typescript@5.9.3)
       svelte-eslint-parser:
         specifier: ^1.4.1
         version: 1.5.1(svelte@5.47.0)
@@ -3070,9 +3070,6 @@ packages:
   bcrypt-ts@8.0.1:
     resolution: {integrity: sha512-ILrO7U7YieyG+71KVIVVuPCmjN8N9DY3gYs4OiEoJvW8A5HOe4eerRhLD0Rgo2CAyANRKssFGXmLF74zJz094g==}
     engines: {node: '>=20'}
-
-  before-after-hook@3.0.2:
-    resolution: {integrity: sha512-Nik3Sc0ncrMK4UUdXQmAnRtzmNQTAAXmXIopizwZ1W1t8QmfJj+zL4OA2I7XPTPW5z5TDqv4hRo/JzouDJnX3A==}
 
   better-sqlite3@12.9.0:
     resolution: {integrity: sha512-wqUv4Gm3toFpHDQmaKD4QhZm3g1DjUBI0yzS4UBl6lElUmXFYdTQmmEDpAFa5o8FiFiymURypEnfVHzILKaxqQ==}
@@ -10182,8 +10179,6 @@ snapshots:
 
   bcrypt-ts@8.0.1: {}
 
-  before-after-hook@3.0.2: {}
-
   better-sqlite3@12.9.0:
     dependencies:
       bindings: 1.5.0
@@ -14682,11 +14677,11 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
-  svelte-check@4.4.4(picomatch@4.0.3)(svelte@5.47.0)(typescript@5.9.3):
+  svelte-check@4.4.4(picomatch@4.0.4)(svelte@5.47.0)(typescript@5.9.3):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       chokidar: 4.0.3
-      fdir: 6.5.0(picomatch@4.0.3)
+      fdir: 6.5.0(picomatch@4.0.4)
       picocolors: 1.1.1
       sade: 1.8.1
       svelte: 5.47.0
