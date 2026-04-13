@@ -4,6 +4,8 @@ import { onMount } from 'svelte';
 import { router } from 'tinro';
 
 import IconImage from '/@/lib/appearance/IconImage.svelte';
+import { guidedSetupSteps } from '/@/lib/guided-setup/guided-setup-steps';
+import GuidedSetup from '/@/lib/guided-setup/GuidedSetup.svelte';
 import DesktopIcon from '/@/lib/images/DesktopIcon.svelte';
 import { onboardingList } from '/@/stores/onboarding';
 import { providerInfos } from '/@/stores/providers';
@@ -16,6 +18,7 @@ import { WelcomeUtils } from './welcome-utils';
 
 export let showWelcome = false;
 export let showTelemetry = false;
+let showGuidedSetup = false;
 
 let telemetry = true;
 let telemetryMessages: TelemetryMessages;
@@ -92,11 +95,13 @@ function toggleOnboardingSelection(providerName: string): void {
   });
 }
 
-function startOnboardingQueue(): void {
-  const selectedProviders = onboardingProviders.filter(provider => provider.selected);
-  const extensionIds = selectedProviders.map(provider => provider.extension);
-  const queryParams = new URLSearchParams({ ids: extensionIds.join(',') }).toString();
-  router.goto(`/global-onboarding?${queryParams}`);
+function openGuidedSetup(): void {
+  showGuidedSetup = true;
+}
+
+async function handleGuidedSetupClose(): Promise<void> {
+  showGuidedSetup = false;
+  await closeWelcome();
 }
 </script>
 
@@ -189,25 +194,19 @@ function startOnboardingQueue(): void {
     <!-- Footer - button bar -->
     <div class="flex justify-end flex-none bg-[var(--pd-content-bg)] p-8">
       <div class="flex flex-row">
-        <!-- If Providers have any onboarding elements selected, create a button that says "Start onboarding" rather than Skip -->
-        {#if onboardingProviders && onboardingProviders.filter(o => o.selected).length > 0}
-          <!-- We will "always" show the "Skip" button
-          in-case anything were to happen with the Start onboarding button / sequence not working correctly.
-          we do not want the user to not be able to continue. -->
-          <Button
-            type="secondary"
-            on:click={closeWelcome}>Skip</Button>
+        <Button
+          type="secondary"
+          on:click={closeWelcome}>Skip</Button>
+        {#if guidedSetupSteps.length > 0}
           <Button
             class="ml-2"
-            on:click={async (): Promise<void> => {
-              await closeWelcome();
-              startOnboardingQueue();
-            }}>Start onboarding</Button>
-        {:else}
-          <Button
-            on:click={closeWelcome}>Skip</Button>
+            on:click={openGuidedSetup}>Start guided setup</Button>
         {/if}
       </div>
     </div>
   </div>
+{/if}
+
+{#if showGuidedSetup}
+  <GuidedSetup onclose={handleGuidedSetupClose} />
 {/if}

@@ -332,3 +332,9 @@ test('Expect that releaseNotesBanner.show configuration value is not set to curr
   await waitRender({});
   expect(vi.mocked(window.updateConfigurationValue)).not.toBeCalledWith(`releaseNotesBanner.show`, '1.0.0');
 });
+
+test('Expect "Start guided setup" button is hidden when no steps are registered', async () => {
+  await waitRender({ showWelcome: true });
+
+  expect(screen.queryByRole('button', { name: 'Start guided setup' })).not.toBeInTheDocument();
+});
