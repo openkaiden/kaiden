@@ -18,3 +18,4 @@
 
 export const ExtensionContextSymbol = Symbol.for('ExtensionContext');
 export const ClaudeProviderSymbol = Symbol.for('ClaudeProvider');
+export const SecretStorageSymbol = Symbol.for('SecretStorage');

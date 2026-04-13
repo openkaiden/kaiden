@@ -21,10 +21,12 @@ import type { Container } from 'inversify';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ClaudeExtension } from '/@/claude-extension';
+import { ClaudeInferenceManager } from '/@/manager/claude-inference-manager';
 import { ClaudeSkillsManager } from '/@/manager/claude-skills-manager';
 
 vi.mock(import('@openkaiden/api'));
 vi.mock(import('/@/manager/claude-skills-manager'));
+vi.mock(import('/@/manager/claude-inference-manager'));
 
 class TestClaudeExtension extends ClaudeExtension {
   getContainer(): Container | undefined {
@@ -45,6 +47,7 @@ describe('ClaudeExtension', () => {
   test('activate', async () => {
     await claudeExtension.activate();
     expect(ClaudeSkillsManager.prototype.init).toHaveBeenCalled();
+    expect(ClaudeInferenceManager.prototype.init).toHaveBeenCalled();
   });
 
   test('activate handles error during container creation', async () => {
@@ -59,5 +62,6 @@ describe('ClaudeExtension', () => {
     await claudeExtension.activate();
     await claudeExtension.deactivate();
     expect(ClaudeSkillsManager.prototype.dispose).toHaveBeenCalled();
+    expect(ClaudeInferenceManager.prototype.dispose).toHaveBeenCalled();
   });
 });

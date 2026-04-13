@@ -21,6 +21,7 @@ import { provider } from '@openkaiden/api';
 import type { Container } from 'inversify';
 
 import { InversifyBinding } from '/@/inject/inversify-binding';
+import { ClaudeInferenceManager } from '/@/manager/claude-inference-manager';
 import { ClaudeSkillsManager } from '/@/manager/claude-skills-manager';
 
 export class ClaudeExtension {
@@ -29,6 +30,7 @@ export class ClaudeExtension {
   #inversifyBinding: InversifyBinding | undefined;
   #container: Container | undefined;
   #claudeSkillsManager: ClaudeSkillsManager | undefined;
+  #claudeInferenceManager: ClaudeInferenceManager | undefined;
 
   constructor(extensionContext: ExtensionContext) {
     this.#extensionContext = extensionContext;
@@ -58,7 +60,15 @@ export class ClaudeExtension {
       throw e;
     }
 
+    try {
+      this.#claudeInferenceManager = await this.getContainer()?.getAsync(ClaudeInferenceManager);
+    } catch (e) {
+      console.error('Error while creating the Claude inference manager', e);
+      throw e;
+    }
+
     await this.#claudeSkillsManager?.init();
+    await this.#claudeInferenceManager?.init();
   }
 
   protected getContainer(): Container | undefined {
@@ -69,5 +79,7 @@ export class ClaudeExtension {
     await this.#inversifyBinding?.dispose();
     this.#claudeSkillsManager?.dispose();
     this.#claudeSkillsManager = undefined;
+    this.#claudeInferenceManager?.dispose();
+    this.#claudeInferenceManager = undefined;
   }
 }

@@ -19,8 +19,9 @@
 import type { ExtensionContext, Provider } from '@openkaiden/api';
 import { Container } from 'inversify';
 
-import { ClaudeProviderSymbol, ExtensionContextSymbol } from '/@/inject/symbol';
+import { ClaudeProviderSymbol, ExtensionContextSymbol, SecretStorageSymbol } from '/@/inject/symbol';
 import { managersModule } from '/@/manager/_manager-module';
+import { ClaudeInferenceManager } from '/@/manager/claude-inference-manager';
 import { ClaudeSkillsManager } from '/@/manager/claude-skills-manager';
 
 export class InversifyBinding {
@@ -39,10 +40,12 @@ export class InversifyBinding {
 
     this.#container.bind(ExtensionContextSymbol).toConstantValue(this.#extensionContext);
     this.#container.bind(ClaudeProviderSymbol).toConstantValue(this.#provider);
+    this.#container.bind(SecretStorageSymbol).toConstantValue(this.#extensionContext.secrets);
 
     await this.#container.load(managersModule);
 
     await this.#container.getAsync(ClaudeSkillsManager);
+    await this.#container.getAsync(ClaudeInferenceManager);
     return this.#container;
   }
 

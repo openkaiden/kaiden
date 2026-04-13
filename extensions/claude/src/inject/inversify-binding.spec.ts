@@ -16,20 +16,22 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { ExtensionContext, Provider } from '@openkaiden/api';
+import type { ExtensionContext, Provider, SecretStorage } from '@openkaiden/api';
 import { Container } from 'inversify';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { managersModule } from '/@/manager/_manager-module';
+import { ClaudeInferenceManager } from '/@/manager/claude-inference-manager';
 import { ClaudeSkillsManager } from '/@/manager/claude-skills-manager';
 
 import { InversifyBinding } from './inversify-binding';
-import { ClaudeProviderSymbol, ExtensionContextSymbol } from './symbol';
+import { ClaudeProviderSymbol, ExtensionContextSymbol, SecretStorageSymbol } from './symbol';
 
 let inversifyBinding: InversifyBinding;
 
 const providerMock = {} as Provider;
-const extensionContextMock = {} as ExtensionContext;
+const secretStorageMock = {} as SecretStorage;
+const extensionContextMock = { secrets: secretStorageMock } as ExtensionContext;
 
 vi.mock(import('inversify'));
 
@@ -46,9 +48,11 @@ describe('InversifyBinding', () => {
     const container = await inversifyBinding.initBindings();
 
     await container.getAsync(ClaudeSkillsManager);
+    await container.getAsync(ClaudeInferenceManager);
 
     expect(vi.mocked(Container.prototype.bind)).toHaveBeenCalledWith(ExtensionContextSymbol);
     expect(vi.mocked(Container.prototype.bind)).toHaveBeenCalledWith(ClaudeProviderSymbol);
+    expect(vi.mocked(Container.prototype.bind)).toHaveBeenCalledWith(SecretStorageSymbol);
 
     expect(vi.mocked(Container.prototype.load)).toHaveBeenCalledWith(managersModule);
   });

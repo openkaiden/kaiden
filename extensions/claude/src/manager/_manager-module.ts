@@ -18,10 +18,12 @@
 
 import { ContainerModule } from 'inversify';
 
+import { ClaudeInferenceManager } from './claude-inference-manager';
 import { ClaudeSkillsManager } from './claude-skills-manager';
 
 const managersModule = new ContainerModule(options => {
   options.bind<ClaudeSkillsManager>(ClaudeSkillsManager).toSelf().inSingletonScope();
+  options.bind<ClaudeInferenceManager>(ClaudeInferenceManager).toSelf().inSingletonScope();
 });
 
 export { managersModule };
