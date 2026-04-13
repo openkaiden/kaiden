@@ -3,6 +3,7 @@ import './app.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 
 import { tablePersistence } from '@podman-desktop/ui-svelte';
+import { onDestroy } from 'svelte';
 import { router } from 'tinro';
 
 import AgentWorkspaceCreate from '/@/lib/agent-workspaces/AgentWorkspaceCreate.svelte';
@@ -18,6 +19,7 @@ import RAGEnvironmentDetails from '/@/lib/rag/RAGEnvironmentDetails.svelte';
 import RAGEnvironmentList from '/@/lib/rag/RAGEnvironmentList.svelte';
 import PinActions from '/@/lib/statusbar/PinActions.svelte';
 import { handleNavigation } from '/@/navigation';
+import { showChatWindow } from '/@/stores/chat-window';
 import { kubernetesNoCurrentContext } from '/@/stores/kubernetes-no-current-context';
 import type { KubernetesNavigationRequest } from '/@api/kubernetes-navigation';
 import type { NavigationRequest } from '/@api/navigation-request';
@@ -108,9 +110,38 @@ router.mode.memory();
 
 //remember from where we come to preference pages
 let nonSettingsPage = '/';
+
+function isChatRoute(url: string): boolean {
+  return url === '/' || url.startsWith('/chat');
+}
+
+// When chat setting loads, redirect as needed.
+// undefined = still loading (no redirect), false = disabled, true = enabled.
+let chatConfigLoaded = false;
+let currentUrl: string | undefined;
+const unsubscribeShowChatWindow = showChatWindow.subscribe(value => {
+  if (value === undefined) return;
+  if (value === false && currentUrl !== undefined && isChatRoute(currentUrl)) {
+    router.goto('/agent-workspaces');
+  } else if (value === true && !chatConfigLoaded && currentUrl === '/') {
+    // Force tinro to re-match after chat routes mount on initial load
+    router.goto('/');
+  }
+  chatConfigLoaded = true;
+});
+
+onDestroy(unsubscribeShowChatWindow);
+
 router.subscribe(function (navigation) {
-  if (navigation.url !== undefined && !navigation.url.startsWith('/preferences')) {
-    nonSettingsPage = navigation.url;
+  if (navigation.url !== undefined) {
+    currentUrl = navigation.url;
+    if (!navigation.url.startsWith('/preferences')) {
+      nonSettingsPage = navigation.url;
+    }
+  }
+  // Guard: redirect away from chat routes when chat is disabled
+  if (navigation.url !== undefined && $showChatWindow === false && isChatRoute(navigation.url)) {
+    router.goto('/agent-workspaces');
   }
 });
 
@@ -170,6 +201,7 @@ tablePersistence.storage = new PodmanDesktopStoragePersist();
         <SendFeedback />
         <ToastHandler />
         <ToastTaskNotifications />
+        {#if $showChatWindow}
         <Route path="/" breadcrumb="Chat" navigationHint="root">
           <CustomChat />
         </Route>
@@ -179,6 +211,7 @@ tablePersistence.storage = new PodmanDesktopStoragePersist();
         <Route path="/chat/:chatId/*" let:meta breadcrumb="Chat">
           <CustomChat chatId={meta.params.chatId} />
         </Route>
+        {/if}
 
         <Route path="/agent-workspaces/*" breadcrumb="Agent Workspaces" navigationHint="root" firstmatch>
           <Route path="/" breadcrumb="Agent Workspaces" navigationHint="root">

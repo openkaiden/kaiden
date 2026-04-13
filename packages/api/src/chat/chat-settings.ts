@@ -19,4 +19,5 @@
 export enum ChatSettings {
   SectionName = 'chat',
   MaxDndFileSizeMB = 'maxAttachmentFileSize',
+  ShowChatWindow = 'showChatWindow',
 }

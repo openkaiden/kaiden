@@ -97,6 +97,15 @@ export class NavigationBar {
     return this.navigateTo(this.extensionsLink, ExtensionsPage);
   }
 
+  async ensureChatWindowEnabled(): Promise<void> {
+    if (await this.chatLink.isVisible()) {
+      return;
+    }
+    const settingsPage = await this.navigateToSettingsPage();
+    const preferencesPage = await settingsPage.openPreferences();
+    await preferencesPage.enableChatWindow();
+  }
+
   async navigateToSettingsPage(): Promise<SettingsPage> {
     const settingsPage = new SettingsPage(this.page);
     // Settings nav link is a toggle: clicking while on Settings exits it

@@ -31,6 +31,11 @@ export class ChatInit {
       title: 'Chat',
       type: 'object',
       properties: {
+        [ChatSettings.SectionName + '.' + ChatSettings.ShowChatWindow]: {
+          description: 'Show or hide the chat window.',
+          type: 'boolean',
+          default: false,
+        },
         [ChatSettings.SectionName + '.' + ChatSettings.MaxDndFileSizeMB]: {
           description: 'Maximum file size (in MB) for attachments. Files exceeding this limit are rejected.',
           type: 'number',

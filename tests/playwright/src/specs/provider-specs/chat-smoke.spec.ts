@@ -28,6 +28,7 @@ test.use({
 
 test.beforeEach(async ({ page, navigationBar, chatPage }) => {
   await waitForNavigationReady(page);
+  await navigationBar.ensureChatWindowEnabled();
   await navigationBar.navigateToChatPage();
   await chatPage.ensureChatSidebarVisible();
   const existingCount = await chatPage.getChatHistoryCount();

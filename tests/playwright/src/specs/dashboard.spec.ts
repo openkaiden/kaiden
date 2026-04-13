@@ -22,8 +22,9 @@ import { expect, workerTest as test } from '../fixtures/electron-app';
 
 test.describe
   .serial('App start', { tag: '@smoke' }, () => {
-    test.beforeEach(async ({ page }) => {
+    test.beforeEach(async ({ page, navigationBar }) => {
       await waitForNavigationReady(page);
+      await navigationBar.ensureChatWindowEnabled();
     });
 
     test('[APP-01] Navigation bar is visible and contains all expected navigation links', async ({ navigationBar }) => {

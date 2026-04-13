@@ -60,4 +60,14 @@ export class SettingsPreferencesPage extends BasePage {
     await preferenceLink.click();
     await expect(this.getPreferenceContent(option)).toBeVisible();
   }
+
+  async enableChatWindow(): Promise<void> {
+    await this.selectPreference('Chat');
+    const toggle = this.page.getByRole('checkbox', { name: 'Show or hide the chat window.' });
+    await toggle.check({ force: true });
+    // Wait for the Chat nav link to appear after the async config update propagates
+    await expect(
+      this.page.getByRole('navigation', { name: 'AppNavigation' }).getByRole('link', { name: 'Chat' }),
+    ).toBeVisible();
+  }
 }

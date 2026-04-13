@@ -4,6 +4,7 @@
 import { onDestroy, onMount } from 'svelte';
 import type { TinroRouteMeta } from 'tinro';
 
+import { showChatWindow } from '/@/stores/chat-window';
 import { NavigationPage } from '/@api/navigation-page';
 
 import { AppearanceSettings } from '../../main/src/plugin/appearance-settings';
@@ -64,6 +65,7 @@ function onDidChangeConfigurationCallback(e: Event): void {
 <nav
   class="group w-leftnavbar {minNavbarWidth} flex flex-col hover:overflow-y-none bg-[var(--pd-global-nav-bg)] border-[var(--pd-global-nav-bg-border)] border-r-[1px]"
   aria-label="AppNavigation">
+  {#if $showChatWindow}
   <NavItem href="/" tooltip="Chat" bind:meta={meta}>
     <div class="relative w-full">
       <div class="flex flex-col items-center w-full h-full">
@@ -79,6 +81,7 @@ function onDidChangeConfigurationCallback(e: Event): void {
       </div>
     </div>
   </NavItem>
+  {/if}
   {#each $navigationRegistry as navigationRegistryItem, index (index)}
     {#if navigationRegistryItem.items && navigationRegistryItem.type === 'group'}
       <!-- This is a group, list all items from the entry -->

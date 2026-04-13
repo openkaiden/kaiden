@@ -23,8 +23,9 @@ import { render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { readable } from 'svelte/store';
 import type { TinroRouteMeta } from 'tinro';
-import { beforeAll, expect, test, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 
+import { showChatWindow } from '/@/stores/chat-window';
 import * as kubeContextStore from '/@/stores/kubernetes-contexts-state';
 import type { ContributionInfo } from '/@api/contribution-info';
 import type { ContextGeneralState } from '/@api/kubernetes-contexts-states';
@@ -44,22 +45,7 @@ vi.mock('/@/stores/kubernetes-contexts-state', async () => {
   return {};
 });
 
-// fake the window object
-beforeAll(() => {
-  Object.defineProperty(window, 'events', { value: eventsMock });
-  Object.defineProperty(window, 'getConfigurationValue', { value: vi.fn() });
-  Object.defineProperty(window, 'sendNavigationItems', { value: vi.fn() });
-  onDidChangeConfiguration.addEventListener = vi.fn().mockImplementation((message: string, callback: () => void) => {
-    callbacks.set(message, callback);
-  });
-});
-
-test('Test rendering of the navigation bar with empty items', async (_arg: unknown) => {
-  const meta = {
-    url: '/',
-  } as unknown as TinroRouteMeta;
-
-  // mock no kubernetes resources
+function mockEmptyKubernetesContextStores(): void {
   vi.mocked(kubeContextStore).kubernetesCurrentContextDeployments = readable<KubernetesObject[]>([]);
   vi.mocked(kubeContextStore).kubernetesCurrentContextPods = readable<KubernetesObject[]>([]);
   vi.mocked(kubeContextStore).kubernetesCurrentContextServices = readable<KubernetesObject[]>([]);
@@ -73,6 +59,38 @@ test('Test rendering of the navigation bar with empty items', async (_arg: unkno
   vi.mocked(kubeContextStore).kubernetesCurrentContextState = readable<ContextGeneralState>({} as ContextGeneralState);
   vi.mocked(kubeContextStore).kubernetesCurrentContextCronJobs = readable<KubernetesObject[]>([]);
   vi.mocked(kubeContextStore).kubernetesCurrentContextJobs = readable<KubernetesObject[]>([]);
+}
+
+// fake the window object
+beforeAll(() => {
+  Object.defineProperty(window, 'events', { value: eventsMock });
+  Object.defineProperty(window, 'getConfigurationValue', { value: vi.fn() });
+  Object.defineProperty(window, 'sendNavigationItems', { value: vi.fn() });
+  onDidChangeConfiguration.addEventListener = vi.fn().mockImplementation((message: string, callback: () => void) => {
+    callbacks.set(message, callback);
+  });
+});
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  callbacks.clear();
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  onDidChangeConfiguration.addEventListener = vi.fn().mockImplementation((message: string, callback: () => void) => {
+    callbacks.set(message, callback);
+  });
+  showChatWindow.set(true);
+  mockEmptyKubernetesContextStores();
+});
+
+afterEach(() => {
+  showChatWindow.set(false);
+  vi.useRealTimers();
+});
+
+test('Test rendering of the navigation bar with empty items', async (_arg: unknown) => {
+  const meta = {
+    url: '/',
+  } as unknown as TinroRouteMeta;
 
   // init navigation registry
   await fetchNavigationRegistries();
@@ -113,6 +131,29 @@ test('Test contributions', () => {
     meta,
     exitSettingsCallback: () => {},
   });
+});
+
+test('Chat nav item hidden when showChatWindow is false', async () => {
+  const meta = {
+    url: '/',
+  } as unknown as TinroRouteMeta;
+
+  await fetchNavigationRegistries();
+
+  showChatWindow.set(true);
+  render(AppNavigation, {
+    meta,
+    exitSettingsCallback: () => {},
+  });
+
+  await vi.waitFor(() => expect(screen.getByRole('link', { name: 'Chat' })).toBeInTheDocument());
+
+  showChatWindow.set(false);
+
+  await vi.waitFor(() => expect(screen.queryByRole('link', { name: 'Chat' })).not.toBeInTheDocument());
+
+  // Settings still visible
+  expect(screen.getByRole('link', { name: 'Settings' })).toBeInTheDocument();
 });
 
 test('NAV_BAR_LAYOUT updates on configuration change', async () => {

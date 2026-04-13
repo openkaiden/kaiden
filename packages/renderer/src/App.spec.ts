@@ -21,8 +21,9 @@ import { render, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get, writable } from 'svelte/store';
 import { router } from 'tinro';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { showChatWindow } from '/@/stores/chat-window';
 import * as kubernetesNoCurrentContext from '/@/stores/kubernetes-no-current-context';
 
 import App from './App.svelte';
@@ -87,6 +88,7 @@ const messages = new Map<string, (args: unknown) => void>();
 
 beforeEach(() => {
   vi.resetAllMocks();
+  showChatWindow.set(true);
   router.goto('/');
   (window.events as unknown) = {
     receive: vi.fn().mockImplementation((channel, func) => {
@@ -97,6 +99,10 @@ beforeEach(() => {
   (window.getConfigurationValue as unknown) = vi.fn();
   vi.mocked(window.inferenceGetChats).mockResolvedValue([]);
   vi.mocked(kubernetesNoCurrentContext).kubernetesNoCurrentContext = writable(false);
+});
+
+afterEach(() => {
+  showChatWindow.set(false);
 });
 
 test('test /image/run/* route', async () => {
