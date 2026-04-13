@@ -36,6 +36,7 @@ const enabledSkill: SkillInfo = {
   description: 'A test skill',
   path: '/skills/my-skill',
   enabled: true,
+  type: 'custom',
 };
 
 const disabledSkill: SkillInfo = {
@@ -43,6 +44,7 @@ const disabledSkill: SkillInfo = {
   description: 'A test skill',
   path: '/skills/my-skill',
   enabled: false,
+  type: 'custom',
 };
 
 test('should show "Disable skill" title when skill is enabled', () => {

@@ -37,6 +37,7 @@ beforeEach(() => {
     description: 'A test skill',
     path: '/skills/test-skill',
     enabled: true,
+    type: 'custom',
   });
 });
 
