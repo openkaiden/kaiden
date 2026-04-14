@@ -159,7 +159,7 @@
     "@types/stream-json": "^1.7.8",
     "@types/winreg": "^1.2.36",
     "adm-zip": "^0.5.16",
-    "ai": "^6.0.158",
+    "ai": "^6.0.159",
     "bcrypt-ts": "^8.0.1",
     "better-sqlite3": "^12.9.0",
     "check-disk-space": "^3.4.0",
