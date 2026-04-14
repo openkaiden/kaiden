@@ -36,7 +36,7 @@ export class MilvusConnection implements api.RagProviderConnection {
   ) {
     this.connectionStatus = running ? 'started' : 'stopped';
     const server: MCPServerDetail = {
-      name: 'mcp-server-milvus',
+      name: `kaiden.milvus.mcp-server-milvus-${name}`,
       version: '0.1.1.dev8',
       description: 'Milvus MCP Server for RAG',
       packages: [
