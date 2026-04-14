@@ -242,7 +242,12 @@ test('should prefill fields from parsed file when browsing', async () => {
   await fireEvent.click(createButton);
 
   expect(window.createSkill).toHaveBeenCalledWith(
-    { name: 'parsed-skill', description: 'Parsed description', content: '# Body content' },
+    {
+      name: 'parsed-skill',
+      description: 'Parsed description',
+      content: '# Body content',
+      sourcePath: '/home/user/skills/SKILL.md',
+    },
     '/test/skills',
   );
 });

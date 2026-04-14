@@ -37,7 +37,12 @@ async function create(): Promise<void> {
 
   try {
     await window.createSkill(
-      { name: name.trim(), description: description.trim(), content: skillContent.trim() || undefined },
+      {
+        name: name.trim(),
+        description: description.trim(),
+        content: skillContent.trim() || undefined,
+        sourcePath: selectedFile || undefined,
+      },
       target,
     );
     onclose();

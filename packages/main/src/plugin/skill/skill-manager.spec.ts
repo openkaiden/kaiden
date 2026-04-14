@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -633,6 +633,57 @@ test('createSkill with extension-registered target should write to that target d
     expect.stringContaining('name: new-skill'),
     'utf-8',
   );
+});
+
+test('createSkill with sourcePath should copy supporting files from source directory', async () => {
+  vi.mocked(existsSync).mockReturnValue(false);
+  vi.mocked(mkdir).mockResolvedValue(undefined);
+  vi.mocked(writeFile).mockResolvedValue(undefined);
+  vi.mocked(readdir).mockResolvedValue(['SKILL.md', 'examples.md', 'references'] as unknown as Awaited<
+    ReturnType<typeof readdir>
+  >);
+  vi.mocked(cp).mockResolvedValue(undefined);
+
+  const skillManager = createSkillManager();
+  await skillManager.init();
+
+  const sourceDir = resolve('/source/skills/my-skill');
+  const sourcePath = join(sourceDir, 'SKILL.md');
+
+  await skillManager.createSkill(
+    {
+      name: 'imported-skill',
+      description: 'An imported skill',
+      content: '# Imported',
+      sourcePath,
+    },
+    SKILLS_DIR,
+  );
+
+  const expectedDir = join(SKILLS_DIR, 'imported-skill');
+  expect(cp).toHaveBeenCalledWith(join(sourceDir, 'examples.md'), join(expectedDir, 'examples.md'), {
+    recursive: true,
+  });
+  expect(cp).toHaveBeenCalledWith(join(sourceDir, 'references'), join(expectedDir, 'references'), {
+    recursive: true,
+  });
+  expect(cp).not.toHaveBeenCalledWith(join(sourceDir, 'SKILL.md'), join(expectedDir, 'SKILL.md'), expect.anything());
+});
+
+test('createSkill without sourcePath should not copy any files', async () => {
+  vi.mocked(existsSync).mockReturnValue(false);
+  vi.mocked(mkdir).mockResolvedValue(undefined);
+  vi.mocked(writeFile).mockResolvedValue(undefined);
+
+  const skillManager = createSkillManager();
+  await skillManager.init();
+
+  await skillManager.createSkill(
+    { name: 'manual-skill', description: 'A manual skill', content: '# Manual' },
+    SKILLS_DIR,
+  );
+
+  expect(cp).not.toHaveBeenCalled();
 });
 
 test('createSkill should throw when target is not registered', async () => {

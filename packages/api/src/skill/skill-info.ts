@@ -36,6 +36,7 @@ export interface SkillFolderInfo {
 
 export interface SkillFileContent extends SkillMetadata {
   content?: string;
+  sourcePath?: string;
 }
 
 export const SKILL_SECTION = 'skills';
