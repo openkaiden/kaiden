@@ -69,6 +69,7 @@ test('Expect coding agent options displayed', () => {
   expect(screen.getByText('Claude')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Cursor' })).toBeInTheDocument();
   expect(screen.getByText('Goose')).toBeInTheDocument();
+  expect(screen.getByText('OpenCode')).toBeInTheDocument();
 });
 
 test('Expect agent badges displayed', () => {

@@ -5,6 +5,7 @@ import {
   faGears,
   faHome,
   faLock,
+  faO,
   faPlus,
   faRobot,
   faServer,
@@ -27,6 +28,13 @@ import { NavigationPage } from '/@api/navigation-page';
 
 // Mock coding agents until real provider connections are available
 const agentOptions = [
+  {
+    title: 'OpenCode',
+    badge: 'Anomaly',
+    value: 'opencode',
+    icon: faO,
+    description: 'Open-source terminal-based coding agent',
+  },
   {
     title: 'Claude',
     badge: 'Anthropic',
