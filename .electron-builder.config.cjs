@@ -23,6 +23,10 @@ const { flipFuses, FuseVersion, FuseV1Options } = require('@electron/fuses');
 const product = require('./product.json');
 const fs = require('node:fs');
 
+function getKdnOutputDir(platform, arch) {
+  return path.resolve('./kdn-binary', `${platform}-${arch}`);
+}
+
 if (process.env.VITE_APP_VERSION === undefined) {
   const now = new Date();
   process.env.VITE_APP_VERSION = `${now.getUTCFullYear() - 2000}.${now.getUTCMonth() + 1}.${now.getUTCDate()}-${
@@ -102,6 +106,51 @@ async function packageRemoteExtensions(context) {
 }
 
 /**
+ * Downloads the kdn CLI binary for the target platform/arch.
+ * Fetches the latest version from GitHub releases.
+ */
+async function downloadKdn(context) {
+  const downloadScript = path.join('packages', 'main', 'dist', 'download-kdn.cjs');
+  if (!fs.existsSync(downloadScript)) {
+    throw new Error(`${downloadScript} not found. Run "pnpm run build:main" before packaging.`);
+  }
+
+  const archMap = {
+    [Arch.x64]: 'x64',
+    [Arch.arm64]: 'arm64',
+  };
+  const arch = archMap[context.arch];
+  if (!arch) {
+    throw new Error(`unsupported arch ${context.arch} for kdn bundling`);
+  }
+
+  const outputDir = getKdnOutputDir(context.electronPlatformName, arch);
+
+  await new Promise((resolve, reject) => {
+    execFile(
+      'node',
+      [downloadScript, `--output=${outputDir}`, `--platform=${context.electronPlatformName}`, `--arch=${arch}`],
+      { maxBuffer: 10 * 1024 * 1024, timeout: 10 * 60 * 1000 },
+      (error, stdout, stderr) => {
+        console.log(stdout);
+        if (stderr) console.log(stderr);
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      },
+    );
+  });
+
+  context.packager.config.extraResources.push({
+    from: outputDir,
+    to: 'kdn',
+    filter: ['!.kdn-version'],
+  });
+}
+
+/**
  * @type {import('electron-builder').Configuration}
  * @see https://www.electron.build/configuration/configuration
  */
@@ -122,6 +171,9 @@ const config = {
     // download & package remote extensions
     await packageRemoteExtensions(context);
 
+    // download & bundle kdn CLI binary
+    await downloadKdn(context);
+
     // include product.json
     context.packager.config.extraResources.push({
       from: 'product.json',
@@ -134,6 +186,8 @@ const config = {
       context.appOutDir.endsWith('mac-universal-x64-temp') ||
       context.appOutDir.endsWith('mac-universal-arm64-temp')
     ) {
+      // Reset to defaults only — the universal temp dirs are copies of the
+      // platform-specific builds which already contain product.json and kdn.
       context.packager.config.extraResources = DEFAULT_ASSETS;
       context.packager.config.extraResources.push(`${PODMAN_EXTENSION_ASSETS}/podman-installer-macos-universal*.pkg`);
       return;
