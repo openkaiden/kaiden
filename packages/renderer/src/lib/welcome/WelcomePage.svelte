@@ -95,6 +95,13 @@ function toggleOnboardingSelection(providerName: string): void {
   });
 }
 
+function startOnboardingQueue(): void {
+  const selectedProviders = onboardingProviders.filter(provider => provider.selected);
+  const extensionIds = selectedProviders.map(provider => provider.extension);
+  const queryParams = new URLSearchParams({ ids: extensionIds.join(',') }).toString();
+  router.goto(`/global-onboarding?${queryParams}`);
+}
+
 function openGuidedSetup(): void {
   showGuidedSetup = true;
 }
@@ -194,9 +201,24 @@ async function handleGuidedSetupClose(): Promise<void> {
     <!-- Footer - button bar -->
     <div class="flex justify-end flex-none bg-[var(--pd-content-bg)] p-8">
       <div class="flex flex-row">
-        <Button
-          type="secondary"
-          on:click={closeWelcome}>Skip</Button>
+        <!-- If Providers have any onboarding elements selected, create a button that says "Start onboarding" rather than Skip -->
+        {#if onboardingProviders && onboardingProviders.filter(o => o.selected).length > 0}
+          <!-- We will "always" show the "Skip" button
+          in-case anything were to happen with the Start onboarding button / sequence not working correctly.
+          we do not want the user to not be able to continue. -->
+          <Button
+            type="secondary"
+            on:click={closeWelcome}>Skip</Button>
+          <Button
+            class="ml-2"
+            on:click={async (): Promise<void> => {
+              await closeWelcome();
+              startOnboardingQueue();
+            }}>Start onboarding</Button>
+        {:else}
+          <Button
+            on:click={closeWelcome}>Skip</Button>
+        {/if}
         {#if guidedSetupSteps.length > 0}
           <Button
             class="ml-2"
