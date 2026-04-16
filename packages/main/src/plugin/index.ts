@@ -2957,7 +2957,7 @@ export class PluginSystem {
         return taskConnectionUtils.withTask({
           loggerId,
           tokenId,
-          title: `Creating ${providerName ?? 'RAG'} provider`,
+          title: `Creating ${providerName ?? 'Knowledge Database'} provider`,
           navigateToTask: () => navigationManager.navigateToProviderTask(internalProviderId, taskId),
           execute: (logger: LoggerWithEnd, token?: containerDesktopAPI.CancellationToken) =>
             providerRegistry.createRagProviderConnection(internalProviderId, params, logger, token),

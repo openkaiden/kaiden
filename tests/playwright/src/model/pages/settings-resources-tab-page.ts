@@ -64,7 +64,7 @@ export class SettingsResourcesPage extends BasePage {
   private getConnectionTypeLabel(connectionType: ConnectionType): string {
     switch (connectionType) {
       case 'rag':
-        return '(RAG)';
+        return '(Knowledge Database)';
       default:
         return '(Inference)';
     }

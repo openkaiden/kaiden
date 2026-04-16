@@ -137,7 +137,7 @@ function selectChunkProvider(id: string): void {
                   <div class="tile-title text-base font-medium text-[var(--pd-modal-text)]">{provider.name}</div>
                 </div>
                 <div class="tile-description text-xs text-[var(--pd-content-text)] leading-relaxed">
-                  Advanced document parsing and chunking for RAG applications
+                  Advanced document parsing and chunking for knowledge database applications
                 </div>
               </button>
             {/each}

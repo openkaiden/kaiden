@@ -38,7 +38,7 @@ export class MilvusConnection implements api.RagProviderConnection {
     const server: MCPServerDetail = {
       name: `kaiden.milvus.mcp-server-milvus-${name}`,
       version: '0.1.1.dev8',
-      description: 'Milvus MCP Server for RAG',
+      description: 'Milvus MCP Server for Knowledge Databases',
       packages: [
         {
           registryType: 'pypi',

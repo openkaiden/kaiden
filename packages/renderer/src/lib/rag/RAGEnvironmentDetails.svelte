@@ -35,7 +35,7 @@ async function handleAddFile(): Promise<void> {
 
   try {
     const selectedFiles = await window.openDialog({
-      title: 'Select file to add to RAG environment',
+      title: 'Select file to add to knowledge database',
       selectors: ['openFile'],
       filters: [
         {
@@ -63,13 +63,13 @@ async function handleAddFile(): Promise<void> {
 
       if (!result) {
         window
-          .showMessageBox({ title: 'Error', message: 'Error indexing file in RAG environment' })
+          .showMessageBox({ title: 'Error', message: 'Error indexing file in knowledge database' })
           .catch(console.error);
       }
     }
   } catch (error: unknown) {
     window
-      .showMessageBox({ title: 'Error', message: 'Error indexing file in RAG environment', detail: String(error) })
+      .showMessageBox({ title: 'Error', message: 'Error indexing file in knowledge database', detail: String(error) })
       .catch(console.error);
   }
 }
@@ -83,12 +83,12 @@ async function handleRemoveFile(filePath: string): Promise<void> {
 
       if (!result) {
         window
-          .showMessageBox({ title: 'Error', message: 'Error removing file from RAG environment' })
+          .showMessageBox({ title: 'Error', message: 'Error removing file from knowledge database' })
           .catch(console.error);
       }
     } catch (error: unknown) {
       window
-        .showMessageBox({ title: 'Error', message: 'Error removing file from RAG environment', detail: String(error) })
+        .showMessageBox({ title: 'Error', message: 'Error removing file from knowledge database', detail: String(error) })
         .catch(console.error);
     }
   }, `remove file from environment ${ragEnvironment.name}`);
@@ -138,7 +138,7 @@ async function handleRemoveFile(filePath: string): Promise<void> {
         </div>
       {:else}
         <div class="flex items-center justify-center h-full">
-          <div class="text-sm text-[var(--pd-content-text-secondary)]">RAG environment not found.</div>
+          <div class="text-sm text-[var(--pd-content-text-secondary)]">Knowledge database not found.</div>
         </div>
       {/if}
     </Route>
@@ -178,7 +178,7 @@ async function handleRemoveFile(filePath: string): Promise<void> {
                   onclick={handleRemoveFile.bind(undefined, file.path)}
                   type="link"
                   aria-label="Remove file"
-                  title="Remove file from RAG environment"
+                  title="Remove file from knowledge database"
                   icon="fas fa-trash"
                 >
                 </Button>
@@ -186,13 +186,13 @@ async function handleRemoveFile(filePath: string): Promise<void> {
             {/each}
           {:else}
             <div class="flex items-center justify-center py-12">
-              <div class="text-sm text-[var(--pd-content-text-secondary)]">No files in this RAG environment.</div>
+              <div class="text-sm text-[var(--pd-content-text-secondary)]">No files in this knowledge database.</div>
             </div>
           {/if}
         </div>
       {:else}
         <div class="flex items-center justify-center h-full">
-          <div class="text-sm text-[var(--pd-content-text-secondary)]">RAG environment not found.</div>
+          <div class="text-sm text-[var(--pd-content-text-secondary)]">Knowledge database not found.</div>
         </div>
       {/if}
     </Route>
@@ -212,7 +212,7 @@ async function handleRemoveFile(filePath: string): Promise<void> {
         </div>
       {:else}
         <div class="flex items-center justify-center h-full">
-          <div class="text-sm text-[var(--pd-content-text-secondary)]">RAG environment not found.</div>
+          <div class="text-sm text-[var(--pd-content-text-secondary)]">Knowledge database not found.</div>
         </div>
       {/if}
     </Route>
@@ -228,7 +228,7 @@ async function handleRemoveFile(filePath: string): Promise<void> {
         </div>
       {:else}
         <div class="flex items-center justify-center h-full">
-          <div class="text-sm text-[var(--pd-content-text-secondary)]">RAG environment not found.</div>
+          <div class="text-sm text-[var(--pd-content-text-secondary)]">Knowledge database not found.</div>
         </div>
       {/if}
     </Route>

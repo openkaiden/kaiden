@@ -77,9 +77,9 @@ async function handleCreateEnvironment(
     await window.createRagEnvironment(name, ragConnection, chunkerId);
     closeCreateModal();
   } catch (error: unknown) {
-    console.error('Failed to create RAG environment:', error);
+    console.error('Failed to create knowledge database:', error);
     window
-      .showMessageBox({ title: 'Error', message: 'Error creating RAG environment', detail: String(error) })
+      .showMessageBox({ title: 'Error', message: 'Error creating knowledge database', detail: String(error) })
       .catch(console.error);
   }
 }

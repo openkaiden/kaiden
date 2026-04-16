@@ -225,12 +225,12 @@ tablePersistence.storage = new PodmanDesktopStoragePersist();
             <SkillsList />
           </Route>
         </Route>
-        <!-- RAG Environments -->
-        <Route path="/rag-environments/*" breadcrumb="RAG Environments" navigationHint="root" firstmatch>
-          <Route path="/" breadcrumb="RAG Environments" navigationHint="root">
+        <!-- Knowledge Databases -->
+        <Route path="/rag-environments/*" breadcrumb="Knowledge Databases" navigationHint="root" firstmatch>
+          <Route path="/" breadcrumb="Knowledge Databases" navigationHint="root">
             <RAGEnvironmentList />
           </Route>
-          <Route path="/:name/*" let:meta breadcrumb="RAG Environment Details" navigationHint="details">
+          <Route path="/:name/*" let:meta breadcrumb="Knowledge Database Details" navigationHint="details">
             <RAGEnvironmentDetails name={decodeURIComponent(meta.params.name)} />
           </Route>
         </Route>

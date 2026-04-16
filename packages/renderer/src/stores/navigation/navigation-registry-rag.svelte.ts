@@ -21,10 +21,10 @@ import type { NavigationRegistryEntry } from './navigation-registry';
 
 export function createNavigationRagEntry(): NavigationRegistryEntry {
   const registry: NavigationRegistryEntry = {
-    name: 'RAG',
+    name: 'Knowledge Databases',
     icon: { iconComponent: RAGIcon },
     link: '/rag-environments',
-    tooltip: 'RAG',
+    tooltip: 'Knowledge Databases',
     type: 'entry',
     get counter() {
       return 0;

@@ -27,7 +27,7 @@ test.describe('RAG page - empty state', { tag: '@smoke' }, () => {
   test('[RAG-01] RAG page shows empty state when no environments exist', async ({ workerNavigationBar }) => {
     const ragPage = await workerNavigationBar.navigateToRagPage();
     await expect(ragPage.heading).toBeVisible();
-    await expect(ragPage.noEnvironmentsMessage).toHaveText('No RAG environments are currently configured.');
+    await expect(ragPage.noEnvironmentsMessage).toHaveText('No knowledge databases are currently configured.');
     await expect(ragPage.table).not.toBeVisible();
   });
 });

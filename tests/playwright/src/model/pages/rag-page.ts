@@ -33,7 +33,7 @@ export class RagPage extends BaseTablePage {
     super(page, 'rag-environments');
     this.header = this.page.getByRole('region', { name: 'header' });
     this.heading = this.header.getByRole('heading', { name: 'Knowledge Bases' });
-    this.noEnvironmentsMessage = this.content.getByText('No RAG environments are currently configured.');
+    this.noEnvironmentsMessage = this.content.getByText('No knowledge databases are currently configured.');
     this.newKnowledgeBaseButton = this.header.getByRole('button', { name: 'New Knowledge Base' });
   }
 
