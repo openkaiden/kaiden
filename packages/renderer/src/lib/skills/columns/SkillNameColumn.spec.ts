@@ -19,7 +19,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { render, screen } from '@testing-library/svelte';
-import { expect, test } from 'vitest';
+import { beforeEach, expect, test, vi } from 'vitest';
 
 import type { SkillInfo } from '/@api/skill/skill-info';
 
@@ -33,6 +33,11 @@ const skill: SkillInfo = {
   managed: true,
 };
 
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.resetAllMocks();
+});
+
 test('should display the skill name', () => {
   render(SkillNameColumn, { object: skill });
 
@@ -43,15 +48,16 @@ test('should display the skill name', () => {
 test('should have correct styling', () => {
   render(SkillNameColumn, { object: skill });
 
-  const text = screen.getByText('my-test-skill');
-  expect(text).toHaveClass('text-[var(--pd-table-body-text-highlight)]');
-  expect(text).toHaveClass('overflow-hidden');
-  expect(text).toHaveClass('text-ellipsis');
+  const button = screen.getByRole('button', { name: 'my-test-skill' });
+  expect(button).toBeInTheDocument();
+  const label = screen.getByText('my-test-skill');
+  expect(label).toHaveClass('overflow-hidden');
+  expect(label).toHaveClass('text-ellipsis');
 });
 
 test('should have the skill name as title attribute', () => {
   render(SkillNameColumn, { object: skill });
 
-  const text = screen.getByTitle('my-test-skill');
-  expect(text).toBeInTheDocument();
+  const button = screen.getByTitle('my-test-skill');
+  expect(button).toBeInTheDocument();
 });

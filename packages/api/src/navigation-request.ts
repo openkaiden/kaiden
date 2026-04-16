@@ -79,6 +79,9 @@ export interface NavigationParameters {
   [NavigationPage.AGENT_WORKSPACES]: never;
   [NavigationPage.AGENT_WORKSPACE_CREATE]: never;
   [NavigationPage.SKILLS]: never;
+  [NavigationPage.SKILL_DETAILS]: {
+    name: string;
+  };
   [NavigationPage.RAG_ENVIRONMENT_DETAILS]: {
     name: string;
   };

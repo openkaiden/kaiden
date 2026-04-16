@@ -83,6 +83,7 @@ import PVCDetails from './lib/pvc/PVCDetails.svelte';
 import PVCList from './lib/pvc/PVCList.svelte';
 import ServiceDetails from './lib/service/ServiceDetails.svelte';
 import ServicesList from './lib/service/ServicesList.svelte';
+import SkillDetails from './lib/skills/SkillDetails.svelte';
 import SkillsList from './lib/skills/SkillsList.svelte';
 import StatusBar from './lib/statusbar/StatusBar.svelte';
 import IconsStyle from './lib/style/IconsStyle.svelte';
@@ -223,6 +224,9 @@ tablePersistence.storage = new PodmanDesktopStoragePersist();
         <Route path="/skills/*" breadcrumb="Skills" navigationHint="root" firstmatch>
           <Route path="/" breadcrumb="Skills" navigationHint="root">
             <SkillsList />
+          </Route>
+          <Route path="/:name/*" let:meta breadcrumb="Skill Details" navigationHint="details">
+            <SkillDetails name={decodeURIComponent(meta.params.name)} />
           </Route>
         </Route>
         <!-- Knowledge Databases -->

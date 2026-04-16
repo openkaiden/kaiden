@@ -376,10 +376,11 @@ export class SkillManager {
     return { name: metadata.name, description: metadata.description, content: body };
   }
 
-  /** Lists all file/directory names inside the skill's folder. */
+  /** Lists all file/directory names inside the skill's folder. Directories have a trailing slash. */
   async listSkillFolderContent(name: string): Promise<string[]> {
     const skill = this.findSkillByName(name);
-    return readdir(skill.path);
+    const entries = await readdir(skill.path, { withFileTypes: true });
+    return entries.map(entry => (entry.isDirectory() ? `${entry.name}/` : entry.name));
   }
 
   private findSkillByName(name: string): SkillInfo {

@@ -494,13 +494,15 @@ test('listSkillFolderContent should return folder entries for a registered skill
   const skillManager = createSkillManager();
   const skill = await skillManager.registerSkill(join(SKILLS_DIR, 'my-test-skill'));
 
-  vi.mocked(readdir).mockResolvedValue(['SKILL.md', 'utils.ts', 'templates'] as unknown as Awaited<
-    ReturnType<typeof readdir>
-  >);
+  vi.mocked(readdir).mockResolvedValue([
+    { name: 'SKILL.md', isDirectory: (): boolean => false },
+    { name: 'utils.ts', isDirectory: (): boolean => false },
+    { name: 'templates', isDirectory: (): boolean => true },
+  ] as unknown as Awaited<ReturnType<typeof readdir>>);
 
   const entries = await skillManager.listSkillFolderContent('my-test-skill');
-  expect(entries).toEqual(['SKILL.md', 'utils.ts', 'templates']);
-  expect(readdir).toHaveBeenCalledWith(skill.path);
+  expect(entries).toEqual(['SKILL.md', 'utils.ts', 'templates/']);
+  expect(readdir).toHaveBeenCalledWith(skill.path, { withFileTypes: true });
 });
 
 test('listSkillFolderContent should throw when skill name not found', async () => {
