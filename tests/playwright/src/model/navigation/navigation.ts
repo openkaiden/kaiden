@@ -46,7 +46,7 @@ export class NavigationBar {
     this.mcpLink = this.navigationLocator.getByRole('link', { name: 'MCP' });
     this.flowsLink = this.navigationLocator.getByRole('link', { name: 'Flows', exact: true });
     this.skillsLink = this.navigationLocator.getByRole('link', { name: 'Skills', exact: true });
-    this.ragLink = this.navigationLocator.getByRole('link', { name: 'Knowledge Databases', exact: true });
+    this.ragLink = this.navigationLocator.getByRole('link', { name: 'Knowledges', exact: true });
     this.extensionsLink = this.navigationLocator.getByRole('link', { name: 'Extensions', exact: true });
     this.settingsLink = this.navigationLocator.getByRole('link', { name: 'Settings', exact: true });
     this.links = [

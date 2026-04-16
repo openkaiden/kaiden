@@ -15,16 +15,21 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
-import RAGIcon from '/@/lib/images/RAGIcon.svelte';
+import { faFileLines } from '@fortawesome/free-solid-svg-icons';
 
 import type { NavigationRegistryEntry } from './navigation-registry';
 
 export function createNavigationRagEntry(): NavigationRegistryEntry {
   const registry: NavigationRegistryEntry = {
-    name: 'Knowledge Databases',
-    icon: { iconComponent: RAGIcon },
+    name: 'Knowledges',
+    icon: {
+      faIcon: {
+        definition: faFileLines,
+        size: 'lg',
+      },
+    },
     link: '/rag-environments',
-    tooltip: 'Knowledge Databases',
+    tooltip: 'Knowledges',
     type: 'entry',
     get counter() {
       return 0;

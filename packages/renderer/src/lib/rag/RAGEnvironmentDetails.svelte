@@ -88,7 +88,11 @@ async function handleRemoveFile(filePath: string): Promise<void> {
       }
     } catch (error: unknown) {
       window
-        .showMessageBox({ title: 'Error', message: 'Error removing file from knowledge database', detail: String(error) })
+        .showMessageBox({
+          title: 'Error',
+          message: 'Error removing file from knowledge database',
+          detail: String(error),
+        })
         .catch(console.error);
     }
   }, `remove file from environment ${ragEnvironment.name}`);
