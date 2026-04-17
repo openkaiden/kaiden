@@ -36,7 +36,7 @@
     "watch": "vite build --watch"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.69",
+    "@ai-sdk/anthropic": "^3.0.71",
     "@anthropic-ai/sdk": "^0.88.0",
     "inversify": "^7.7.1"
   },
