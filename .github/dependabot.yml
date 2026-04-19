@@ -27,6 +27,8 @@ updates:
           dependency-type: "all"
         - dependency-name: "@modelcontextprotocol/sdk"
           dependency-type: "all"
+        - dependency-name: "@openkainden/*"
+          dependency-type: "all"
         - dependency-name: "@oslojs/*"
           dependency-type: "all"
         - dependency-name: "@types/better-sqlite3"
