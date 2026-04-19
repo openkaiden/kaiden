@@ -1,0 +1,51 @@
+{
+  "name": "mistral",
+  "displayName": "Mistral",
+  "description": "Integration for Mistral",
+  "version": "0.0.1-next",
+  "icon": "icon.png",
+  "publisher": "kaiden",
+  "license": "Apache-2.0",
+  "engines": {
+    "kaiden": "^0.0.1"
+  },
+  "main": "./dist/extension.js",
+  "source": "./src/extension.ts",
+  "contributes": {
+    "configuration": {
+      "title": "Mistral",
+      "properties": {
+        "mistral.factory._description": {
+          "type": "markdown",
+          "scope": "InferenceProviderConnectionFactory",
+          "markdownDescription": "Provide a Mistral API key\n\n:button[Grab a key]{href=\"https://console.mistral.ai/api-keys\"}"
+        },
+        "mistral.factory.apiKey": {
+          "type": "string",
+          "scope": "InferenceProviderConnectionFactory",
+          "description": "Enter your Mistral API key (MISTRAL_API_KEY)",
+          "format": "password"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "vite build && node ./scripts/build.js",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest watch --coverage",
+    "watch": "vite build --watch"
+  },
+  "dependencies": {
+    "@ai-sdk/mistral": "^3.0.30",
+    "@mistralai/mistralai": "^2.2.0",
+    "inversify": "^7.7.1",
+    "smol-toml": "^1.6.1"
+  },
+  "devDependencies": {
+    "@openkaiden/api": "workspace:*",
+    "adm-zip": "^0.5.16",
+    "mkdirp": "^3.0.1",
+    "vite": "^7.1.2",
+    "vitest": "^4.0.10"
+  }
+}
