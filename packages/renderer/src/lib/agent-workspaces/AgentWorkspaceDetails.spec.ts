@@ -23,7 +23,7 @@ import { get, writable } from 'svelte/store';
 import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { agentWorkspaces, agentWorkspaceStatuses } from '/@/stores/agent-workspaces.svelte';
+import { agentWorkspaces } from '/@/stores/agent-workspaces.svelte';
 import type { AgentWorkspaceConfiguration, AgentWorkspaceSummary } from '/@api/agent-workspace-info';
 
 import AgentWorkspaceDetails from './AgentWorkspaceDetails.svelte';
@@ -64,8 +64,7 @@ beforeEach(() => {
   vi.mocked(window.stopAgentWorkspace).mockResolvedValue({ id: 'ws-1' });
   vi.mocked(window.showMessageBox).mockResolvedValue({ response: 1 });
   vi.mocked(window.removeAgentWorkspace).mockResolvedValue({ id: 'ws-1' });
-  agentWorkspaces.set([workspaceSummary]);
-  agentWorkspaceStatuses.clear();
+  agentWorkspaces.set([{ ...workspaceSummary }]);
 });
 
 test('Expect page title to use workspace summary name', async () => {
@@ -131,12 +130,12 @@ test('Expect clicking start button transitions workspace to running', async () =
   await fireEvent.click(startButton);
 
   await waitFor(() => {
-    expect(agentWorkspaceStatuses.get('ws-1')).toBe('running');
+    expect(get(agentWorkspaces).find(w => w.id === 'ws-1')?.state).toBe('running');
   });
 });
 
 test('Expect stop button is rendered when workspace is running', async () => {
-  agentWorkspaceStatuses.set('ws-1', 'running');
+  agentWorkspaces.set([{ ...workspaceSummary, state: 'running' }]);
 
   render(AgentWorkspaceDetails, { workspaceId: 'ws-1' });
 
@@ -146,7 +145,7 @@ test('Expect stop button is rendered when workspace is running', async () => {
 });
 
 test('Expect clicking stop button transitions workspace to stopped', async () => {
-  agentWorkspaceStatuses.set('ws-1', 'running');
+  agentWorkspaces.set([{ ...workspaceSummary, state: 'running' }]);
 
   render(AgentWorkspaceDetails, { workspaceId: 'ws-1' });
 
@@ -158,7 +157,7 @@ test('Expect clicking stop button transitions workspace to stopped', async () =>
   await fireEvent.click(stopButton);
 
   await waitFor(() => {
-    expect(agentWorkspaceStatuses.get('ws-1')).toBe('stopped');
+    expect(get(agentWorkspaces).find(w => w.id === 'ws-1')?.state).toBe('stopped');
   });
 });
 
@@ -240,7 +239,7 @@ test('Expect error dialog shown when start fails', async () => {
     );
   });
 
-  expect(agentWorkspaceStatuses.get('ws-1')).toBe('stopped');
+  expect(get(agentWorkspaces).find(w => w.id === 'ws-1')?.state).toBe('stopped');
 });
 
 test('Expect error dialog uses workspace name when start fails', async () => {
@@ -265,7 +264,7 @@ test('Expect error dialog uses workspace name when start fails', async () => {
 });
 
 test('Expect error dialog shown when stop fails', async () => {
-  agentWorkspaceStatuses.set('ws-1', 'running');
+  agentWorkspaces.set([{ ...workspaceSummary, state: 'running' }]);
   vi.mocked(window.stopAgentWorkspace).mockRejectedValue(new Error('stop timeout'));
 
   render(AgentWorkspaceDetails, { workspaceId: 'ws-1' });
@@ -287,7 +286,7 @@ test('Expect error dialog shown when stop fails', async () => {
     );
   });
 
-  expect(agentWorkspaceStatuses.get('ws-1')).toBe('running');
+  expect(get(agentWorkspaces).find(w => w.id === 'ws-1')?.state).toBe('running');
 });
 
 test('Expect no navigation when removal fails', async () => {

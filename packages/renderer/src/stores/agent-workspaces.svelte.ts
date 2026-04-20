@@ -16,17 +16,17 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { SvelteMap } from 'svelte/reactivity';
-import { type Writable, writable } from 'svelte/store';
+import { get, type Writable, writable } from 'svelte/store';
 
 import type { AgentWorkspaceSummary } from '/@api/agent-workspace-info';
 
 import { EventStore } from './event-store';
 
-export type AgentWorkspaceStatus = 'stopped' | 'running' | 'starting' | 'stopping';
+export type AgentWorkspaceState = AgentWorkspaceSummary['state'] | 'starting' | 'stopping';
 
-export const agentWorkspaces: Writable<AgentWorkspaceSummary[]> = writable([]);
-export const agentWorkspaceStatuses = new SvelteMap<string, AgentWorkspaceStatus>();
+export const agentWorkspaces: Writable<AgentWorkspaceSummaryUI[]> = writable([]);
+
+export type AgentWorkspaceSummaryUI = Omit<AgentWorkspaceSummary, 'state'> & { state: AgentWorkspaceState };
 
 let readyToUpdate = false;
 
@@ -37,9 +37,11 @@ export async function checkForUpdate(eventName: string): Promise<boolean> {
   return readyToUpdate;
 }
 
-const listWorkspaces = (): Promise<AgentWorkspaceSummary[]> => window.listAgentWorkspaces();
+const listWorkspaces = async (): Promise<AgentWorkspaceSummaryUI[]> => {
+  return (await window.listAgentWorkspaces()) as AgentWorkspaceSummaryUI[];
+};
 
-export const agentWorkspacesEventStore = new EventStore<AgentWorkspaceSummary[]>(
+export const agentWorkspacesEventStore = new EventStore<AgentWorkspaceSummaryUI[]>(
   'agent-workspaces',
   agentWorkspaces,
   checkForUpdate,
@@ -50,24 +52,32 @@ export const agentWorkspacesEventStore = new EventStore<AgentWorkspaceSummary[]>
 agentWorkspacesEventStore.setup();
 
 export async function startAgentWorkspace(id: string): Promise<void> {
-  agentWorkspaceStatuses.set(id, 'starting');
+  const workspace = get(agentWorkspaces).find(ws => ws.id === id);
+  if (workspace === undefined) {
+    throw new Error(`Invalid workspace id: ${id}`);
+  }
+  workspace.state = 'starting';
   try {
-    await window.startAgentWorkspace(id);
-    agentWorkspaceStatuses.set(id, 'running');
+    await window.startAgentWorkspace(workspace.id);
+    workspace.state = 'running';
   } catch (error: unknown) {
-    agentWorkspaceStatuses.set(id, 'stopped');
+    workspace.state = 'stopped';
     console.error('Failed to start agent workspace', error);
     throw error;
   }
 }
 
 export async function stopAgentWorkspace(id: string): Promise<void> {
-  agentWorkspaceStatuses.set(id, 'stopping');
+  const workspace = get(agentWorkspaces).find(ws => ws.id === id);
+  if (workspace === undefined) {
+    throw new Error(`Invalid workspace id: ${id}`);
+  }
+  workspace.state = 'stopping';
   try {
-    await window.stopAgentWorkspace(id);
-    agentWorkspaceStatuses.set(id, 'stopped');
+    await window.stopAgentWorkspace(workspace.id);
+    workspace.state = 'stopped';
   } catch (error: unknown) {
-    agentWorkspaceStatuses.set(id, 'running');
+    workspace.state = 'running';
     console.error('Failed to stop agent workspace', error);
     throw error;
   }

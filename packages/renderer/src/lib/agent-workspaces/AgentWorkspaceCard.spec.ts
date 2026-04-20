@@ -19,10 +19,11 @@
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { agentWorkspaceStatuses } from '/@/stores/agent-workspaces.svelte';
+import { agentWorkspaces } from '/@/stores/agent-workspaces.svelte';
 import type { AgentWorkspaceSummary } from '/@api/agent-workspace-info';
 
 import AgentWorkspaceCard from './AgentWorkspaceCard.svelte';
@@ -48,7 +49,7 @@ beforeEach(() => {
   vi.mocked(window.listAgentWorkspaces).mockResolvedValue([]);
   vi.mocked(window.startAgentWorkspace).mockResolvedValue({ id: 'ws-1' });
   vi.mocked(window.stopAgentWorkspace).mockResolvedValue({ id: 'ws-1' });
-  agentWorkspaceStatuses.clear();
+  agentWorkspaces.set([{ ...workspace }]);
 });
 
 test('Expect card displays workspace name', () => {
@@ -156,28 +157,24 @@ test('Expect clicking start button calls startAgentWorkspace', async () => {
   await fireEvent.click(startButton);
 
   await vi.waitFor(() => {
-    expect(agentWorkspaceStatuses.get('ws-1')).toBe('running');
+    expect(get(agentWorkspaces).find(w => w.id === 'ws-1')?.state).toBe('running');
   });
 });
 
 test('Expect stop button is rendered when workspace is running', async () => {
-  agentWorkspaceStatuses.set('ws-1', 'running');
-
-  render(AgentWorkspaceCard, { workspace });
+  render(AgentWorkspaceCard, { workspace: { ...workspace, state: 'running' } });
 
   expect(screen.getByRole('button', { name: 'Stop workspace api-refactor' })).toBeInTheDocument();
 });
 
 test('Expect clicking stop button calls stopAgentWorkspace', async () => {
-  agentWorkspaceStatuses.set('ws-1', 'running');
-
-  render(AgentWorkspaceCard, { workspace });
+  render(AgentWorkspaceCard, { workspace: { ...workspace, state: 'running' } });
 
   const stopButton = screen.getByRole('button', { name: 'Stop workspace api-refactor' });
   await fireEvent.click(stopButton);
 
   await vi.waitFor(() => {
-    expect(agentWorkspaceStatuses.get('ws-1')).toBe('stopped');
+    expect(get(agentWorkspaces).find(w => w.id === 'ws-1')?.state).toBe('stopped');
   });
 });
 
@@ -199,7 +196,7 @@ test('Expect error dialog shown when start fails', async () => {
     );
   });
 
-  expect(agentWorkspaceStatuses.get('ws-1')).toBe('stopped');
+  expect(get(agentWorkspaces).find(w => w.id === 'ws-1')?.state).toBe('stopped');
 });
 
 test('Expect error dialog uses workspace name when start fails', async () => {
@@ -220,10 +217,9 @@ test('Expect error dialog uses workspace name when start fails', async () => {
 });
 
 test('Expect error dialog shown when stop fails', async () => {
-  agentWorkspaceStatuses.set('ws-1', 'running');
   vi.mocked(window.stopAgentWorkspace).mockRejectedValue(new Error('stop timeout'));
 
-  render(AgentWorkspaceCard, { workspace });
+  render(AgentWorkspaceCard, { workspace: { ...workspace, state: 'running' } });
 
   const stopButton = screen.getByRole('button', { name: 'Stop workspace api-refactor' });
   await fireEvent.click(stopButton);
@@ -238,5 +234,5 @@ test('Expect error dialog shown when stop fails', async () => {
     );
   });
 
-  expect(agentWorkspaceStatuses.get('ws-1')).toBe('running');
+  expect(get(agentWorkspaces).find(w => w.id === 'ws-1')?.state).toBe('running');
 });

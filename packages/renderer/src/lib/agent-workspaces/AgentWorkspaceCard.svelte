@@ -5,19 +5,21 @@ import { router } from 'tinro';
 
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import LoadingIcon from '/@/lib/ui/LoadingIcon.svelte';
-import type { AgentWorkspaceStatus } from '/@/stores/agent-workspaces.svelte';
-import { agentWorkspaceStatuses, startAgentWorkspace, stopAgentWorkspace } from '/@/stores/agent-workspaces.svelte';
-import type { AgentWorkspaceSummary } from '/@api/agent-workspace-info';
+import {
+  type AgentWorkspaceSummaryUI,
+  startAgentWorkspace,
+  stopAgentWorkspace,
+} from '/@/stores/agent-workspaces.svelte';
 
 interface Props {
-  workspace: AgentWorkspaceSummary;
+  workspace: AgentWorkspaceSummaryUI;
 }
 
 let { workspace }: Props = $props();
 
-const status: AgentWorkspaceStatus = $derived(agentWorkspaceStatuses.get(workspace.id) ?? 'stopped');
-const isRunning = $derived(status === 'running' || status === 'stopping');
-const inProgress = $derived(status === 'starting' || status === 'stopping');
+const state = $derived(workspace.state);
+const isRunning = $derived(state === 'running' || state === 'stopping');
+const inProgress = $derived(state === 'starting' || state === 'stopping');
 
 function handleOpen(): void {
   router.goto(`/agent-workspaces/${encodeURIComponent(workspace.id)}/summary`);

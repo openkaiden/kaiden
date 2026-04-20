@@ -2,10 +2,11 @@
 import DetailsCell from '/@/lib/details/DetailsCell.svelte';
 import DetailsTable from '/@/lib/details/DetailsTable.svelte';
 import DetailsTitle from '/@/lib/details/DetailsTitle.svelte';
-import type { AgentWorkspaceConfiguration, AgentWorkspaceSummary } from '/@api/agent-workspace-info';
+import type { AgentWorkspaceSummaryUI } from '/@/stores/agent-workspaces.svelte';
+import type { AgentWorkspaceConfiguration } from '/@api/agent-workspace-info';
 
 interface Props {
-  workspaceSummary: AgentWorkspaceSummary | undefined;
+  workspaceSummary: AgentWorkspaceSummaryUI | undefined;
   configuration: AgentWorkspaceConfiguration;
 }
 

@@ -9,13 +9,7 @@ import DetailsPage from '/@/lib/ui/DetailsPage.svelte';
 import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
 import { getTabUrl, isTabSelected } from '/@/lib/ui/Util';
 import Route from '/@/Route.svelte';
-import type { AgentWorkspaceStatus } from '/@/stores/agent-workspaces.svelte';
-import {
-  agentWorkspaces,
-  agentWorkspaceStatuses,
-  startAgentWorkspace,
-  stopAgentWorkspace,
-} from '/@/stores/agent-workspaces.svelte';
+import { agentWorkspaces, startAgentWorkspace, stopAgentWorkspace } from '/@/stores/agent-workspaces.svelte';
 
 interface Props {
   workspaceId: string;
@@ -28,7 +22,7 @@ let configurationError: string | undefined = $state(undefined);
 
 const workspaceSummary = $derived($agentWorkspaces.find(ws => ws.id === workspaceId));
 
-const status: AgentWorkspaceStatus = $derived(agentWorkspaceStatuses.get(workspaceId) ?? 'stopped');
+const status = $derived(workspaceSummary?.state ?? 'stopped');
 const isRunning = $derived(status === 'running' || status === 'stopping');
 const inProgress = $derived(status === 'starting' || status === 'stopping');
 
@@ -49,13 +43,13 @@ $effect(() => {
 });
 
 async function handleStartStop(): Promise<void> {
-  if (inProgress) return;
+  if (inProgress || workspaceSummary === undefined) return;
   const name = workspaceSummary?.name ?? workspaceId;
   try {
     if (isRunning) {
-      await stopAgentWorkspace(workspaceId);
+      await stopAgentWorkspace(workspaceSummary.id);
     } else {
-      await startAgentWorkspace(workspaceId);
+      await startAgentWorkspace(workspaceSummary.id);
     }
   } catch (error: unknown) {
     const action = isRunning ? 'stopping' : 'starting';
