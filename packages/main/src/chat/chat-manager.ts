@@ -22,7 +22,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { LanguageModelV2 } from '@ai-sdk/provider';
+import type { LanguageModelV3 } from '@ai-sdk/provider';
 import type { DynamicToolUIPart, ModelMessage, StopCondition, ToolSet, UIMessage } from 'ai';
 import { convertToModelMessages, generateObject, generateText, isTextUIPart, stepCountIs, streamText } from 'ai';
 import Database from 'better-sqlite3';
@@ -298,7 +298,7 @@ export class ChatManager {
    * Only updates the title if it hasn't been manually changed from the placeholder.
    */
   private generateTitleInBackground(
-    model: LanguageModelV2,
+    model: LanguageModelV3,
     userMessage: UIMessage,
     chatId: string,
     placeholderTitle: string,

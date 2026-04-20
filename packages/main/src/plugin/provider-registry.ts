@@ -15,7 +15,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
-import type { ProviderV2 } from '@ai-sdk/provider';
+import type { ProviderV3 } from '@ai-sdk/provider';
 import type {
   AuditRequestItems,
   AuditResult,
@@ -2024,7 +2024,7 @@ export class ProviderRegistry {
     return undefined;
   }
 
-  getInferenceSDK(internalProviderId: string, connectionName: string): ProviderV2 {
+  getInferenceSDK(internalProviderId: string, connectionName: string): ProviderV3 {
     const provider = this.providers.get(internalProviderId);
     if (!provider) throw new Error('Provider not found');
 
@@ -2043,7 +2043,7 @@ export class ProviderRegistry {
     return connection.type;
   }
 
-  getFirstInferenceSDK(providerName: string): ProviderV2 {
+  getFirstInferenceSDK(providerName: string): ProviderV3 {
     const provider = this.providers.values().find(provider => provider.id === providerName);
     if (!provider) throw new Error('Provider not found');
     const connections = provider.inferenceConnections.filter(c => c.sdk);

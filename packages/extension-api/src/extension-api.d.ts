@@ -40,7 +40,7 @@
  **/
 
 declare module '@openkaiden/api' {
-  import type { ProviderV2 as AISDKInferenceProvider } from '@ai-sdk/provider';
+  import type { ProviderV3 as AISDKInferenceProvider } from '@ai-sdk/provider';
   import type { components } from '@openkaiden/mcp-registry-types';
 
   /**
