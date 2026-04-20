@@ -35,7 +35,7 @@ const suggestedActions: SuggestedAction[] = [
     action: 'What are the last 5 issues of GitHub repository podman-desktop/podman-desktop?',
     requiredMcp: [
       {
-        mcpId: 'com.github.mcp',
+        mcpId: 'ai.openkaiden.registry/github',
         tools: ['list_issues'],
       },
     ],
