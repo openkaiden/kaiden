@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { get, type Writable, writable } from 'svelte/store';
+import { type Writable, writable } from 'svelte/store';
 
 import type { AgentWorkspaceSummary } from '/@api/agent-workspace-info';
 
@@ -51,33 +51,44 @@ export const agentWorkspacesEventStore = new EventStore<AgentWorkspaceSummaryUI[
 );
 agentWorkspacesEventStore.setup();
 
+function setWorkspaceState(id: string, state: AgentWorkspaceState): boolean {
+  let found = false;
+  agentWorkspaces.update(workspaces => {
+    const updatedWorkspaces = workspaces.map(workspace => {
+      if (workspace.id !== id) {
+        return workspace;
+      }
+      found = true;
+      return { ...workspace, state };
+    });
+    return found ? updatedWorkspaces : workspaces;
+  });
+  return found;
+}
+
 export async function startAgentWorkspace(id: string): Promise<void> {
-  const workspace = get(agentWorkspaces).find(ws => ws.id === id);
-  if (workspace === undefined) {
+  if (!setWorkspaceState(id, 'starting')) {
     throw new Error(`Invalid workspace id: ${id}`);
   }
-  workspace.state = 'starting';
   try {
-    await window.startAgentWorkspace(workspace.id);
-    workspace.state = 'running';
+    await window.startAgentWorkspace(id);
+    setWorkspaceState(id, 'running');
   } catch (error: unknown) {
-    workspace.state = 'stopped';
+    setWorkspaceState(id, 'stopped');
     console.error('Failed to start agent workspace', error);
     throw error;
   }
 }
 
 export async function stopAgentWorkspace(id: string): Promise<void> {
-  const workspace = get(agentWorkspaces).find(ws => ws.id === id);
-  if (workspace === undefined) {
+  if (!setWorkspaceState(id, 'stopping')) {
     throw new Error(`Invalid workspace id: ${id}`);
   }
-  workspace.state = 'stopping';
   try {
-    await window.stopAgentWorkspace(workspace.id);
-    workspace.state = 'stopped';
+    await window.stopAgentWorkspace(id);
+    setWorkspaceState(id, 'stopped');
   } catch (error: unknown) {
-    workspace.state = 'running';
+    setWorkspaceState(id, 'running');
     console.error('Failed to stop agent workspace', error);
     throw error;
   }
