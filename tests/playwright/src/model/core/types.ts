@@ -70,7 +70,6 @@ export enum PreferenceOption {
   APPEARANCE = 'Appearance',
   EDITOR = 'Editor',
   EXIT_ON_CLOSE = 'Exit On Close',
-  EXPERIMENTAL_STATUS_BAR = 'Experimental (Status Bar Providers)',
   EXTENSIONS = 'Extensions',
   KUBERNETES = 'Kubernetes',
   TASKS = 'Tasks',
