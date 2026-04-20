@@ -107,6 +107,7 @@ export class ClaudeInferenceManager {
 
     const connectionDisposable = this.claudeProvider.registerInferenceProviderConnection({
       name: this.maskKey(token),
+      type: 'cloud',
       sdk: anthropic,
       status(): ProviderConnectionStatus {
         return status;
