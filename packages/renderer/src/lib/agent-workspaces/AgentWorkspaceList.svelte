@@ -25,8 +25,8 @@ function navigateToCreate(): void {
         <AgentWorkspaceEmptyScreen />
       {:else}
         <div class="flex flex-col gap-4 p-5 w-full h-fit">
-          <span class="text-sm text-(--pd-content-text) opacity-70">{$agentWorkspaces.length} total sessions</span>
-          <div class="grid grid-cols-3 gap-4 w-full">
+          <span class="text-sm text-(--pd-content-text) opacity-70">{$agentWorkspaces.length} total {$agentWorkspaces.length === 1 ? 'workspace' : 'workspaces'}</span>
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 w-full">
             {#each $agentWorkspaces as workspace (workspace.id)}
               <AgentWorkspaceCard {workspace} />
             {/each}
