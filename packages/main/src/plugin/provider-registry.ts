@@ -792,6 +792,7 @@ export class ProviderRegistry {
         connectionType: 'inference',
         name: connection.name,
         type: connection.type,
+        endpoint: connection.endpoint,
         models: connection.models,
         status: connection.status(),
       };
@@ -2041,6 +2042,16 @@ export class ProviderRegistry {
     const connection = provider.inferenceConnections.find(({ name }) => name === connectionName);
     if (!connection) throw new Error('Connection not found');
     return connection.type;
+  }
+
+  getInferenceConnectionEndpoint(providerId: string, connectionName: string): InferenceProviderConnection['endpoint'] {
+    const internalId = this.getMatchingProviderInternalId(providerId);
+    const provider = this.providers.get(internalId);
+    if (!provider) throw new Error('Provider not found');
+
+    const connection = provider.inferenceConnections.find(({ name }) => name === connectionName);
+    if (!connection) throw new Error('Connection not found');
+    return connection.endpoint;
   }
 
   getFirstInferenceSDK(providerName: string): ProviderV3 {

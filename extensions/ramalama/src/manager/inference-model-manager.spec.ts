@@ -70,6 +70,7 @@ describe('InferenceModelManager', () => {
       expect.objectContaining({
         name: `port/${modelPort}`,
         type: 'local',
+        endpoint: `http://localhost:${modelPort}`,
         sdk: sdkInstance,
         models: [{ label: modelName }],
       }),

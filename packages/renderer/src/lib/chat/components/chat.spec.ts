@@ -91,4 +91,25 @@ describe('findModel', () => {
     const result = findModel([], target);
     expect(result).toBeUndefined();
   });
+
+  test('should return undefined when endpoint does not match', () => {
+    const modelsWithEndpoint: ModelInfo[] = [
+      { providerId: 'openai', connectionName: 'conn', label: 'gpt-4', type: 'cloud', endpoint: 'http://host-a/v1' },
+    ];
+    const target: ModelInfo = {
+      providerId: 'openai',
+      connectionName: 'conn',
+      label: 'gpt-4',
+      type: 'cloud',
+      endpoint: 'http://host-b/v1',
+    };
+    const result = findModel(modelsWithEndpoint, target);
+    expect(result).toBeUndefined();
+  });
+
+  test('should match models when both have undefined endpoint', () => {
+    const target: ModelInfo = { providerId: 'ollama', connectionName: 'local', label: 'llama3', type: 'local' };
+    const result = findModel(models, target);
+    expect(result).toEqual(target);
+  });
 });

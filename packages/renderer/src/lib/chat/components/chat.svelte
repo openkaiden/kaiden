@@ -8,7 +8,8 @@ export function findModel(models: ModelInfo[], model: ModelInfo | undefined): Mo
       m.label === model.label &&
       m.providerId === model.providerId &&
       m.connectionName === model.connectionName &&
-      m.type === model.type,
+      m.type === model.type &&
+      m.endpoint === model.endpoint,
   );
 }
 </script>
@@ -62,6 +63,7 @@ let selectedModel = $derived<ModelInfo | undefined>(
         label: config.modelId,
         providerId: config.providerId,
         type: config.type ?? 'cloud',
+        endpoint: config.endpoint,
       }
     : findModel(models, lastUsedModel.value) ?? models[0],
 );

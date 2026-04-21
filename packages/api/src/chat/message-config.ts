@@ -6,6 +6,7 @@ export const MessageConfigSchema = z.object({
   connectionName: z.string(),
   providerId: z.string(),
   type: z.enum(['cloud', 'local', 'self-hosted']).optional(),
+  endpoint: z.string().optional(),
 });
 
 export type MessageConfig = z.output<typeof MessageConfigSchema>;

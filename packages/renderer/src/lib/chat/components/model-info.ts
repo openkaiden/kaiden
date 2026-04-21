@@ -22,5 +22,6 @@ export interface ModelInfo {
   providerId: string;
   connectionName: string;
   type: InferenceProviderConnectionType;
+  endpoint?: string;
   label: string;
 }
