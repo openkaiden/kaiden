@@ -70,7 +70,7 @@ test('Expect workspace cards displayed with total count', () => {
   expect(screen.getByText('frontend-redesign')).toBeInTheDocument();
   expect(screen.getByText('/home/user/projects/backend')).toBeInTheDocument();
   expect(screen.getByText('/home/user/projects/frontend')).toBeInTheDocument();
-  expect(screen.getByText('2 total sessions')).toBeInTheDocument();
+  expect(screen.getByText('2 total workspaces')).toBeInTheDocument();
 });
 
 test('Expect page title to be Agent Workspaces', () => {
