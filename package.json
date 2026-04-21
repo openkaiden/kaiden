@@ -64,7 +64,7 @@
     "typecheck:renderer": "pnpm run build:preload:types && svelte-check --tsconfig packages/renderer/tsconfig.json",
     "typecheck:extensions": "pnpm run typecheck:extensions:claude && pnpm run typecheck:extensions:container && pnpm run typecheck:extensions:docling && pnpm run typecheck:extensions:gemini && pnpm run typecheck:extensions:mcp-registries && pnpm run typecheck:extensions:mistral && pnpm run typecheck:extensions:milvus && pnpm run typecheck:extensions:ollama && pnpm run typecheck:extensions:openai-compatible && pnpm run typecheck:extensions:openshift-ai && pnpm run typecheck:extensions:ramalama",
     "typecheck:extensions:claude": "tsc --noEmit --project extensions/claude",
-    "typecheck:extensions:container": "tsc --noEmit --project extensions/container/packages/extension",
+    "typecheck:extensions:container": "tsc --noEmit --project extensions/container/packages/api && tsc --noEmit --project extensions/container/packages/extension",
     "typecheck:extensions:docling": "tsc --noEmit --project extensions/docling",
     "typecheck:extensions:gemini": "tsc --noEmit --project extensions/gemini",
     "typecheck:extensions:mcp-registries": "tsc --noEmit --project extensions/mcp-registries",
