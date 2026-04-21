@@ -45,6 +45,9 @@ export class MilvusConnection implements api.RagProviderConnection {
           identifier: 'mcp-server-milvus',
           version: '0.1.1.dev8',
           runtimeHint: 'python',
+          transport: {
+            type: 'stdio',
+          },
           packageArguments: [
             {
               isRequired: true,

@@ -260,16 +260,18 @@ export class DoclingExtension {
     // Read the chunk files
     const chunks: api.Chunk[] = [];
     const documentNumber = this.processedDocuments++;
-    for (let i = 0; i < res.chunks.length; i++) {
-      const chunkPath = join(
-        this.extensionContext.storagePath,
-        'docling-workspace',
-        `doc${documentNumber}-chunk${i}.txt`,
-      );
-      await writeFile(chunkPath, res.chunks[i].text, 'utf-8');
-      chunks.push({
-        text: Uri.file(chunkPath),
-      });
+    if (typeof res === 'object' && res && 'chunks' in res && Array.isArray(res.chunks)) {
+      for (let i = 0; i < res.chunks.length; i++) {
+        const chunkPath = join(
+          this.extensionContext.storagePath,
+          'docling-workspace',
+          `doc${documentNumber}-chunk${i}.txt`,
+        );
+        await writeFile(chunkPath, res.chunks[i].text, 'utf-8');
+        chunks.push({
+          text: Uri.file(chunkPath),
+        });
+      }
     }
 
     return chunks;
