@@ -37,12 +37,6 @@ test('Expect empty screen when no workspaces', () => {
   expect(screen.getByText('No agent workspaces')).toBeInTheDocument();
 });
 
-test('Expect total count displayed as 0 total sessions when empty', () => {
-  render(AgentWorkspaceList);
-
-  expect(screen.getByText('0 total sessions')).toBeInTheDocument();
-});
-
 test('Expect workspace cards displayed with total count', () => {
   const workspaces: AgentWorkspaceSummary[] = [
     {

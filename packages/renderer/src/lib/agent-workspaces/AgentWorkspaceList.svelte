@@ -16,8 +16,7 @@ function navigateToCreate(): void {
 
 <NavPage searchEnabled={false} title="Agent Workspaces">
   {#snippet additionalActions()}
-    <Button icon={faPlus} onclick={navigateToCreate}>Create Workspace</Button>
-    <span class="text-(--pd-content-text)">{$agentWorkspaces.length} total sessions</span>
+  <Button icon={faPlus} onclick={navigateToCreate}>Create Workspace</Button>
   {/snippet}
 
   {#snippet content()}
@@ -25,10 +24,13 @@ function navigateToCreate(): void {
       {#if $agentWorkspaces.length === 0}
         <AgentWorkspaceEmptyScreen />
       {:else}
-        <div class="grid grid-cols-3 gap-4 p-5 w-full h-fit">
-          {#each $agentWorkspaces as workspace (workspace.id)}
-            <AgentWorkspaceCard {workspace} />
-          {/each}
+        <div class="flex flex-col gap-4 p-5 w-full h-fit">
+          <span class="text-sm text-(--pd-content-text) opacity-70">{$agentWorkspaces.length} total sessions</span>
+          <div class="grid grid-cols-3 gap-4 w-full">
+            {#each $agentWorkspaces as workspace (workspace.id)}
+              <AgentWorkspaceCard {workspace} />
+            {/each}
+          </div>
         </div>
       {/if}
     </div>

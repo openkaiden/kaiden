@@ -76,30 +76,30 @@ function handleRemove(): void {
 </script>
 
 <div
-  class="flex flex-col gap-3 p-4 bg-(--pd-content-card-carousel-card-bg) hover:bg-(--pd-content-card-carousel-card-hover-bg) rounded-md cursor-pointer"
+  class="flex flex-col gap-3 p-4 bg-(--pd-content-card-carousel-card-bg) hover:bg-(--pd-content-card-carousel-card-hover-bg) rounded-md cursor-pointer overflow-hidden"
   role="button"
   aria-label="workspace {workspace.name}"
   onclick={handleOpen}
   onkeydown={handleKeydown}
   tabindex="0">
-  <div class="flex items-center justify-between text-start">
-    <span class="text-(--pd-invert-content-card-text) font-semibold text-base">{workspace.name}</span>
-    <span class="flex items-center gap-1 text-xs text-(--pd-invert-content-card-text) opacity-70">
+  <div class="flex items-center justify-between text-start gap-2 min-w-0">
+    <span class="text-(--pd-invert-content-card-text) font-semibold text-base truncate min-w-0">{workspace.name}</span>
+    <span class="flex items-center gap-1 text-xs text-(--pd-invert-content-card-text) opacity-70 shrink-0 max-w-[50%]">
       <Icon icon={faCubes} class="shrink-0" />
-      {workspace.project}
+      <span class="truncate">{workspace.project}</span>
     </span>
   </div>
   <div class="flex flex-col gap-2 text-sm">
-    <div class="flex items-center gap-2 text-(--pd-invert-content-card-text)" title={workspace.paths.source}>
+    <div class="flex items-center gap-2 text-(--pd-invert-content-card-text) min-w-0" title={workspace.paths.source}>
       <Icon icon={faFolder} class="shrink-0 opacity-70" />
       <span class="truncate">{workspace.paths.source}</span>
     </div>
-    <div class="flex items-center gap-2 text-(--pd-invert-content-card-text)" title={workspace.paths.configuration}>
+    <div class="flex items-center gap-2 text-(--pd-invert-content-card-text) min-w-0" title={workspace.paths.configuration}>
       <Icon icon={faGear} class="shrink-0 opacity-70" />
       <span class="truncate">{workspace.paths.configuration}</span>
     </div>
     {#if workspace.model}
-      <div class="flex items-center gap-2 text-(--pd-invert-content-card-text)" title={workspace.model}>
+      <div class="flex items-center gap-2 text-(--pd-invert-content-card-text) min-w-0" title={workspace.model}>
         <Icon icon={faBrain} class="shrink-0 opacity-70" />
         <span class="truncate">{workspace.model}</span>
       </div>
