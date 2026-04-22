@@ -1329,7 +1329,7 @@ export class ProviderRegistry {
   ): connection is ProviderKubernetesConnectionInfo {
     return (
       !this.isProviderContainerConnection(connection) &&
-      (connection as ProviderKubernetesConnectionInfo).endpoint !== undefined
+      (connection as ProviderKubernetesConnectionInfo).connectionType === 'kubernetes'
     );
   }
 
@@ -1357,7 +1357,8 @@ export class ProviderRegistry {
 
   isKubernetesConnection(connection: ProviderConnection): connection is KubernetesProviderConnection {
     return (
-      !this.isContainerConnection(connection) && (connection as ContainerProviderConnection).endpoint !== undefined
+      !this.isContainerConnection(connection) &&
+      (connection as KubernetesProviderConnection).endpoint?.apiURL !== undefined
     );
   }
 
