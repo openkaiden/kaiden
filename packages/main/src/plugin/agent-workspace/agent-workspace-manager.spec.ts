@@ -19,11 +19,12 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { RunError, RunResult } from '@openkaiden/api';
+import type { FileSystemWatcher, RunError, RunResult } from '@openkaiden/api';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { IPCHandle } from '/@/plugin/api.js';
 import type { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
+import type { FilesystemMonitoring } from '/@/plugin/filesystem-monitoring.js';
 import type { Proxy as ProxyType } from '/@/plugin/proxy.js';
 import type { TaskManager } from '/@/plugin/tasks/task-manager.js';
 import type { Task } from '/@/plugin/tasks/tasks.js';
@@ -87,6 +88,16 @@ const taskManager = {
   createTask: vi.fn().mockReturnValue(mockTask),
 } as unknown as TaskManager;
 
+const mockWatcher = {
+  onDidChange: vi.fn(),
+  onDidCreate: vi.fn(),
+  onDidDelete: vi.fn(),
+  dispose: vi.fn(),
+} as unknown as FileSystemWatcher;
+const filesystemMonitoring = {
+  createFileSystemWatcher: vi.fn().mockReturnValue(mockWatcher),
+} as unknown as FilesystemMonitoring;
+
 const KAIDEN_CLI_PATH = '/usr/local/bin/kdn';
 
 function mockExecResult(stdout: string): RunResult {
@@ -113,7 +124,8 @@ beforeEach(() => {
   mockTask.state = '' as TaskState;
   mockTask.status = '' as TaskStatus;
   mockTask.error = '';
-  manager = new AgentWorkspaceManager(apiSender, ipcHandle, exec, cliToolRegistry, taskManager);
+  vi.mocked(filesystemMonitoring.createFileSystemWatcher).mockReturnValue(mockWatcher);
+  manager = new AgentWorkspaceManager(apiSender, ipcHandle, exec, cliToolRegistry, taskManager, filesystemMonitoring);
   manager.init();
 });
 
@@ -140,6 +152,37 @@ describe('init', () => {
 
   test('registers IPC handler for stop', () => {
     expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:stop', expect.any(Function));
+  });
+});
+
+describe('watchInstancesFile', () => {
+  test('watches ~/.kdn/instances.json on init', () => {
+    expect(filesystemMonitoring.createFileSystemWatcher).toHaveBeenCalledWith(
+      expect.stringMatching(/\.kdn[\\/]instances\.json$/),
+    );
+  });
+
+  test('sends agent-workspace-update on file change', () => {
+    const changeCallback = vi.mocked(mockWatcher.onDidChange).mock.calls[0]![0] as () => void;
+    changeCallback();
+    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+  });
+
+  test('sends agent-workspace-update on file create', () => {
+    const createCallback = vi.mocked(mockWatcher.onDidCreate).mock.calls[0]![0] as () => void;
+    createCallback();
+    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+  });
+
+  test('sends agent-workspace-update on file delete', () => {
+    const deleteCallback = vi.mocked(mockWatcher.onDidDelete).mock.calls[0]![0] as () => void;
+    deleteCallback();
+    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+  });
+
+  test('disposes watcher on dispose', () => {
+    manager.dispose();
+    expect(mockWatcher.dispose).toHaveBeenCalled();
   });
 });
 

@@ -17,13 +17,15 @@
  ***********************************************************************/
 
 import { readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Disposable, RunError } from '@openkaiden/api';
+import type { Disposable, FileSystemWatcher, RunError } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
 
 import { IPCHandle } from '/@/plugin/api.js';
 import { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
+import { FilesystemMonitoring } from '/@/plugin/filesystem-monitoring.js';
 import { TaskManager } from '/@/plugin/tasks/task-manager.js';
 import { Exec } from '/@/plugin/util/exec.js';
 import type {
@@ -39,6 +41,8 @@ import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
  */
 @injectable()
 export class AgentWorkspaceManager implements Disposable {
+  private instancesWatcher: FileSystemWatcher | undefined;
+
   constructor(
     @inject(ApiSenderType)
     private readonly apiSender: ApiSenderType,
@@ -50,6 +54,8 @@ export class AgentWorkspaceManager implements Disposable {
     private readonly cliToolRegistry: CliToolRegistry,
     @inject(TaskManager)
     private readonly taskManager: TaskManager,
+    @inject(FilesystemMonitoring)
+    private readonly filesystemMonitoring: FilesystemMonitoring,
   ) {}
 
   private getCliPath(): string {
@@ -200,10 +206,24 @@ export class AgentWorkspaceManager implements Disposable {
     this.ipcHandle('agent-workspace:stop', async (_listener: unknown, id: string): Promise<AgentWorkspaceId> => {
       return this.stop(id);
     });
+
+    this.watchInstancesFile();
+  }
+
+  private watchInstancesFile(): void {
+    this.instancesWatcher?.dispose();
+    const instancesPath = join(homedir(), '.kdn', 'instances.json');
+    this.instancesWatcher = this.filesystemMonitoring.createFileSystemWatcher(instancesPath);
+    const notify = (): void => {
+      this.apiSender.send('agent-workspace-update');
+    };
+    this.instancesWatcher.onDidChange(notify);
+    this.instancesWatcher.onDidCreate(notify);
+    this.instancesWatcher.onDidDelete(notify);
   }
 
   @preDestroy()
   dispose(): void {
-    // no-op for now; will clean up CLI process handles if needed
+    this.instancesWatcher?.dispose();
   }
 }
