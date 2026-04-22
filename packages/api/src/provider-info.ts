@@ -74,6 +74,7 @@ export interface ProviderInferenceConnectionInfo {
   connectionType: 'inference';
   name: string;
   type: InferenceProviderConnectionType;
+  providerName?: string;
   endpoint?: string;
   status: ProviderConnectionStatus;
   lifecycleMethods?: LifecycleMethod[];

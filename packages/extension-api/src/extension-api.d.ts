@@ -653,6 +653,7 @@ declare module '@openkaiden/api' {
   export type InferenceProviderConnection = {
     name: string;
     type: InferenceProviderConnectionType;
+    providerName?: string;
     endpoint?: string;
     sdk: AISDKInferenceProvider;
     credentials(): Record<string, string>;

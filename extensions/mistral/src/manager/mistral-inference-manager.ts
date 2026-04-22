@@ -108,6 +108,7 @@ export class MistralInferenceManager {
     const connectionDisposable = this.mistralProvider.registerInferenceProviderConnection({
       name: this.maskKey(token),
       type: 'cloud',
+      providerName: 'mistral',
       sdk: mistral,
       status(): ProviderConnectionStatus {
         return status;

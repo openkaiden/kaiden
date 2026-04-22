@@ -187,6 +187,7 @@ export class OpenAI implements Disposable {
     const connectionDisposable = this.provider.registerInferenceProviderConnection({
       name: baseURL,
       type: 'cloud',
+      providerName: 'openai',
       endpoint: baseURL,
       sdk: openai,
       status(): ProviderConnectionStatus {

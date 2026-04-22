@@ -161,6 +161,7 @@ describe('factory', () => {
     expect(PROVIDER_MOCK.registerInferenceProviderConnection).toHaveBeenCalledWith({
       name: 'dum*****',
       type: 'cloud',
+      providerName: 'mistral',
       status: expect.any(Function),
       lifecycle: {
         delete: expect.any(Function),
