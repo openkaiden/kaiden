@@ -37,7 +37,13 @@ test('Expect empty screen when no workspaces', () => {
   expect(screen.getByText('No agent workspaces')).toBeInTheDocument();
 });
 
-test('Expect workspace cards displayed with total count', () => {
+test('Expect total count displayed as 0 total sessions when empty', () => {
+  render(AgentWorkspaceList);
+
+  expect(screen.getByText('0 total sessions')).toBeInTheDocument();
+});
+
+test('Expect workspace rows displayed with total count', () => {
   const workspaces: AgentWorkspaceSummary[] = [
     {
       id: 'ws-1',
@@ -68,13 +74,11 @@ test('Expect workspace cards displayed with total count', () => {
 
   expect(screen.getByText('api-refactor')).toBeInTheDocument();
   expect(screen.getByText('frontend-redesign')).toBeInTheDocument();
-  expect(screen.getByText('/home/user/projects/backend')).toBeInTheDocument();
-  expect(screen.getByText('/home/user/projects/frontend')).toBeInTheDocument();
-  expect(screen.getByText('2 total workspaces')).toBeInTheDocument();
+  expect(screen.getByText('2 total sessions')).toBeInTheDocument();
 });
 
-test('Expect page title to be Agent Workspaces', () => {
+test('Expect page title to be Agentic Workspaces', () => {
   render(AgentWorkspaceList);
 
-  expect(screen.getByText('Agent Workspaces')).toBeInTheDocument();
+  expect(screen.getByText('Agentic Workspaces')).toBeInTheDocument();
 });

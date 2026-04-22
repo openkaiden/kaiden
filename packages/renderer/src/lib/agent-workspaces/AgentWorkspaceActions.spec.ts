@@ -20,15 +20,12 @@ import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { get } from 'svelte/store';
-import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { agentWorkspaces } from '/@/stores/agent-workspaces.svelte';
 import type { AgentWorkspaceSummary } from '/@api/agent-workspace-info';
 
-import AgentWorkspaceCard from './AgentWorkspaceCard.svelte';
-
-vi.mock(import('tinro'));
+import AgentWorkspaceActions from './AgentWorkspaceActions.svelte';
 
 const workspace: AgentWorkspaceSummary = {
   id: 'ws-1',
@@ -52,60 +49,16 @@ beforeEach(() => {
   agentWorkspaces.set([{ ...workspace }]);
 });
 
-test('Expect card displays workspace name', () => {
-  render(AgentWorkspaceCard, { workspace });
-
-  expect(screen.getByText('api-refactor')).toBeInTheDocument();
-});
-
-test('Expect card displays project name', () => {
-  render(AgentWorkspaceCard, { workspace });
-
-  expect(screen.getByText('backend')).toBeInTheDocument();
-});
-
-test('Expect card displays source path', () => {
-  render(AgentWorkspaceCard, { workspace });
-
-  expect(screen.getByText('/home/user/projects/backend')).toBeInTheDocument();
-});
-
-test('Expect card displays configuration path', () => {
-  render(AgentWorkspaceCard, { workspace });
-
-  expect(screen.getByText('/home/user/.config/kaiden/workspaces/api-refactor.yaml')).toBeInTheDocument();
-});
-
-test('Expect card displays model when present', () => {
-  const wsWithModel: AgentWorkspaceSummary = { ...workspace, model: 'gpt-4o' };
-
-  render(AgentWorkspaceCard, { workspace: wsWithModel });
-
-  expect(screen.getByText('gpt-4o')).toBeInTheDocument();
-});
-
-test('Expect card does not display model when absent', () => {
-  render(AgentWorkspaceCard, { workspace });
-
-  expect(screen.queryByTitle(workspace.model ?? '')).not.toBeInTheDocument();
-});
-
-test('Expect card has aria label with workspace name', () => {
-  render(AgentWorkspaceCard, { workspace });
-
-  expect(screen.getByRole('button', { name: 'workspace api-refactor' })).toBeInTheDocument();
-});
-
 test('Expect remove button is rendered', () => {
-  render(AgentWorkspaceCard, { workspace });
+  render(AgentWorkspaceActions, { object: workspace });
 
-  expect(screen.getByRole('button', { name: 'Remove workspace api-refactor' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Remove workspace' })).toBeInTheDocument();
 });
 
 test('Expect confirmation dialog shown when remove button clicked', async () => {
-  render(AgentWorkspaceCard, { workspace });
+  render(AgentWorkspaceActions, { object: workspace });
 
-  const removeButton = screen.getByRole('button', { name: 'Remove workspace api-refactor' });
+  const removeButton = screen.getByRole('button', { name: 'Remove workspace' });
   await fireEvent.click(removeButton);
 
   expect(window.showMessageBox).toHaveBeenCalledOnce();
@@ -114,9 +67,9 @@ test('Expect confirmation dialog shown when remove button clicked', async () => 
 test('Expect workspace removed when user confirms', async () => {
   vi.mocked(window.showMessageBox).mockResolvedValue({ response: 0 });
 
-  render(AgentWorkspaceCard, { workspace });
+  render(AgentWorkspaceActions, { object: workspace });
 
-  const removeButton = screen.getByRole('button', { name: 'Remove workspace api-refactor' });
+  const removeButton = screen.getByRole('button', { name: 'Remove workspace' });
   await fireEvent.click(removeButton);
 
   await vi.waitFor(() => {
@@ -127,33 +80,24 @@ test('Expect workspace removed when user confirms', async () => {
 test('Expect workspace not removed when user cancels', async () => {
   vi.mocked(window.showMessageBox).mockResolvedValue({ response: 1 });
 
-  render(AgentWorkspaceCard, { workspace });
+  render(AgentWorkspaceActions, { object: workspace });
 
-  const removeButton = screen.getByRole('button', { name: 'Remove workspace api-refactor' });
+  const removeButton = screen.getByRole('button', { name: 'Remove workspace' });
   await fireEvent.click(removeButton);
 
   expect(window.removeAgentWorkspace).not.toHaveBeenCalled();
 });
 
-test('Expect clicking card navigates to workspace detail view', async () => {
-  render(AgentWorkspaceCard, { workspace });
-
-  const card = screen.getByRole('button', { name: 'workspace api-refactor' });
-  await fireEvent.click(card);
-
-  expect(router.goto).toHaveBeenCalledWith('/agent-workspaces/ws-1/summary');
-});
-
 test('Expect start button is rendered when workspace is stopped', () => {
-  render(AgentWorkspaceCard, { workspace });
+  render(AgentWorkspaceActions, { object: workspace });
 
-  expect(screen.getByRole('button', { name: 'Start workspace api-refactor' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Start workspace' })).toBeInTheDocument();
 });
 
 test('Expect clicking start button calls startAgentWorkspace', async () => {
-  render(AgentWorkspaceCard, { workspace });
+  render(AgentWorkspaceActions, { object: workspace });
 
-  const startButton = screen.getByRole('button', { name: 'Start workspace api-refactor' });
+  const startButton = screen.getByRole('button', { name: 'Start workspace' });
   await fireEvent.click(startButton);
 
   await vi.waitFor(() => {
@@ -161,16 +105,16 @@ test('Expect clicking start button calls startAgentWorkspace', async () => {
   });
 });
 
-test('Expect stop button is rendered when workspace is running', async () => {
-  render(AgentWorkspaceCard, { workspace: { ...workspace, state: 'running' } });
+test('Expect stop button is rendered when workspace is running', () => {
+  render(AgentWorkspaceActions, { object: { ...workspace, state: 'running' } });
 
-  expect(screen.getByRole('button', { name: 'Stop workspace api-refactor' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Stop workspace' })).toBeInTheDocument();
 });
 
 test('Expect clicking stop button calls stopAgentWorkspace', async () => {
-  render(AgentWorkspaceCard, { workspace: { ...workspace, state: 'running' } });
+  render(AgentWorkspaceActions, { object: { ...workspace, state: 'running' } });
 
-  const stopButton = screen.getByRole('button', { name: 'Stop workspace api-refactor' });
+  const stopButton = screen.getByRole('button', { name: 'Stop workspace' });
   await fireEvent.click(stopButton);
 
   await vi.waitFor(() => {
@@ -181,9 +125,9 @@ test('Expect clicking stop button calls stopAgentWorkspace', async () => {
 test('Expect error dialog shown when start fails', async () => {
   vi.mocked(window.startAgentWorkspace).mockRejectedValue(new Error('container not found'));
 
-  render(AgentWorkspaceCard, { workspace });
+  render(AgentWorkspaceActions, { object: workspace });
 
-  const startButton = screen.getByRole('button', { name: 'Start workspace api-refactor' });
+  const startButton = screen.getByRole('button', { name: 'Start workspace' });
   await fireEvent.click(startButton);
 
   await vi.waitFor(() => {
@@ -202,9 +146,9 @@ test('Expect error dialog shown when start fails', async () => {
 test('Expect error dialog uses workspace name when start fails', async () => {
   vi.mocked(window.startAgentWorkspace).mockRejectedValue(new Error('start failed'));
 
-  render(AgentWorkspaceCard, { workspace });
+  render(AgentWorkspaceActions, { object: workspace });
 
-  const startButton = screen.getByRole('button', { name: 'Start workspace api-refactor' });
+  const startButton = screen.getByRole('button', { name: 'Start workspace' });
   await fireEvent.click(startButton);
 
   await vi.waitFor(() => {
@@ -219,9 +163,9 @@ test('Expect error dialog uses workspace name when start fails', async () => {
 test('Expect error dialog shown when stop fails', async () => {
   vi.mocked(window.stopAgentWorkspace).mockRejectedValue(new Error('stop timeout'));
 
-  render(AgentWorkspaceCard, { workspace: { ...workspace, state: 'running' } });
+  render(AgentWorkspaceActions, { object: { ...workspace, state: 'running' } });
 
-  const stopButton = screen.getByRole('button', { name: 'Stop workspace api-refactor' });
+  const stopButton = screen.getByRole('button', { name: 'Stop workspace' });
   await fireEvent.click(stopButton);
 
   await vi.waitFor(() => {

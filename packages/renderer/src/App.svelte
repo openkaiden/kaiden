@@ -214,8 +214,8 @@ tablePersistence.storage = new PodmanDesktopStoragePersist();
         </Route>
         {/if}
 
-        <Route path="/agent-workspaces/*" breadcrumb="Agent Workspaces" navigationHint="root" firstmatch>
-          <Route path="/" breadcrumb="Agent Workspaces" navigationHint="root">
+        <Route path="/agent-workspaces/*" breadcrumb="Agentic Workspaces" navigationHint="root" firstmatch>
+          <Route path="/" breadcrumb="Agentic Workspaces" navigationHint="root">
             <AgentWorkspaceList />
           </Route>
           <Route path="/create" breadcrumb="Create">

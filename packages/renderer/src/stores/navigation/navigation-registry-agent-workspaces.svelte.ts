@@ -16,16 +16,16 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { faRobot } from '@fortawesome/free-solid-svg-icons/faRobot';
+import { faLayerGroup } from '@fortawesome/free-solid-svg-icons/faLayerGroup';
 
 import type { NavigationRegistryEntry } from './navigation-registry';
 
 export function createNavigationAgentWorkspacesEntry(): NavigationRegistryEntry {
   const registry: NavigationRegistryEntry = {
-    name: 'Agents',
-    icon: { faIcon: { definition: faRobot, size: 'lg' } },
+    name: 'Workspaces',
+    icon: { faIcon: { definition: faLayerGroup, size: 'lg' } },
     link: '/agent-workspaces',
-    tooltip: 'Agent Workspaces',
+    tooltip: 'Agentic Workspaces',
     type: 'entry',
     get counter() {
       return 0;
