@@ -231,9 +231,6 @@ test('closes wizard even when persistence fails', async () => {
 
   expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to persist onboarding defaults', persistError);
   expect(closeMock).toHaveBeenCalled();
-
-  consoleErrorSpy.mockRestore();
-  vi.stubGlobal('updateConfigurationValue', vi.fn().mockResolvedValue(undefined));
 });
 
 test('does not persist defaults when advancing to intermediate steps', async () => {

@@ -31,7 +31,7 @@ function stubLocalInference(hasConnection: boolean): void {
   const providers = hasConnection
     ? [{ id: 'ollama', inferenceConnections: [{ type: 'local', status: 'started' }] }]
     : [{ id: 'ollama', inferenceConnections: [] }];
-  (window as unknown as Record<string, unknown>).getProviderInfos = vi.fn().mockResolvedValue(providers);
+  vi.stubGlobal('getProviderInfos', vi.fn().mockResolvedValue(providers));
 }
 
 beforeEach(() => {
@@ -82,7 +82,7 @@ test('shows local runtime panel when OpenCode is selected', () => {
 });
 
 test('shows probe checking state on mount with OpenCode selected', async () => {
-  (window as unknown as Record<string, unknown>).getProviderInfos = vi.fn().mockReturnValue(new Promise(() => {}));
+  vi.stubGlobal('getProviderInfos', vi.fn().mockReturnValue(new Promise(() => {})));
 
   renderStep();
 
