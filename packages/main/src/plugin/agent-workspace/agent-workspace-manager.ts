@@ -74,7 +74,7 @@ export class AgentWorkspaceManager implements Disposable {
       const detail = err instanceof Error ? err.message : String(err);
       task.status = 'failure';
       task.error = `Failed to create workspace: ${detail}`;
-      throw err;
+      throw new Error(detail);
     } finally {
       task.state = 'completed';
     }

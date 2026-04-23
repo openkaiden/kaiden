@@ -20,12 +20,14 @@ import type { RunError, RunResult } from '@openkaiden/api';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
-import type { Proxy as ProxyType } from '/@/plugin/proxy.js';
+import type { Proxy } from '/@/plugin/proxy.js';
 import { Exec } from '/@/plugin/util/exec.js';
 import type { AgentWorkspaceCreateOptions, AgentWorkspaceSummary } from '/@api/agent-workspace-info.js';
 import type { CliToolInfo } from '/@api/cli-tool-info.js';
 
 import { KdnCli } from './kdn-cli.js';
+
+vi.mock(import('/@/plugin/util/exec.js'));
 
 const KAIDEN_CLI_PATH = '/usr/local/bin/kdn';
 
@@ -51,10 +53,7 @@ const TEST_SUMMARIES: AgentWorkspaceSummary[] = [
 
 let kdnCli: KdnCli;
 
-const proxy = {
-  isEnabled: vi.fn().mockReturnValue(false),
-} as unknown as ProxyType;
-const exec = new Exec(proxy);
+const exec = new Exec({} as Proxy);
 const cliToolRegistry = {
   getCliToolInfos: vi.fn().mockReturnValue([{ name: 'kdn', path: KAIDEN_CLI_PATH }]),
 } as unknown as CliToolRegistry;
@@ -101,7 +100,7 @@ describe('getCliPath', () => {
 describe('getInfo', () => {
   test('executes kdn info and returns agents, runtimes, and version', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(
+    vi.mocked(exec.exec).mockResolvedValue(
       mockExecResult(JSON.stringify({ version: '0.1.0', agents: ['claude', 'opencode'], runtimes: ['podman'] })),
     );
 
@@ -114,7 +113,7 @@ describe('getInfo', () => {
   test('preserves extra fields from future CLI versions', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const payload = { version: '0.2.0', agents: ['opencode'], runtimes: ['podman'], newField: 'hello' };
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify(payload)));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify(payload)));
 
     const result = await kdnCli.getInfo();
 
@@ -124,7 +123,7 @@ describe('getInfo', () => {
   test('returns defaults when CLI returns non-object response', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult('"unexpected string"'));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('"unexpected string"'));
 
     const result = await kdnCli.getInfo();
 
@@ -134,7 +133,7 @@ describe('getInfo', () => {
   test('rejects when CLI fails', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockRejectedValue(new Error('command not found'));
+    vi.mocked(exec.exec).mockRejectedValue(new Error('command not found'));
 
     await expect(kdnCli.getInfo()).rejects.toThrow('command not found');
   });
@@ -145,7 +144,7 @@ describe('getInfo', () => {
     const runError = mockRunError({
       stdout: JSON.stringify({ error: 'failed to read --storage flag' }),
     });
-    vi.spyOn(exec, 'exec').mockRejectedValue(runError);
+    vi.mocked(exec.exec).mockRejectedValue(runError);
 
     await expect(kdnCli.getInfo()).rejects.toThrow('failed to read --storage flag');
   });
@@ -160,7 +159,7 @@ describe('create', () => {
 
   test('executes kdn init with required flags and returns the workspace id', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-new' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-new' })));
 
     const result = await kdnCli.create(defaultOptions);
 
@@ -179,7 +178,7 @@ describe('create', () => {
 
   test('defaults runtime to podman when not specified', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-new' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-new' })));
 
     await kdnCli.create({ sourcePath: '/tmp/my-project', agent: 'claude' });
 
@@ -188,7 +187,7 @@ describe('create', () => {
 
   test('includes optional name flag when provided', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-new' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-new' })));
 
     await kdnCli.create({ ...defaultOptions, name: 'my-workspace' });
 
@@ -197,7 +196,7 @@ describe('create', () => {
 
   test('includes optional project flag when provided', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-new' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-new' })));
 
     await kdnCli.create({ ...defaultOptions, project: 'my-project' });
 
@@ -207,7 +206,7 @@ describe('create', () => {
   test('rejects when source directory does not exist', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockRejectedValue(new Error('sources directory does not exist: /tmp/not-found'));
+    vi.mocked(exec.exec).mockRejectedValue(new Error('sources directory does not exist: /tmp/not-found'));
 
     await expect(kdnCli.create({ ...defaultOptions, sourcePath: '/tmp/not-found' })).rejects.toThrow(
       'sources directory does not exist: /tmp/not-found',
@@ -220,7 +219,7 @@ describe('create', () => {
     const runError = mockRunError({
       stdout: JSON.stringify({ error: 'failed to create runtime instance: exit status 125' }),
     });
-    vi.spyOn(exec, 'exec').mockRejectedValue(runError);
+    vi.mocked(exec.exec).mockRejectedValue(runError);
 
     await expect(kdnCli.create(defaultOptions)).rejects.toThrow('failed to create runtime instance: exit status 125');
   });
@@ -229,7 +228,7 @@ describe('create', () => {
 describe('list', () => {
   test('executes kdn workspace list and returns items', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ items: TEST_SUMMARIES })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ items: TEST_SUMMARIES })));
 
     const result = await kdnCli.list();
 
@@ -240,7 +239,7 @@ describe('list', () => {
 
   test('returns summaries with expected CLI fields', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ items: TEST_SUMMARIES })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ items: TEST_SUMMARIES })));
 
     const summary = (await kdnCli.list())[0]!;
 
@@ -257,7 +256,7 @@ describe('list', () => {
 
   test('returns summaries without model when CLI omits it', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ items: TEST_SUMMARIES })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ items: TEST_SUMMARIES })));
 
     const summary = (await kdnCli.list())[1]!;
 
@@ -267,7 +266,7 @@ describe('list', () => {
   test('rejects when CLI fails', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockRejectedValue(new Error('command not found'));
+    vi.mocked(exec.exec).mockRejectedValue(new Error('command not found'));
 
     await expect(kdnCli.list()).rejects.toThrow('command not found');
   });
@@ -276,7 +275,7 @@ describe('list', () => {
 describe('remove', () => {
   test('executes kdn workspace remove and returns the workspace id', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-1' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-1' })));
 
     const result = await kdnCli.remove('ws-1');
 
@@ -291,7 +290,7 @@ describe('remove', () => {
   test('rejects when CLI fails for unknown id', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockRejectedValue(new Error('workspace not found: unknown-id'));
+    vi.mocked(exec.exec).mockRejectedValue(new Error('workspace not found: unknown-id'));
 
     await expect(kdnCli.remove('unknown-id')).rejects.toThrow('workspace not found: unknown-id');
   });
@@ -300,7 +299,7 @@ describe('remove', () => {
 describe('start', () => {
   test('executes kdn workspace start and returns the workspace id', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-1' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-1' })));
 
     const result = await kdnCli.start('ws-1');
 
@@ -315,7 +314,7 @@ describe('start', () => {
   test('rejects when CLI fails for unknown id', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockRejectedValue(new Error('workspace not found: unknown-id'));
+    vi.mocked(exec.exec).mockRejectedValue(new Error('workspace not found: unknown-id'));
 
     await expect(kdnCli.start('unknown-id')).rejects.toThrow('workspace not found: unknown-id');
   });
@@ -324,7 +323,7 @@ describe('start', () => {
 describe('stop', () => {
   test('executes kdn workspace stop and returns the workspace id', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-1' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ id: 'ws-1' })));
 
     const result = await kdnCli.stop('ws-1');
 
@@ -339,7 +338,7 @@ describe('stop', () => {
   test('rejects when CLI fails for unknown id', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockRejectedValue(new Error('workspace not found: unknown-id'));
+    vi.mocked(exec.exec).mockRejectedValue(new Error('workspace not found: unknown-id'));
 
     await expect(kdnCli.stop('unknown-id')).rejects.toThrow('workspace not found: unknown-id');
   });
