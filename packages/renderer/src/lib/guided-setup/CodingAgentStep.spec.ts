@@ -138,6 +138,16 @@ test('card selector region has correct aria-label', () => {
   expect(screen.getByRole('region', { name: 'Coding agent' })).toBeInTheDocument();
 });
 
+test('falls back to all registry entries when CLI returns empty agents', async () => {
+  vi.stubGlobal('getCliInfo', vi.fn().mockResolvedValue({ version: '0.1.0', agents: [], runtimes: [] }));
+
+  renderStep();
+
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: 'OpenCode' })).toBeInTheDocument();
+  });
+});
+
 test('falls back to all registry entries when getCliInfo fails', async () => {
   vi.stubGlobal('getCliInfo', vi.fn().mockRejectedValue(new Error('kdn not found')));
 

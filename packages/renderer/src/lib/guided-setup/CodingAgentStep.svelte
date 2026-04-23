@@ -12,12 +12,13 @@ let { title, description, onboarding }: GuidedSetupStepProps = $props();
 let cliAgents: string[] | undefined = $state();
 
 onMount(async () => {
+  const fallback = agentDefinitions.map(d => d.cliName);
   try {
     const info = await window.getCliInfo();
-    cliAgents = info.agents;
+    cliAgents = info.agents.length > 0 ? info.agents : fallback;
   } catch (err) {
     console.warn('Failed to fetch CLI agents, showing all registry entries', err);
-    cliAgents = agentDefinitions.map(d => d.cliName);
+    cliAgents = fallback;
   }
 });
 
