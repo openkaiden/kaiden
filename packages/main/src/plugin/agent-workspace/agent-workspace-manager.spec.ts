@@ -23,10 +23,12 @@ import type { FileSystemWatcher } from '@openkaiden/api';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { IPCHandle } from '/@/plugin/api.js';
+import type { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
 import type { FilesystemMonitoring } from '/@/plugin/filesystem-monitoring.js';
-import type { KdnCli } from '/@/plugin/kdn-cli/kdn-cli.js';
+import { KdnCli } from '/@/plugin/kdn-cli/kdn-cli.js';
 import type { TaskManager } from '/@/plugin/tasks/task-manager.js';
 import type { Task } from '/@/plugin/tasks/tasks.js';
+import type { Exec } from '/@/plugin/util/exec.js';
 import type { AgentWorkspaceCreateOptions, AgentWorkspaceSummary } from '/@api/agent-workspace-info.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { TaskState, TaskStatus } from '/@api/taskInfo.js';
@@ -34,6 +36,8 @@ import type { TaskState, TaskStatus } from '/@api/taskInfo.js';
 import { AgentWorkspaceManager } from './agent-workspace-manager.js';
 
 vi.mock(import('node:fs/promises'));
+
+vi.mock(import('/@/plugin/kdn-cli/kdn-cli.js'));
 
 const TEST_SUMMARIES: AgentWorkspaceSummary[] = [
   {
@@ -62,15 +66,7 @@ const apiSender: ApiSenderType = {
   receive: vi.fn(),
 };
 const ipcHandle: IPCHandle = vi.fn();
-const kdnCli = {
-  getInfo: vi.fn(),
-  create: vi.fn(),
-  list: vi.fn(),
-  remove: vi.fn(),
-  start: vi.fn(),
-  stop: vi.fn(),
-  getCliPath: vi.fn(),
-} as unknown as KdnCli;
+const kdnCli = new KdnCli({} as Exec, {} as CliToolRegistry);
 
 const mockTask = {
   id: 'task-1',
