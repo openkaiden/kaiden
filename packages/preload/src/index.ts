@@ -143,6 +143,7 @@ import type { ChunkProviderInfo } from '/@api/rag/chunk-provider-info';
 import type { RagEnvironment } from '/@api/rag/rag-environment';
 import type { ExtensionBanner, RecommendedRegistry } from '/@api/recommendations/recommendations';
 import type { ReleaseNotesInfo } from '/@api/release-notes-info';
+import type { SecretCreateOptions, SecretInfo, SecretName } from '/@api/secret-info';
 import type { SkillFileContent, SkillFolderInfo, SkillInfo, SkillResourceEntry } from '/@api/skill/skill-info';
 import type { StatusBarEntryDescriptor } from '/@api/status-bar';
 import type { PinOption } from '/@api/status-bar/pin-option';
@@ -353,6 +354,18 @@ export function initExposure(): void {
 
   contextBridge.exposeInMainWorld('stopAgentWorkspace', async (id: string): Promise<AgentWorkspaceId> => {
     return ipcInvoke('agent-workspace:stop', id);
+  });
+
+  contextBridge.exposeInMainWorld('createSecret', async (options: SecretCreateOptions): Promise<SecretName> => {
+    return ipcInvoke('secret-manager:create', options);
+  });
+
+  contextBridge.exposeInMainWorld('listSecrets', async (): Promise<SecretInfo[]> => {
+    return ipcInvoke('secret-manager:list');
+  });
+
+  contextBridge.exposeInMainWorld('removeSecret', async (name: string): Promise<SecretName> => {
+    return ipcInvoke('secret-manager:remove', name);
   });
 
   contextBridge.exposeInMainWorld('listFlows', async (): Promise<Array<FlowInfo>> => {

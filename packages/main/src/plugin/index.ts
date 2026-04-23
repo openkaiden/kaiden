@@ -72,6 +72,7 @@ import { MenuRegistry } from '/@/plugin/menu-registry.js';
 import { NavigationManager } from '/@/plugin/navigation/navigation-manager.js';
 import { RagEnvironmentRegistry } from '/@/plugin/rag-environment-registry.js';
 import { SchedulerRegistry } from '/@/plugin/scheduler/scheduler-registry.js';
+import { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import { SkillManager } from '/@/plugin/skill/skill-manager.js';
 import { TaskManager } from '/@/plugin/tasks/task-manager.js';
 import { Uri } from '/@/plugin/types/uri.js';
@@ -582,6 +583,7 @@ export class PluginSystem {
     container.bind<CliToolRegistry>(CliToolRegistry).toSelf().inSingletonScope();
     container.bind<KdnCli>(KdnCli).toSelf().inSingletonScope();
     container.bind<AgentWorkspaceManager>(AgentWorkspaceManager).toSelf().inSingletonScope();
+    container.bind<SecretManager>(SecretManager).toSelf().inSingletonScope();
     container.bind<FlowManager>(FlowManager).toSelf().inSingletonScope();
     container.bind<SkillManager>(SkillManager).toSelf().inSingletonScope();
     container.bind<TrayMenuRegistry>(TrayMenuRegistry).toSelf().inSingletonScope();
@@ -665,6 +667,9 @@ export class PluginSystem {
 
     const agentWorkspaceManager = container.get<AgentWorkspaceManager>(AgentWorkspaceManager);
     agentWorkspaceManager.init();
+
+    const secretManager = container.get<SecretManager>(SecretManager);
+    secretManager.init();
 
     const flowManager = container.get<FlowManager>(FlowManager);
     flowManager.init();

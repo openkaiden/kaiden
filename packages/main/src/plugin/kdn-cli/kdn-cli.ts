@@ -27,6 +27,7 @@ import type {
   AgentWorkspaceSummary,
   CliInfo,
 } from '/@api/agent-workspace-info.js';
+import type { SecretCreateOptions, SecretInfo, SecretName } from '/@api/secret-info.js';
 
 /**
  * Low-level wrapper around the `kdn` CLI binary.
@@ -145,5 +146,55 @@ export class KdnCli {
 
   async stopWorkspace(id: string): Promise<AgentWorkspaceId> {
     return this.execWorkspace<AgentWorkspaceId>(['stop', id]);
+  }
+
+  private async execSecret<T>(args: string[]): Promise<T> {
+    const cliPath = this.getCliPath();
+    const fullArgs = ['secret', ...args, '--output', 'json'];
+    console.log(`Executing: ${cliPath} ${fullArgs.join(' ')}`);
+    try {
+      const result = await this.exec.exec(cliPath, fullArgs);
+      return JSON.parse(result.stdout) as T;
+    } catch (err: unknown) {
+      const detail = this.extractCliError(err);
+      console.error(`kdn failed: ${cliPath} ${fullArgs.join(' ')} — ${detail}`);
+      throw new Error(detail);
+    }
+  }
+
+  async createSecret(options: SecretCreateOptions): Promise<SecretName> {
+    const args = ['create', '--name', options.name, '--type', options.type, '--value', options.value];
+    if (options.description) {
+      args.push('--description', options.description);
+    }
+    if (options.hosts) {
+      for (const host of options.hosts) {
+        args.push('--host', host);
+      }
+    }
+    if (options.header) {
+      args.push('--header', options.header);
+    }
+    if (options.headerTemplate) {
+      args.push('--header-template', options.headerTemplate);
+    }
+    if (options.path) {
+      args.push('--path', options.path);
+    }
+    if (options.envs) {
+      for (const e of options.envs) {
+        args.push('--env', e);
+      }
+    }
+    return this.execSecret<SecretName>(args);
+  }
+
+  async listSecrets(): Promise<SecretInfo[]> {
+    const response = await this.execSecret<{ items: SecretInfo[] }>(['list']);
+    return response.items;
+  }
+
+  async removeSecret(name: string): Promise<SecretName> {
+    return this.execSecret<SecretName>(['remove', name]);
   }
 }
