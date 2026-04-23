@@ -109,7 +109,7 @@ export class KdnCli {
     }
   }
 
-  async create(options: AgentWorkspaceCreateOptions): Promise<AgentWorkspaceId> {
+  async createWorkspace(options: AgentWorkspaceCreateOptions): Promise<AgentWorkspaceId> {
     const cliPath = this.getCliPath();
     const runtime = options.runtime ?? 'podman';
     const args = ['init', options.sourcePath, '--runtime', runtime, '--agent', options.agent, '--output', 'json'];
@@ -130,20 +130,20 @@ export class KdnCli {
     }
   }
 
-  async list(): Promise<AgentWorkspaceSummary[]> {
+  async listWorkspaces(): Promise<AgentWorkspaceSummary[]> {
     const response = await this.execWorkspace<{ items: AgentWorkspaceSummary[] }>(['list']);
     return response.items;
   }
 
-  async remove(id: string): Promise<AgentWorkspaceId> {
+  async removeWorkspaces(id: string): Promise<AgentWorkspaceId> {
     return this.execWorkspace<AgentWorkspaceId>(['remove', id]);
   }
 
-  async start(id: string): Promise<AgentWorkspaceId> {
+  async startWorkspace(id: string): Promise<AgentWorkspaceId> {
     return this.execWorkspace<AgentWorkspaceId>(['start', id]);
   }
 
-  async stop(id: string): Promise<AgentWorkspaceId> {
+  async stopWorkspace(id: string): Promise<AgentWorkspaceId> {
     return this.execWorkspace<AgentWorkspaceId>(['stop', id]);
   }
 }

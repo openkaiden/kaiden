@@ -66,7 +66,7 @@ export class AgentWorkspaceManager implements Disposable {
     task.state = 'running';
     task.status = 'in-progress';
     try {
-      const workspaceId = await this.kdnCli.create(options);
+      const workspaceId = await this.kdnCli.createWorkspace(options);
       this.apiSender.send('agent-workspace-update');
       task.status = 'success';
       return workspaceId;
@@ -81,11 +81,11 @@ export class AgentWorkspaceManager implements Disposable {
   }
 
   async list(): Promise<AgentWorkspaceSummary[]> {
-    return this.kdnCli.list();
+    return this.kdnCli.listWorkspaces();
   }
 
   async remove(id: string): Promise<AgentWorkspaceId> {
-    const result = await this.kdnCli.remove(id);
+    const result = await this.kdnCli.removeWorkspaces(id);
     this.apiSender.send('agent-workspace-update');
     return result;
   }
@@ -108,13 +108,13 @@ export class AgentWorkspaceManager implements Disposable {
   }
 
   async start(id: string): Promise<AgentWorkspaceId> {
-    const result = await this.kdnCli.start(id);
+    const result = await this.kdnCli.startWorkspace(id);
     this.apiSender.send('agent-workspace-update');
     return result;
   }
 
   async stop(id: string): Promise<AgentWorkspaceId> {
-    const result = await this.kdnCli.stop(id);
+    const result = await this.kdnCli.stopWorkspace(id);
     this.apiSender.send('agent-workspace-update');
     return result;
   }

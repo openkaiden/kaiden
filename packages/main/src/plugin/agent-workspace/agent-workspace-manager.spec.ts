@@ -195,16 +195,16 @@ describe('create', () => {
   };
 
   test('delegates to kdnCli.create and returns the workspace id', async () => {
-    vi.mocked(kdnCli.create).mockResolvedValue({ id: 'ws-new' });
+    vi.mocked(kdnCli.createWorkspace).mockResolvedValue({ id: 'ws-new' });
 
     const result = await manager.create(defaultOptions);
 
-    expect(kdnCli.create).toHaveBeenCalledWith(defaultOptions);
+    expect(kdnCli.createWorkspace).toHaveBeenCalledWith(defaultOptions);
     expect(result).toEqual({ id: 'ws-new' });
   });
 
   test('creates a task and sets success status on completion', async () => {
-    vi.mocked(kdnCli.create).mockResolvedValue({ id: 'ws-new' });
+    vi.mocked(kdnCli.createWorkspace).mockResolvedValue({ id: 'ws-new' });
 
     await manager.create(defaultOptions);
 
@@ -214,7 +214,7 @@ describe('create', () => {
   });
 
   test('sets task failure status when CLI fails', async () => {
-    vi.mocked(kdnCli.create).mockRejectedValue(new Error('command not found'));
+    vi.mocked(kdnCli.createWorkspace).mockRejectedValue(new Error('command not found'));
 
     await expect(manager.create(defaultOptions)).rejects.toThrow('command not found');
 
@@ -224,7 +224,9 @@ describe('create', () => {
   });
 
   test('preserves error detail in task error message', async () => {
-    vi.mocked(kdnCli.create).mockRejectedValue(new Error('failed to create runtime instance: exit status 125'));
+    vi.mocked(kdnCli.createWorkspace).mockRejectedValue(
+      new Error('failed to create runtime instance: exit status 125'),
+    );
 
     await expect(manager.create(defaultOptions)).rejects.toThrow('failed to create runtime instance: exit status 125');
 
@@ -232,7 +234,7 @@ describe('create', () => {
   });
 
   test('includes workspace name in task title when provided', async () => {
-    vi.mocked(kdnCli.create).mockResolvedValue({ id: 'ws-new' });
+    vi.mocked(kdnCli.createWorkspace).mockResolvedValue({ id: 'ws-new' });
 
     await manager.create({ ...defaultOptions, name: 'my-workspace' });
 
@@ -240,7 +242,7 @@ describe('create', () => {
   });
 
   test('emits agent-workspace-update event', async () => {
-    vi.mocked(kdnCli.create).mockResolvedValue({ id: 'ws-new' });
+    vi.mocked(kdnCli.createWorkspace).mockResolvedValue({ id: 'ws-new' });
 
     await manager.create(defaultOptions);
 
@@ -250,17 +252,17 @@ describe('create', () => {
 
 describe('list', () => {
   test('delegates to kdnCli.list and returns items', async () => {
-    vi.mocked(kdnCli.list).mockResolvedValue(TEST_SUMMARIES);
+    vi.mocked(kdnCli.listWorkspaces).mockResolvedValue(TEST_SUMMARIES);
 
     const result = await manager.list();
 
-    expect(kdnCli.list).toHaveBeenCalled();
+    expect(kdnCli.listWorkspaces).toHaveBeenCalled();
     expect(result).toHaveLength(2);
     expect(result.map(s => s.id)).toEqual(['ws-1', 'ws-2']);
   });
 
   test('rejects when kdnCli.list fails', async () => {
-    vi.mocked(kdnCli.list).mockRejectedValue(new Error('command not found'));
+    vi.mocked(kdnCli.listWorkspaces).mockRejectedValue(new Error('command not found'));
 
     await expect(manager.list()).rejects.toThrow('command not found');
   });
@@ -268,16 +270,16 @@ describe('list', () => {
 
 describe('remove', () => {
   test('delegates to kdnCli.remove and returns the workspace id', async () => {
-    vi.mocked(kdnCli.remove).mockResolvedValue({ id: 'ws-1' });
+    vi.mocked(kdnCli.removeWorkspaces).mockResolvedValue({ id: 'ws-1' });
 
     const result = await manager.remove('ws-1');
 
-    expect(kdnCli.remove).toHaveBeenCalledWith('ws-1');
+    expect(kdnCli.removeWorkspaces).toHaveBeenCalledWith('ws-1');
     expect(result).toEqual({ id: 'ws-1' });
   });
 
   test('emits agent-workspace-update event', async () => {
-    vi.mocked(kdnCli.remove).mockResolvedValue({ id: 'ws-1' });
+    vi.mocked(kdnCli.removeWorkspaces).mockResolvedValue({ id: 'ws-1' });
 
     await manager.remove('ws-1');
 
@@ -285,7 +287,7 @@ describe('remove', () => {
   });
 
   test('rejects when kdnCli.remove fails', async () => {
-    vi.mocked(kdnCli.remove).mockRejectedValue(new Error('workspace not found: unknown-id'));
+    vi.mocked(kdnCli.removeWorkspaces).mockRejectedValue(new Error('workspace not found: unknown-id'));
 
     await expect(manager.remove('unknown-id')).rejects.toThrow('workspace not found: unknown-id');
   });
@@ -293,18 +295,18 @@ describe('remove', () => {
 
 describe('getConfiguration', () => {
   test('reads JSON configuration file from workspace directory', async () => {
-    vi.mocked(kdnCli.list).mockResolvedValue(TEST_SUMMARIES);
+    vi.mocked(kdnCli.listWorkspaces).mockResolvedValue(TEST_SUMMARIES);
     vi.mocked(readFile).mockResolvedValue('{"mounts":{"dependencies":[]}}');
 
     const result = await manager.getConfiguration('ws-1');
 
-    expect(kdnCli.list).toHaveBeenCalled();
+    expect(kdnCli.listWorkspaces).toHaveBeenCalled();
     expect(readFile).toHaveBeenCalledWith(join('/tmp/ws1/.kaiden', 'workspace.json'), 'utf-8');
     expect(result).toEqual({ mounts: { dependencies: [] } });
   });
 
   test('throws when workspace id is not found in list', async () => {
-    vi.mocked(kdnCli.list).mockResolvedValue(TEST_SUMMARIES);
+    vi.mocked(kdnCli.listWorkspaces).mockResolvedValue(TEST_SUMMARIES);
 
     await expect(manager.getConfiguration('unknown-id')).rejects.toThrow(
       'workspace "unknown-id" not found. Use "workspace list" to see available workspaces.',
@@ -312,7 +314,7 @@ describe('getConfiguration', () => {
   });
 
   test('returns empty configuration when file does not exist', async () => {
-    vi.mocked(kdnCli.list).mockResolvedValue(TEST_SUMMARIES);
+    vi.mocked(kdnCli.listWorkspaces).mockResolvedValue(TEST_SUMMARIES);
     const enoent = Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' });
     vi.mocked(readFile).mockRejectedValue(enoent);
 
@@ -322,7 +324,7 @@ describe('getConfiguration', () => {
   });
 
   test('rejects when reading the configuration file fails with a non-ENOENT error', async () => {
-    vi.mocked(kdnCli.list).mockResolvedValue(TEST_SUMMARIES);
+    vi.mocked(kdnCli.listWorkspaces).mockResolvedValue(TEST_SUMMARIES);
     const eacces = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
     vi.mocked(readFile).mockRejectedValue(eacces);
 
@@ -332,16 +334,16 @@ describe('getConfiguration', () => {
 
 describe('start', () => {
   test('delegates to kdnCli.start and returns the workspace id', async () => {
-    vi.mocked(kdnCli.start).mockResolvedValue({ id: 'ws-1' });
+    vi.mocked(kdnCli.startWorkspace).mockResolvedValue({ id: 'ws-1' });
 
     const result = await manager.start('ws-1');
 
-    expect(kdnCli.start).toHaveBeenCalledWith('ws-1');
+    expect(kdnCli.startWorkspace).toHaveBeenCalledWith('ws-1');
     expect(result).toEqual({ id: 'ws-1' });
   });
 
   test('emits agent-workspace-update event', async () => {
-    vi.mocked(kdnCli.start).mockResolvedValue({ id: 'ws-1' });
+    vi.mocked(kdnCli.startWorkspace).mockResolvedValue({ id: 'ws-1' });
 
     await manager.start('ws-1');
 
@@ -349,7 +351,7 @@ describe('start', () => {
   });
 
   test('rejects when kdnCli.start fails', async () => {
-    vi.mocked(kdnCli.start).mockRejectedValue(new Error('workspace not found: unknown-id'));
+    vi.mocked(kdnCli.startWorkspace).mockRejectedValue(new Error('workspace not found: unknown-id'));
 
     await expect(manager.start('unknown-id')).rejects.toThrow('workspace not found: unknown-id');
   });
@@ -357,16 +359,16 @@ describe('start', () => {
 
 describe('stop', () => {
   test('delegates to kdnCli.stop and returns the workspace id', async () => {
-    vi.mocked(kdnCli.stop).mockResolvedValue({ id: 'ws-1' });
+    vi.mocked(kdnCli.stopWorkspace).mockResolvedValue({ id: 'ws-1' });
 
     const result = await manager.stop('ws-1');
 
-    expect(kdnCli.stop).toHaveBeenCalledWith('ws-1');
+    expect(kdnCli.stopWorkspace).toHaveBeenCalledWith('ws-1');
     expect(result).toEqual({ id: 'ws-1' });
   });
 
   test('emits agent-workspace-update event', async () => {
-    vi.mocked(kdnCli.stop).mockResolvedValue({ id: 'ws-1' });
+    vi.mocked(kdnCli.stopWorkspace).mockResolvedValue({ id: 'ws-1' });
 
     await manager.stop('ws-1');
 
@@ -374,7 +376,7 @@ describe('stop', () => {
   });
 
   test('rejects when kdnCli.stop fails', async () => {
-    vi.mocked(kdnCli.stop).mockRejectedValue(new Error('workspace not found: unknown-id'));
+    vi.mocked(kdnCli.stopWorkspace).mockRejectedValue(new Error('workspace not found: unknown-id'));
 
     await expect(manager.stop('unknown-id')).rejects.toThrow('workspace not found: unknown-id');
   });
