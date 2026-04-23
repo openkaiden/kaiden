@@ -221,6 +221,7 @@ import { INTERNAL_PROVIDER_ID, MCPRegistry } from './mcp/mcp-registry.js';
 import { MCPSchemaValidator } from './mcp/mcp-schema-validator.js';
 import { MessageBox } from './message-box.js';
 import { NavigationItemsInit } from './navigation-items-init.js';
+import { OnboardingInit } from './onboarding/onboarding-init.js';
 import { OnboardingRegistry } from './onboarding-registry.js';
 import { OpenDevToolsInit } from './open-devtools-init.js';
 import { ProviderRegistry } from './provider-registry.js';
@@ -591,6 +592,7 @@ export class PluginSystem {
     container.bind<FilesystemMonitoring>(FilesystemMonitoring).toSelf().inSingletonScope();
     container.bind<CustomPickRegistry>(CustomPickRegistry).toSelf().inSingletonScope();
     container.bind<OnboardingRegistry>(OnboardingRegistry).toSelf().inSingletonScope();
+    container.bind<OnboardingInit>(OnboardingInit).toSelf().inSingletonScope();
     container.bind<KubernetesClient>(KubernetesClient).toSelf().inSingletonScope();
     container.bind<ChatManager>(ChatManager).toSelf().inSingletonScope();
     container.bind<SchedulerRegistry>(SchedulerRegistry).toSelf().inSingletonScope();
@@ -670,6 +672,8 @@ export class PluginSystem {
 
     const secretManager = container.get<SecretManager>(SecretManager);
     secretManager.init();
+    const onboardingInit = container.get<OnboardingInit>(OnboardingInit);
+    onboardingInit.init();
 
     const flowManager = container.get<FlowManager>(FlowManager);
     flowManager.init();

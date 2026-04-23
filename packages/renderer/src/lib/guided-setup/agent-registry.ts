@@ -17,49 +17,29 @@
  ***********************************************************************/
 
 import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
-import { faRobot } from '@fortawesome/free-solid-svg-icons';
+import { faDesktop } from '@fortawesome/free-solid-svg-icons';
 import type { Component } from 'svelte';
 
-import CodingAgentStep from './CodingAgentStep.svelte';
+import type { CliAgent } from './guided-setup-steps';
+import OpenCodePanel from './panels/OpenCodePanel.svelte';
 
-export type CliAgent = 'opencode';
-
-export interface OnboardingState {
-  agent: CliAgent;
-}
-
-export interface GuidedSetupStepProps {
-  stepId: string;
+export interface AgentDefinition {
+  cliName: CliAgent;
   title: string;
   description: string;
-  onboarding: OnboardingState;
-}
-
-export interface GuidedSetupStep {
-  id: string;
-  title: string;
-  description: string;
+  badge: string;
   icon: IconDefinition;
-  component: Component<GuidedSetupStepProps>;
-  isComplete: () => boolean;
-  isSkippable: boolean;
+  panel?: Component;
 }
 
-export function createDefaultOnboardingState(): OnboardingState {
-  return {
-    agent: 'opencode',
-  };
-}
-
-export const guidedSetupSteps: GuidedSetupStep[] = [
+export const agentDefinitions: AgentDefinition[] = [
   {
-    id: 'coding-agent',
-    title: 'Choose your coding agent',
+    cliName: 'opencode',
+    title: 'OpenCode',
     description:
-      'Pick the default coding agent runtime. The API notes below update for your choice. You can change this later in settings.',
-    icon: faRobot,
-    component: CodingAgentStep,
-    isComplete: (): boolean => false,
-    isSkippable: true,
+      'Open-source agent on your machine - local models via Ollama or Ramalama, or cloud APIs (OpenAI, Gemini, and other providers OpenCode supports).',
+    badge: 'Recommended',
+    icon: faDesktop,
+    panel: OpenCodePanel,
   },
 ];

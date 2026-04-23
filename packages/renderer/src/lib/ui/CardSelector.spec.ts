@@ -130,3 +130,12 @@ test('Expect deselection when clicking the already selected option', async () =>
 
   expect(buttonA.className).toContain('border-[var(--pd-content-card-border)]');
 });
+
+test('Expect no deselection when required is true', async () => {
+  render(CardSelector, { options, selected: 'a', required: true });
+
+  const buttonA = screen.getByRole('button', { name: 'Option A' });
+  await fireEvent.click(buttonA);
+
+  expect(buttonA.className).toContain('border-[var(--pd-content-card-border-selected)]');
+});

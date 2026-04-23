@@ -32,6 +32,11 @@ import type { TelemetryMessages } from '/@api/telemetry';
 
 import WelcomePage from './WelcomePage.svelte';
 
+vi.mock(import('/@/lib/guided-setup/guided-setup-steps'), async importOriginal => ({
+  ...(await importOriginal()),
+  guidedSetupSteps: [],
+}));
+
 // fake the window.events object
 beforeEach(() => {
   vi.resetAllMocks();

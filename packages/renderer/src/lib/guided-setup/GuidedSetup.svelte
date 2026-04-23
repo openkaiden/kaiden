@@ -4,7 +4,7 @@ import { Button } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { SvelteSet } from 'svelte/reactivity';
 
-import { guidedSetupSteps } from './guided-setup-steps';
+import { createDefaultOnboardingState, guidedSetupSteps } from './guided-setup-steps';
 
 interface Props {
   onclose: () => void;
@@ -14,6 +14,7 @@ let { onclose }: Props = $props();
 
 let currentStepIndex = $state(0);
 let completedSteps = new SvelteSet<string>();
+let onboardingState = $state(createDefaultOnboardingState());
 
 let hasSteps = $derived(guidedSetupSteps.length > 0);
 let currentStep = $derived(guidedSetupSteps[currentStepIndex]);
@@ -27,8 +28,17 @@ function getStepState(index: number): 'completed' | 'active' | 'upcoming' {
   return 'upcoming';
 }
 
-function advance(): void {
+async function persistOnboardingDefaults(): Promise<void> {
+  await window.updateConfigurationValue('onboarding.defaultAgent', onboardingState.agent);
+}
+
+async function advance(): Promise<void> {
   if (!hasSteps || isLastStep) {
+    try {
+      await persistOnboardingDefaults();
+    } catch (err: unknown) {
+      console.error('Failed to persist onboarding defaults', err);
+    }
     onclose();
   } else {
     currentStepIndex++;
@@ -37,23 +47,27 @@ function advance(): void {
 
 function handleContinue(): void {
   completedSteps.add(currentStep.id);
-  advance();
+  advance().catch((err: unknown) => {
+    console.error('advance failed', err);
+  });
 }
 
 function handleSkip(): void {
-  advance();
+  advance().catch((err: unknown) => {
+    console.error('advance failed', err);
+  });
 }
 
 function handleStepClick(index: number): void {
-  const state = getStepState(index);
-  if (state === 'completed' || index === currentStepIndex) {
+  const stepState = getStepState(index);
+  if (stepState === 'completed' || index === currentStepIndex) {
     currentStepIndex = index;
   }
 }
 </script>
 
 <div
-  class="fixed inset-0 z-50 flex flex-col bg-[var(--pd-content-card-bg)]"
+  class="fixed inset-0 z-50 flex flex-col bg-(--pd-content-card-bg)"
   role="dialog"
   aria-label="Guided Setup">
 
@@ -64,8 +78,8 @@ function handleStepClick(index: number): void {
       {#if index > 0}
         <div
           class="h-0.5 w-12 mx-1 transition-colors {state === 'upcoming'
-            ? 'bg-[var(--pd-content-divider)]'
-            : 'bg-[var(--pd-button-primary-bg)]'}"
+            ? 'bg-(--pd-content-divider)'
+            : 'bg-(--pd-button-primary-bg)'}"
           aria-hidden="true">
         </div>
       {/if}
@@ -82,15 +96,15 @@ function handleStepClick(index: number): void {
             {state === 'completed'
               ? 'bg-green-600 text-white'
               : state === 'active'
-                ? 'bg-[var(--pd-button-primary-bg)] text-[var(--pd-button-text)]'
-                : 'bg-[var(--pd-content-card-inset-bg)] text-[var(--pd-content-card-text)]'}">
+                ? 'bg-(--pd-button-primary-bg) text-(--pd-button-text)'
+                : 'bg-(--pd-content-card-inset-bg) text-(--pd-content-card-text)'}">
           {#if state === 'completed'}
             <Icon icon={faCheck} size="0.8x" />
           {:else}
             {index + 1}
           {/if}
         </div>
-        <span class="text-xs text-[var(--pd-content-card-text)] whitespace-nowrap">{step.title}</span>
+        <span class="text-xs text-(--pd-content-card-text) whitespace-nowrap">{step.title}</span>
       </button>
     {/each}
   </nav>
@@ -99,16 +113,16 @@ function handleStepClick(index: number): void {
   <div class="flex-1 overflow-y-auto px-8" aria-label="Step content">
     {#each guidedSetupSteps as step, index (step.id)}
       {#if index === currentStepIndex}
-        <step.component stepId={step.id} title={step.title} description={step.description} />
+        <step.component stepId={step.id} title={step.title} description={step.description} onboarding={onboardingState} />
       {/if}
     {/each}
   </div>
 
   <!-- Footer -->
-  <footer class="flex justify-end gap-3 px-8 py-6 bg-[var(--pd-content-bg)]">
+  <footer class="flex justify-end gap-3 px-8 py-6 bg-(--pd-content-bg)">
     {#if currentStep?.isSkippable}
       <Button type="secondary" aria-label="Skip" onclick={handleSkip}>Skip</Button>
     {/if}
-    <Button type="primary" aria-label={continueLabel} onclick={handleContinue}>{continueLabel}</Button>
+    <Button type="primary" aria-label={continueLabel} onclick={handleContinue}>{continueLabel} &rsaquo;</Button>
   </footer>
 </div>
