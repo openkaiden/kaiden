@@ -5,13 +5,13 @@ export function getModels(providerInfos: ProviderInfo[]): ModelInfo[] {
   return providerInfos.reduce(
     (accumulator, current) => {
       if (current.inferenceConnections.length > 0) {
-        for (const { name, type, providerName, endpoint, models } of current.inferenceConnections) {
+        for (const { name, type, llmMetadata, endpoint, models } of current.inferenceConnections) {
           accumulator.push(
             ...models.map((model: { label: string }) => ({
               providerId: current.id,
               connectionName: name,
               type,
-              providerName,
+              llmMetadata: llmMetadata,
               endpoint,
               label: model.label,
             })),

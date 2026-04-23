@@ -377,10 +377,6 @@ export class ChatManager {
         connectionName: params.connectionName,
         providerId: params.providerId,
         type: this.providerRegistry.getInferenceConnectionType(params.providerId, params.connectionName),
-        providerName: this.providerRegistry.getInferenceConnectionProviderName(
-          params.providerId,
-          params.connectionName,
-        ),
         endpoint: this.providerRegistry.getInferenceConnectionEndpoint(params.providerId, params.connectionName),
       };
       await this.chatQueries.saveMessages({

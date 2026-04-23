@@ -9,7 +9,6 @@ export function findModel(models: ModelInfo[], model: ModelInfo | undefined): Mo
       m.providerId === model.providerId &&
       m.connectionName === model.connectionName &&
       m.type === model.type &&
-      m.providerName === model.providerName &&
       m.endpoint === model.endpoint,
   );
 }
@@ -64,7 +63,6 @@ let selectedModel = $derived<ModelInfo | undefined>(
         label: config.modelId,
         providerId: config.providerId,
         type: config.type ?? 'cloud',
-        providerName: config.providerName,
         endpoint: config.endpoint,
       }
     : findModel(models, lastUsedModel.value) ?? models[0],

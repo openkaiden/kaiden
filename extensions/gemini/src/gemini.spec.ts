@@ -197,7 +197,7 @@ describe('factory', () => {
     expect(PROVIDER_MOCK.registerInferenceProviderConnection).toHaveBeenCalledWith({
       name: 'dum*****',
       type: 'cloud',
-      providerName: 'gemini',
+      llmMetadata: { name: 'gemini' },
       status: expect.any(Function),
       lifecycle: {
         delete: expect.any(Function),
