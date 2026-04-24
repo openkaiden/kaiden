@@ -151,7 +151,6 @@ export class KdnCli {
   private async execSecret<T>(args: string[]): Promise<T> {
     const cliPath = this.getCliPath();
     const fullArgs = ['secret', ...args, '--output', 'json'];
-    console.log(`Executing: ${cliPath} ${fullArgs.join(' ')}`);
     try {
       const result = await this.exec.exec(cliPath, fullArgs);
       return JSON.parse(result.stdout) as T;

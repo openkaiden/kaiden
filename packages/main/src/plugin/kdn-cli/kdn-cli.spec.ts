@@ -356,14 +356,13 @@ describe('createSecret', () => {
 
   test('executes kdn secret create with required flags and returns the secret name', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
 
     const result = await kdnCli.createSecret(defaultOptions);
 
     expect(exec.exec).toHaveBeenCalledWith(KAIDEN_CLI_PATH, [
       'secret',
       'create',
-      '--name',
       'my-secret',
       '--type',
       'github',
@@ -377,7 +376,7 @@ describe('createSecret', () => {
 
   test('includes optional description flag when provided', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
 
     await kdnCli.createSecret({ ...defaultOptions, description: 'GitHub token' });
 
@@ -386,7 +385,7 @@ describe('createSecret', () => {
 
   test('includes optional host flag when provided', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
 
     await kdnCli.createSecret({ ...defaultOptions, type: 'other', hosts: ['api.example.com'] });
 
@@ -395,7 +394,7 @@ describe('createSecret', () => {
 
   test('includes optional header flag when provided', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
 
     await kdnCli.createSecret({ ...defaultOptions, type: 'other', header: 'Authorization' });
 
@@ -404,7 +403,7 @@ describe('createSecret', () => {
 
   test('includes optional header-template flag when provided', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
 
     await kdnCli.createSecret({ ...defaultOptions, type: 'other', headerTemplate: 'Bearer ${value}' });
 
@@ -416,7 +415,7 @@ describe('createSecret', () => {
 
   test('includes optional path flag when provided', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
 
     await kdnCli.createSecret({ ...defaultOptions, type: 'other', path: '/api/v1' });
 
@@ -425,7 +424,7 @@ describe('createSecret', () => {
 
   test('repeats env flag for each entry in the array', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
 
     await kdnCli.createSecret({ ...defaultOptions, type: 'other', envs: ['API_KEY', 'SECRET_KEY'] });
 
@@ -464,7 +463,7 @@ describe('listSecrets', () => {
 
   test('executes kdn secret list and returns items', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ items: TEST_SECRETS })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ items: TEST_SECRETS })));
 
     const result = await kdnCli.listSecrets();
 
@@ -476,7 +475,7 @@ describe('listSecrets', () => {
   test('rejects when CLI fails', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockRejectedValue(new Error('command not found'));
+    vi.mocked(exec.exec).mockRejectedValue(new Error('command not found'));
 
     await expect(kdnCli.listSecrets()).rejects.toThrow('command not found');
   });
@@ -485,7 +484,7 @@ describe('listSecrets', () => {
 describe('removeSecret', () => {
   test('executes kdn secret remove and returns the secret name', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ name: 'my-secret' })));
 
     const result = await kdnCli.removeSecret('my-secret');
 
@@ -496,7 +495,7 @@ describe('removeSecret', () => {
   test('rejects when CLI fails for unknown name', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.spyOn(exec, 'exec').mockRejectedValue(new Error('secret not found: unknown'));
+    vi.mocked(exec.exec).mockRejectedValue(new Error('secret not found: unknown'));
 
     await expect(kdnCli.removeSecret('unknown')).rejects.toThrow('secret not found: unknown');
   });
