@@ -163,7 +163,7 @@ export class KdnCli {
   }
 
   async createSecret(options: SecretCreateOptions): Promise<SecretName> {
-    const args = ['create', '--name', options.name, '--type', options.type, '--value', options.value];
+    const args = ['create', options.name, '--type', options.type, '--value', options.value];
     if (options.description) {
       args.push('--description', options.description);
     }
