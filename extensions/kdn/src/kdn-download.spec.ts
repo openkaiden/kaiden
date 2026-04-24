@@ -24,8 +24,8 @@ import { PassThrough } from 'node:stream';
 import * as tar from 'tar';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { downloadKdn, getLatestVersion } from './download-kdn.js';
-import { sha256 } from './sha256.js';
+import { downloadKdn, getLatestVersion } from './kdn-download';
+import { sha256 } from './sha256';
 
 const getEntriesMock = vi.fn();
 
@@ -38,14 +38,10 @@ vi.mock('adm-zip', () => ({
   },
 }));
 vi.mock(import('tar'));
-vi.mock('./sha256.js', () => ({
-  sha256: vi.fn().mockResolvedValue('abc123'),
-}));
+vi.mock(import('./sha256'));
 
-// Track which paths "exist" on the virtual filesystem
 let fileMap: Map<string, boolean>;
 
-// Normalize path separators so tests work on both Linux and Windows
 function normPath(p: string): string {
   return path.posix.normalize(String(p).replace(/\\/g, '/'));
 }
@@ -103,7 +99,6 @@ describe('downloadKdn', () => {
     vi.mocked(readFile).mockResolvedValue('0.5.0-linux-x64');
     stubFetch('abc123  kdn_0.5.0_linux_amd64.tar.gz\n');
 
-    // After extraction, binary should appear
     vi.mocked(tar.extract).mockImplementation(async (opts: { cwd?: string }) => {
       fileMap.set(normPath(path.join(opts.cwd ?? '', 'kdn')), true);
     });

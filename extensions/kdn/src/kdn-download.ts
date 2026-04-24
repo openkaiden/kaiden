@@ -25,7 +25,7 @@ import { parseArgs as nodeParseArgs } from 'node:util';
 import AdmZip from 'adm-zip';
 import * as tar from 'tar';
 
-import { sha256 } from './sha256.js';
+import { sha256 } from './sha256';
 
 const KDN_REPO = 'openkaiden/kdn';
 
@@ -116,7 +116,6 @@ export async function downloadKdn(version: string, platform: string, arch: strin
   const versionMarker = `${version}-${platform}-${arch}`;
   const binaryPath = join(outputDir, platform === 'win32' ? 'kdn.exe' : 'kdn');
 
-  // Skip if already downloaded
   if (existsSync(versionFile) && existsSync(binaryPath)) {
     const existing = await readFile(versionFile, { encoding: 'utf-8' });
     if (existing.trim() === versionMarker) {
@@ -175,7 +174,6 @@ function parseArgs(args: string[]): { output: string; platform: string; arch: st
   return { output: values.output, platform: values.platform, arch: values.arch };
 }
 
-// do not start if we are in a VITEST env
 if (!process.env['VITEST']) {
   const { output, platform, arch } = parseArgs(process.argv.slice(2));
   getLatestVersion()

@@ -16,11 +16,11 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { node } from '../../.electron-vendors.cache.json';
 import { join } from 'path';
 import { builtinModules } from 'module';
 
 const PACKAGE_ROOT = __dirname;
+
 /**
  * @type {import('vite').UserConfig}
  * @see https://vitejs.dev/config/
@@ -32,43 +32,35 @@ const config = {
   resolve: {
     alias: {
       '/@/': join(PACKAGE_ROOT, 'src') + '/',
-      '/@api/': join(PACKAGE_ROOT, '../api/src') + '/',
-      '/@product.json': `${join(PACKAGE_ROOT, '../../product.json')}`,
     },
   },
   build: {
     sourcemap: 'inline',
-    target: `node${node}`,
+    target: 'esnext',
     outDir: 'dist',
     assetsDir: '.',
     minify: process.env.MODE === 'production' ? 'esbuild' : false,
     lib: {
-      entry: ['src/index.ts', 'scripts/download-remote-extensions.ts'],
+      entry: ['src/extension.ts', 'src/kdn-download.ts'],
       formats: ['cjs'],
     },
     rollupOptions: {
-      external: [
-        'electron',
-        'chokidar',
-        'tar-fs',
-        'ssh2',
-        '@segment/analytics-node',
-        'express',
-        'isomorphic-ws',
-        'better-sqlite3',
-        ...builtinModules.flatMap(p => [p, `node:${p}`]),
-      ],
+      external: ['@openkaiden/api', ...builtinModules.flatMap(p => [p, `node:${p}`])],
       output: {
-        entryFileNames: '[name].cjs',
+        entryFileNames: '[name].js',
       },
     },
     emptyOutDir: true,
     reportCompressedSize: false,
   },
   test: {
-    retry: 3, // Retries failing tests up to 3 times
+    globals: true,
     environment: 'node',
-    include: ['{src,scripts}/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    include: ['src/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    globalSetup: [join(PACKAGE_ROOT, '..', '..', '__mocks__', 'vitest-generate-api-global-setup.ts')],
+    alias: {
+      '@openkaiden/api': join(PACKAGE_ROOT, '..', '..', '__mocks__/@openkaiden/api.js'),
+    },
   },
 };
 

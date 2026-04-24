@@ -110,9 +110,9 @@ async function packageRemoteExtensions(context) {
  * Fetches the latest version from GitHub releases.
  */
 async function downloadKdn(context) {
-  const downloadScript = path.join('packages', 'main', 'dist', 'download-kdn.cjs');
+  const downloadScript = path.join('extensions', 'kdn', 'dist', 'kdn-download.js');
   if (!fs.existsSync(downloadScript)) {
-    throw new Error(`${downloadScript} not found. Run "pnpm run build:main" before packaging.`);
+    throw new Error(`${downloadScript} not found. Run "pnpm run build:extensions:kdn" before packaging.`);
   }
 
   const archMap = {
@@ -132,10 +132,12 @@ async function downloadKdn(context) {
       [downloadScript, `--output=${outputDir}`, `--platform=${context.electronPlatformName}`, `--arch=${arch}`],
       { maxBuffer: 10 * 1024 * 1024, timeout: 10 * 60 * 1000 },
       (error, stdout, stderr) => {
-        console.log(stdout);
-        if (stderr) console.log(stderr);
+        if (stdout) console.log(stdout);
+        if (stderr) console.error(stderr);
         if (error) {
-          reject(error);
+          reject(
+            new Error(`kdn download failed for ${context.electronPlatformName}/${arch}: ${stderr || error.message}`),
+          );
         } else {
           resolve();
         }
