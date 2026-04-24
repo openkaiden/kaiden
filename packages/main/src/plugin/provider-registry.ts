@@ -2046,19 +2046,6 @@ export class ProviderRegistry {
     return connection.type;
   }
 
-  getInferenceConnectionProviderName(
-    providerId: string,
-    connectionName: string,
-  ): InferenceProviderConnection['llmMetadata'] {
-    const internalId = this.getMatchingProviderInternalId(providerId);
-    const provider = this.providers.get(internalId);
-    if (!provider) throw new Error('Provider not found');
-
-    const connection = provider.inferenceConnections.find(({ name }) => name === connectionName);
-    if (!connection) throw new Error('Connection not found');
-    return connection.llmMetadata;
-  }
-
   getInferenceConnectionEndpoint(providerId: string, connectionName: string): InferenceProviderConnection['endpoint'] {
     const internalId = this.getMatchingProviderInternalId(providerId);
     const provider = this.providers.get(internalId);
