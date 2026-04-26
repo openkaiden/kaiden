@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { RunError } from '@openkaiden/api';
+import type { RunError, RunOptions } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
 
 import { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
@@ -27,7 +27,7 @@ import type {
   AgentWorkspaceSummary,
   CliInfo,
 } from '/@api/agent-workspace-info.js';
-import type { SecretCreateOptions, SecretInfo, SecretName } from '/@api/secret-info.js';
+import type { SecretCreateOptions, SecretInfo, SecretName, SecretService } from '/@api/secret-info.js';
 
 /**
  * Low-level wrapper around the `kdn` CLI binary.
@@ -77,20 +77,6 @@ export class KdnCli {
     return err instanceof Error ? err.message : String(err);
   }
 
-  private async execWorkspace<T>(args: string[], options?: { cwd?: string }): Promise<T> {
-    const cliPath = this.getCliPath();
-    const fullArgs = ['workspace', ...args, '--output', 'json'];
-    console.log(`Executing: ${cliPath} ${fullArgs.join(' ')}`);
-    try {
-      const result = await this.exec.exec(cliPath, fullArgs, options);
-      return JSON.parse(result.stdout) as T;
-    } catch (err: unknown) {
-      const detail = this.extractCliError(err);
-      console.error(`kdn failed: ${cliPath} ${fullArgs.join(' ')} — ${detail}`);
-      throw new Error(detail);
-    }
-  }
-
   async getInfo(): Promise<CliInfo> {
     const cliPath = this.getCliPath();
     const args = ['info', '--output', 'json'];
@@ -132,27 +118,27 @@ export class KdnCli {
   }
 
   async listWorkspaces(): Promise<AgentWorkspaceSummary[]> {
-    const response = await this.execWorkspace<{ items: AgentWorkspaceSummary[] }>(['list']);
+    const response = await this.execCLI<{ items: AgentWorkspaceSummary[] }>(['workspace', 'list']);
     return response.items;
   }
 
   async removeWorkspaces(id: string): Promise<AgentWorkspaceId> {
-    return this.execWorkspace<AgentWorkspaceId>(['remove', id]);
+    return this.execCLI<AgentWorkspaceId>(['workspace', 'remove', id]);
   }
 
   async startWorkspace(id: string): Promise<AgentWorkspaceId> {
-    return this.execWorkspace<AgentWorkspaceId>(['start', id]);
+    return this.execCLI<AgentWorkspaceId>(['workspace', 'start', id]);
   }
 
   async stopWorkspace(id: string): Promise<AgentWorkspaceId> {
-    return this.execWorkspace<AgentWorkspaceId>(['stop', id]);
+    return this.execCLI<AgentWorkspaceId>(['workspace', 'stop', id]);
   }
 
-  private async execSecret<T>(args: string[]): Promise<T> {
+  private async execCLI<T>(args: string[], options?: RunOptions): Promise<T> {
     const cliPath = this.getCliPath();
-    const fullArgs = ['secret', ...args, '--output', 'json'];
+    const fullArgs = [...args, '--output', 'json'];
     try {
-      const result = await this.exec.exec(cliPath, fullArgs);
+      const result = await this.exec.exec(cliPath, fullArgs, options);
       return JSON.parse(result.stdout) as T;
     } catch (err: unknown) {
       const detail = this.extractCliError(err);
@@ -162,7 +148,7 @@ export class KdnCli {
   }
 
   async createSecret(options: SecretCreateOptions): Promise<SecretName> {
-    const args = ['create', options.name, '--type', options.type, '--value', options.value];
+    const args = ['secret', 'create', options.name, '--type', options.type, '--value', options.value];
     if (options.description) {
       args.push('--description', options.description);
     }
@@ -185,15 +171,19 @@ export class KdnCli {
         args.push('--env', e);
       }
     }
-    return this.execSecret<SecretName>(args);
+    return this.execCLI<SecretName>(args);
   }
 
   async listSecrets(): Promise<SecretInfo[]> {
-    const response = await this.execSecret<{ items: SecretInfo[] }>(['list']);
+    const response = await this.execCLI<{ items: SecretInfo[] }>(['secret', 'list']);
     return response.items;
   }
 
   async removeSecret(name: string): Promise<SecretName> {
-    return this.execSecret<SecretName>(['remove', name]);
+    return this.execCLI<SecretName>(['secret', 'remove', name]);
+  }
+
+  async listServices(): Promise<SecretService[]> {
+    return this.execCLI<SecretService[]>(['service', 'list']);
   }
 }

@@ -21,7 +21,7 @@ import { inject, injectable } from 'inversify';
 import { IPCHandle } from '/@/plugin/api.js';
 import { KdnCli } from '/@/plugin/kdn-cli/kdn-cli.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
-import type { SecretCreateOptions, SecretInfo, SecretName } from '/@api/secret-info.js';
+import type { SecretCreateOptions, SecretInfo, SecretName, SecretService } from '/@api/secret-info.js';
 
 /**
  * Manages secrets by delegating to the `kdn` CLI.
@@ -51,6 +51,10 @@ export class SecretManager {
     const result = await this.kdnCli.removeSecret(name);
     this.apiSender.send('secret-manager-update');
     return result;
+  }
+
+  async listServices(): Promise<SecretService[]> {
+    return this.kdnCli.listServices();
   }
 
   init(): void {

@@ -28,6 +28,8 @@ export type SecretName = components['schemas']['SecretName'];
  */
 export type SecretInfo = components['schemas']['SecretInfo'];
 
+export type SecretService = components['schemas']['SecretService'];
+
 /**
  * Options for creating a new secret via `kdn secret create`.
  */

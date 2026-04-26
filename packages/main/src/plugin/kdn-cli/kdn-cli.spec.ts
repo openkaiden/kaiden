@@ -24,7 +24,7 @@ import type { Proxy } from '/@/plugin/proxy.js';
 import { Exec } from '/@/plugin/util/exec.js';
 import type { AgentWorkspaceCreateOptions, AgentWorkspaceSummary } from '/@api/agent-workspace-info.js';
 import type { CliToolInfo } from '/@api/cli-tool-info.js';
-import type { SecretCreateOptions, SecretInfo } from '/@api/secret-info.js';
+import type { SecretCreateOptions, SecretInfo, SecretService } from '/@api/secret-info.js';
 
 import { KdnCli } from './kdn-cli.js';
 
@@ -360,17 +360,11 @@ describe('createSecret', () => {
 
     const result = await kdnCli.createSecret(defaultOptions);
 
-    expect(exec.exec).toHaveBeenCalledWith(KAIDEN_CLI_PATH, [
-      'secret',
-      'create',
-      'my-secret',
-      '--type',
-      'github',
-      '--value',
-      'ghp_abc123',
-      '--output',
-      'json',
-    ]);
+    expect(exec.exec).toHaveBeenCalledWith(
+      KAIDEN_CLI_PATH,
+      ['secret', 'create', 'my-secret', '--type', 'github', '--value', 'ghp_abc123', '--output', 'json'],
+      undefined,
+    );
     expect(result).toEqual({ name: 'my-secret' });
   });
 
@@ -380,7 +374,11 @@ describe('createSecret', () => {
 
     await kdnCli.createSecret({ ...defaultOptions, description: 'GitHub token' });
 
-    expect(exec.exec).toHaveBeenCalledWith(KAIDEN_CLI_PATH, expect.arrayContaining(['--description', 'GitHub token']));
+    expect(exec.exec).toHaveBeenCalledWith(
+      KAIDEN_CLI_PATH,
+      expect.arrayContaining(['--description', 'GitHub token']),
+      undefined,
+    );
   });
 
   test('includes optional host flag when provided', async () => {
@@ -389,7 +387,11 @@ describe('createSecret', () => {
 
     await kdnCli.createSecret({ ...defaultOptions, type: 'other', hosts: ['api.example.com'] });
 
-    expect(exec.exec).toHaveBeenCalledWith(KAIDEN_CLI_PATH, expect.arrayContaining(['--host', 'api.example.com']));
+    expect(exec.exec).toHaveBeenCalledWith(
+      KAIDEN_CLI_PATH,
+      expect.arrayContaining(['--host', 'api.example.com']),
+      undefined,
+    );
   });
 
   test('includes optional header flag when provided', async () => {
@@ -398,7 +400,11 @@ describe('createSecret', () => {
 
     await kdnCli.createSecret({ ...defaultOptions, type: 'other', header: 'Authorization' });
 
-    expect(exec.exec).toHaveBeenCalledWith(KAIDEN_CLI_PATH, expect.arrayContaining(['--header', 'Authorization']));
+    expect(exec.exec).toHaveBeenCalledWith(
+      KAIDEN_CLI_PATH,
+      expect.arrayContaining(['--header', 'Authorization']),
+      undefined,
+    );
   });
 
   test('includes optional header-template flag when provided', async () => {
@@ -410,6 +416,7 @@ describe('createSecret', () => {
     expect(exec.exec).toHaveBeenCalledWith(
       KAIDEN_CLI_PATH,
       expect.arrayContaining(['--header-template', 'Bearer ${value}']),
+      undefined,
     );
   });
 
@@ -419,7 +426,7 @@ describe('createSecret', () => {
 
     await kdnCli.createSecret({ ...defaultOptions, type: 'other', path: '/api/v1' });
 
-    expect(exec.exec).toHaveBeenCalledWith(KAIDEN_CLI_PATH, expect.arrayContaining(['--path', '/api/v1']));
+    expect(exec.exec).toHaveBeenCalledWith(KAIDEN_CLI_PATH, expect.arrayContaining(['--path', '/api/v1']), undefined);
   });
 
   test('repeats env flag for each entry in the array', async () => {
@@ -431,6 +438,7 @@ describe('createSecret', () => {
     expect(exec.exec).toHaveBeenCalledWith(
       KAIDEN_CLI_PATH,
       expect.arrayContaining(['--env', 'API_KEY', '--env', 'SECRET_KEY']),
+      undefined,
     );
   });
 
@@ -467,7 +475,7 @@ describe('listSecrets', () => {
 
     const result = await kdnCli.listSecrets();
 
-    expect(exec.exec).toHaveBeenCalledWith(KAIDEN_CLI_PATH, ['secret', 'list', '--output', 'json']);
+    expect(exec.exec).toHaveBeenCalledWith(KAIDEN_CLI_PATH, ['secret', 'list', '--output', 'json'], undefined);
     expect(result).toHaveLength(2);
     expect(result.map(s => s.name)).toEqual(['my-secret', 'my-other-secret']);
   });
@@ -488,7 +496,11 @@ describe('removeSecret', () => {
 
     const result = await kdnCli.removeSecret('my-secret');
 
-    expect(exec.exec).toHaveBeenCalledWith(KAIDEN_CLI_PATH, ['secret', 'remove', 'my-secret', '--output', 'json']);
+    expect(exec.exec).toHaveBeenCalledWith(
+      KAIDEN_CLI_PATH,
+      ['secret', 'remove', 'my-secret', '--output', 'json'],
+      undefined,
+    );
     expect(result).toEqual({ name: 'my-secret' });
   });
 
@@ -498,5 +510,80 @@ describe('removeSecret', () => {
     vi.mocked(exec.exec).mockRejectedValue(new Error('secret not found: unknown'));
 
     await expect(kdnCli.removeSecret('unknown')).rejects.toThrow('secret not found: unknown');
+  });
+});
+
+describe('listServices', () => {
+  const TEST_SERVICES: SecretService[] = [
+    {
+      name: 'github',
+      hostPattern: 'api.github.com',
+      headerName: 'Authorization',
+      headerTemplate: 'Bearer ${value}',
+      envVars: ['GH_TOKEN', 'GITHUB_TOKEN'],
+    },
+    {
+      name: 'gitlab',
+      hostPattern: 'gitlab.com',
+      headerName: 'PRIVATE-TOKEN',
+    },
+  ];
+
+  test('executes kdn service list and returns services', async () => {
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify(TEST_SERVICES)));
+
+    const result = await kdnCli.listServices();
+
+    expect(exec.exec).toHaveBeenCalledWith(KAIDEN_CLI_PATH, ['service', 'list', '--output', 'json'], undefined);
+    expect(result).toHaveLength(2);
+    expect(result.map(s => s.name)).toEqual(['github', 'gitlab']);
+  });
+
+  test('returns services with optional fields when present', async () => {
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify(TEST_SERVICES)));
+
+    const result = await kdnCli.listServices();
+
+    expect(result[0]).toEqual({
+      name: 'github',
+      hostPattern: 'api.github.com',
+      headerName: 'Authorization',
+      headerTemplate: 'Bearer ${value}',
+      envVars: ['GH_TOKEN', 'GITHUB_TOKEN'],
+    });
+  });
+
+  test('returns services without optional fields when omitted', async () => {
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify(TEST_SERVICES)));
+
+    const result = await kdnCli.listServices();
+
+    expect(result[1]!.headerTemplate).toBeUndefined();
+    expect(result[1]!.envVars).toBeUndefined();
+  });
+
+  test('returns empty array when CLI returns no services', async () => {
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify([])));
+
+    const result = await kdnCli.listServices();
+
+    expect(result).toEqual([]);
+  });
+
+  test('rejects when CLI fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(exec.exec).mockRejectedValue(new Error('command not found'));
+
+    await expect(kdnCli.listServices()).rejects.toThrow('command not found');
+  });
+
+  test('extracts kdn JSON error from stdout on failure', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const runError = mockRunError({
+      stdout: JSON.stringify({ error: 'Error: failed to list secrets services' }),
+    });
+    vi.mocked(exec.exec).mockRejectedValue(runError);
+
+    await expect(kdnCli.listServices()).rejects.toThrow('Error: failed to list secrets services');
   });
 });

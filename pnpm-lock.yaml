@@ -210,14 +210,14 @@ importers:
         specifier: 'workspace:'
         version: link:packages/extension-api
       '@openkaiden/kdn-api':
-        specifier: ^0.6.0
-        version: 0.6.0
+        specifier: ^0.7.0
+        version: 0.7.0
       '@openkaiden/mcp-registry-types':
         specifier: ^1.3.10
         version: 1.3.10
       '@openkaiden/workspace-configuration':
-        specifier: ^0.6.0
-        version: 0.6.0
+        specifier: ^0.7.0
+        version: 0.7.0
       '@rollup/plugin-json':
         specifier: ^6.1.0
         version: 6.1.0(rollup@4.46.2)
@@ -1785,14 +1785,14 @@ packages:
   '@open-draft/until@2.1.0':
     resolution: {integrity: sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==}
 
-  '@openkaiden/kdn-api@0.6.0':
-    resolution: {integrity: sha512-nfJ8TwoUW6Xz1PRjEhoC7MG0UJq4QsgRK0pAIqqBiKyMOiFAbcmzioXYMDVpeQSHg2P8lfYor8HmbxklrI+q6Q==}
+  '@openkaiden/kdn-api@0.7.0':
+    resolution: {integrity: sha512-eI+L6rr2NDPFTbms2ql/83z8yo3FO5RN4hF1dc9ZEX6FEry2/xRHEJOGXua8bo59Y2e3Re0AyEonHZmJ8PHfYg==}
 
   '@openkaiden/mcp-registry-types@1.3.10':
     resolution: {integrity: sha512-3DJ7Pi+FtnkBC5ynYPDqK0jP9l9KkUS4GLgC/+uv0vTYRXXn/NrjOnqXqPqCmlyLTTYtwEegIR4X5vKUU2dDaw==}
 
-  '@openkaiden/workspace-configuration@0.6.0':
-    resolution: {integrity: sha512-58xa67+sDFqn4gR4FuZ3FTY6+U9gsLoF30cDLAIcXyMeVEUpVnGwdWdWj0gkCBFpzlRnffOxRsCj+d0nXBnYHA==}
+  '@openkaiden/workspace-configuration@0.7.0':
+    resolution: {integrity: sha512-iYtDRfcoGf7JOSnKeT1LSqilIh/tNvLmBLpKz4sQnwcaQn/DTNHZLL7faYiDCHxzYrplggWRMiwrdYWF3nsdoQ==}
 
   '@opentelemetry/api@1.9.0':
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
@@ -8751,13 +8751,13 @@ snapshots:
 
   '@open-draft/until@2.1.0': {}
 
-  '@openkaiden/kdn-api@0.6.0': {}
+  '@openkaiden/kdn-api@0.7.0': {}
 
   '@openkaiden/mcp-registry-types@1.3.10':
     dependencies:
       ajv: 8.18.0
 
-  '@openkaiden/workspace-configuration@0.6.0': {}
+  '@openkaiden/workspace-configuration@0.7.0': {}
 
   '@opentelemetry/api@1.9.0': {}
 
