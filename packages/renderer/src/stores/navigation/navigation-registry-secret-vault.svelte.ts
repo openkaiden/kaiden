@@ -18,9 +18,15 @@
 
 import { faKey } from '@fortawesome/free-solid-svg-icons/faKey';
 
+import { secretVaultInfos } from '/@/stores/secret-vault';
+
 import type { NavigationRegistryEntry } from './navigation-registry';
 
-const count = $state(0);
+let count = $state(0);
+
+secretVaultInfos.subscribe(infos => {
+  count = infos.length;
+});
 
 export function createNavigationSecretVaultEntry(): NavigationRegistryEntry {
   const registry: NavigationRegistryEntry = {

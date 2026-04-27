@@ -20,9 +20,22 @@ import type { Writable } from 'svelte/store';
 import { derived, writable } from 'svelte/store';
 
 import { findMatchInLeaves } from '/@/stores/search-util';
+import type { SecretInfo } from '/@api/secret-info';
 import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 
-// TODO: wire to backend data source
+import { EventStore } from './event-store';
+
+function secretInfoToVaultInfo(info: SecretInfo): SecretVaultInfo {
+  return {
+    id: info.name,
+    name: info.name,
+    category: 'api',
+    type: info.type,
+    description: info.description,
+    status: 'active',
+  };
+}
+
 export const secretVaultInfos: Writable<readonly SecretVaultInfo[]> = writable([]);
 
 export const secretVaultSearchPattern = writable('');
@@ -46,3 +59,27 @@ export const filteredSecretVaultInfos = derived(
     return filtered;
   },
 );
+
+let readyToUpdate = false;
+
+async function checkForUpdate(eventName: string): Promise<boolean> {
+  if ('system-ready' === eventName) {
+    readyToUpdate = true;
+  }
+  return readyToUpdate;
+}
+
+const listSecrets = async (): Promise<readonly SecretVaultInfo[]> => {
+  const items = await window.listSecrets();
+  return items.map(secretInfoToVaultInfo);
+};
+
+export const secretVaultEventStore = new EventStore<readonly SecretVaultInfo[]>(
+  'secret-vault',
+  secretVaultInfos,
+  checkForUpdate,
+  ['secret-manager-update'],
+  ['system-ready'],
+  listSecrets,
+);
+secretVaultEventStore.setup();
