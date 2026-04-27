@@ -58,6 +58,7 @@ const typeOptions = [
 let type = $state('other');
 let name = $state('');
 let secret = $state('');
+let description = $state('');
 let hostPattern = $state('');
 let pathPattern = $state('');
 let headerName = $state('');
@@ -94,6 +95,10 @@ async function addSecret(): Promise<void> {
       type: effectiveType,
       value: secret,
     };
+
+    if (description.trim()) {
+      options.description = description.trim();
+    }
 
     if (isGeneric) {
       options.hosts = [hostPattern.trim()];
@@ -148,6 +153,14 @@ async function addSecret(): Promise<void> {
             <p class="text-xs text-(--pd-content-card-text) opacity-60 mt-1.5">
               Encrypted at rest. You won't be able to view this value again.
             </p>
+          </div>
+
+          <div>
+            <span class="block text-sm font-semibold text-(--pd-modal-text) mb-2">
+              Description
+              <span class="font-normal text-(--pd-content-card-text) opacity-60">(optional)</span>
+            </span>
+            <Input bind:value={description} placeholder="What this secret is used for" aria-label="Description" />
           </div>
 
           {#if isGeneric}

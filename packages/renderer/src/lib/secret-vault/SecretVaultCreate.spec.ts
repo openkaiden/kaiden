@@ -44,6 +44,7 @@ test('defaults to Generic type with appropriate form fields', () => {
   expect(screen.getByText('Other Secret')).toBeInTheDocument();
   expect(screen.getByLabelText('Name')).toBeInTheDocument();
   expect(screen.getByLabelText('Secret value')).toBeInTheDocument();
+  expect(screen.getByLabelText('Description')).toBeInTheDocument();
   expect(screen.getByLabelText('Host pattern')).toBeInTheDocument();
   expect(screen.getByText('Injection settings')).toBeInTheDocument();
   expect(screen.getByLabelText('Path pattern')).toBeInTheDocument();
@@ -100,6 +101,7 @@ test('submits generic secret with injection settings', async () => {
 
   await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'my-api-key' } });
   await fireEvent.input(screen.getByLabelText('Secret value'), { target: { value: 'sk-123' } });
+  await fireEvent.input(screen.getByLabelText('Description'), { target: { value: 'Production API key' } });
   await fireEvent.input(screen.getByLabelText('Host pattern'), { target: { value: 'api.example.com' } });
   await fireEvent.input(screen.getByLabelText('Header name'), { target: { value: 'Authorization' } });
   await fireEvent.input(screen.getByLabelText('Value format'), { target: { value: 'Bearer {value}' } });
@@ -111,6 +113,7 @@ test('submits generic secret with injection settings', async () => {
     name: 'my-api-key',
     type: 'other',
     value: 'sk-123',
+    description: 'Production API key',
     hosts: ['api.example.com'],
     header: 'Authorization',
     headerTemplate: 'Bearer ${value}',
