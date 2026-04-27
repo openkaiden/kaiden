@@ -23,7 +23,7 @@ import { join } from 'node:path';
 import type { CliToolInstallationSource, ExtensionContext } from '@openkaiden/api';
 import * as extensionApi from '@openkaiden/api';
 
-import { downloadKdn, getLatestVersion } from './kdn-download';
+import { downloadKdn, getAvailableVersions, getLatestVersion } from './kdn-download';
 
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 
@@ -100,6 +100,46 @@ export class KdnExtension {
       installationSource,
     });
     this.extensionContext.subscriptions.push(cliTool);
+
+    if (installationSource === 'extension') {
+      const binDir = join(this.extensionContext.storagePath, 'bin');
+      const binaryName = extensionApi.env.isWindows ? 'kdn.exe' : 'kdn';
+      const localBinaryPath = join(binDir, binaryName);
+      let currentVersion = version;
+      let versionToUpdate: string | undefined;
+
+      const updater = cliTool.registerUpdate({
+        selectVersion: async (): Promise<string> => {
+          const releases = await getAvailableVersions();
+          const filtered = releases.filter(r => r.tag !== currentVersion);
+          const selected = await extensionApi.window.showQuickPick(filtered, {
+            placeHolder: 'Select kdn version to install',
+          });
+          if (!selected) {
+            throw new Error('No version selected');
+          }
+          versionToUpdate = selected.tag;
+          return versionToUpdate;
+        },
+        doUpdate: async (): Promise<void> => {
+          if (!versionToUpdate) {
+            throw new Error('No version selected for update');
+          }
+          await downloadKdn(versionToUpdate, process.platform, arch(), binDir);
+          const newVersion = await this.getVersion(localBinaryPath);
+          if (!newVersion) {
+            throw new Error('failed to determine version after update');
+          }
+          cliTool.updateVersion({
+            version: newVersion,
+            path: localBinaryPath,
+          });
+          currentVersion = newVersion;
+          versionToUpdate = undefined;
+        },
+      });
+      this.extensionContext.subscriptions.push(updater);
+    }
   }
 
   private async downloadAndRegister(localBinaryPath: string, binDir: string): Promise<void> {

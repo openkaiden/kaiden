@@ -24,7 +24,7 @@ import { PassThrough } from 'node:stream';
 import * as tar from 'tar';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { downloadKdn, getLatestVersion } from './kdn-download';
+import { downloadKdn, getAvailableVersions, getLatestVersion } from './kdn-download';
 import { sha256 } from './sha256';
 
 const getEntriesMock = vi.fn();
@@ -199,5 +199,63 @@ describe('downloadKdn signal', () => {
     for (const call of fetchMock.mock.calls) {
       expect(call[1]).toEqual(expect.objectContaining({ signal: controller.signal }));
     }
+  });
+});
+
+describe('getAvailableVersions', () => {
+  test('returns non-prerelease versions with kdn assets and strips v prefix', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => [
+          {
+            tag_name: 'v0.6.0',
+            name: 'kdn v0.6.0',
+            prerelease: false,
+            assets: [{ name: 'kdn_0.6.0_linux_amd64.tar.gz' }],
+          },
+          {
+            tag_name: 'v0.6.0-rc1',
+            name: 'kdn v0.6.0-rc1',
+            prerelease: true,
+            assets: [{ name: 'kdn_0.6.0-rc1_linux_amd64.tar.gz' }],
+          },
+          {
+            tag_name: 'v0.5.0',
+            name: 'kdn v0.5.0',
+            prerelease: false,
+            assets: [{ name: 'kdn_0.5.0_linux_amd64.tar.gz' }],
+          },
+          {
+            tag_name: 'v0.4.0',
+            name: null,
+            prerelease: false,
+            assets: [{ name: 'kortex-cli_0.4.0_linux_amd64.tar.gz' }],
+          },
+        ],
+      }),
+    );
+
+    const versions = await getAvailableVersions();
+
+    expect(versions).toEqual([
+      { label: 'kdn v0.6.0', tag: '0.6.0' },
+      { label: 'kdn v0.5.0', tag: '0.5.0' },
+    ]);
+  });
+
+  test('limits to 5 versions', async () => {
+    const releases = Array.from({ length: 10 }, (_, i) => ({
+      tag_name: `v0.${10 - i}.0`,
+      name: `kdn v0.${10 - i}.0`,
+      prerelease: false,
+      assets: [{ name: `kdn_0.${10 - i}.0_linux_amd64.tar.gz` }],
+    }));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => releases }));
+
+    const versions = await getAvailableVersions();
+
+    expect(versions).toHaveLength(5);
   });
 });
