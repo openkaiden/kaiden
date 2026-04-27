@@ -46,6 +46,6 @@ test('registers onboarding configuration with hidden properties', () => {
   expect(config).toBeDefined();
   expect(config?.id).toBe('preferences.onboarding');
   expect(config?.properties?.['onboarding.defaultAgent']).toEqual(
-    expect.objectContaining({ type: 'string', default: 'opencode', hidden: true }),
+    expect.objectContaining({ type: 'string', default: '', hidden: true }),
   );
 });

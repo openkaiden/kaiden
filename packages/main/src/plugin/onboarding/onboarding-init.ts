@@ -35,7 +35,7 @@ export class OnboardingInit {
         [`${OnboardingSettings.SectionName}.${OnboardingSettings.DefaultAgent}`]: {
           description: 'Default coding agent selected during onboarding',
           type: 'string',
-          default: 'opencode',
+          default: '',
           hidden: true,
         },
       },
