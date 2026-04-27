@@ -1,5 +1,7 @@
 # Kaiden
 
+<img src="docs/logo-1093.png" alt="A stylized bear wearing virtual reality goggles and a collared shirt with a letter K on it." width="400">
+
 ## Demonstration video
 
 https://github.com/user-attachments/assets/2cbe186a-d7b8-4a31-8ac0-4f0964d72448
