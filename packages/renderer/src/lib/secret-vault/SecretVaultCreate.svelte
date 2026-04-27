@@ -1,61 +1,23 @@
 <script lang="ts">
-import { faGithub } from '@fortawesome/free-brands-svg-icons';
 import { faChevronDown, faChevronUp, faGear, faKey } from '@fortawesome/free-solid-svg-icons';
 import { Button, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
+import { onMount } from 'svelte';
 
+import type { CardSelectorOption } from '/@/lib/ui/CardSelector.svelte';
 import CardSelector from '/@/lib/ui/CardSelector.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import PasswordInput from '/@/lib/ui/PasswordInput.svelte';
 import { handleNavigation } from '/@/navigation';
 import { NavigationPage } from '/@api/navigation-page';
-import type { SecretCreateOptions } from '/@api/secret-info';
+import type { SecretCreateOptions, SecretService } from '/@api/secret-info';
 
-interface TypeMeta {
-  title: string;
-  subtitle: string;
-}
+const OTHER_TYPE = 'other';
 
-const TYPE_META: Record<string, TypeMeta> = {
-  github: {
-    title: 'GitHub Secret',
-    subtitle: 'Store a GitHub personal access token. Automatically injected as a Bearer token for api.github.com.',
-  },
-  gemini: {
-    title: 'Gemini Secret',
-    subtitle: 'Store a Gemini API key. Automatically injected for Google AI endpoints.',
-  },
-  other: {
-    title: 'Other Secret',
-    subtitle: 'Configure a custom secret to inject as a header into matching requests.',
-  },
-};
+let services = $state<SecretService[]>([]);
+let loading = $state(true);
 
-const typeOptions = [
-  {
-    title: 'GitHub',
-    badge: 'GitHub',
-    value: 'github',
-    icon: faGithub,
-    description: 'Personal access token for GitHub API',
-  },
-  {
-    title: 'Gemini',
-    badge: 'Gemini',
-    value: 'gemini',
-    icon: faKey,
-    description: 'API key for Google Gemini',
-  },
-  {
-    title: 'Other',
-    badge: 'Custom',
-    value: 'other',
-    icon: faKey,
-    description: 'Custom secret with configurable injection',
-  },
-];
-
-let type = $state('other');
+let type = $state(OTHER_TYPE);
 let name = $state('');
 let secret = $state('');
 let description = $state('');
@@ -67,14 +29,56 @@ let injectionOpen = $state(true);
 let saving = $state(false);
 let error = $state('');
 
-let effectiveType = $derived(type || 'other');
-let meta = $derived(TYPE_META[effectiveType] ?? TYPE_META.other);
-let isGeneric = $derived(effectiveType === 'other');
+let serviceMap = $derived(new Map(services.map(s => [s.name, s])));
+
+let typeOptions = $derived<CardSelectorOption[]>([
+  ...services.map(s => ({
+    title: s.name.charAt(0).toUpperCase() + s.name.slice(1),
+    badge: s.name.charAt(0).toUpperCase() + s.name.slice(1),
+    value: s.name,
+    icon: faKey,
+    description: `Inject as ${s.headerName} for ${s.hostPattern}`,
+  })),
+  {
+    title: 'Other',
+    badge: 'Custom',
+    value: OTHER_TYPE,
+    icon: faKey,
+    description: 'Custom secret with configurable injection',
+  },
+]);
+
+let effectiveType = $derived(type || OTHER_TYPE);
+let isOther = $derived(!serviceMap.has(effectiveType));
+
+let title = $derived.by(() => {
+  if (isOther) return 'Other Secret';
+  const svc = serviceMap.get(effectiveType);
+  if (!svc) return 'Other Secret';
+  return `${svc.name.charAt(0).toUpperCase() + svc.name.slice(1)} Secret`;
+});
+
+let subtitle = $derived.by(() => {
+  if (isOther) return 'Configure a custom secret to inject as a header into matching requests.';
+  const svc = serviceMap.get(effectiveType);
+  if (!svc) return '';
+  return `Automatically injected as ${svc.headerName} for ${svc.hostPattern}.`;
+});
 
 let canSave = $derived.by(() => {
   if (!name.trim() || !secret.trim()) return false;
-  if (isGeneric && (!hostPattern.trim() || !headerName.trim())) return false;
+  if (isOther && (!hostPattern.trim() || !headerName.trim())) return false;
   return true;
+});
+
+onMount(async () => {
+  try {
+    services = await window.listSecretServices();
+  } catch (err: unknown) {
+    console.error('Failed to load secret services', err);
+  } finally {
+    loading = false;
+  }
 });
 
 function cancel(): void {
@@ -100,7 +104,7 @@ async function addSecret(): Promise<void> {
       options.description = description.trim();
     }
 
-    if (isGeneric) {
+    if (isOther) {
       options.hosts = [hostPattern.trim()];
       options.header = headerName.trim();
       if (pathPattern.trim()) {
@@ -127,15 +131,19 @@ async function addSecret(): Promise<void> {
       <div class="bg-(--pd-content-card-bg) py-6">
         <div class="flex flex-col px-6 max-w-4xl mx-auto space-y-5">
 
-          <CardSelector
-            label="Secret type"
-            options={typeOptions}
-            bind:selected={type}
-          />
+          {#if loading}
+            <p class="text-sm text-(--pd-content-card-text) opacity-70">Loading secret types…</p>
+          {:else}
+            <CardSelector
+              label="Secret type"
+              options={typeOptions}
+              bind:selected={type}
+            />
+          {/if}
 
           <div>
-            <h1 class="text-2xl font-bold text-(--pd-modal-text)">{meta.title}</h1>
-            <p class="text-sm text-(--pd-content-card-text) opacity-70 mt-2">{meta.subtitle}</p>
+            <h1 class="text-2xl font-bold text-(--pd-modal-text)">{title}</h1>
+            <p class="text-sm text-(--pd-content-card-text) opacity-70 mt-2">{subtitle}</p>
           </div>
 
           <div>
@@ -163,7 +171,7 @@ async function addSecret(): Promise<void> {
             <Input bind:value={description} placeholder="What this secret is used for" aria-label="Description" />
           </div>
 
-          {#if isGeneric}
+          {#if isOther}
             <div>
               <span class="block text-sm font-semibold text-(--pd-modal-text) mb-2">Host pattern</span>
               <Input bind:value={hostPattern} placeholder="e.g. api.example.com or *.example.com" aria-label="Host pattern" />

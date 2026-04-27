@@ -18,28 +18,54 @@
 
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
+
+import type { SecretService } from '/@api/secret-info';
 
 import SecretVaultCreate from './SecretVaultCreate.svelte';
 
 vi.mock(import('/@/navigation'));
 
+const MOCK_SERVICES: SecretService[] = [
+  {
+    name: 'github',
+    hostPattern: 'api.github.com',
+    headerName: 'Authorization',
+    headerTemplate: 'Bearer ${value}',
+    envVars: ['GH_TOKEN', 'GITHUB_TOKEN'],
+  },
+  {
+    name: 'gemini',
+    hostPattern: 'generativelanguage.googleapis.com',
+    headerName: 'x-goog-api-key',
+    headerTemplate: '${value}',
+    envVars: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
+  },
+];
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(window.createSecret).mockResolvedValue({ name: 'test' });
+  vi.mocked(window.listSecretServices).mockResolvedValue(MOCK_SERVICES);
 });
 
-test('renders type selector with GitHub, Gemini, and Other options', () => {
+test('renders type options from fetched services plus Other', async () => {
   render(SecretVaultCreate);
 
-  expect(screen.getByLabelText('GitHub')).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.getByLabelText('Github')).toBeInTheDocument();
+  });
   expect(screen.getByLabelText('Gemini')).toBeInTheDocument();
   expect(screen.getByLabelText('Other')).toBeInTheDocument();
 });
 
-test('defaults to Generic type with appropriate form fields', () => {
+test('defaults to Other type with full form fields', async () => {
   render(SecretVaultCreate);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText('Other')).toBeInTheDocument();
+  });
 
   expect(screen.getByText('Other Secret')).toBeInTheDocument();
   expect(screen.getByLabelText('Name')).toBeInTheDocument();
@@ -52,33 +78,53 @@ test('defaults to Generic type with appropriate form fields', () => {
   expect(screen.getByLabelText('Value format')).toBeInTheDocument();
 });
 
-test('hides injection fields when a predefined type is selected', async () => {
+test('hides injection fields when a predefined service type is selected', async () => {
   render(SecretVaultCreate);
 
-  const githubCard = screen.getByLabelText('GitHub');
-  await fireEvent.click(githubCard);
+  await waitFor(() => {
+    expect(screen.getByLabelText('Github')).toBeInTheDocument();
+  });
 
-  expect(screen.getByText('GitHub Secret')).toBeInTheDocument();
+  await fireEvent.click(screen.getByLabelText('Github'));
+
+  expect(screen.getByText('Github Secret')).toBeInTheDocument();
   expect(screen.getByLabelText('Name')).toBeInTheDocument();
   expect(screen.getByLabelText('Secret value')).toBeInTheDocument();
   expect(screen.queryByLabelText('Host pattern')).not.toBeInTheDocument();
   expect(screen.queryByText('Injection settings')).not.toBeInTheDocument();
 });
 
-test('Add Secret button is disabled when required fields are empty', () => {
+test('shows subtitle with service details for predefined type', async () => {
   render(SecretVaultCreate);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText('Github')).toBeInTheDocument();
+  });
+
+  await fireEvent.click(screen.getByLabelText('Github'));
+
+  expect(screen.getByText(/Automatically injected as Authorization for api\.github\.com/)).toBeInTheDocument();
+});
+
+test('Add Secret button is disabled when required fields are empty', async () => {
+  render(SecretVaultCreate);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText('Other')).toBeInTheDocument();
+  });
 
   expect(screen.getByRole('button', { name: 'Add Secret' })).toBeDisabled();
 });
 
-test('Add Secret button is disabled for generic type without host pattern', async () => {
+test('Add Secret button is disabled for Other type without host pattern', async () => {
   render(SecretVaultCreate);
 
-  const nameInput = screen.getByLabelText('Name');
-  const secretInput = screen.getByLabelText('Secret value');
+  await waitFor(() => {
+    expect(screen.getByLabelText('Other')).toBeInTheDocument();
+  });
 
-  await fireEvent.input(nameInput, { target: { value: 'my-secret' } });
-  await fireEvent.input(secretInput, { target: { value: 'secret-value' } });
+  await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'my-secret' } });
+  await fireEvent.input(screen.getByLabelText('Secret value'), { target: { value: 'secret-value' } });
 
   expect(screen.getByRole('button', { name: 'Add Secret' })).toBeDisabled();
 });
@@ -94,10 +140,14 @@ test('cancel navigates back to secret vault', async () => {
   expect(handleNavigation).toHaveBeenCalledWith({ page: 'secret-vault' });
 });
 
-test('submits generic secret with injection settings', async () => {
+test('submits Other secret with injection settings', async () => {
   const { handleNavigation } = await import('/@/navigation');
 
   render(SecretVaultCreate);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText('Other')).toBeInTheDocument();
+  });
 
   await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'my-api-key' } });
   await fireEvent.input(screen.getByLabelText('Secret value'), { target: { value: 'sk-123' } });
@@ -106,8 +156,7 @@ test('submits generic secret with injection settings', async () => {
   await fireEvent.input(screen.getByLabelText('Header name'), { target: { value: 'Authorization' } });
   await fireEvent.input(screen.getByLabelText('Value format'), { target: { value: 'Bearer {value}' } });
 
-  const addButton = screen.getByRole('button', { name: 'Add Secret' });
-  await fireEvent.click(addButton);
+  await fireEvent.click(screen.getByRole('button', { name: 'Add Secret' }));
 
   expect(window.createSecret).toHaveBeenCalledWith({
     name: 'my-api-key',
@@ -122,17 +171,20 @@ test('submits generic secret with injection settings', async () => {
   expect(handleNavigation).toHaveBeenCalledWith({ page: 'secret-vault' });
 });
 
-test('submits predefined type secret without injection fields', async () => {
+test('submits predefined service type without injection fields', async () => {
   const { handleNavigation } = await import('/@/navigation');
 
   render(SecretVaultCreate);
 
-  await fireEvent.click(screen.getByLabelText('GitHub'));
+  await waitFor(() => {
+    expect(screen.getByLabelText('Github')).toBeInTheDocument();
+  });
+
+  await fireEvent.click(screen.getByLabelText('Github'));
   await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'gh-token' } });
   await fireEvent.input(screen.getByLabelText('Secret value'), { target: { value: 'ghp_abc123' } });
 
-  const addButton = screen.getByRole('button', { name: 'Add Secret' });
-  await fireEvent.click(addButton);
+  await fireEvent.click(screen.getByRole('button', { name: 'Add Secret' }));
 
   expect(window.createSecret).toHaveBeenCalledWith({
     name: 'gh-token',
@@ -148,26 +200,48 @@ test('displays error when createSecret fails', async () => {
 
   render(SecretVaultCreate);
 
-  await fireEvent.click(screen.getByLabelText('GitHub'));
+  await waitFor(() => {
+    expect(screen.getByLabelText('Github')).toBeInTheDocument();
+  });
+
+  await fireEvent.click(screen.getByLabelText('Github'));
   await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'test' } });
   await fireEvent.input(screen.getByLabelText('Secret value'), { target: { value: 'val' } });
 
   await fireEvent.click(screen.getByRole('button', { name: 'Add Secret' }));
 
-  expect(screen.getByText('Storage unavailable')).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.getByText('Storage unavailable')).toBeInTheDocument();
+  });
 });
 
 test('injection settings section can be collapsed and expanded', async () => {
   render(SecretVaultCreate);
 
+  await waitFor(() => {
+    expect(screen.getByLabelText('Other')).toBeInTheDocument();
+  });
+
   expect(screen.getByLabelText('Path pattern')).toBeInTheDocument();
 
-  const toggleButton = screen.getByText('Injection settings');
-  await fireEvent.click(toggleButton);
+  await fireEvent.click(screen.getByText('Injection settings'));
 
   expect(screen.queryByLabelText('Path pattern')).not.toBeInTheDocument();
 
-  await fireEvent.click(toggleButton);
+  await fireEvent.click(screen.getByText('Injection settings'));
 
   expect(screen.getByLabelText('Path pattern')).toBeInTheDocument();
+});
+
+test('still renders form when listSecretServices fails', async () => {
+  vi.mocked(window.listSecretServices).mockRejectedValueOnce(new Error('CLI not found'));
+
+  render(SecretVaultCreate);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText('Other')).toBeInTheDocument();
+  });
+
+  expect(screen.getByText('Other Secret')).toBeInTheDocument();
+  expect(screen.getByLabelText('Name')).toBeInTheDocument();
 });

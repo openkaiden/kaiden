@@ -530,7 +530,7 @@ describe('listServices', () => {
   ];
 
   test('executes kdn service list and returns services', async () => {
-    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify(TEST_SERVICES)));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ items: TEST_SERVICES })));
 
     const result = await kdnCli.listServices();
 
@@ -540,7 +540,7 @@ describe('listServices', () => {
   });
 
   test('returns services with optional fields when present', async () => {
-    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify(TEST_SERVICES)));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ items: TEST_SERVICES })));
 
     const result = await kdnCli.listServices();
 
@@ -554,7 +554,7 @@ describe('listServices', () => {
   });
 
   test('returns services without optional fields when omitted', async () => {
-    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify(TEST_SERVICES)));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ items: TEST_SERVICES })));
 
     const result = await kdnCli.listServices();
 
@@ -563,7 +563,7 @@ describe('listServices', () => {
   });
 
   test('returns empty array when CLI returns no services', async () => {
-    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify([])));
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify({ items: [] })));
 
     const result = await kdnCli.listServices();
 

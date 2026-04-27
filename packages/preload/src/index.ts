@@ -143,7 +143,7 @@ import type { ChunkProviderInfo } from '/@api/rag/chunk-provider-info';
 import type { RagEnvironment } from '/@api/rag/rag-environment';
 import type { ExtensionBanner, RecommendedRegistry } from '/@api/recommendations/recommendations';
 import type { ReleaseNotesInfo } from '/@api/release-notes-info';
-import type { SecretCreateOptions, SecretInfo, SecretName } from '/@api/secret-info';
+import type { SecretCreateOptions, SecretInfo, SecretName, SecretService } from '/@api/secret-info';
 import type { SkillFileContent, SkillFolderInfo, SkillInfo, SkillResourceEntry } from '/@api/skill/skill-info';
 import type { StatusBarEntryDescriptor } from '/@api/status-bar';
 import type { PinOption } from '/@api/status-bar/pin-option';
@@ -366,6 +366,10 @@ export function initExposure(): void {
 
   contextBridge.exposeInMainWorld('removeSecret', async (name: string): Promise<SecretName> => {
     return ipcInvoke('secret-manager:remove', name);
+  });
+
+  contextBridge.exposeInMainWorld('listSecretServices', async (): Promise<SecretService[]> => {
+    return ipcInvoke('secret-manager:list-services');
   });
 
   contextBridge.exposeInMainWorld('listFlows', async (): Promise<Array<FlowInfo>> => {

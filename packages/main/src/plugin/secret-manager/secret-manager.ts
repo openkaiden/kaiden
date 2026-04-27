@@ -72,5 +72,9 @@ export class SecretManager {
     this.ipcHandle('secret-manager:remove', async (_listener: unknown, name: string): Promise<SecretName> => {
       return this.remove(name);
     });
+
+    this.ipcHandle('secret-manager:list-services', async (): Promise<SecretService[]> => {
+      return this.listServices();
+    });
   }
 }

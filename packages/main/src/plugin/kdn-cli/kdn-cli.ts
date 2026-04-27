@@ -184,6 +184,7 @@ export class KdnCli {
   }
 
   async listServices(): Promise<SecretService[]> {
-    return this.execCLI<SecretService[]>(['service', 'list']);
+    const response = await this.execCLI<{ items: SecretService[] }>(['service', 'list']);
+    return response.items;
   }
 }
