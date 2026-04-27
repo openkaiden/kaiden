@@ -1,66 +1,112 @@
 <script lang="ts">
-import { faKey, faServer, faShieldHalved } from '@fortawesome/free-solid-svg-icons';
-import { Button, Checkbox, Dropdown, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
+import { faGithub } from '@fortawesome/free-brands-svg-icons';
+import { faChevronDown, faChevronUp, faGear, faKey } from '@fortawesome/free-solid-svg-icons';
+import { Button, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
-import { Textarea } from '/@/lib/chat/components/ui/textarea';
 import CardSelector from '/@/lib/ui/CardSelector.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import PasswordInput from '/@/lib/ui/PasswordInput.svelte';
 import { handleNavigation } from '/@/navigation';
 import { NavigationPage } from '/@api/navigation-page';
+import type { SecretCreateOptions } from '/@api/secret-info';
 
-const categoryOptions = [
+interface TypeMeta {
+  title: string;
+  subtitle: string;
+}
+
+const TYPE_META: Record<string, TypeMeta> = {
+  github: {
+    title: 'GitHub Secret',
+    subtitle: 'Store a GitHub personal access token. Automatically injected as a Bearer token for api.github.com.',
+  },
+  gemini: {
+    title: 'Gemini Secret',
+    subtitle: 'Store a Gemini API key. Automatically injected for Google AI endpoints.',
+  },
+  other: {
+    title: 'Other Secret',
+    subtitle: 'Configure a custom secret to inject as a header into matching requests.',
+  },
+};
+
+const typeOptions = [
   {
-    title: 'API Token',
-    badge: 'API',
-    value: 'api',
+    title: 'GitHub',
+    badge: 'GitHub',
+    value: 'github',
+    icon: faGithub,
+    description: 'Personal access token for GitHub API',
+  },
+  {
+    title: 'Gemini',
+    badge: 'Gemini',
+    value: 'gemini',
     icon: faKey,
-    description: 'API keys, access tokens, and service credentials',
+    description: 'API key for Google Gemini',
   },
   {
-    title: 'Infrastructure',
-    badge: 'Infra',
-    value: 'infra',
-    icon: faServer,
-    description: 'Cluster tokens, platform keys, and infrastructure secrets',
+    title: 'Other',
+    badge: 'Custom',
+    value: 'other',
+    icon: faKey,
+    description: 'Custom secret with configurable injection',
   },
 ];
 
-const credentialTypes = [
-  { value: 'pat', label: 'Personal access token (PAT)' },
-  { value: 'oauth', label: 'OAuth / refresh token' },
-  { value: 'bot', label: 'Bot token' },
-  { value: 'project', label: 'Fine-grained / project token' },
-  { value: 'apikey', label: 'Generic API key' },
-  { value: 'cluster', label: 'Cluster or platform token' },
-  { value: 'service', label: 'Service account' },
-  { value: 'other', label: 'Other' },
-];
-
+let type = $state('other');
 let name = $state('');
-let category = $state('api');
-let type = $state('pat');
 let secret = $state('');
-let description = $state('');
-// TODO: backend not wired yet — using $derived(noExpiry ? '' : expiration) triggers no-unused-vars lint.
-// When the IPC save call is implemented, rename this to expirationInput and add: let expiration = $derived(noExpiry ? '' : expirationInput);
-let expiration = $state('');
-let noExpiry = $state(false);
+let hostPattern = $state('');
+let pathPattern = $state('');
+let headerName = $state('');
+let valueFormat = $state('');
+let injectionOpen = $state(true);
 let saving = $state(false);
 let error = $state('');
+
+let effectiveType = $derived(type || 'other');
+let meta = $derived(TYPE_META[effectiveType] ?? TYPE_META.other);
+let isGeneric = $derived(effectiveType === 'other');
+
+let canSave = $derived.by(() => {
+  if (!name.trim() || !secret.trim()) return false;
+  if (isGeneric && (!hostPattern.trim() || !headerName.trim())) return false;
+  return true;
+});
 
 function cancel(): void {
   handleNavigation({ page: NavigationPage.SECRET_VAULT });
 }
 
-async function saveSecret(): Promise<void> {
-  if (!name.trim() || !secret.trim()) return;
+function toggleInjection(): void {
+  injectionOpen = !injectionOpen;
+}
 
+async function addSecret(): Promise<void> {
+  if (!canSave) return;
   saving = true;
   error = '';
   try {
-    // TODO: send { name, category, type, secret, description, expiration } via IPC to SafeStorageRegistry
+    const options: SecretCreateOptions = {
+      name: name.trim(),
+      type: effectiveType,
+      value: secret,
+    };
+
+    if (isGeneric) {
+      options.hosts = [hostPattern.trim()];
+      options.header = headerName.trim();
+      if (pathPattern.trim()) {
+        options.path = pathPattern.trim();
+      }
+      if (valueFormat.trim()) {
+        options.headerTemplate = valueFormat.trim().replaceAll('{value}', '${value}');
+      }
+    }
+
+    await window.createSecret(options);
     handleNavigation({ page: NavigationPage.SECRET_VAULT });
   } catch (err: unknown) {
     error = err instanceof Error ? err.message : String(err);
@@ -73,112 +119,97 @@ async function saveSecret(): Promise<void> {
 <FormPage title="Add Secret">
   {#snippet content()}
     <div class="px-5 pb-5 min-w-full">
-      <div class="bg-[var(--pd-content-card-bg)] py-6">
+      <div class="bg-(--pd-content-card-bg) py-6">
         <div class="flex flex-col px-6 max-w-4xl mx-auto space-y-5">
 
+          <CardSelector
+            label="Secret type"
+            options={typeOptions}
+            bind:selected={type}
+          />
+
           <div>
-            <h1 class="text-2xl font-bold text-[var(--pd-modal-text)]">Add Secret</h1>
-            <p class="text-sm text-[var(--pd-content-card-text)] opacity-70 mt-2">
-              Store API tokens, OAuth secrets, and infrastructure keys in one place.
-              Values are encrypted and only exposed to agents and flows you attach them to.
-            </p>
+            <h1 class="text-2xl font-bold text-(--pd-modal-text)">{meta.title}</h1>
+            <p class="text-sm text-(--pd-content-card-text) opacity-70 mt-2">{meta.subtitle}</p>
           </div>
 
-          <!-- Info callout -->
-          <div class="flex gap-3 p-4 rounded-lg border border-[var(--pd-content-card-border)] bg-[var(--pd-content-card-inset-bg)]">
-            <div class="flex-shrink-0 mt-0.5 text-[var(--pd-content-card-text)]">
-              <Icon icon={faShieldHalved} />
-            </div>
-            <p class="text-sm text-[var(--pd-content-card-text)] opacity-80 leading-relaxed">
-              After saving, you can connect this credential from agent workspaces, MCP servers, and Settings integrations.
-              You won't be able to read the full secret back — only rotate or replace it.
-            </p>
+          <div>
+            <span class="block text-sm font-semibold text-(--pd-modal-text) mb-2">Name</span>
+            <Input bind:value={name} placeholder="e.g. GitHub Token" aria-label="Name" />
           </div>
 
-          <!-- Form -->
-          <section class="rounded-lg border border-[var(--pd-content-card-border)] bg-[var(--pd-content-card-inset-bg)] p-6 space-y-5">
-
-            <!-- Display name -->
-            <div>
-              <span class="block text-sm font-semibold text-[var(--pd-modal-text)] mb-2">Display name</span>
-              <Input bind:value={name} placeholder="e.g. GitHub · docs repo" aria-label="Display name" />
-            </div>
-
-            <!-- Category -->
-            <CardSelector
-              label="Category"
-              options={categoryOptions}
-              bind:selected={category}
+          <div>
+            <span class="block text-sm font-semibold text-(--pd-modal-text) mb-2">Secret value</span>
+            <PasswordInput
+              bind:password={secret}
+              placeholder="Enter secret value"
+              aria-label="Secret value"
             />
+            <p class="text-xs text-(--pd-content-card-text) opacity-60 mt-1.5">
+              Encrypted at rest. You won't be able to view this value again.
+            </p>
+          </div>
 
-            <!-- Credential type -->
+          {#if isGeneric}
             <div>
-              <span class="block text-sm font-semibold text-[var(--pd-modal-text)] mb-2">Credential type</span>
-              <Dropdown
-                name="credentialType"
-                bind:value={type}
-                ariaLabel="Credential type"
-                options={credentialTypes}
-              />
+              <span class="block text-sm font-semibold text-(--pd-modal-text) mb-2">Host pattern</span>
+              <Input bind:value={hostPattern} placeholder="e.g. api.example.com or *.example.com" aria-label="Host pattern" />
+              <p class="text-xs text-(--pd-content-card-text) opacity-60 mt-1.5">
+                The host this secret applies to. Use *.example.com for wildcard subdomains.
+              </p>
             </div>
 
-            <!-- Secret value -->
-            <div>
-              <span class="block text-sm font-semibold text-[var(--pd-modal-text)] mb-2">Secret value</span>
-              <PasswordInput
-                bind:password={secret}
-                placeholder="Paste token or key"
-                aria-label="Secret value"
-              />
-            </div>
+            <div class="rounded-lg border border-(--pd-content-card-border) overflow-hidden">
+              <button
+                class="w-full flex items-center gap-3 px-4 py-3 bg-(--pd-content-card-inset-bg)
+                  hover:bg-(--pd-content-card-hover-inset-bg) cursor-pointer"
+                aria-expanded={injectionOpen}
+                aria-controls="injection-settings"
+                onclick={toggleInjection}
+              >
+                <Icon icon={faGear} size="sm" />
+                <span class="text-sm font-semibold text-(--pd-modal-text) flex-1 text-left">Injection settings</span>
+                <Icon icon={injectionOpen ? faChevronUp : faChevronDown} size="sm" />
+              </button>
 
-            <!-- Description -->
-            <div>
-              <span class="block text-sm font-semibold text-[var(--pd-modal-text)] mb-2">
-                Description
-                <span class="font-normal text-[var(--pd-content-card-text)] opacity-60">(optional)</span>
-              </span>
-              <Textarea
-                bind:value={description}
-                placeholder="Where it's used, scopes, or rotation notes"
-                rows={3}
-                class="bg-muted min-h-[24px] resize-none rounded-lg !text-sm dark:border-zinc-700"
-              />
-            </div>
+              {#if injectionOpen}
+                <div id="injection-settings" class="px-4 pb-4 pt-2 space-y-4 bg-(--pd-content-card-inset-bg)">
+                  <div>
+                    <span class="block text-sm font-semibold text-(--pd-modal-text) mb-2">
+                      Path pattern
+                      <span class="font-normal text-(--pd-content-card-text) opacity-60">(optional)</span>
+                    </span>
+                    <Input bind:value={pathPattern} placeholder="e.g. /v1/*" aria-label="Path pattern" />
+                  </div>
 
-            <!-- Expiration -->
-            <div>
-              <span class="block text-sm font-semibold text-[var(--pd-modal-text)] mb-2">
-                Expiration
-                <span class="font-normal text-[var(--pd-content-card-text)] opacity-60">(optional)</span>
-              </span>
-              <div class="flex items-center gap-4">
-                <input
-                  type="date"
-                  bind:value={expiration}
-                  disabled={noExpiry}
-                  class="max-w-[280px] p-2 rounded-lg text-sm outline-hidden
-                    bg-[var(--pd-input-field-bg)] text-[var(--pd-input-field-text)]
-                    border border-[var(--pd-input-field-stroke)]
-                    hover:border-[var(--pd-input-field-hover-stroke)]
-                    focus:border-[var(--pd-input-field-focused-stroke)]
-                    disabled:opacity-50 disabled:cursor-not-allowed"
-                  aria-label="Expiration date"
-                />
-                <Checkbox bind:checked={noExpiry} title="No expiry" />
-              </div>
+                  <div>
+                    <span class="block text-sm font-semibold text-(--pd-modal-text) mb-2">Header name</span>
+                    <Input bind:value={headerName} placeholder="Authorization" aria-label="Header name" />
+                  </div>
+
+                  <div>
+                    <span class="block text-sm font-semibold text-(--pd-modal-text) mb-2">
+                      Value format
+                      <span class="font-normal text-(--pd-content-card-text) opacity-60">(optional)</span>
+                    </span>
+                    <Input bind:value={valueFormat} placeholder="Bearer {'{value}'}" aria-label="Value format" />
+                    <p class="text-xs text-(--pd-content-card-text) opacity-60 mt-1.5">
+                      Use {'{value}'} as a placeholder for the secret. Defaults to the raw value.
+                    </p>
+                  </div>
+                </div>
+              {/if}
             </div>
-          </section>
+          {/if}
 
           {#if error}
             <ErrorMessage error={error} />
           {/if}
 
-          <!-- Footer actions -->
-          <div class="flex items-center justify-end gap-3 pt-4 border-t border-[var(--pd-content-card-border)]">
+          <div class="flex items-center justify-end gap-3 pt-4 border-t border-(--pd-content-card-border)">
             <Button onclick={cancel}>Cancel</Button>
-            <Button disabled={!name.trim() || !secret.trim() || saving} onclick={saveSecret}>
-              {saving ? 'Saving...' : 'Save Secret'}
+            <Button disabled={!canSave || saving} onclick={addSecret}>
+              {saving ? 'Adding...' : 'Add Secret'}
             </Button>
           </div>
 
