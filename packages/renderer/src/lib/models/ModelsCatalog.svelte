@@ -15,10 +15,13 @@ import ModelNameColumn from '/@/lib/models/columns/ModelNameColumn.svelte';
 import ModelRuntimeColumn from '/@/lib/models/columns/ModelRuntimeColumn.svelte';
 import ModelSizeColumn from '/@/lib/models/columns/ModelSizeColumn.svelte';
 import ModelStatusColumn from '/@/lib/models/columns/ModelStatusColumn.svelte';
+import LocalRuntimeTiles from '/@/lib/models/LocalRuntimeTiles.svelte';
 import {
   type CatalogModelInfo,
-  getCatalogModels,
-  getInferenceConnectionSummaries,
+  getCloudCatalogModels,
+  getCloudConnectionSummaries,
+  getLocalCatalogModels,
+  getLocalConnectionSummaries,
   type InferenceConnectionSummary,
 } from '/@/lib/models/models-utils';
 import ModelsCatalogEmptyScreen from '/@/lib/models/ModelsCatalogEmptyScreen.svelte';
@@ -45,13 +48,23 @@ const categories: CategoryInfo[] = [
 let activeCategory: Category = $state('cloud');
 let searchTerm = $state('');
 
-let allModels: CatalogModelInfo[] = $derived(getCatalogModels($providerInfos));
-let connections: InferenceConnectionSummary[] = $derived(getInferenceConnectionSummaries($providerInfos));
+let cloudModels: CatalogModelInfo[] = $derived(getCloudCatalogModels($providerInfos));
+let cloudConnections: InferenceConnectionSummary[] = $derived(getCloudConnectionSummaries($providerInfos));
+let localModels: CatalogModelInfo[] = $derived(getLocalCatalogModels($providerInfos));
+let localConnections: InferenceConnectionSummary[] = $derived(getLocalConnectionSummaries($providerInfos));
 
-let filteredModels: ModelSelectable[] = $derived(
-  filterBySearch(allModels, searchTerm).map(m => ({ ...m, selected: false })),
+let filteredCloudModels: ModelSelectable[] = $derived(
+  filterBySearch(cloudModels, searchTerm).map(m => ({ ...m, selected: false })),
 );
-let filteredConnections: InferenceConnectionSummary[] = $derived(filterConnectionsBySearch(connections, searchTerm));
+let filteredCloudConnections: InferenceConnectionSummary[] = $derived(
+  filterConnectionsBySearch(cloudConnections, searchTerm),
+);
+let filteredLocalModels: ModelSelectable[] = $derived(
+  filterBySearch(localModels, searchTerm).map(m => ({ ...m, selected: false })),
+);
+let filteredLocalConnections: InferenceConnectionSummary[] = $derived(
+  filterConnectionsBySearch(localConnections, searchTerm),
+);
 
 let activeSubtitle: string = $derived(categories.find(c => c.id === activeCategory)?.subtitle ?? '');
 
@@ -165,19 +178,19 @@ function selectCategory(cat: Category): void {
         </div>
         <div class="flex min-w-full h-full">
           <div class="flex flex-col w-full">
-            {#if allModels.length === 0 && connections.length === 0}
+            {#if cloudModels.length === 0 && cloudConnections.length === 0}
               <ModelsCatalogEmptyScreen />
-            {:else if searchTerm && filteredModels.length === 0 && filteredConnections.length === 0}
+            {:else if searchTerm && filteredCloudModels.length === 0 && filteredCloudConnections.length === 0}
               <FilteredEmptyScreen icon={NoLogIcon} kind="models" bind:searchTerm />
             {:else}
-              {#if filteredConnections.length > 0}
+              {#if filteredCloudConnections.length > 0}
                 <div class="px-5 pt-4 pb-2">
-                  <ProviderConnectionTiles connections={filteredConnections} />
+                  <ProviderConnectionTiles connections={filteredCloudConnections} />
                 </div>
               {/if}
 
               <div class="flex min-w-full">
-                <Table kind="models" data={filteredModels} columns={columns} row={row} defaultSortColumn="Name" />
+                <Table kind="models" data={filteredCloudModels} columns={columns} row={row} defaultSortColumn="Name" />
               </div>
             {/if}
           </div>
@@ -191,11 +204,36 @@ function selectCategory(cat: Category): void {
           </div>
         </div>
       {:else if activeCategory === 'local'}
-        <div class="flex items-center justify-center h-full">
-          <div class="text-center text-[var(--pd-content-text)]">
-            <Icon icon={faDesktop} class="mb-3 opacity-40" size="2.5em" />
-            <p class="text-sm">Local models coming soon</p>
-            <p class="text-xs mt-1 opacity-60">Ollama and Ramalama runtimes will be listed here</p>
+        <div class="px-5 pb-3">
+          <p class="text-xs text-[var(--pd-content-text)] opacity-70">
+            Local runtimes detected on this host. Models from Ollama and RamaLama are listed below.
+          </p>
+        </div>
+        <div class="flex min-w-full h-full">
+          <div class="flex flex-col w-full">
+            {#if localModels.length === 0 && localConnections.length === 0}
+              <div class="flex items-center justify-center h-full">
+                <div class="text-center text-[var(--pd-content-text)]">
+                  <Icon icon={faDesktop} class="mb-3 opacity-40" size="2.5em" />
+                  <p class="text-sm">No local runtimes detected</p>
+                  <p class="text-xs mt-1 opacity-60">Install Ollama or RamaLama to manage local models</p>
+                </div>
+              </div>
+            {:else if searchTerm && filteredLocalModels.length === 0 && filteredLocalConnections.length === 0}
+              <FilteredEmptyScreen icon={NoLogIcon} kind="models" bind:searchTerm />
+            {:else}
+              {#if filteredLocalConnections.length > 0}
+                <div class="px-5 pt-4 pb-2">
+                  <LocalRuntimeTiles connections={filteredLocalConnections} />
+                </div>
+              {/if}
+
+              {#if filteredLocalModels.length > 0}
+                <div class="flex min-w-full">
+                  <Table kind="models" data={filteredLocalModels} columns={columns} row={row} defaultSortColumn="Name" />
+                </div>
+              {/if}
+            {/if}
           </div>
         </div>
       {/if}

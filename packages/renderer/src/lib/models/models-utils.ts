@@ -42,6 +42,18 @@ export function getModels(providerInfos: ProviderInfo[]): ModelInfo[] {
   );
 }
 
+function isCloudLike(type: InferenceProviderConnectionType | undefined): boolean {
+  return type === 'cloud' || type === 'self-hosted' || !type;
+}
+
+export function getCloudCatalogModels(providerInfos: ProviderInfo[]): CatalogModelInfo[] {
+  return getCatalogModels(providerInfos).filter(m => isCloudLike(m.type));
+}
+
+export function getLocalCatalogModels(providerInfos: ProviderInfo[]): CatalogModelInfo[] {
+  return getCatalogModels(providerInfos).filter(m => m.type === 'local');
+}
+
 export function getCatalogModels(providerInfos: ProviderInfo[]): CatalogModelInfo[] {
   const result: CatalogModelInfo[] = [];
   for (const provider of providerInfos) {
@@ -59,6 +71,14 @@ export function getCatalogModels(providerInfos: ProviderInfo[]): CatalogModelInf
     }
   }
   return result;
+}
+
+export function getCloudConnectionSummaries(providerInfos: ProviderInfo[]): InferenceConnectionSummary[] {
+  return getInferenceConnectionSummaries(providerInfos).filter(c => isCloudLike(c.connectionType));
+}
+
+export function getLocalConnectionSummaries(providerInfos: ProviderInfo[]): InferenceConnectionSummary[] {
+  return getInferenceConnectionSummaries(providerInfos).filter(c => c.connectionType === 'local');
 }
 
 export function getInferenceConnectionSummaries(providerInfos: ProviderInfo[]): InferenceConnectionSummary[] {
