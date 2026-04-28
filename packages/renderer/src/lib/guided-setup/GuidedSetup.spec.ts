@@ -19,7 +19,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { faBrain, faCheckCircle, faRobot } from '@fortawesome/free-solid-svg-icons';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import type { GuidedSetupStep, OnboardingState } from './guided-setup-steps';
@@ -152,9 +152,10 @@ test('dispatches close event when finishing on last step', async () => {
 
   const dashboardButton = screen.getByRole('button', { name: /Go to Dashboard/ });
   await fireEvent.click(dashboardButton);
-  await vi.advanceTimersByTimeAsync(0);
 
-  expect(closeMock).toHaveBeenCalled();
+  await waitFor(() => {
+    expect(closeMock).toHaveBeenCalled();
+  });
 });
 
 test('clicking on completed step navigates back to it', async () => {
@@ -201,9 +202,10 @@ test('persists default agent to settings.json when wizard completes', async () =
   await fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
   await fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
   await fireEvent.click(screen.getByRole('button', { name: /Go to Dashboard/ }));
-  await vi.advanceTimersByTimeAsync(0);
 
-  expect(window.updateConfigurationValue).toHaveBeenCalledWith('onboarding.defaultAgent', 'opencode');
+  await waitFor(() => {
+    expect(window.updateConfigurationValue).toHaveBeenCalledWith('onboarding.defaultAgent', 'opencode');
+  });
 });
 
 test('persists defaults when skipping to the end', async () => {
@@ -212,9 +214,10 @@ test('persists defaults when skipping to the end', async () => {
   await fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
   await fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
   await fireEvent.click(screen.getByRole('button', { name: /Go to Dashboard/ }));
-  await vi.advanceTimersByTimeAsync(0);
 
-  expect(window.updateConfigurationValue).toHaveBeenCalledWith('onboarding.defaultAgent', 'opencode');
+  await waitFor(() => {
+    expect(window.updateConfigurationValue).toHaveBeenCalledWith('onboarding.defaultAgent', 'opencode');
+  });
 });
 
 test('closes wizard even when persistence fails', async () => {
@@ -227,10 +230,11 @@ test('closes wizard even when persistence fails', async () => {
   await fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
   await fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
   await fireEvent.click(screen.getByRole('button', { name: /Go to Dashboard/ }));
-  await vi.advanceTimersByTimeAsync(0);
 
-  expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to persist onboarding defaults', persistError);
-  expect(closeMock).toHaveBeenCalled();
+  await waitFor(() => {
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to persist onboarding defaults', persistError);
+    expect(closeMock).toHaveBeenCalled();
+  });
 });
 
 test('does not persist defaults when advancing to intermediate steps', async () => {

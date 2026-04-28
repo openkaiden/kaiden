@@ -3,22 +3,13 @@ import { faCircleCheck, faTriangleExclamation } from '@fortawesome/free-solid-sv
 import { Button, Link, Spinner } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
-type ProbeStatus = 'idle' | 'checking' | 'detected' | 'not-found';
-let probeStatus: ProbeStatus = $state('idle');
+import { fetchProviders, providerInfos } from '/@/stores/providers';
 
-async function hasLocalInferenceConnection(): Promise<boolean> {
-  try {
-    const providers = await window.getProviderInfos();
-    return providers.some(p => p.inferenceConnections.some(c => c.type === 'local' && c.status === 'started'));
-  } catch {
-    return false;
-  }
-}
+let checking = $state(false);
 
-async function probeLocalRuntime(): Promise<void> {
-  probeStatus = 'checking';
-  probeStatus = (await hasLocalInferenceConnection()) ? 'detected' : 'not-found';
-}
+let hasLocalInference = $derived(
+  $providerInfos.some(p => p.inferenceConnections.some(c => c.type === 'local' && c.status === 'started')),
+);
 
 function openOllamaLink(): void {
   window.openExternal('https://ollama.com').catch(() => {});
@@ -29,18 +20,15 @@ function openRamalamaLink(): void {
 }
 
 function handleRetryProbe(): void {
-  probeLocalRuntime().catch((err: unknown) => {
-    console.error('Local runtime probe failed', err);
-  });
-}
-
-$effect(() => {
-  if (probeStatus === 'idle') {
-    probeLocalRuntime().catch((err: unknown) => {
+  checking = true;
+  fetchProviders()
+    .catch((err: unknown) => {
       console.error('Local runtime probe failed', err);
+    })
+    .finally(() => {
+      checking = false;
     });
-  }
-});
+}
 </script>
 
 <div
@@ -54,7 +42,7 @@ $effect(() => {
     with the extension system. Results update the default-model step.
   </p>
 
-  {#if probeStatus === 'checking'}
+  {#if checking}
     <div
       class="flex items-center gap-3 rounded-lg bg-(--pd-content-card-bg) p-4"
       role="status"
@@ -68,7 +56,7 @@ $effect(() => {
         </p>
       </div>
     </div>
-  {:else if probeStatus === 'detected'}
+  {:else if hasLocalInference}
     <div
       class="flex items-center gap-3 rounded-lg bg-(--pd-content-card-bg) border border-(--pd-state-success) p-4"
       role="status"
@@ -80,7 +68,7 @@ $effect(() => {
         <p class="text-xs text-(--pd-content-card-text) opacity-70 mt-0.5">You can pick a default from the local catalog on the next step.</p>
       </div>
     </div>
-  {:else if probeStatus === 'not-found'}
+  {:else}
     <div
       class="flex items-start gap-3 rounded-lg bg-(--pd-content-card-bg) border border-(--pd-state-warning) p-4"
       role="alert"
@@ -95,7 +83,7 @@ $effect(() => {
           <Link on:click={openRamalamaLink}>Ramalama</Link>, pull at least one model, then run
           <strong>Check again</strong>.
         </p>
-        <Button type="secondary" class="mt-3" aria-label="Check again" onclick={handleRetryProbe}>Check again</Button>
+        <Button type="secondary" class="mt-3" onclick={handleRetryProbe}>Check again</Button>
       </div>
     </div>
   {/if}
