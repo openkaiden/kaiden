@@ -22,8 +22,18 @@ const SERVICE_ICONS: Record<string, IconDefinition> = {
   anthropic: faClaude,
 };
 
+const SERVICE_LABELS: Record<string, string> = {
+  github: 'GitHub',
+  gemini: 'Gemini',
+  anthropic: 'Anthropic',
+};
+
 function getServiceIcon(name: string): IconDefinition {
   return SERVICE_ICONS[name] ?? faPlug;
+}
+
+function getServiceLabel(name: string): string {
+  return SERVICE_LABELS[name] ?? name.charAt(0).toUpperCase() + name.slice(1);
 }
 
 let services = $state<SecretService[]>([]);
@@ -45,8 +55,8 @@ let serviceMap = $derived(new Map(services.map(s => [s.name, s])));
 
 let typeOptions = $derived<CardSelectorOption[]>([
   ...services.map(s => ({
-    title: s.name.charAt(0).toUpperCase() + s.name.slice(1),
-    badge: s.name.charAt(0).toUpperCase() + s.name.slice(1),
+    title: getServiceLabel(s.name),
+    badge: getServiceLabel(s.name),
     value: s.name,
     icon: getServiceIcon(s.name),
   })),
@@ -66,17 +76,16 @@ let title = $derived.by(() => {
   if (isOther) return 'Other Secret';
   const svc = serviceMap.get(effectiveType);
   if (!svc) return 'Other Secret';
-  return `${svc.name.charAt(0).toUpperCase() + svc.name.slice(1)} Secret`;
+  return `${getServiceLabel(svc.name)} Secret`;
 });
 
 let subtitle = $derived.by(() => {
   if (isOther) return 'Configure a custom secret to inject as a header into matching requests.';
-  const svc = serviceMap.get(effectiveType);
-  if (!svc) return '';
-  return `Automatically injected as ${svc.headerName} for ${svc.hostPattern}.`;
+  return '';
 });
 
 let canSave = $derived.by(() => {
+  if (loading) return false;
   if (!name.trim() || !secret.trim()) return false;
   if (isOther && (!hostPattern.trim() || !headerName.trim())) return false;
   return true;
