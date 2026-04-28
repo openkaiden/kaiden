@@ -61,5 +61,9 @@ let { workspaceSummary, configuration }: Props = $props();
         </tr>
       {/each}
     {/if}
+    <!-- TODO: secrets section — configuration.secrets (string[]) -->
+    <!-- TODO: skills section — configuration.skills (string[] of skill folder paths) -->
+    <!-- TODO: MCP tools section — configuration.mcp.servers and configuration.mcp.commands -->
+    <!-- TODO: network section — configuration.network.mode + configuration.network.hosts -->
   </DetailsTable>
 </div>
