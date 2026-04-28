@@ -18,6 +18,7 @@
 
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { AgentWorkspacesPage } from '../pages/agent-workspaces-page';
 import type { BasePage } from '../pages/base-page';
 import { ChatPage } from '../pages/chat-page';
 import { ExtensionsPage } from '../pages/extensions-page';
@@ -36,6 +37,7 @@ export class NavigationBar {
   readonly skillsLink: Locator;
   readonly knowledgesLink: Locator;
   readonly extensionsLink: Locator;
+  readonly workspacesLink: Locator;
   readonly settingsLink: Locator;
   private readonly links: Locator[];
 
@@ -48,6 +50,7 @@ export class NavigationBar {
     this.skillsLink = this.navigationLocator.getByRole('link', { name: 'Skills', exact: true });
     this.knowledgesLink = this.navigationLocator.getByRole('link', { name: 'Knowledges', exact: true });
     this.extensionsLink = this.navigationLocator.getByRole('link', { name: 'Extensions', exact: true });
+    this.workspacesLink = this.navigationLocator.getByRole('link', { name: 'Workspaces', exact: true });
     this.settingsLink = this.navigationLocator.getByRole('link', { name: 'Settings', exact: true });
     this.links = [
       this.chatLink,
@@ -56,6 +59,7 @@ export class NavigationBar {
       this.skillsLink,
       this.knowledgesLink,
       this.extensionsLink,
+      this.workspacesLink,
       this.settingsLink,
     ];
   }
@@ -104,6 +108,10 @@ export class NavigationBar {
     const settingsPage = await this.navigateToSettingsPage();
     const preferencesPage = await settingsPage.openPreferences();
     await preferencesPage.enableChatWindow();
+  }
+
+  async navigateToWorkspacesPage(): Promise<AgentWorkspacesPage> {
+    return this.navigateTo(this.workspacesLink, AgentWorkspacesPage);
   }
 
   async navigateToSettingsPage(): Promise<SettingsPage> {

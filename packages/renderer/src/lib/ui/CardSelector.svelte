@@ -36,6 +36,7 @@ function handleClick(value: string): void {
           {selected === option.value ? 'border-[var(--pd-content-card-border-selected)]' : 'border-[var(--pd-content-card-border)]'}
           border-2 flex flex-col overflow-hidden"
         aria-label={option.title}
+        aria-pressed={selected === option.value}
         onclick={():void => handleClick(option.value)}>
         <div class="flex flex-row items-start gap-2 min-w-0">
           <div class="flex-shrink-0 mt-0.5">

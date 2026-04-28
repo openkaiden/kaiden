@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { _electron as electron, type ElectronApplication, type Page, test as base } from '@playwright/test';
 import { TIMEOUTS } from 'src/model/core/types';
 import { NavigationBar } from 'src/model/navigation/navigation';
+import { AgentWorkspacesPage } from 'src/model/pages/agent-workspaces-page';
 import { ChatPage } from 'src/model/pages/chat-page';
 import { ExtensionsPage } from 'src/model/pages/extensions-page';
 import { FlowsPage } from 'src/model/pages/flows-page';
@@ -52,6 +53,7 @@ export interface ElectronFixtures {
   skillsPage: SkillsPage;
   extensionsPage: ExtensionsPage;
   chatPage: ChatPage;
+  agentWorkspacesPage: AgentWorkspacesPage;
 }
 
 export interface WorkerElectronFixtures {
@@ -137,6 +139,11 @@ export const test = base.extend<ElectronFixtures>({
   chatPage: async ({ page }, use): Promise<void> => {
     const chatPage = new ChatPage(page);
     await use(chatPage);
+  },
+
+  agentWorkspacesPage: async ({ page }, use): Promise<void> => {
+    const agentWorkspacesPage = new AgentWorkspacesPage(page);
+    await use(agentWorkspacesPage);
   },
 });
 
