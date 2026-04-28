@@ -217,14 +217,6 @@ async function addSecret(): Promise<void> {
               {#if injectionOpen}
                 <div id="injection-settings" class="px-4 pb-4 pt-2 space-y-4 bg-(--pd-content-card-inset-bg)">
                   <div>
-                    <span class="block text-sm font-semibold text-(--pd-modal-text) mb-2">
-                      Path pattern
-                      <span class="font-normal text-(--pd-content-card-text) opacity-60">(optional)</span>
-                    </span>
-                    <Input bind:value={pathPattern} placeholder="e.g. /v1/*" aria-label="Path pattern" />
-                  </div>
-
-                  <div>
                     <span class="block text-sm font-semibold text-(--pd-modal-text) mb-2">Header name</span>
                     <Input bind:value={headerName} placeholder="Authorization" aria-label="Header name" />
                   </div>
@@ -238,6 +230,14 @@ async function addSecret(): Promise<void> {
                     <p class="text-xs text-(--pd-content-card-text) opacity-60 mt-1.5">
                       Use {'{value}'} as a placeholder for the secret. Defaults to the raw value.
                     </p>
+                  </div>
+
+                  <div>
+                    <span class="block text-sm font-semibold text-(--pd-modal-text) mb-2">
+                      Path pattern
+                      <span class="font-normal text-(--pd-content-card-text) opacity-60">(optional)</span>
+                    </span>
+                    <Input bind:value={pathPattern} placeholder="e.g. /v1/*" aria-label="Path pattern" />
                   </div>
                 </div>
               {/if}
