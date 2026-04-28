@@ -57,6 +57,7 @@ export class RamaLamaExtension {
           light: './icon.png',
         },
       },
+      links: [{ title: 'Website', url: 'https://ramalama.ai' }],
     });
 
     this.#inversifyBinding = new InversifyBinding(

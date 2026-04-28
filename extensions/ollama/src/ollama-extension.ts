@@ -40,6 +40,7 @@ export class OllamaExtension {
           light: './icon.png',
         },
       },
+      links: [{ title: 'Website', url: 'https://ollama.com' }],
     });
     this.#extensionContext.subscriptions.push(ollamaProvider);
 
