@@ -171,6 +171,32 @@ test('submits Other secret with injection settings', async () => {
   expect(handleNavigation).toHaveBeenCalledWith({ page: 'secret-vault' });
 });
 
+test('submits Other secret using default Authorization header when header name is not changed', async () => {
+  const { handleNavigation } = await import('/@/navigation');
+
+  render(SecretVaultCreate);
+
+  await waitFor(() => {
+    expect(screen.getByLabelText('Other')).toBeInTheDocument();
+  });
+
+  await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'custom-key' } });
+  await fireEvent.input(screen.getByLabelText('Secret value'), { target: { value: 'sk-abc' } });
+  await fireEvent.input(screen.getByLabelText('Host pattern'), { target: { value: 'api.custom.io' } });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Add Secret' }));
+
+  expect(window.createSecret).toHaveBeenCalledWith({
+    name: 'custom-key',
+    type: 'other',
+    value: 'sk-abc',
+    hosts: ['api.custom.io'],
+    header: 'Authorization',
+  });
+
+  expect(handleNavigation).toHaveBeenCalledWith({ page: 'secret-vault' });
+});
+
 test('submits predefined service type without injection fields', async () => {
   const { handleNavigation } = await import('/@/navigation');
 

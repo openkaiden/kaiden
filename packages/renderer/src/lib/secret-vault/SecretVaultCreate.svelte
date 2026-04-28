@@ -1,5 +1,7 @@
 <script lang="ts">
-import { faChevronDown, faChevronUp, faGear, faKey } from '@fortawesome/free-solid-svg-icons';
+import { faClaude, faGithub, faGoogle } from '@fortawesome/free-brands-svg-icons';
+import type { IconDefinition } from '@fortawesome/free-solid-svg-icons';
+import { faChevronDown, faChevronUp, faGear, faKey, faPlug } from '@fortawesome/free-solid-svg-icons';
 import { Button, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { onMount } from 'svelte';
@@ -14,6 +16,16 @@ import type { SecretCreateOptions, SecretService } from '/@api/secret-info';
 
 const OTHER_TYPE = 'other';
 
+const SERVICE_ICONS: Record<string, IconDefinition> = {
+  github: faGithub,
+  gemini: faGoogle,
+  anthropic: faClaude,
+};
+
+function getServiceIcon(name: string): IconDefinition {
+  return SERVICE_ICONS[name] ?? faPlug;
+}
+
 let services = $state<SecretService[]>([]);
 let loading = $state(true);
 
@@ -23,7 +35,7 @@ let secret = $state('');
 let description = $state('');
 let hostPattern = $state('');
 let pathPattern = $state('');
-let headerName = $state('');
+let headerName = $state('Authorization');
 let valueFormat = $state('');
 let injectionOpen = $state(true);
 let saving = $state(false);
@@ -36,8 +48,7 @@ let typeOptions = $derived<CardSelectorOption[]>([
     title: s.name.charAt(0).toUpperCase() + s.name.slice(1),
     badge: s.name.charAt(0).toUpperCase() + s.name.slice(1),
     value: s.name,
-    icon: faKey,
-    description: `Inject as ${s.headerName} for ${s.hostPattern}`,
+    icon: getServiceIcon(s.name),
   })),
   {
     title: 'Other',
@@ -182,6 +193,7 @@ async function addSecret(): Promise<void> {
 
             <div class="rounded-lg border border-(--pd-content-card-border) overflow-hidden">
               <button
+                type="button"
                 class="w-full flex items-center gap-3 px-4 py-3 bg-(--pd-content-card-inset-bg)
                   hover:bg-(--pd-content-card-hover-inset-bg) cursor-pointer"
                 aria-expanded={injectionOpen}
