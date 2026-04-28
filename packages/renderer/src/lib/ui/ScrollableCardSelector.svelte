@@ -111,8 +111,8 @@ $effect(() => {
                 hover:bg-[var(--pd-content-card-hover-inset-bg)]"
               onclick={(): void => toggle(item.id)}
               aria-label={item.name}>
-              <div class="flex-shrink-0">
-                <Checkbox checked={isSelected(item.id)} title={item.name} />
+              <div class="flex-shrink-0" onclick={(e): void => e.stopPropagation()}>
+                <Checkbox checked={isSelected(item.id)} title={item.name} onclick={(): void => toggle(item.id)} />
               </div>
               <div class="text-left min-w-0 flex-1">
                 <div class="text-xs font-medium text-[var(--pd-content-card-text)] truncate">{item.name}</div>

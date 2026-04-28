@@ -33,6 +33,7 @@ function generateItems(count: number): ScrollableCardItem[] {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.resetAllMocks();
 });
 
@@ -196,4 +197,24 @@ test('Expect items without description render without description element', () =
   render(ScrollableCardSelector, { items });
 
   expect(screen.getByText('No Desc Item')).toBeInTheDocument();
+});
+
+test('Expect clicking checkbox inside card toggles selection', async () => {
+  const items = generateItems(3);
+  render(ScrollableCardSelector, { items, selected: [] });
+
+  const checkbox = screen.getByRole('checkbox', { name: 'Item 0' });
+  await fireEvent.click(checkbox);
+
+  expect(screen.getByText('1 selected')).toBeInTheDocument();
+});
+
+test('Expect clicking checkbox inside selected card deselects it', async () => {
+  const items = generateItems(3);
+  render(ScrollableCardSelector, { items, selected: ['item-0'] });
+
+  const checkbox = screen.getByRole('checkbox', { name: 'Item 0' });
+  await fireEvent.click(checkbox);
+
+  expect(screen.getByText('0 selected')).toBeInTheDocument();
 });
