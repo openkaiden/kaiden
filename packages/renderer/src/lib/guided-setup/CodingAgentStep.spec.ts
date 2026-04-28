@@ -19,7 +19,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
-import { type Writable } from 'svelte/store';
+import type { Writable } from 'svelte/store';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { fetchProviders, providerInfos } from '/@/stores/providers';
