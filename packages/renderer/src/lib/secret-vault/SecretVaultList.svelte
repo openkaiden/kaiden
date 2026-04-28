@@ -4,21 +4,16 @@ import { Button, FilteredEmptyScreen, NavPage, Table, TableColumn, TableRow } fr
 
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
 import { handleNavigation } from '/@/navigation';
-import { filteredSecretVaultInfos, secretVaultCategoryFilter, secretVaultSearchPattern } from '/@/stores/secret-vault';
+import { filteredSecretVaultInfos, secretVaultSearchPattern } from '/@/stores/secret-vault';
 import { NavigationPage } from '/@api/navigation-page';
 import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 
-import { SecretVaultDescriptionColumn } from './columns/secret-vault-columns';
-import SecretVaultCategoryIcon from './columns/SecretVaultCategoryIcon.svelte';
-import SecretVaultExpiry from './columns/SecretVaultExpiry.svelte';
-import SecretVaultName from './columns/SecretVaultName.svelte';
-import SecretVaultStatus from './columns/SecretVaultStatus.svelte';
+import SecretVaultAccount from './columns/SecretVaultAccount.svelte';
+import SecretVaultIntegration from './columns/SecretVaultIntegration.svelte';
+import SecretVaultMaskedSecret from './columns/SecretVaultMaskedSecret.svelte';
 import SecretVaultEmptyScreen from './SecretVaultEmptyScreen.svelte';
 
 type SecretVaultSelectable = SecretVaultInfo & { selected: boolean };
-
-type CategoryScreen = 'all' | 'api' | 'infra';
-let screen: CategoryScreen = $state('all');
 
 let searchTerm = $state('');
 
@@ -26,45 +21,26 @@ $effect(() => {
   secretVaultSearchPattern.set(searchTerm);
 });
 
-$effect(() => {
-  secretVaultCategoryFilter.set(screen);
-});
-
-function changeScreen(newScreen: CategoryScreen): void {
-  if (screen === newScreen) {
-    return;
-  }
-  screen = newScreen;
-}
-
 const row = new TableRow<SecretVaultSelectable>({});
 
-const iconColumn = new TableColumn<SecretVaultSelectable>('', {
-  width: '60px',
-  renderer: SecretVaultCategoryIcon,
-});
-
-const nameColumn = new TableColumn<SecretVaultSelectable>('Name', {
-  width: '2fr',
-  renderer: SecretVaultName,
+const integrationColumn = new TableColumn<SecretVaultSelectable>('Integration', {
+  width: '3fr',
+  renderer: SecretVaultIntegration,
   comparator: (a, b): number => a.name.localeCompare(b.name),
 });
 
-const expirationColumn = new TableColumn<SecretVaultSelectable>('Expiration', {
-  width: '120px',
-  renderer: SecretVaultExpiry,
-  comparator: (a, b): number =>
-    (a.expiration?.getTime() ?? Number.POSITIVE_INFINITY) - (b.expiration?.getTime() ?? Number.POSITIVE_INFINITY),
+const accountColumn = new TableColumn<SecretVaultSelectable>('Account', {
+  width: '2fr',
+  renderer: SecretVaultAccount,
+  comparator: (): number => 0,
 });
 
-const statusColumn = new TableColumn<SecretVaultSelectable>('Status', {
-  width: '100px',
-  align: 'center',
-  renderer: SecretVaultStatus,
-  comparator: (a, b): number => a.status.localeCompare(b.status),
+const secretColumn = new TableColumn<SecretVaultSelectable>('Secret', {
+  width: '1fr',
+  renderer: SecretVaultMaskedSecret,
 });
 
-const columns = [iconColumn, nameColumn, new SecretVaultDescriptionColumn(), expirationColumn, statusColumn];
+const columns = [integrationColumn, accountColumn, secretColumn];
 
 const secrets: SecretVaultSelectable[] = $derived(
   $filteredSecretVaultInfos.map(secret => ({ ...secret, selected: false })),
@@ -82,18 +58,6 @@ function addSecret(): void {
     </Button>
   {/snippet}
 
-  {#snippet tabs()}
-    <Button type="tab" onclick={(): void => { changeScreen('all'); }} selected={screen === 'all'}>
-      All secrets
-    </Button>
-    <Button type="tab" onclick={(): void => { changeScreen('api'); }} selected={screen === 'api'}>
-      API tokens
-    </Button>
-    <Button type="tab" onclick={(): void => { changeScreen('infra'); }} selected={screen === 'infra'}>
-      Infrastructure
-    </Button>
-  {/snippet}
-
   {#snippet content()}
     <div class="flex min-w-full h-full">
       {#if secrets.length === 0}
@@ -108,7 +72,7 @@ function addSecret(): void {
           data={secrets}
           columns={columns}
           row={row}
-          defaultSortColumn="Name"
+          defaultSortColumn="Integration"
         />
       {/if}
     </div>

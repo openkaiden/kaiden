@@ -16,15 +16,11 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-export type SecretCategory = 'api' | 'infra';
-export type SecretStatus = 'active' | 'expired' | 'warning';
-
 export interface SecretVaultInfo {
   id: string;
   name: string;
-  category: SecretCategory;
   type?: string;
   description?: string;
+  hosts?: string[];
   expiration?: Date;
-  status: SecretStatus;
 }

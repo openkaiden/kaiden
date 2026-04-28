@@ -1,7 +1,5 @@
 <script lang="ts">
-import { faClaude, faGithub, faGoogle } from '@fortawesome/free-brands-svg-icons';
-import type { IconDefinition } from '@fortawesome/free-solid-svg-icons';
-import { faChevronDown, faChevronUp, faGear, faKey, faPlug } from '@fortawesome/free-solid-svg-icons';
+import { faChevronDown, faChevronUp, faGear, faKey } from '@fortawesome/free-solid-svg-icons';
 import { Button, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { onMount } from 'svelte';
@@ -14,27 +12,7 @@ import { handleNavigation } from '/@/navigation';
 import { NavigationPage } from '/@api/navigation-page';
 import type { SecretCreateOptions, SecretService } from '/@api/secret-info';
 
-const OTHER_TYPE = 'other';
-
-const SERVICE_ICONS: Record<string, IconDefinition> = {
-  github: faGithub,
-  gemini: faGoogle,
-  anthropic: faClaude,
-};
-
-const SERVICE_LABELS: Record<string, string> = {
-  github: 'GitHub',
-  gemini: 'Gemini',
-  anthropic: 'Anthropic',
-};
-
-function getServiceIcon(name: string): IconDefinition {
-  return SERVICE_ICONS[name] ?? faPlug;
-}
-
-function getServiceLabel(name: string): string {
-  return SERVICE_LABELS[name] ?? name.charAt(0).toUpperCase() + name.slice(1);
-}
+import { getServiceIcon, getServiceLabel, OTHER_TYPE } from './secret-vault-utils';
 
 let services = $state<SecretService[]>([]);
 let loading = $state(true);

@@ -29,10 +29,8 @@ function secretInfoToVaultInfo(info: SecretInfo): SecretVaultInfo {
   return {
     id: info.name,
     name: info.name,
-    category: 'api',
     type: info.type,
     description: info.description,
-    status: 'active',
   };
 }
 
@@ -40,23 +38,15 @@ export const secretVaultInfos: Writable<readonly SecretVaultInfo[]> = writable([
 
 export const secretVaultSearchPattern = writable('');
 
-export const secretVaultCategoryFilter = writable<'all' | 'api' | 'infra'>('all');
-
 export const filteredSecretVaultInfos = derived(
-  [secretVaultInfos, secretVaultSearchPattern, secretVaultCategoryFilter],
-  ([$secretVaultInfos, $secretVaultSearchPattern, $secretVaultCategoryFilter]) => {
-    let filtered = $secretVaultInfos;
-
-    if ($secretVaultCategoryFilter !== 'all') {
-      filtered = filtered.filter(secret => secret.category === $secretVaultCategoryFilter);
-    }
-
+  [secretVaultInfos, secretVaultSearchPattern],
+  ([$secretVaultInfos, $secretVaultSearchPattern]) => {
     const pattern = $secretVaultSearchPattern.trim();
     if (pattern.length) {
-      filtered = filtered.filter(secret => findMatchInLeaves(secret, pattern));
+      return $secretVaultInfos.filter(secret => findMatchInLeaves(secret, pattern));
     }
 
-    return filtered;
+    return $secretVaultInfos;
   },
 );
 
