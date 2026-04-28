@@ -62,13 +62,13 @@ function getSecondBadge(status: string): BadgeInfo | undefined {
 }
 </script>
 
-<div class="grid grid-cols-[repeat(auto-fill,minmax(min(260px,100%),1fr))] gap-3">
+<div class="flex flex-wrap gap-3">
   {#each connections as connection (connection.providerId + ':' + connection.connectionName)}
     {@const status = effectiveStatus(connection)}
     {@const primaryBadge = getStatusBadge(status)}
     {@const secondaryBadge = getSecondBadge(status)}
     <div
-      class="flex flex-col gap-2 p-4 rounded-lg border border-[var(--pd-content-card-border)] bg-[var(--pd-content-card-bg)]">
+      class="flex flex-col gap-2 p-4 rounded-lg border border-[var(--pd-content-card-border)] bg-[var(--pd-content-card-bg)] flex-1 min-w-40 max-w-48">
       <span class="text-base font-semibold text-[var(--pd-content-card-header-text)]">
         {connection.providerName}
       </span>
