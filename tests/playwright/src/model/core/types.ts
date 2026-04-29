@@ -171,6 +171,16 @@ export const CODING_AGENT = {
 export const CODING_AGENTS = Object.values(CODING_AGENT);
 export type CodingAgent = (typeof CODING_AGENT)[keyof typeof CODING_AGENT];
 
+export const WIZARD_STEP = {
+  WORKSPACE: 'Workspace',
+  AGENT_MODEL: 'Agent & Model',
+  TOOLS_SECRETS: 'Tools & Secrets',
+  FILE_SYSTEM: 'File System',
+  NETWORKING: 'Networking',
+} as const;
+export const WIZARD_STEPS = Object.values(WIZARD_STEP);
+export type WizardStep = (typeof WIZARD_STEP)[keyof typeof WIZARD_STEP];
+
 export const FILE_ACCESS_LEVEL = {
   WORKING_DIR_ONLY: 'Working Directory Only',
   HOME_DIRECTORY: 'Home Directory',

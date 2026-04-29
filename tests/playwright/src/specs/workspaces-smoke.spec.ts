@@ -16,83 +16,53 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { CODING_AGENTS, FILE_ACCESS_LEVEL, FILE_ACCESS_LEVELS, MCP_SERVERS } from 'src/model/core/types';
+import {
+  CODING_AGENT,
+  CODING_AGENTS,
+  FILE_ACCESS_LEVEL,
+  FILE_ACCESS_LEVELS,
+  MCP_SERVERS,
+  WIZARD_STEP,
+  WIZARD_STEPS,
+} from 'src/model/core/types';
 
 import { expect, workerTest as test } from '../fixtures/electron-app';
 import { waitForNavigationReady } from '../utils/app-ready';
 
-test.describe('Workspaces page - initial state', { tag: '@smoke' }, () => {
+test.describe('Workspaces page', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page, navigationBar }) => {
     await waitForNavigationReady(page);
     await navigationBar.navigateToWorkspacesPage();
   });
 
-  test('[WKS-INIT-01] Workspaces page renders with heading and create button', async ({ agentWorkspacesPage }) => {
-    await expect(agentWorkspacesPage.heading).toBeVisible();
-    await expect(agentWorkspacesPage.createButton).toBeVisible();
-    await expect(agentWorkspacesPage.createButton).toBeEnabled();
-    await expect(agentWorkspacesPage.searchInput).toBeVisible();
+  test.describe('given no workspaces exist', () => {
+    test('should display the heading, create button and search input', async ({ agentWorkspacesPage }) => {
+      await expect(agentWorkspacesPage.heading).toBeVisible();
+      await expect(agentWorkspacesPage.createButton).toBeVisible();
+      await expect(agentWorkspacesPage.createButton).toBeEnabled();
+      await expect(agentWorkspacesPage.searchInput).toBeVisible();
+    });
+
+    test('should show the empty state message', async ({ agentWorkspacesPage }) => {
+      await expect(agentWorkspacesPage.noWorkspacesMessage).toBeVisible();
+      await expect(agentWorkspacesPage.table).not.toBeVisible();
+    });
   });
 
-  test('[WKS-INIT-02] Empty state is shown when no workspaces exist', async ({ agentWorkspacesPage }) => {
-    await expect(agentWorkspacesPage.noWorkspacesMessage).toBeVisible();
-    await expect(agentWorkspacesPage.table).not.toBeVisible();
-  });
-});
+  test.describe('when searching for a non-existent workspace', () => {
+    test('should show filtered empty state and clear filter restores the view', async ({ agentWorkspacesPage }) => {
+      await agentWorkspacesPage.search('non-existent-workspace-xyz');
+      await expect(agentWorkspacesPage.filteredEmptyMessage).toBeVisible();
+      await expect(agentWorkspacesPage.clearFilterButton).toBeVisible();
 
-test.describe('Workspaces page - create form', { tag: '@smoke' }, () => {
-  test.beforeEach(async ({ page, navigationBar }) => {
-    await waitForNavigationReady(page);
-    await navigationBar.navigateToWorkspacesPage();
-  });
-
-  test('[WKS-CREATE-01] Create page loads with correct initial state', async ({ agentWorkspacesPage }) => {
-    const createPage = await agentWorkspacesPage.openCreatePage();
-
-    await expect(createPage.heading).toBeVisible();
-    await expect(createPage.sessionNameInput).toBeVisible();
-    await expect(createPage.workingDirInput).toBeVisible();
-    await expect(createPage.browseButton).toBeVisible();
-    await expect(createPage.descriptionInput).toBeVisible();
-    await expect(createPage.submitButton).toBeDisabled();
-  });
-
-  test('[WKS-CREATE-02] Agent selector displays all coding agents', async ({ agentWorkspacesPage }) => {
-    const createPage = await agentWorkspacesPage.openCreatePage();
-
-    await expect(createPage.agentSelector).toBeVisible();
-    for (const agent of CODING_AGENTS) {
-      await expect(createPage.agentSelector.getByLabel(agent)).toBeVisible();
-    }
-  });
-
-  test('[WKS-CREATE-03] File system access selector displays all options', async ({ agentWorkspacesPage }) => {
-    const createPage = await agentWorkspacesPage.openCreatePage();
-
-    await expect(createPage.fileAccessSelector).toBeVisible();
-    for (const option of FILE_ACCESS_LEVELS) {
-      await expect(createPage.fileAccessSelector.getByLabel(option)).toBeVisible();
-    }
-  });
-
-  test('[WKS-CREATE-04] Cancel button navigates back to workspaces list', async ({ agentWorkspacesPage }) => {
-    const createPage = await agentWorkspacesPage.openCreatePage();
-    await createPage.cancel();
-    await expect(agentWorkspacesPage.heading).toBeVisible();
-  });
-
-  test('[WKS-CREATE-05] Skills section is hidden when no skills exist', async ({ agentWorkspacesPage }) => {
-    const createPage = await agentWorkspacesPage.openCreatePage();
-    await expect(createPage.skillsSection).not.toBeVisible();
-  });
-
-  test('[WKS-CREATE-06] MCP Servers section is hidden when no MCP servers exist', async ({ agentWorkspacesPage }) => {
-    const createPage = await agentWorkspacesPage.openCreatePage();
-    await expect(createPage.mcpServersSection).not.toBeVisible();
+      await agentWorkspacesPage.clearFilterButton.click();
+      await expect(agentWorkspacesPage.filteredEmptyMessage).not.toBeVisible();
+      await expect(agentWorkspacesPage.searchInput).toHaveValue('');
+    });
   });
 });
 
-test.describe('Workspaces page - create form interactions', { tag: '@smoke' }, () => {
+test.describe('Create workspace wizard', { tag: '@smoke' }, () => {
   const testWorkspace = {
     name: 'Test Workspace',
     workingDir: '/tmp/test-project',
@@ -104,43 +74,178 @@ test.describe('Workspaces page - create form interactions', { tag: '@smoke' }, (
     await navigationBar.navigateToWorkspacesPage();
   });
 
-  test('[WKS-CREATE-07] Form fields and agent selection work correctly', async ({ agentWorkspacesPage }) => {
-    const createPage = await agentWorkspacesPage.openCreatePage();
+  test.describe('given the wizard is opened', () => {
+    test('should show step 1 with form fields and disabled Continue button', async ({ agentWorkspacesPage }) => {
+      const createPage = await agentWorkspacesPage.openCreatePage();
 
-    await createPage.fillSessionName(testWorkspace.name);
-    await createPage.fillWorkingDir(testWorkspace.workingDir);
-    await createPage.fillDescription(testWorkspace.description);
+      await expect(createPage.heading).toBeVisible();
+      await expect(createPage.sessionNameInput).toBeVisible();
+      await expect(createPage.workingDirInput).toBeVisible();
+      await expect(createPage.browseButton).toBeVisible();
+      await expect(createPage.continueButton).toBeDisabled();
+      await expect(createPage.cancelButton).toBeEnabled();
+      await expect(createPage.backButton).not.toBeVisible();
+    });
 
-    await expect(createPage.sessionNameInput).toHaveValue(testWorkspace.name);
-    await expect(createPage.workingDirInput).toHaveValue(testWorkspace.workingDir);
-    await expect(createPage.descriptionInput).toHaveValue(testWorkspace.description);
+    test('should display all wizard steps with Workspace active', async ({ agentWorkspacesPage }) => {
+      const createPage = await agentWorkspacesPage.openCreatePage();
 
-    for (const agent of CODING_AGENTS) {
-      await createPage.selectAgent(agent);
-      await createPage.expectAgentSelected(agent);
-    }
+      await expect(createPage.wizardStepper).toBeVisible();
+      for (const step of WIZARD_STEPS) {
+        await expect(createPage.getStepButton(step)).toBeVisible();
+      }
+      await createPage.expectStepActive(WIZARD_STEP.WORKSPACE);
+    });
   });
 
-  test('[WKS-CREATE-08] File access options can be selected and custom paths only shows for Custom Paths', async ({
-    agentWorkspacesPage,
-  }) => {
-    const createPage = await agentWorkspacesPage.openCreatePage();
+  test.describe('when filling step 1 (Workspace)', () => {
+    test('should enable Continue and Use-defaults buttons after filling project folder', async ({
+      agentWorkspacesPage,
+    }) => {
+      const createPage = await agentWorkspacesPage.openCreatePage();
 
-    for (const level of FILE_ACCESS_LEVELS) {
-      await createPage.selectFileAccess(level);
+      await expect(createPage.continueButton).toBeDisabled();
 
-      if (level === FILE_ACCESS_LEVEL.CUSTOM_PATHS) {
-        await expect(createPage.customPathsContainer).toBeVisible();
-        await expect(createPage.addPathButton).toBeVisible();
-      } else {
-        await expect(createPage.addPathButton).not.toBeVisible();
+      await createPage.workingDirInput.fill(testWorkspace.workingDir);
+
+      await expect(createPage.continueButton).toBeEnabled();
+      await expect(createPage.useDefaultsButton).toBeEnabled();
+    });
+
+    test('should accept session name, working directory and description', async ({ agentWorkspacesPage }) => {
+      const createPage = await agentWorkspacesPage.openCreatePage();
+
+      await createPage.sessionNameInput.fill(testWorkspace.name);
+      await createPage.workingDirInput.fill(testWorkspace.workingDir);
+      await createPage.fillDescription(testWorkspace.description);
+
+      await expect(createPage.sessionNameInput).toHaveValue(testWorkspace.name);
+      await expect(createPage.workingDirInput).toHaveValue(testWorkspace.workingDir);
+      await expect(createPage.descriptionInput).toHaveValue(testWorkspace.description);
+    });
+  });
+
+  test.describe('when navigating to step 2 (Agent & Model)', () => {
+    test('should display all coding agents and allow selection', async ({ agentWorkspacesPage }) => {
+      const createPage = await agentWorkspacesPage.openCreatePage();
+
+      await createPage.workingDirInput.fill('/tmp/test');
+      await createPage.navigateToStep(WIZARD_STEP.AGENT_MODEL);
+
+      await expect(createPage.agentSelector).toBeVisible();
+      for (const agent of CODING_AGENTS) {
+        await expect(createPage.getAgentCard(agent)).toBeVisible();
+        await createPage.selectAgent(agent);
       }
-    }
+    });
+  });
+
+  test.describe('when navigating to step 3 (Tools & Secrets)', () => {
+    test('should hide skills and MCP sections when none are configured', async ({ agentWorkspacesPage }) => {
+      const createPage = await agentWorkspacesPage.openCreatePage();
+
+      await createPage.workingDirInput.fill('/tmp/test');
+      await createPage.navigateToStep(WIZARD_STEP.TOOLS_SECRETS);
+
+      await expect(createPage.skillsSearchInput).not.toBeVisible();
+      await expect(createPage.mcpServersSearchInput).not.toBeVisible();
+    });
+  });
+
+  test.describe('when navigating to step 4 (File System)', () => {
+    test('should allow selecting file access levels and show custom paths only for Custom Paths', async ({
+      agentWorkspacesPage,
+    }) => {
+      const createPage = await agentWorkspacesPage.openCreatePage();
+
+      await createPage.workingDirInput.fill(testWorkspace.workingDir);
+      await createPage.navigateToStep(WIZARD_STEP.FILE_SYSTEM);
+
+      await expect(createPage.fileAccessSelector).toBeVisible();
+      for (const level of FILE_ACCESS_LEVELS) {
+        await createPage.selectFileAccess(level);
+
+        if (level === FILE_ACCESS_LEVEL.CUSTOM_PATHS) {
+          await expect(createPage.customPathsContainer).toBeVisible();
+          await expect(createPage.addPathButton).toBeVisible();
+        } else {
+          await expect(createPage.addPathButton).not.toBeVisible();
+        }
+      }
+    });
+  });
+
+  test.describe('when navigating to the last step (Networking)', () => {
+    test('should show Start Workspace button and hide Continue', async ({ agentWorkspacesPage }) => {
+      const createPage = await agentWorkspacesPage.openCreatePage();
+
+      await createPage.workingDirInput.fill(testWorkspace.workingDir);
+      await createPage.navigateToStep(WIZARD_STEP.NETWORKING);
+
+      await expect(createPage.submitButton).toBeVisible();
+      await expect(createPage.submitButton).toBeEnabled();
+      await expect(createPage.continueButton).not.toBeVisible();
+      await expect(createPage.backButton).toBeVisible();
+    });
+  });
+
+  test.describe('wizard navigation', () => {
+    test('should return to the previous step when clicking Back', async ({ agentWorkspacesPage }) => {
+      const createPage = await agentWorkspacesPage.openCreatePage();
+
+      await createPage.workingDirInput.fill('/tmp/test');
+      await createPage.navigateToStep(WIZARD_STEP.AGENT_MODEL);
+      await createPage.expectStepActive(WIZARD_STEP.AGENT_MODEL);
+
+      await createPage.goToPreviousStep();
+      await createPage.expectStepActive(WIZARD_STEP.WORKSPACE);
+      await expect(createPage.sessionNameInput).toBeVisible();
+    });
+
+    test('should navigate back to workspaces list when clicking Cancel', async ({ agentWorkspacesPage }) => {
+      const createPage = await agentWorkspacesPage.openCreatePage();
+      await createPage.cancel();
+      await expect(agentWorkspacesPage.heading).toBeVisible();
+    });
+  });
+
+  test.describe('scenario: use all defaults and create workspace', () => {
+    test('should create workspace from step 1 and return to workspaces list', async ({ agentWorkspacesPage }) => {
+      const createPage = await agentWorkspacesPage.openCreatePage();
+
+      await createPage.workingDirInput.fill(testWorkspace.workingDir);
+      await createPage.startWithDefaults();
+
+      await expect(agentWorkspacesPage.heading).toBeVisible();
+    });
+  });
+
+  test.describe('scenario: complete step-by-step creation', () => {
+    test('should fill all steps and create workspace', async ({ agentWorkspacesPage }) => {
+      const createPage = await agentWorkspacesPage.openCreatePage();
+
+      await createPage.sessionNameInput.fill(testWorkspace.name);
+      await createPage.workingDirInput.fill(testWorkspace.workingDir);
+      await createPage.fillDescription(testWorkspace.description);
+      await createPage.goToNextStep();
+
+      await createPage.selectAgent(CODING_AGENT.CLAUDE);
+      await createPage.goToNextStep();
+
+      await createPage.goToNextStep();
+
+      await createPage.selectFileAccess(FILE_ACCESS_LEVEL.WORKING_DIR_ONLY);
+      await createPage.goToNextStep();
+
+      await createPage.startWorkspace();
+
+      await expect(agentWorkspacesPage.heading).toBeVisible();
+    });
   });
 });
 
 test.describe
-  .serial('Workspaces page - skills integration', { tag: '@smoke' }, () => {
+  .serial('Create workspace - skills integration', { tag: '@smoke' }, () => {
     const testSkill = {
       name: 'e2e-workspace-test-skill',
       description: 'Skill for workspace e2e test',
@@ -151,7 +256,7 @@ test.describe
       await waitForNavigationReady(page);
     });
 
-    test('[WKS-SKILL-01] Skills section appears after creating a skill', async ({
+    test('should show skills section on step 3 after creating a skill', async ({
       navigationBar,
       skillsPage,
       agentWorkspacesPage,
@@ -163,12 +268,14 @@ test.describe
       await navigationBar.navigateToWorkspacesPage();
       const createPage = await agentWorkspacesPage.openCreatePage();
 
-      await expect(createPage.skillsSection).toBeVisible();
+      await createPage.workingDirInput.fill('/tmp/test');
+      await createPage.navigateToStep(WIZARD_STEP.TOOLS_SECRETS);
+
       await expect(createPage.skillsSearchInput).toBeVisible();
-      await expect(createPage.skillsSection.getByText(testSkill.name)).toBeVisible();
+      await expect(createPage.hasSkill(testSkill.name)).toBeVisible();
     });
 
-    test('[WKS-SKILL-02] Cleanup - delete the test skill', async ({ navigationBar, skillsPage }) => {
+    test('cleanup: delete the test skill', async ({ navigationBar, skillsPage }) => {
       await navigationBar.navigateToSkillsPage();
       await skillsPage.deleteSkillByName(testSkill.name);
       await skillsPage.ensureRowDoesNotExist(testSkill.name);
@@ -176,7 +283,7 @@ test.describe
   });
 
 test.describe
-  .serial('Workspaces page - MCP integration', { tag: '@smoke' }, () => {
+  .serial('Create workspace - MCP integration', { tag: '@smoke' }, () => {
     const githubServer = MCP_SERVERS.github;
     const hasGithubToken = !!process.env[githubServer.envVarName];
 
@@ -186,7 +293,7 @@ test.describe
       await waitForNavigationReady(page);
     });
 
-    test('[WKS-MCP-01] MCP Servers section appears after adding an MCP server', async ({
+    test('should show MCP servers section on step 3 after adding a server', async ({
       navigationBar,
       mcpPage,
       agentWorkspacesPage,
@@ -197,34 +304,15 @@ test.describe
       await navigationBar.navigateToWorkspacesPage();
       const createPage = await agentWorkspacesPage.openCreatePage();
 
-      await expect(createPage.mcpServersSection).toBeVisible();
+      await createPage.workingDirInput.fill('/tmp/test');
+      await createPage.navigateToStep(WIZARD_STEP.TOOLS_SECRETS);
+
       await expect(createPage.mcpServersSearchInput).toBeVisible();
-      await expect(createPage.mcpServersSection.getByText(githubServer.serverName)).toBeVisible();
+      await expect(createPage.hasMcpServer(githubServer.serverName)).toBeVisible();
     });
 
-    test('[WKS-MCP-02] Cleanup - delete the MCP server', async ({ navigationBar, mcpPage }) => {
+    test('cleanup: delete the MCP server', async ({ navigationBar, mcpPage }) => {
       await navigationBar.navigateToMCPPage();
       await mcpPage.deleteServer(githubServer.serverName);
     });
   });
-
-test.describe('Workspaces page - search', { tag: '@smoke' }, () => {
-  const nonExistentWorkspace = 'non-existent-workspace-xyz';
-
-  test.beforeEach(async ({ page, navigationBar }) => {
-    await waitForNavigationReady(page);
-    await navigationBar.navigateToWorkspacesPage();
-  });
-
-  test('[WKS-SEARCH-01] Search shows filtered empty state and clear filter restores the view', async ({
-    agentWorkspacesPage,
-  }) => {
-    await agentWorkspacesPage.search(nonExistentWorkspace);
-    await expect(agentWorkspacesPage.filteredEmptyMessage).toBeVisible();
-    await expect(agentWorkspacesPage.clearFilterButton).toBeVisible();
-
-    await agentWorkspacesPage.clearFilterButton.click();
-    await expect(agentWorkspacesPage.filteredEmptyMessage).not.toBeVisible();
-    await expect(agentWorkspacesPage.searchInput).toHaveValue('');
-  });
-});
