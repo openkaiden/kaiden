@@ -150,17 +150,14 @@ async function handleRemoveFile(filePath: string): Promise<void> {
     <Route path="/sources" breadcrumb="Sources" navigationHint="tab">
       {#if ragEnvironment}
         <div class="flex flex-col px-5 py-4 gap-4">
-          <div
-            class="border-2 border-dashed border-[var(--pd-content-divider)] rounded-lg py-12 px-6 text-center hover:border-[var(--pd-button-primary)] hover:bg-[color-mix(in_srgb,var(--pd-button-primary)_5%,transparent)] transition-all duration-200"
+          <button
+            onclick={handleAddFile}
+            class="flex flex-col items-center border-2 border-dashed border-[var(--pd-content-divider)] rounded-lg py-8 px-6 text-center hover:border-[var(--pd-button-primary)] hover:bg-[color-mix(in_srgb,var(--pd-button-primary)_5%,transparent)] transition-all duration-200 bg-transparent cursor-pointer"
           >
-            <Button
-              onclick={handleAddFile} type="link"
-            >
-              <Icon icon="fas fa-upload" class="fa-4x"/>
-              <div class="text-base text-[var(--pd-content-text)] mb-2">Click to upload</div>
-              <div class="text-sm text-[var(--pd-content-text-secondary)]">Supports PDF, TXT, MD, and more</div>
-            </Button>
-          </div>
+            <Icon icon="fas fa-upload" class="fa-2x text-[var(--pd-content-text-secondary)] mb-3"/>
+            <div class="text-base text-[var(--pd-content-text)] mb-1">Click to upload</div>
+            <div class="text-sm text-[var(--pd-content-text-secondary)]">Supports PDF, TXT, MD, and more</div>
+          </button>
 
           <div class="bg-[var(--pd-content-card-bg)] border border-[var(--pd-content-divider)] rounded-lg overflow-hidden">
             <div class="px-5 py-4 border-b border-[var(--pd-content-divider)] bg-[var(--pd-content-card-inset-bg)]">
