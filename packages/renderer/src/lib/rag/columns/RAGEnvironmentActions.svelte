@@ -20,5 +20,5 @@ function handleDelete(): void {
 </script>
 
 <div class="flex items-center gap-1">
-  <ListItemButtonIcon title="Delete" icon={faTrash} onClick={handleDelete} />
+  <ListItemButtonIcon title="Delete environment" icon={faTrash} onClick={handleDelete} />
 </div>
