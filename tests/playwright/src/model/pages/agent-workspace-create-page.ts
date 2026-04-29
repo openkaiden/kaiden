@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import { expect, type Locator, type Page } from '@playwright/test';
-import { type CodingAgent, type FileAccessLevel, TIMEOUTS, WIZARD_STEP, type WizardStep } from 'src/model/core/types';
+import { type CodingAgent, type FileAccessLevel, TIMEOUTS, WIZARD_STEPS, type WizardStep } from 'src/model/core/types';
 
 import { BasePage } from './base-page';
 
@@ -40,7 +40,7 @@ export class AgentWorkspaceCreatePage extends BasePage {
 
   // Step 4: File System
   readonly fileAccessSelector: Locator;
-  readonly customPathsContainer: Locator;
+  readonly firstCustomPathInput: Locator;
   readonly addPathButton: Locator;
 
   // Wizard
@@ -67,7 +67,7 @@ export class AgentWorkspaceCreatePage extends BasePage {
     this.mcpServersSearchInput = this.page.getByPlaceholder('Search MCP servers...');
 
     this.fileAccessSelector = this.page.getByRole('region', { name: 'Access Level' });
-    this.customPathsContainer = this.page.getByPlaceholder('/path/to/allowed/directory').first();
+    this.firstCustomPathInput = this.page.getByPlaceholder('/path/to/allowed/directory').first();
     this.addPathButton = this.page.getByRole('button', { name: 'Add Another Path' });
 
     this.wizardStepper = this.page.getByLabel('Wizard progress');
@@ -111,10 +111,18 @@ export class AgentWorkspaceCreatePage extends BasePage {
     await this.backButton.click();
   }
 
+  async getCurrentStepIndex(): Promise<number> {
+    for (let i = 0; i < WIZARD_STEPS.length; i++) {
+      const attr = await this.getStepButton(WIZARD_STEPS[i]).getAttribute('aria-current');
+      if (attr === 'step') return i;
+    }
+    return 0;
+  }
+
   async navigateToStep(step: WizardStep): Promise<void> {
-    const steps = Object.values(WIZARD_STEP);
-    const targetIndex = steps.indexOf(step);
-    for (let i = 0; i < targetIndex; i++) {
+    const currentIndex = await this.getCurrentStepIndex();
+    const targetIndex = WIZARD_STEPS.indexOf(step);
+    for (let i = currentIndex; i < targetIndex; i++) {
       await this.goToNextStep();
     }
     await this.expectStepActive(step);
@@ -144,20 +152,16 @@ export class AgentWorkspaceCreatePage extends BasePage {
     await expect(card).toHaveAttribute('aria-pressed', 'true');
   }
 
+  // --- Step 3: Tools & Secrets ---
+
+  getCardByName(name: string): Locator {
+    return this.page.getByRole('button', { name, exact: true });
+  }
+
   // --- Step 4: File System ---
 
   async selectFileAccess(level: FileAccessLevel): Promise<void> {
     await this.fileAccessSelector.getByLabel(level).click();
-  }
-
-  // --- Step 3: Tools & Secrets ---
-
-  hasSkill(name: string): Locator {
-    return this.page.getByText(name);
-  }
-
-  hasMcpServer(name: string): Locator {
-    return this.page.getByText(name);
   }
 
   // --- Actions ---
