@@ -21,7 +21,7 @@
     "watch": "vite build --watch"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^2.0.41",
+    "@ai-sdk/openai-compatible": "^2.0.42",
     "inversify": "^7.7.1"
   },
   "devDependencies": {
