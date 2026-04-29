@@ -8,10 +8,16 @@ import ColorsStyle from './lib/style/ColorsStyle.svelte';
 import { lastPage } from './stores/breadcrumb';
 
 let systemReady = $state(false);
+let showTitle = $state(false);
 
+let titleTimer: NodeJS.Timeout;
 let extensionsStarterChecker: NodeJS.Timeout;
 
 onMount(async () => {
+  titleTimer = setTimeout(() => {
+    showTitle = true;
+  }, 2_000);
+
   // check if the server side is ready
   try {
     const isReady = await window.extensionSystemIsReady();
@@ -39,6 +45,8 @@ onMount(async () => {
 });
 
 onDestroy(() => {
+  clearTimeout(titleTimer);
+
   if (extensionsStarterChecker) {
     clearInterval(extensionsStarterChecker);
   }
@@ -80,6 +88,7 @@ window.events.receive('starting-extensions', (value: unknown) => {
   <main class="flex flex-row w-screen h-screen justify-center" style="-webkit-app-region: drag;">
     <div class="flex flex-col justify-center">
       <LoaderAnimation />
+      <h1 class="text-center text-xl" class:invisible={!showTitle}>Initializing...</h1>
     </div>
   </main>
 {:else}
