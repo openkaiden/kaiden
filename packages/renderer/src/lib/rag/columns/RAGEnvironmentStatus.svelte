@@ -1,5 +1,6 @@
 <script lang="ts">
-import RAGEnvironmentIcon from '/@/lib/images/RAGEnvironmentIcon.svelte';
+import { StatusIcon } from '@podman-desktop/ui-svelte';
+
 import type { RagEnvironment } from '/@api/rag/rag-environment';
 
 interface Props {
@@ -8,11 +9,7 @@ interface Props {
 
 const { object }: Props = $props();
 
-const isConnected = $derived(!!object.mcpServer);
-const statusColor = $derived(isConnected ? 'var(--pd-status-running)' : 'var(--pd-status-stopped)');
-const statusText = $derived(isConnected ? 'Connected' : 'Disconnected');
+const status = $derived(object.mcpServer ? 'RUNNING' : 'STOPPED');
 </script>
 
-<div class="flex items-center justify-center gap-1" title={statusText}>
-  <RAGEnvironmentIcon statusColor={statusColor} connected={isConnected} />
-</div>
+<StatusIcon {status} />

@@ -19,7 +19,7 @@ import EmptyRAGEnvironmentScreen from './components/EmptyRAGEnvironmentScreen.sv
 type RAGEnvironmentSelectable = RagEnvironment & { selected: boolean };
 
 const row = new TableRow<RAGEnvironmentSelectable>({
-  selectable: (_): boolean => false,
+  selectable: (_): boolean => true,
 });
 
 const statusColumn = new TableColumn<RAGEnvironmentSelectable>('Status', {
