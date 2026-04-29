@@ -1,6 +1,6 @@
 # Kaiden
 
-<img src="https://raw.githubusercontent.com/openkaiden/artwork/refs/heads/main/icon-1024.png" alt="A stylized bear wearing virtual reality goggles and a collared shirt with a letter K on it." width="400">
+<img src="https://raw.githubusercontent.com/openkaiden/artwork/refs/heads/main/icon-1024.png" alt="A stylized bear wearing virtual reality goggles and a collared shirt with a letter K on it." width="256">
 
 ## Demonstration video
 
