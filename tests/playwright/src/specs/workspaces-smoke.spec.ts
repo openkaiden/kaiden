@@ -33,7 +33,10 @@ import { expect, workerTest as test } from '../fixtures/electron-app';
 import { waitForNavigationReady } from '../utils/app-ready';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SKILL_FILE = resolve(__dirname, '../../../../.agents/skills/playwright-testing/SKILL.md');
+const TEST_SKILL = {
+  file: resolve(__dirname, '../../../../.agents/skills/playwright-testing/SKILL.md'),
+  name: 'playwright-testing',
+};
 
 test.describe('Workspaces page - initial state', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page, navigationBar }) => {
@@ -116,14 +119,14 @@ test.describe('Workspaces page - create wizard', { tag: '@smoke' }, () => {
     }
   });
 
-  test('[WKS-WIZ-04] Hides tools sections when none are configured', async ({ agentWorkspacesPage }) => {
+  test('[WKS-WIZ-04] Shows summary and collapsed Customize section', async ({ agentWorkspacesPage }) => {
     const createPage = await agentWorkspacesPage.openCreatePage();
 
     await createPage.workingDirInput.fill('/tmp/test');
     await createPage.navigateToStep(WIZARD_STEP.TOOLS_SECRETS);
 
-    await expect(createPage.skillsSearchInput).not.toBeVisible();
-    await expect(createPage.mcpServersSearchInput).not.toBeVisible();
+    await expect(createPage.toolsSummary).toBeVisible();
+    await expect(createPage.customizeExpandable).toBeVisible();
   });
 
   test('[WKS-WIZ-05] Shows custom path inputs only for Custom Paths access level', async ({ agentWorkspacesPage }) => {
@@ -132,7 +135,7 @@ test.describe('Workspaces page - create wizard', { tag: '@smoke' }, () => {
     await createPage.workingDirInput.fill(testWorkspace.workingDir);
     await createPage.navigateToStep(WIZARD_STEP.FILE_SYSTEM);
 
-    await expect(createPage.fileAccessSelector).toBeVisible();
+    await expect(createPage.fileAccessHeading).toBeVisible();
     for (const level of FILE_ACCESS_LEVELS) {
       await createPage.selectFileAccess(level);
 
@@ -203,7 +206,7 @@ test.describe('Workspaces page - create wizard', { tag: '@smoke' }, () => {
 
     await createPage.continueToStep(WIZARD_STEP.FILE_SYSTEM);
 
-    await createPage.selectFileAccess(FILE_ACCESS_LEVEL.WORKING_DIR_ONLY);
+    await createPage.selectFileAccess(FILE_ACCESS_LEVEL.NO_HOST_ACCESS);
     await createPage.continueToStep(WIZARD_STEP.NETWORKING);
 
     await createPage.startWorkspace();
@@ -213,34 +216,35 @@ test.describe('Workspaces page - create wizard', { tag: '@smoke' }, () => {
 });
 
 test.describe('Workspaces page - skills integration', { tag: '@smoke' }, () => {
-  const skillName = 'playwright-testing';
-
   test.beforeAll(async ({ page, electronApp, navigationBar, skillsPage }) => {
     await waitForNavigationReady(page);
     await navigationBar.navigateToSkillsPage();
-    await skillsPage.importSkill(SKILL_FILE, electronApp);
-    await skillsPage.ensureRowExists(skillName);
+    await skillsPage.importSkill(TEST_SKILL.file, electronApp);
+    await skillsPage.ensureRowExists(TEST_SKILL.name);
   });
 
   test.afterAll(async ({ navigationBar, skillsPage }) => {
     await navigationBar.navigateToSkillsPage();
-    await skillsPage.deleteSkillByName(skillName);
-    await skillsPage.ensureRowDoesNotExist(skillName);
+    await skillsPage.deleteSkillByName(TEST_SKILL.name);
+    await skillsPage.ensureRowDoesNotExist(TEST_SKILL.name);
   });
 
   test.beforeEach(async ({ page }) => {
     await waitForNavigationReady(page);
   });
 
-  test('[WKS-SKILL-01] Imported skill is listed on the Tools step', async ({ navigationBar, agentWorkspacesPage }) => {
+  test('[WKS-SKILL-01] Imported skill appears in the Customize section', async ({
+    navigationBar,
+    agentWorkspacesPage,
+  }) => {
     await navigationBar.navigateToWorkspacesPage();
     const createPage = await agentWorkspacesPage.openCreatePage();
 
     await createPage.workingDirInput.fill('/tmp/test');
     await createPage.navigateToStep(WIZARD_STEP.TOOLS_SECRETS);
+    await createPage.expandCustomize();
 
-    await expect(createPage.skillsSearchInput).toBeVisible();
-    await expect(createPage.getCardByName(skillName)).toBeVisible();
+    await expect(createPage.getCardByName(TEST_SKILL.name)).toBeVisible();
   });
 });
 
@@ -265,12 +269,16 @@ test.describe('Workspaces page - MCP integration', { tag: '@smoke' }, () => {
     await waitForNavigationReady(page);
   });
 
-  test('[WKS-MCP-01] Configured server is listed on the Tools step', async ({ navigationBar, agentWorkspacesPage }) => {
+  test('[WKS-MCP-01] Configured server appears in the Customize section', async ({
+    navigationBar,
+    agentWorkspacesPage,
+  }) => {
     await navigationBar.navigateToWorkspacesPage();
     const createPage = await agentWorkspacesPage.openCreatePage();
 
     await createPage.workingDirInput.fill('/tmp/test');
     await createPage.navigateToStep(WIZARD_STEP.TOOLS_SECRETS);
+    await createPage.expandCustomize();
 
     await expect(createPage.mcpServersSearchInput).toBeVisible();
     await expect(createPage.getCardByName(githubServer.serverName)).toBeVisible();

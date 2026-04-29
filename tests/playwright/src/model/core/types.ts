@@ -182,7 +182,7 @@ export const WIZARD_STEPS = Object.values(WIZARD_STEP);
 export type WizardStep = (typeof WIZARD_STEP)[keyof typeof WIZARD_STEP];
 
 export const FILE_ACCESS_LEVEL = {
-  WORKING_DIR_ONLY: 'Working Directory Only',
+  NO_HOST_ACCESS: 'No host filesystem access',
   HOME_DIRECTORY: 'Home Directory',
   CUSTOM_PATHS: 'Custom Paths',
   FULL_SYSTEM: 'Full System Access',

@@ -29,9 +29,10 @@ export class AgentWorkspaceCreatePage extends BasePage {
   readonly descriptionToggle: Locator;
   readonly descriptionInput: Locator;
   readonly agentSelector: Locator;
-  readonly skillsSearchInput: Locator;
+  readonly toolsSummary: Locator;
+  readonly customizeExpandable: Locator;
   readonly mcpServersSearchInput: Locator;
-  readonly fileAccessSelector: Locator;
+  readonly fileAccessHeading: Locator;
   readonly firstCustomPathInput: Locator;
   readonly addPathButton: Locator;
   readonly wizardStepper: Locator;
@@ -50,9 +51,10 @@ export class AgentWorkspaceCreatePage extends BasePage {
     this.descriptionToggle = this.page.getByRole('button', { name: /Description/ });
     this.descriptionInput = this.page.getByPlaceholder('Short note for your team (optional)');
     this.agentSelector = this.page.getByRole('region', { name: 'Select Coding Agent' });
-    this.skillsSearchInput = this.page.getByPlaceholder('Search skills...');
+    this.toolsSummary = this.page.getByText(/Everything available is included|Expand.*Customize/);
+    this.customizeExpandable = this.page.getByText('Customize skills, MCP servers, and vault');
     this.mcpServersSearchInput = this.page.getByPlaceholder('Search MCP servers...');
-    this.fileAccessSelector = this.page.getByRole('region', { name: 'Access Level' });
+    this.fileAccessHeading = this.page.getByText('File System Access');
     this.firstCustomPathInput = this.page.getByPlaceholder('/path/to/allowed/directory').first();
     this.addPathButton = this.page.getByRole('button', { name: 'Add Another Path' });
     this.wizardStepper = this.page.getByLabel('Wizard progress');
@@ -118,12 +120,21 @@ export class AgentWorkspaceCreatePage extends BasePage {
     await expect(card).toHaveAttribute('aria-pressed', 'true');
   }
 
+  async expandCustomize(): Promise<void> {
+    await expect(this.customizeExpandable).toBeVisible();
+    await this.customizeExpandable.click();
+  }
+
   getCardByName(name: string): Locator {
-    return this.page.getByRole('button', { name, exact: true });
+    return this.page.getByText(name, { exact: true });
+  }
+
+  getFileAccessOption(level: FileAccessLevel): Locator {
+    return this.page.getByRole('button', { name: level, exact: true });
   }
 
   async selectFileAccess(level: FileAccessLevel): Promise<void> {
-    await this.fileAccessSelector.getByLabel(level).click();
+    await this.getFileAccessOption(level).click();
   }
 
   async cancel(): Promise<void> {
