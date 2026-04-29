@@ -1,4 +1,6 @@
 <script lang="ts">
+import { Icon } from '@podman-desktop/ui-svelte/icons';
+
 import { getChunkProviderName } from '/@/lib/rag/rag-environment-utils.svelte';
 import { chunkProviders } from '/@/stores/chunk-providers';
 import type { RagEnvironment } from '/@api/rag/rag-environment';
@@ -9,14 +11,13 @@ interface Props {
 
 const { object }: Props = $props();
 
-// Extract chunker name from ID or show the ID
 const chunkerName = $derived(getChunkProviderName($chunkProviders, object));
 </script>
 
 <div class="flex items-center">
   <span
-    class="inline-flex items-center gap-1.5 px-2 py-1 rounded-xl text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
-    <div class="w-4 h-4 flex-shrink-0 rounded-sm bg-gradient-to-br from-orange-500 to-yellow-500"></div>
+    class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-[var(--pd-label-bg)] text-[var(--pd-label-text)]">
+    <Icon icon="fas fa-puzzle-piece" />
     <span>{chunkerName}</span>
   </span>
 </div>

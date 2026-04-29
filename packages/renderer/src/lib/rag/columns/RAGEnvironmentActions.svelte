@@ -1,7 +1,8 @@
 <script lang="ts">
-import { Icon } from '@podman-desktop/ui-svelte/icons';
+import { faTrash } from '@fortawesome/free-solid-svg-icons';
 
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
+import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
 import type { RagEnvironment } from '/@api/rag/rag-environment';
 
 interface Props {
@@ -18,12 +19,6 @@ function handleDelete(): void {
 }
 </script>
 
-<div class="flex items-center gap-2">
-  <button
-    onclick={handleDelete}
-    class="inline-flex items-center justify-center w-7 h-7 rounded bg-transparent text-gray-400 hover:bg-red-900/10 hover:text-red-400 transition-colors"
-    title="Delete"
-    aria-label="Delete environment">
-    <Icon icon="fas fa-trash"></Icon>
-  </button>
+<div class="flex items-center gap-1">
+  <ListItemButtonIcon title="Delete" icon={faTrash} onClick={handleDelete} />
 </div>

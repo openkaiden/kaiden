@@ -93,7 +93,7 @@ async function handleCreateEnvironment(
   {/snippet}
 
   {#snippet content()}
-    <div class="w-full flex justify-center">
+    <div class="flex min-w-full h-full">
       {#if $ragEnvironments.length === 0}
         <EmptyRAGEnvironmentScreen />
       {:else}

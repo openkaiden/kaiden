@@ -12,7 +12,7 @@ const sourcesCount = object.files.length;
 
 <div class="flex items-center justify-center">
   <span
-    class="inline-flex items-center justify-center min-w-6 h-5 px-1.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-full text-xs font-medium">
+    class="inline-flex items-center justify-center min-w-6 h-5 px-1.5 bg-[var(--pd-label-bg)] text-[var(--pd-label-text)] rounded-full text-xs font-medium">
     {sourcesCount}
   </span>
 </div>
