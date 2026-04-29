@@ -130,9 +130,11 @@ export class MistralInferenceManager {
     const client = new Mistral({ apiKey: token });
     const response = await client.models.list();
     const models: InferenceModel[] = [];
+    const ids = new Set<string>();
     for (const model of response.data ?? []) {
-      if (model.type !== 'UNKNOWN' && model.id && model.capabilities.completionChat) {
+      if (model.type !== 'UNKNOWN' && model.id && model.capabilities.completionChat && !ids.has(model.id)) {
         models.push({ label: model.id });
+        ids.add(model.id);
       }
     }
     return models;
