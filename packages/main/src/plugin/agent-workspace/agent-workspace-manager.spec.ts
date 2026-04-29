@@ -20,6 +20,9 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { FileSystemWatcher } from '@openkaiden/api';
+import type { WebContents } from 'electron';
+import type { IPty } from 'node-pty';
+import { spawn } from 'node-pty';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { IPCHandle } from '/@/plugin/api.js';
@@ -36,6 +39,8 @@ import type { TaskState, TaskStatus } from '/@api/taskInfo.js';
 import { AgentWorkspaceManager } from './agent-workspace-manager.js';
 
 vi.mock(import('node:fs/promises'));
+vi.mock(import('yaml'));
+vi.mock(import('node-pty'));
 
 vi.mock(import('/@/plugin/kdn-cli/kdn-cli.js'));
 
@@ -95,6 +100,11 @@ const filesystemMonitoring = {
   createFileSystemWatcher: vi.fn().mockReturnValue(mockWatcher),
 } as unknown as FilesystemMonitoring;
 
+const webContents = {
+  send: vi.fn(),
+  receive: vi.fn(),
+} as unknown as WebContents;
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(taskManager.createTask).mockReturnValue(mockTask);
@@ -102,7 +112,7 @@ beforeEach(() => {
   mockTask.status = '' as TaskStatus;
   mockTask.error = '';
   vi.mocked(filesystemMonitoring.createFileSystemWatcher).mockReturnValue(mockWatcher);
-  manager = new AgentWorkspaceManager(apiSender, ipcHandle, kdnCli, taskManager, filesystemMonitoring);
+  manager = new AgentWorkspaceManager(apiSender, ipcHandle, kdnCli, taskManager, filesystemMonitoring, webContents);
   manager.init();
 });
 
@@ -377,5 +387,146 @@ describe('stop', () => {
     vi.mocked(kdnCli.stopWorkspace).mockRejectedValue(new Error('workspace not found: unknown-id'));
 
     await expect(manager.stop('unknown-id')).rejects.toThrow('workspace not found: unknown-id');
+  });
+});
+
+describe('shellInAgentWorkspace', () => {
+  let onDataCallback: ((data: string) => void) | undefined;
+  let onExitCallback: (() => void) | undefined;
+
+  function createMockPty(): IPty {
+    onDataCallback = undefined;
+    onExitCallback = undefined;
+    return {
+      onData: vi.fn((cb: (data: string) => void) => {
+        onDataCallback = cb;
+        return { dispose: vi.fn() };
+      }),
+      onExit: vi.fn((cb: () => void) => {
+        onExitCallback = cb;
+        return { dispose: vi.fn() };
+      }),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      pid: 123,
+      cols: 80,
+      rows: 24,
+      process: 'kdn',
+      handleFlowControl: false,
+      pause: vi.fn(),
+      resume: vi.fn(),
+      clear: vi.fn(),
+    } as unknown as IPty;
+  }
+
+  test('returns write, resize, and ptyProcess', () => {
+    vi.mocked(spawn).mockReturnValue(createMockPty());
+
+    const result = manager.shellInAgentWorkspace('test-workspace-1', vi.fn(), vi.fn(), vi.fn());
+
+    expect(result).toHaveProperty('write');
+    expect(result).toHaveProperty('resize');
+    expect(result).toHaveProperty('ptyProcess');
+  });
+
+  test('spawns kdn terminal with workspace name', () => {
+    vi.mocked(spawn).mockReturnValue(createMockPty());
+
+    manager.shellInAgentWorkspace('test-workspace-1', vi.fn(), vi.fn(), vi.fn());
+
+    expect(spawn).toHaveBeenCalledWith('kdn', ['terminal', 'test-workspace-1'], expect.any(Object));
+  });
+
+  test('write function forwards data to pty', () => {
+    const mockPty = createMockPty();
+    vi.mocked(spawn).mockReturnValue(mockPty);
+
+    const result = manager.shellInAgentWorkspace('test-workspace-1', vi.fn(), vi.fn(), vi.fn());
+    result.write('hello');
+
+    expect(mockPty.write).toHaveBeenCalledWith('hello');
+  });
+
+  test('resize function forwards dimensions to pty', () => {
+    const mockPty = createMockPty();
+    vi.mocked(spawn).mockReturnValue(mockPty);
+
+    const result = manager.shellInAgentWorkspace('test-workspace-1', vi.fn(), vi.fn(), vi.fn());
+    result.resize(120, 40);
+
+    expect(mockPty.resize).toHaveBeenCalledWith(120, 40);
+  });
+
+  test('calls onData when pty emits data', () => {
+    vi.mocked(spawn).mockReturnValue(createMockPty());
+
+    const onData = vi.fn();
+    manager.shellInAgentWorkspace('test-workspace-1', onData, vi.fn(), vi.fn());
+
+    expect(onDataCallback).toBeDefined();
+    onDataCallback!('output');
+
+    expect(onData).toHaveBeenCalledWith('output');
+  });
+
+  test('calls onEnd when pty exits', () => {
+    vi.mocked(spawn).mockReturnValue(createMockPty());
+
+    const onEnd = vi.fn();
+    manager.shellInAgentWorkspace('test-workspace-1', vi.fn(), vi.fn(), onEnd);
+
+    expect(onExitCallback).toBeDefined();
+    onExitCallback!();
+
+    expect(onEnd).toHaveBeenCalled();
+  });
+});
+
+describe('dispose', () => {
+  test('kills active terminal processes', async () => {
+    vi.mocked(kdnCli.listWorkspaces).mockResolvedValue(TEST_SUMMARIES);
+
+    const mockPty = {
+      onData: vi.fn(() => ({ dispose: vi.fn() })),
+      onExit: vi.fn(() => ({ dispose: vi.fn() })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      pid: 123,
+    } as unknown as IPty;
+    vi.mocked(spawn).mockReturnValue(mockPty);
+
+    const terminalHandler = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(call => call[0] === 'agent-workspace:terminal')?.[1] as (
+      _listener: unknown,
+      id: string,
+      onDataId: number,
+    ) => Promise<number>;
+    expect(terminalHandler).toBeDefined();
+
+    await terminalHandler({}, 'ws-1', 1);
+
+    manager.dispose();
+
+    expect(mockPty.kill).toHaveBeenCalled();
+  });
+
+  test('terminal IPC handler rejects when workspace id is not found', async () => {
+    vi.mocked(kdnCli.listWorkspaces).mockResolvedValue(TEST_SUMMARIES);
+
+    const terminalHandler = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(call => call[0] === 'agent-workspace:terminal')?.[1] as (
+      _listener: unknown,
+      id: string,
+      onDataId: number,
+    ) => Promise<number>;
+    expect(terminalHandler).toBeDefined();
+
+    await expect(terminalHandler({}, 'unknown-id', 1)).rejects.toThrow(
+      'workspace "unknown-id" not found. Use "workspace list" to see available workspaces.',
+    );
   });
 });

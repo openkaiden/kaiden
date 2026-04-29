@@ -356,6 +356,74 @@ export function initExposure(): void {
     return ipcInvoke('agent-workspace:stop', id);
   });
 
+  // Agent Workspace Terminal
+  let onDataCallbacksShellInAgentWorkspaceId = 0;
+  const onDataCallbacksShellInAgentWorkspace = new Map<
+    number,
+    { onData: (data: string) => void; onError: (error: string) => void; onEnd: () => void }
+  >();
+  contextBridge.exposeInMainWorld(
+    'shellInAgentWorkspace',
+    async (
+      id: string,
+      onData: (data: string) => void,
+      onError: (error: string) => void,
+      onEnd: () => void,
+    ): Promise<number> => {
+      onDataCallbacksShellInAgentWorkspaceId++;
+      onDataCallbacksShellInAgentWorkspace.set(onDataCallbacksShellInAgentWorkspaceId, { onData, onError, onEnd });
+      return ipcInvoke('agent-workspace:terminal', id, onDataCallbacksShellInAgentWorkspaceId);
+    },
+  );
+
+  contextBridge.exposeInMainWorld('shellInAgentWorkspaceClose', async (callbackId: number): Promise<void> => {
+    onDataCallbacksShellInAgentWorkspace.delete(callbackId);
+    return ipcInvoke('agent-workspace:terminalClose', callbackId);
+  });
+
+  contextBridge.exposeInMainWorld(
+    'shellInAgentWorkspaceReattach',
+    (callbackId: number, onData: (data: string) => void, onError: (error: string) => void, onEnd: () => void): void => {
+      onDataCallbacksShellInAgentWorkspace.set(callbackId, { onData, onError, onEnd });
+    },
+  );
+
+  contextBridge.exposeInMainWorld(
+    'shellInAgentWorkspaceSend',
+    async (dataId: number, content: string): Promise<void> => {
+      return ipcInvoke('agent-workspace:terminalSend', dataId, content);
+    },
+  );
+
+  contextBridge.exposeInMainWorld(
+    'shellInAgentWorkspaceResize',
+    async (dataId: number, width: number, height: number): Promise<void> => {
+      return ipcInvoke('agent-workspace:terminalResize', dataId, width, height);
+    },
+  );
+
+  ipcRenderer.on('agent-workspace:terminal-onData', (_, callbackId: number, data: string) => {
+    const callback = onDataCallbacksShellInAgentWorkspace.get(callbackId);
+    if (callback) {
+      callback.onData(data);
+    }
+  });
+
+  ipcRenderer.on('agent-workspace:terminal-onError', (_, callbackId: number, error: string) => {
+    const callback = onDataCallbacksShellInAgentWorkspace.get(callbackId);
+    if (callback) {
+      callback.onError(error);
+    }
+  });
+
+  ipcRenderer.on('agent-workspace:terminal-onEnd', (_, callbackId: number) => {
+    const callback = onDataCallbacksShellInAgentWorkspace.get(callbackId);
+    if (callback) {
+      callback.onEnd();
+      onDataCallbacksShellInAgentWorkspace.delete(callbackId);
+    }
+  });
+
   contextBridge.exposeInMainWorld('createSecret', async (options: SecretCreateOptions): Promise<SecretName> => {
     return ipcInvoke('secret-manager:create', options);
   });

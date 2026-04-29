@@ -1,5 +1,6 @@
 <script lang="ts">
-import { faPlay, faStop, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faPlay, faStop, faTerminal, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { router } from 'tinro';
 
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
@@ -38,6 +39,13 @@ async function handleStartStop(): Promise<void> {
   }
 }
 
+function handleTerminal(): void {
+  if (!isRunning && !inProgress) {
+    startAgentWorkspace(object.id).catch(console.error);
+  }
+  router.goto(`/agent-workspaces/${encodeURIComponent(object.id)}/terminal`);
+}
+
 function handleRemove(): void {
   withConfirmation(
     () => window.removeAgentWorkspace(object.id).catch(console.error),
@@ -51,6 +59,10 @@ function handleRemove(): void {
   icon={isRunning ? faStop : faPlay}
   inProgress={inProgress}
   onClick={handleStartStop} />
+<ListItemButtonIcon
+  title="Open terminal for workspace {object.name}"
+  icon={faTerminal}
+  onClick={handleTerminal} />
 <ListItemButtonIcon
   title="Remove workspace"
   icon={faTrash}

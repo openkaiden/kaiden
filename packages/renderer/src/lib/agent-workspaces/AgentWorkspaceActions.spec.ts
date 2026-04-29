@@ -20,12 +20,15 @@ import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { get } from 'svelte/store';
+import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { agentWorkspaces } from '/@/stores/agent-workspaces.svelte';
 import type { AgentWorkspaceSummary } from '/@api/agent-workspace-info';
 
 import AgentWorkspaceActions from './AgentWorkspaceActions.svelte';
+
+vi.mock(import('tinro'));
 
 const workspace: AgentWorkspaceSummary = {
   id: 'ws-1',
@@ -159,6 +162,43 @@ test('Expect error dialog uses workspace name when start fails', async () => {
       }),
     );
   });
+});
+
+test('Expect terminal button is rendered', () => {
+  render(AgentWorkspaceActions, { object: workspace });
+
+  expect(screen.getByRole('button', { name: 'Open terminal for workspace api-refactor' })).toBeInTheDocument();
+});
+
+test('Expect clicking terminal button navigates to terminal tab', async () => {
+  render(AgentWorkspaceActions, { object: workspace });
+
+  const terminalButton = screen.getByRole('button', { name: 'Open terminal for workspace api-refactor' });
+  await fireEvent.click(terminalButton);
+
+  expect(router.goto).toHaveBeenCalledWith('/agent-workspaces/ws-1/terminal');
+});
+
+test('Expect clicking terminal button starts workspace when stopped', async () => {
+  render(AgentWorkspaceActions, { object: workspace });
+
+  const terminalButton = screen.getByRole('button', { name: 'Open terminal for workspace api-refactor' });
+  await fireEvent.click(terminalButton);
+
+  expect(window.startAgentWorkspace).toHaveBeenCalledWith('ws-1');
+  expect(router.goto).toHaveBeenCalledWith('/agent-workspaces/ws-1/terminal');
+});
+
+test('Expect clicking terminal button does not start workspace when already running', async () => {
+  agentWorkspaces.set([{ ...workspace, state: 'running' }]);
+
+  render(AgentWorkspaceActions, { object: { ...workspace, state: 'running' } });
+
+  const terminalButton = screen.getByRole('button', { name: 'Open terminal for workspace api-refactor' });
+  await fireEvent.click(terminalButton);
+
+  expect(window.startAgentWorkspace).not.toHaveBeenCalled();
+  expect(router.goto).toHaveBeenCalledWith('/agent-workspaces/ws-1/terminal');
 });
 
 test('Expect error dialog shown when stop fails', async () => {
