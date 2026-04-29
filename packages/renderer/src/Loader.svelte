@@ -23,6 +23,7 @@ onMount(async () => {
     const isReady = await window.extensionSystemIsReady();
     systemReady = isReady;
     if (systemReady) {
+      clearTimeout(titleTimer);
       window.dispatchEvent(new CustomEvent('system-ready', {}));
     }
   } catch (error) {
@@ -77,6 +78,7 @@ window.events?.receive('install-extension:from-id', (extensionId: unknown) => {
 window.events.receive('starting-extensions', (value: unknown) => {
   systemReady = value === 'true';
   if (systemReady) {
+    clearTimeout(titleTimer);
     window.dispatchEvent(new CustomEvent('system-ready', {}));
   }
 });
