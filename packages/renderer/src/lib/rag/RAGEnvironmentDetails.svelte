@@ -1,10 +1,11 @@
 <script lang="ts">
+import { faTrash } from '@fortawesome/free-solid-svg-icons';
 import { Button, Tab } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { router } from 'tinro';
 
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
-import { getChunkProviderName, getDatabaseName } from '/@/lib/rag/rag-environment-utils.svelte';
+import { getChunkProviderName, getDatabaseName } from '/@/lib/rag/rag-environment-utils';
 import DetailsPage from '/@/lib/ui/DetailsPage.svelte';
 import { getTabUrl, isTabSelected } from '/@/lib/ui/Util';
 import Route from '/@/Route.svelte';
@@ -181,7 +182,7 @@ async function handleRemoveFile(filePath: string): Promise<void> {
                     type="link"
                     aria-label="Remove file"
                     title="Remove file from knowledge database"
-                    icon="fas fa-trash"
+                    icon={faTrash}
                   >
                   </Button>
                 </div>

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
-import { getChunkProviderName } from '/@/lib/rag/rag-environment-utils.svelte';
+import { getChunkProviderName } from '/@/lib/rag/rag-environment-utils';
 import { chunkProviders } from '/@/stores/chunk-providers';
 import type { RagEnvironment } from '/@api/rag/rag-environment';
 

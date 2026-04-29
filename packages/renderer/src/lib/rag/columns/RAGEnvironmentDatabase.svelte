@@ -1,7 +1,7 @@
 <script lang="ts">
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
-import { getDatabaseName } from '/@/lib/rag/rag-environment-utils.svelte';
+import { getDatabaseName } from '/@/lib/rag/rag-environment-utils';
 import { providerInfos } from '/@/stores/providers';
 import type { RagEnvironment } from '/@api/rag/rag-environment';
 
