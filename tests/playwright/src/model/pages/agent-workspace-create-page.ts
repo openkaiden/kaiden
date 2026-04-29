@@ -23,27 +23,17 @@ import { BasePage } from './base-page';
 
 export class AgentWorkspaceCreatePage extends BasePage {
   readonly heading: Locator;
-
-  // Step 1: Workspace
   readonly sessionNameInput: Locator;
   readonly workingDirInput: Locator;
   readonly browseButton: Locator;
   readonly descriptionToggle: Locator;
   readonly descriptionInput: Locator;
-
-  // Step 2: Agent & Model
   readonly agentSelector: Locator;
-
-  // Step 3: Tools & Secrets
   readonly skillsSearchInput: Locator;
   readonly mcpServersSearchInput: Locator;
-
-  // Step 4: File System
   readonly fileAccessSelector: Locator;
   readonly firstCustomPathInput: Locator;
   readonly addPathButton: Locator;
-
-  // Wizard
   readonly wizardStepper: Locator;
   readonly cancelButton: Locator;
   readonly continueButton: Locator;
@@ -54,22 +44,17 @@ export class AgentWorkspaceCreatePage extends BasePage {
   constructor(page: Page) {
     super(page);
     this.heading = this.page.getByRole('heading', { name: 'Create Coding Agent Workspace' });
-
     this.sessionNameInput = this.page.getByPlaceholder('e.g., Frontend Refactoring');
     this.workingDirInput = this.page.getByPlaceholder('/path/to/project');
     this.browseButton = this.page.getByLabel('Browse for folder');
     this.descriptionToggle = this.page.getByRole('button', { name: /Description/ });
     this.descriptionInput = this.page.getByPlaceholder('Short note for your team (optional)');
-
     this.agentSelector = this.page.getByRole('region', { name: 'Select Coding Agent' });
-
     this.skillsSearchInput = this.page.getByPlaceholder('Search skills...');
     this.mcpServersSearchInput = this.page.getByPlaceholder('Search MCP servers...');
-
     this.fileAccessSelector = this.page.getByRole('region', { name: 'Access Level' });
     this.firstCustomPathInput = this.page.getByPlaceholder('/path/to/allowed/directory').first();
     this.addPathButton = this.page.getByRole('button', { name: 'Add Another Path' });
-
     this.wizardStepper = this.page.getByLabel('Wizard progress');
     this.cancelButton = this.page.getByRole('button', { name: 'Cancel' });
     this.continueButton = this.page.getByRole('button', { name: 'Continue' });
@@ -85,8 +70,6 @@ export class AgentWorkspaceCreatePage extends BasePage {
     await expect(this.heading).toBeVisible({ timeout: TIMEOUTS.SHORT });
   }
 
-  // --- Wizard navigation ---
-
   getStepButton(step: WizardStep): Locator {
     return this.wizardStepper.getByLabel(`${step} step`);
   }
@@ -95,40 +78,25 @@ export class AgentWorkspaceCreatePage extends BasePage {
     await expect(this.getStepButton(step)).toHaveAttribute('aria-current', 'step');
   }
 
-  async goToStep(step: WizardStep): Promise<void> {
-    const stepButton = this.getStepButton(step);
-    await expect(stepButton).toBeEnabled();
-    await stepButton.click();
-  }
-
-  async goToNextStep(): Promise<void> {
+  async continueToStep(step: WizardStep): Promise<void> {
     await expect(this.continueButton).toBeEnabled();
     await this.continueButton.click();
-  }
-
-  async goToPreviousStep(): Promise<void> {
-    await expect(this.backButton).toBeVisible();
-    await this.backButton.click();
-  }
-
-  async getCurrentStepIndex(): Promise<number> {
-    for (let i = 0; i < WIZARD_STEPS.length; i++) {
-      const attr = await this.getStepButton(WIZARD_STEPS[i]).getAttribute('aria-current');
-      if (attr === 'step') return i;
-    }
-    return 0;
-  }
-
-  async navigateToStep(step: WizardStep): Promise<void> {
-    const currentIndex = await this.getCurrentStepIndex();
-    const targetIndex = WIZARD_STEPS.indexOf(step);
-    for (let i = currentIndex; i < targetIndex; i++) {
-      await this.goToNextStep();
-    }
     await this.expectStepActive(step);
   }
 
-  // --- Step 1: Workspace ---
+  async backToStep(step: WizardStep): Promise<void> {
+    await expect(this.backButton).toBeVisible();
+    await this.backButton.click();
+    await this.expectStepActive(step);
+  }
+
+  async navigateToStep(step: WizardStep): Promise<void> {
+    const targetIndex = WIZARD_STEPS.indexOf(step);
+    const steps = WIZARD_STEPS;
+    for (let i = 0; i < targetIndex; i++) {
+      await this.continueToStep(steps[i + 1]);
+    }
+  }
 
   async fillDescription(desc: string): Promise<void> {
     if (!(await this.descriptionInput.isVisible())) {
@@ -137,8 +105,6 @@ export class AgentWorkspaceCreatePage extends BasePage {
     }
     await this.descriptionInput.fill(desc);
   }
-
-  // --- Step 2: Agent & Model ---
 
   getAgentCard(agent: CodingAgent): Locator {
     return this.agentSelector.getByLabel(agent);
@@ -152,19 +118,13 @@ export class AgentWorkspaceCreatePage extends BasePage {
     await expect(card).toHaveAttribute('aria-pressed', 'true');
   }
 
-  // --- Step 3: Tools & Secrets ---
-
   getCardByName(name: string): Locator {
     return this.page.getByRole('button', { name, exact: true });
   }
 
-  // --- Step 4: File System ---
-
   async selectFileAccess(level: FileAccessLevel): Promise<void> {
     await this.fileAccessSelector.getByLabel(level).click();
   }
-
-  // --- Actions ---
 
   async cancel(): Promise<void> {
     await expect(this.cancelButton).toBeEnabled();
