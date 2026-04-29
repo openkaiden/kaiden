@@ -26,7 +26,7 @@ const icon = $derived(getSecretIcon(object.type));
         {object.name}
       </span>
       {#if object.type}
-        <Badge class="text-[6px] text-white" color="bg-(--pd-badge-sky)" label={getServiceLabel(object.type)} />
+        <Badge class="text-white" color="bg-(--pd-badge-sky)" label={getServiceLabel(object.type)} />
       {/if}
     </div>
     {#if object.description}
