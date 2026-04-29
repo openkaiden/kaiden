@@ -35,14 +35,26 @@ configurationProperties.subscribe(() => {
     .getConfigurationValue<string[]>(DISABLED_MODELS_KEY)
     ?.then(value => {
       if (currentRequestId === requestId) {
-        disabledModels.set(new Set(value ?? []));
+        const raw = value ?? [];
+        const migrated = raw.map(key => {
+          if (key.includes('::')) return key;
+          const idx = key.indexOf(':');
+          return idx === -1 ? key : `${key.slice(0, idx)}::${key.slice(idx + 1)}`;
+        });
+        const normalized = [...new Set(migrated)];
+        disabledModels.set(new Set(normalized));
+        if (normalized.length !== raw.length || normalized.some((k, i) => k !== raw[i])) {
+          window.updateConfigurationValue(DISABLED_MODELS_KEY, normalized).catch((err: unknown) => {
+            console.error('Failed to persist migrated disabled models', err);
+          });
+        }
       }
     })
     ?.catch((err: unknown) => console.error(`Error getting configuration value ${DISABLED_MODELS_KEY}`, err));
 });
 
 export function modelKey(providerId: string, label: string): string {
-  return `${providerId}:${label}`;
+  return `${providerId}::${label}`;
 }
 
 export function toggleModel(providerId: string, label: string): void {

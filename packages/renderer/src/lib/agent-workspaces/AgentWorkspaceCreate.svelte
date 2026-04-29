@@ -1,5 +1,5 @@
 <script lang="ts">
-import { faCode, faLock, faO, faRobot, faWrench } from '@fortawesome/free-solid-svg-icons';
+import { faLock } from '@fortawesome/free-solid-svg-icons';
 import { Button } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { toast } from 'svelte-sonner';
@@ -10,7 +10,6 @@ import AgentWorkspaceCreateStepFileSystem from '/@/lib/agent-workspaces/AgentWor
 import AgentWorkspaceCreateStepNetworking from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepNetworking.svelte';
 import AgentWorkspaceCreateStepToolsSecrets from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepToolsSecrets.svelte';
 import AgentWorkspaceCreateStepWorkspace from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepWorkspace.svelte';
-import type { CardSelectorOption } from '/@/lib/ui/CardSelector.svelte';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import type { ScrollableCardItem } from '/@/lib/ui/ScrollableCardSelector.svelte';
@@ -20,31 +19,6 @@ import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
 import { secretVaultInfos } from '/@/stores/secret-vault';
 import { skillInfos } from '/@/stores/skills';
 import { NavigationPage } from '/@api/navigation-page';
-
-const agentOptions: CardSelectorOption[] = [
-  {
-    title: 'OpenCode',
-    badge: 'Anomaly',
-    value: 'opencode',
-    icon: faO,
-    description: 'Open-source terminal-based coding agent',
-  },
-  {
-    title: 'Claude',
-    badge: 'Anthropic',
-    value: 'claude',
-    icon: faRobot,
-    description: `Anthropic's AI coding assistant`,
-  },
-  { title: 'Cursor', badge: 'Cursor', value: 'cursor', icon: faCode, description: 'AI-powered code editor agent' },
-  {
-    title: 'Goose',
-    badge: 'Block',
-    value: 'goose',
-    icon: faWrench,
-    description: 'Open-source autonomous coding agent',
-  },
-];
 
 const fileAccessOptions: FileAccessOption[] = [
   {
@@ -103,6 +77,7 @@ let sourcePath = $state('');
 let sessionName = $state('');
 let description = $state('');
 let selectedAgent = $state('opencode');
+let selectedModel = $state('');
 let selectedFileAccess = $state('workspace');
 let selectedSkillIds = $derived(skillItems.map(s => s.id));
 let selectedMcpIds = $derived(mcpItems.map(m => m.id));
@@ -202,6 +177,7 @@ async function startWorkspace(): Promise<void> {
     await window.createAgentWorkspace({
       sourcePath,
       agent: selectedAgent,
+      model: selectedModel || undefined,
       name: sessionName,
     });
   } catch (err: unknown) {
@@ -241,7 +217,7 @@ async function startWorkspace(): Promise<void> {
                 bind:descriptionOpen
                 onBrowseSource={handleBrowseSource} />
             {:else if currentStepId === 'agent-model'}
-              <AgentWorkspaceCreateStepAgentModel {agentOptions} bind:selectedAgent />
+              <AgentWorkspaceCreateStepAgentModel bind:selectedAgent bind:selectedModel />
             {:else if currentStepId === 'tools-secrets'}
               <AgentWorkspaceCreateStepToolsSecrets
                 {skillItems}

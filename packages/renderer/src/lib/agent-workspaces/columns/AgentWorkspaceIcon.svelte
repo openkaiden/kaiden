@@ -1,8 +1,5 @@
 <script lang="ts">
-import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
-import { faCode, faO, faRobot, faWrench } from '@fortawesome/free-solid-svg-icons';
-import { Icon } from '@podman-desktop/ui-svelte/icons';
-
+import { agentDefinitions } from '/@/lib/guided-setup/agent-registry';
 import type { AgentWorkspaceSummaryUI } from '/@/stores/agent-workspaces.svelte';
 
 interface Props {
@@ -11,16 +8,15 @@ interface Props {
 
 let { object }: Props = $props();
 
-const agentIcons: Record<string, IconDefinition> = {
-  opencode: faO,
-  claude: faRobot,
-  cursor: faCode,
-  goose: faWrench,
-};
+const definitionsByAgent = new Map<string, (typeof agentDefinitions)[number]>(
+  agentDefinitions.map(d => [d.cliName, d]),
+);
 
-const icon = $derived(agentIcons[object.agent] ?? faRobot);
+let definition = $derived(definitionsByAgent.get(object.agent));
 </script>
 
 <div class="flex items-center justify-center" title={object.agent}>
-  <Icon {icon} size="1.1x" />
+  {#if definition?.iconComponent}
+    <definition.iconComponent size={28} />
+  {/if}
 </div>

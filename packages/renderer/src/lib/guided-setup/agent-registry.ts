@@ -17,8 +17,13 @@
  ***********************************************************************/
 
 import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
-import { faDesktop } from '@fortawesome/free-solid-svg-icons';
+import { faCode, faDesktop, faRobot, faWrench } from '@fortawesome/free-solid-svg-icons';
 import type { Component } from 'svelte';
+
+import ClaudeCodeIcon from '/@/lib/images/agents/ClaudeCodeIcon.svelte';
+import CursorIcon from '/@/lib/images/agents/CursorIcon.svelte';
+import GooseIcon from '/@/lib/images/agents/GooseIcon.svelte';
+import OpenCodeIcon from '/@/lib/images/agents/OpenCodeIcon.svelte';
 
 import type { CliAgent } from './guided-setup-steps';
 import OpenCodePanel from './panels/OpenCodePanel.svelte';
@@ -29,6 +34,7 @@ export interface AgentDefinition {
   description: string;
   badge: string;
   icon: IconDefinition;
+  iconComponent?: Component;
   panel?: Component;
 }
 
@@ -37,9 +43,34 @@ export const agentDefinitions: AgentDefinition[] = [
     cliName: 'opencode',
     title: 'OpenCode',
     description:
-      'Open-source agent on your machine - local models via Ollama or Ramalama, or cloud APIs (OpenAI, Gemini, and other providers OpenCode supports).',
+      'Open-source agent on your machine — local models via Ollama or Ramalama, or cloud APIs (OpenAI, Gemini, and other providers OpenCode supports).',
     badge: 'Recommended',
     icon: faDesktop,
+    iconComponent: OpenCodeIcon,
     panel: OpenCodePanel,
+  },
+  {
+    cliName: 'claude',
+    title: 'Claude Code',
+    description: 'Anthropic Claude in the terminal — uses the Anthropic API or your org bridge.',
+    badge: '',
+    icon: faRobot,
+    iconComponent: ClaudeCodeIcon,
+  },
+  {
+    cliName: 'cursor',
+    title: 'Cursor',
+    description: 'AI-powered code editor agent with deep IDE integration.',
+    badge: '',
+    icon: faCode,
+    iconComponent: CursorIcon,
+  },
+  {
+    cliName: 'goose',
+    title: 'Goose',
+    description: 'Open-source autonomous coding agent by Block.',
+    badge: '',
+    icon: faWrench,
+    iconComponent: GooseIcon,
   },
 ];
