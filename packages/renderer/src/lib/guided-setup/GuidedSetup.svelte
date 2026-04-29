@@ -64,10 +64,16 @@ async function handleContinue(): Promise<void> {
   }
 }
 
-function handleSkip(): void {
-  advance().catch((err: unknown) => {
+async function handleSkip(): Promise<void> {
+  if (advancing) return;
+  advancing = true;
+  try {
+    await advance();
+  } catch (err: unknown) {
     console.error('advance failed', err);
-  });
+  } finally {
+    advancing = false;
+  }
 }
 
 function handleStepClick(index: number): void {
@@ -133,7 +139,7 @@ function handleStepClick(index: number): void {
   <!-- Footer -->
   <footer class="flex justify-end gap-3 px-8 py-6 bg-(--pd-content-bg)">
     {#if currentStep?.isSkippable}
-      <Button type="secondary" aria-label="Skip" onclick={handleSkip}>Skip</Button>
+      <Button type="secondary" aria-label="Skip" onclick={handleSkip} disabled={advancing}>Skip</Button>
     {/if}
     <Button type="primary" aria-label={continueLabel} onclick={handleContinue} disabled={advancing}>{continueLabel} &rsaquo;</Button>
   </footer>

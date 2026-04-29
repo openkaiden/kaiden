@@ -131,11 +131,10 @@ describe('beforeAdvance callback', () => {
     stubNoProvider();
     renderPanel();
 
-    // Simulate user typing a key via the onboarding's beforeAdvance
-    // The input is disabled when provider is missing, but test the validation path
     const result = await onboarding.beforeAdvance!();
 
     expect(result).toBe(false);
+    expect(screen.getByText(/Claude provider extension is not available/)).toBeInTheDocument();
   });
 
   test('creates secret and inference connection when API key is provided', async () => {

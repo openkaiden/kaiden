@@ -26,13 +26,13 @@ let claudeProvider = $derived($providerInfos.find(p => p.id === extensionId));
 async function validate(): Promise<boolean> {
   errorMessage = '';
 
-  if (!apiKey.trim()) {
-    errorMessage = 'Please enter your Anthropic API key.';
+  if (!claudeProvider) {
+    errorMessage = 'Claude provider extension is not available. Make sure the Claude extension is enabled.';
     return false;
   }
 
-  if (!claudeProvider) {
-    errorMessage = 'Claude provider extension is not available. Make sure the Claude extension is enabled.';
+  if (!apiKey.trim()) {
+    errorMessage = 'Please enter your Anthropic API key.';
     return false;
   }
 
