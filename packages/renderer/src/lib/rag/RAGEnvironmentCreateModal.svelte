@@ -97,19 +97,19 @@ function selectChunkProvider(id: string): void {
             {#each ragConnectionOptions as option (option.key)}
               <button
                 type="button"
-                class="tile border-2 rounded-lg p-4 text-left transition-all cursor-pointer {selectedRagConnectionKey ===
+                class="border-2 rounded-lg p-4 text-left transition-all cursor-pointer {selectedRagConnectionKey ===
                 option.key
-                  ? 'border-[var(--pd-button-primary-bg)] bg-[var(--pd-button-primary-bg)]/10'
-                  : 'border-[var(--pd-modal-header-border)] bg-[var(--pd-content-card-bg)] hover:border-[var(--pd-content-text)]'}"
+                  ? 'border-[var(--pd-content-card-border-selected)] bg-[var(--pd-content-card-hover-inset-bg)]'
+                  : 'border-[var(--pd-content-card-border)] bg-[var(--pd-content-card-bg)] hover:border-[var(--pd-content-card-border-selected)] hover:bg-[var(--pd-content-card-hover-inset-bg)]'}"
                 onclick={selectRagConnection.bind(undefined, option.key)}>
                 <div class="flex items-center gap-3 mb-2">
                   <div
-                    class="tile-logo w-8 h-8 rounded-md flex items-center justify-center text-white text-xs font-bold bg-gradient-to-br from-purple-500 to-purple-700">
+                    class="w-8 h-8 rounded-md flex items-center justify-center text-[var(--pd-label-primary-text)] text-xs font-bold bg-[var(--pd-label-primary-bg)]">
                     {option.displayName.charAt(0).toUpperCase()}
                   </div>
-                  <div class="tile-title text-base font-medium text-[var(--pd-modal-text)]">{option.displayName}</div>
+                  <div class="text-base font-medium text-[var(--pd-modal-text)]">{option.displayName}</div>
                 </div>
-                <div class="tile-description text-xs text-[var(--pd-content-text)] leading-relaxed">
+                <div class="text-xs text-[var(--pd-content-text)] leading-relaxed">
                   {option.providerName}
                 </div>
               </button>
@@ -124,19 +124,19 @@ function selectChunkProvider(id: string): void {
             {#each chunkProviders as provider (provider.id)}
               <button
                 type="button"
-                class="tile border-2 rounded-lg p-4 text-left transition-all cursor-pointer {selectedChunkerId ===
+                class="border-2 rounded-lg p-4 text-left transition-all cursor-pointer {selectedChunkerId ===
                 provider.id
-                  ? 'border-[var(--pd-button-primary-bg)] bg-[var(--pd-button-primary-bg)]/10'
-                  : 'border-[var(--pd-modal-header-border)] bg-[var(--pd-content-card-bg)] hover:border-[var(--pd-content-text)]'}"
+                  ? 'border-[var(--pd-content-card-border-selected)] bg-[var(--pd-content-card-hover-inset-bg)]'
+                  : 'border-[var(--pd-content-card-border)] bg-[var(--pd-content-card-bg)] hover:border-[var(--pd-content-card-border-selected)] hover:bg-[var(--pd-content-card-hover-inset-bg)]'}"
                 onclick={selectChunkProvider.bind(undefined, provider.id)}>
                 <div class="flex items-center gap-3 mb-2">
                   <div
-                    class="tile-logo w-8 h-8 rounded-md flex items-center justify-center text-white text-xs font-bold bg-gradient-to-br from-green-500 to-green-700">
+                    class="w-8 h-8 rounded-md flex items-center justify-center text-[var(--pd-label-primary-text)] text-xs font-bold bg-[var(--pd-label-primary-bg)]">
                     {provider.name.charAt(0).toUpperCase()}
                   </div>
-                  <div class="tile-title text-base font-medium text-[var(--pd-modal-text)]">{provider.name}</div>
+                  <div class="text-base font-medium text-[var(--pd-modal-text)]">{provider.name}</div>
                 </div>
-                <div class="tile-description text-xs text-[var(--pd-content-text)] leading-relaxed">
+                <div class="text-xs text-[var(--pd-content-text)] leading-relaxed">
                   Advanced document parsing and chunking for knowledge database applications
                 </div>
               </button>
