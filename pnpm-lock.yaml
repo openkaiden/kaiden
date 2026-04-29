@@ -694,8 +694,8 @@ importers:
   packages/extension-api:
     devDependencies:
       '@ai-sdk/provider':
-        specifier: ^3.0.4
-        version: 3.0.8
+        specifier: ^3.0.9
+        version: 3.0.9
 
   packages/preload-webview:
     devDependencies:
@@ -8809,7 +8809,7 @@ snapshots:
 
   '@npmcli/fs@4.0.0':
     dependencies:
-      semver: 7.7.3
+      semver: 7.7.4
 
   '@npmcli/move-file@2.0.1':
     dependencies:
