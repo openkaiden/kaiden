@@ -52,8 +52,11 @@ beforeEach(() => {
   onboarding = createDefaultOnboardingState();
   vi.stubGlobal(
     'getCliInfo',
-    vi.fn().mockResolvedValue({ version: '0.1.0', agents: ['opencode'], runtimes: ['podman'] }),
+    vi.fn().mockResolvedValue({ version: '0.1.0', agents: ['opencode', 'claude'], runtimes: ['podman'] }),
   );
+  vi.stubGlobal('listSecrets', vi.fn().mockResolvedValue([]));
+  vi.stubGlobal('createSecret', vi.fn().mockResolvedValue({ name: 'anthropic' }));
+  vi.stubGlobal('createInferenceProviderConnection', vi.fn().mockResolvedValue(undefined));
   stubLocalInference(false);
 });
 
@@ -163,6 +166,65 @@ describe('local runtime probe', () => {
     await waitFor(() => {
       expect(screen.getByTestId('probe-detected')).toBeInTheDocument();
     });
+  });
+});
+
+describe('Claude agent tile', () => {
+  test('renders the Claude Code agent tile when CLI includes claude', async () => {
+    renderStep();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Claude Code' })).toBeInTheDocument();
+    });
+  });
+
+  test('shows Cloud badge on Claude Code tile', async () => {
+    renderStep();
+
+    await waitFor(() => {
+      expect(screen.getByText('Cloud')).toBeInTheDocument();
+    });
+  });
+
+  test('shows Claude panel when Claude Code is selected', async () => {
+    renderStep();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Claude Code' })).toBeInTheDocument();
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Claude Code' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('claude-panel')).toBeInTheDocument();
+      expect(screen.getByText('API Key')).toBeInTheDocument();
+    });
+  });
+
+  test('updates onboarding.agent when Claude is selected', async () => {
+    renderStep();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Claude Code' })).toBeInTheDocument();
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Claude Code' }));
+
+    await waitFor(() => {
+      expect(onboarding.agent).toBe('claude');
+    });
+  });
+
+  test('does not show Claude tile when CLI only returns opencode', async () => {
+    vi.mocked(window.getCliInfo).mockResolvedValue({ version: '0.1.0', agents: ['opencode'], runtimes: ['podman'] });
+
+    renderStep();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'OpenCode' })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('button', { name: 'Claude Code' })).not.toBeInTheDocument();
   });
 });
 

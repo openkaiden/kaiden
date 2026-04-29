@@ -17,10 +17,12 @@
  ***********************************************************************/
 
 import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
+import { faClaude } from '@fortawesome/free-brands-svg-icons';
 import { faDesktop } from '@fortawesome/free-solid-svg-icons';
 import type { Component } from 'svelte';
 
 import type { CliAgent } from './guided-setup-steps';
+import ClaudePanel from './panels/ClaudePanel.svelte';
 import OpenCodePanel from './panels/OpenCodePanel.svelte';
 
 export interface AgentDefinition {
@@ -30,6 +32,8 @@ export interface AgentDefinition {
   badge: string;
   icon: IconDefinition;
   panel?: Component;
+  extensionId?: string;
+  secretType?: string;
 }
 
 export const agentDefinitions: AgentDefinition[] = [
@@ -41,5 +45,15 @@ export const agentDefinitions: AgentDefinition[] = [
     badge: 'Recommended',
     icon: faDesktop,
     panel: OpenCodePanel,
+  },
+  {
+    cliName: 'claude',
+    title: 'Claude Code',
+    description: 'Anthropic\u2019s cloud agent \u2014 connect with an API key to access Claude models.',
+    badge: 'Cloud',
+    icon: faClaude,
+    panel: ClaudePanel,
+    extensionId: 'claude',
+    secretType: 'anthropic',
   },
 ];

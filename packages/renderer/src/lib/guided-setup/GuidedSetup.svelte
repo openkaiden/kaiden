@@ -45,11 +45,23 @@ async function advance(): Promise<void> {
   }
 }
 
-function handleContinue(): void {
-  completedSteps.add(currentStep.id);
-  advance().catch((err: unknown) => {
+let advancing = $state(false);
+
+async function handleContinue(): Promise<void> {
+  if (advancing) return;
+  advancing = true;
+  try {
+    if (onboardingState.beforeAdvance) {
+      const ok = await onboardingState.beforeAdvance();
+      if (!ok) return;
+    }
+    completedSteps.add(currentStep.id);
+    await advance();
+  } catch (err: unknown) {
     console.error('advance failed', err);
-  });
+  } finally {
+    advancing = false;
+  }
 }
 
 function handleSkip(): void {
@@ -123,6 +135,6 @@ function handleStepClick(index: number): void {
     {#if currentStep?.isSkippable}
       <Button type="secondary" aria-label="Skip" onclick={handleSkip}>Skip</Button>
     {/if}
-    <Button type="primary" aria-label={continueLabel} onclick={handleContinue}>{continueLabel} &rsaquo;</Button>
+    <Button type="primary" aria-label={continueLabel} onclick={handleContinue} disabled={advancing}>{continueLabel} &rsaquo;</Button>
   </footer>
 </div>
