@@ -1,5 +1,5 @@
 <script lang="ts">
-import Fa from 'svelte-fa';
+import { Icon } from '@podman-desktop/ui-svelte/icons';
 
 import { getSecretIcon, getServiceLabel } from '/@/lib/secret-vault/secret-vault-utils';
 import Badge from '/@/lib/ui/Badge.svelte';
@@ -16,7 +16,7 @@ const icon = $derived(getSecretIcon(object.type));
 
 <div class="flex items-center gap-3 overflow-hidden max-w-full">
   <div class="shrink-0 flex items-center justify-center">
-    <Fa {icon} size="1.1x" />
+    <Icon {icon} size="1.5x" />
   </div>
   <div class="flex flex-col overflow-hidden min-w-0">
     <div class="flex items-center gap-2">
