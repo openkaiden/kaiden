@@ -23,8 +23,10 @@ import { writable } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import * as mcpStore from '/@/stores/mcp-remote-servers';
+import * as secretVaultStore from '/@/stores/secret-vault';
 import * as skillsStore from '/@/stores/skills';
 import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info';
+import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 import type { SkillInfo } from '/@api/skill/skill-info';
 
 import AgentWorkspaceCreate from './AgentWorkspaceCreate.svelte';
@@ -32,11 +34,18 @@ import AgentWorkspaceCreate from './AgentWorkspaceCreate.svelte';
 vi.mock(import('/@/navigation'));
 vi.mock(import('/@/stores/skills'));
 vi.mock(import('/@/stores/mcp-remote-servers'));
+vi.mock(import('/@/stores/secret-vault'));
 
 beforeEach(() => {
   vi.resetAllMocks();
+  HTMLElement.prototype.animate = vi.fn().mockReturnValue({
+    finished: Promise.resolve(),
+    cancel: vi.fn(),
+    onfinish: null,
+  });
   vi.mocked(skillsStore).skillInfos = writable<SkillInfo[]>([]);
   vi.mocked(mcpStore).mcpRemoteServerInfos = writable<MCPRemoteServerInfo[]>([]);
+  vi.mocked(secretVaultStore).secretVaultInfos = writable<readonly SecretVaultInfo[]>([]);
 });
 
 test('Expect page title displayed', () => {
@@ -200,6 +209,93 @@ test('Expect custom paths section shown when Custom Paths selected on filesystem
 
   expect(screen.getByPlaceholderText('/path/to/allowed/directory')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Add Another Path' })).toBeInTheDocument();
+});
+
+async function navigateToToolsSecretsStep(): Promise<void> {
+  await fireEvent.input(screen.getByPlaceholderText('/path/to/project'), {
+    target: { value: '/home/user/my-repo' },
+  });
+  // Workspace → Agent & Model → Tools & Secrets
+  await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+}
+
+async function expandCustomize(): Promise<void> {
+  await fireEvent.click(screen.getByRole('button', { name: /Customize skills, MCP servers, and vault/ }));
+}
+
+test('Expect summary card and customize toggle on tools & secrets step', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+
+  expect(screen.getByText(/Everything available is included/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Customize skills, MCP servers, and vault/ })).toBeInTheDocument();
+});
+
+test('Expect secrets section visible after expanding customize', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+  await expandCustomize();
+
+  expect(screen.getByText('Secret Vault')).toBeInTheDocument();
+  expect(screen.getByText('Select secrets from your vault to make available in the workspace')).toBeInTheDocument();
+});
+
+test('Expect secrets empty state shown when vault is empty', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+  await expandCustomize();
+
+  expect(screen.getByText('No secrets in your vault yet.')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Open Vault' })).toBeInTheDocument();
+});
+
+test('Expect secrets listed with category headers when vault has entries', async () => {
+  vi.mocked(secretVaultStore).secretVaultInfos = writable<readonly SecretVaultInfo[]>([
+    {
+      id: 'github-token',
+      name: 'GitHub Token',
+      category: 'api',
+      type: 'Personal access token',
+      status: 'active',
+      description: 'Sep 2026 · Active',
+    },
+    {
+      id: 'ssh-key',
+      name: 'SSH Key',
+      category: 'infra',
+      type: 'Platform token',
+      status: 'active',
+      description: 'Aug 2026 · Active',
+    },
+  ]);
+
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+  await expandCustomize();
+
+  expect(screen.getByText('GitHub Token')).toBeInTheDocument();
+  expect(screen.getByText('SSH Key')).toBeInTheDocument();
+  expect(screen.getByText('API tokens')).toBeInTheDocument();
+  expect(screen.getByText('Infrastructure')).toBeInTheDocument();
+  expect(screen.getByText('Secret Vault')).toBeInTheDocument();
+  expect(screen.queryByText('No secrets in your vault yet.')).not.toBeInTheDocument();
+});
+
+test('Expect Open Vault button navigates to secret vault', async () => {
+  const { handleNavigation } = await import('/@/navigation');
+
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+  await expandCustomize();
+  await fireEvent.click(screen.getByRole('button', { name: 'Open Vault' }));
+
+  expect(handleNavigation).toHaveBeenCalledWith({ page: 'secret-vault' });
 });
 
 const wizardStepCount = 5;

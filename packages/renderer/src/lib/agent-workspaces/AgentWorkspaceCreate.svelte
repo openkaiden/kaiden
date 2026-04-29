@@ -24,6 +24,7 @@ import type { ScrollableCardItem } from '/@/lib/ui/ScrollableCardSelector.svelte
 import WizardStepper from '/@/lib/ui/WizardStepper.svelte';
 import { handleNavigation } from '/@/navigation';
 import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
+import { secretVaultInfos } from '/@/stores/secret-vault';
 import { skillInfos } from '/@/stores/skills';
 import { NavigationPage } from '/@api/navigation-page';
 
@@ -104,8 +105,9 @@ let sessionName = $state('');
 let description = $state('');
 let selectedAgent = $state('opencode');
 let selectedFileAccess = $state('workspace');
-let selectedSkillIds = $state<string[]>([]);
-let selectedMcpIds = $state<string[]>([]);
+let selectedSkillIds = $derived(skillItems.map(s => s.id));
+let selectedMcpIds = $derived(mcpItems.map(m => m.id));
+let selectedSecretIds = $derived($secretVaultInfos.map(s => s.id));
 let customPaths = $state<string[]>(['']);
 
 // --- Step 1 UI state ---
@@ -246,7 +248,8 @@ async function startWorkspace(): Promise<void> {
                 {skillItems}
                 bind:selectedSkillIds
                 {mcpItems}
-                bind:selectedMcpIds />
+                bind:selectedMcpIds
+                bind:selectedSecretIds />
             {:else if currentStepId === 'filesystem'}
               <AgentWorkspaceCreateStepFileSystem
                 {fileAccessOptions}
