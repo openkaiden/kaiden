@@ -9,16 +9,9 @@ import { lastPage } from './stores/breadcrumb';
 
 let systemReady = $state(false);
 
-let toggle = $state(false);
-
-let loadingSequence: NodeJS.Timeout;
-
 let extensionsStarterChecker: NodeJS.Timeout;
 
 onMount(async () => {
-  loadingSequence = setInterval(() => {
-    toggle = !toggle;
-  }, 100);
   // check if the server side is ready
   try {
     const isReady = await window.extensionSystemIsReady();
@@ -46,10 +39,6 @@ onMount(async () => {
 });
 
 onDestroy(() => {
-  if (loadingSequence) {
-    clearInterval(loadingSequence);
-  }
-
   if (extensionsStarterChecker) {
     clearInterval(extensionsStarterChecker);
   }
@@ -82,7 +71,6 @@ window.events.receive('starting-extensions', (value: unknown) => {
   if (systemReady) {
     window.dispatchEvent(new CustomEvent('system-ready', {}));
   }
-  clearInterval(loadingSequence);
 });
 </script>
 
@@ -92,7 +80,6 @@ window.events.receive('starting-extensions', (value: unknown) => {
   <main class="flex flex-row w-screen h-screen justify-center" style="-webkit-app-region: drag;">
     <div class="flex flex-col justify-center">
       <LoaderAnimation />
-      <h1 class="text-center text-xl">Initializing...</h1>
     </div>
   </main>
 {:else}
