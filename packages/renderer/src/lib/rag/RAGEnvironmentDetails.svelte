@@ -114,29 +114,30 @@ async function handleRemoveFile(filePath: string): Promise<void> {
   {#snippet contentSnippet()}
     <Route path="/summary" breadcrumb="Summary" navigationHint="tab">
       {#if ragEnvironment}
-        <!-- Summary Tab -->
-        <div class="summary-grid grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-6 mb-8">
-          <div class="info-card bg-[var(--pd-content-card-bg)] border border-[var(--pd-content-divider)] rounded-lg p-5">
-            <h3 class="info-card-title text-sm font-semibold text-[var(--pd-content-text-secondary)] mb-4 uppercase tracking-wider">General Information</h3>
-            <div class="info-row flex justify-between py-3 border-b border-[var(--pd-content-divider)]" aria-label="Name">
-              <span class="info-label text-sm text-[var(--pd-content-text-secondary)]">Name</span>
-              <span class="info-value text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{ragEnvironment.name}</span>
+        <div class="flex flex-col px-5 py-4 gap-4">
+          <div class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4">
+            <div class="bg-[var(--pd-content-card-bg)] border border-[var(--pd-content-divider)] rounded-lg p-5">
+              <h3 class="text-sm font-semibold text-[var(--pd-content-text-secondary)] mb-4 uppercase tracking-wider">General Information</h3>
+              <div class="flex justify-between py-3" aria-label="Name">
+                <span class="text-sm text-[var(--pd-content-text-secondary)]">Name</span>
+                <span class="text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{ragEnvironment.name}</span>
+              </div>
             </div>
-          </div>
 
-          <div class="info-card bg-[var(--pd-content-card-bg)] border border-[var(--pd-content-divider)] rounded-lg p-5">
-            <h3 class="info-card-title text-sm font-semibold text-[var(--pd-content-text-secondary)] mb-4 uppercase tracking-wider">Configuration</h3>
-            <div class="info-row flex justify-between py-3 border-b border-[var(--pd-content-divider)]" aria-label="Vector Store">
-              <span class="info-label text-sm text-[var(--pd-content-text-secondary)]">Vector Store</span>
-              <span class="info-value text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{databaseName}</span>
-            </div>
-            <div class="info-row flex justify-between py-3 border-b border-[var(--pd-content-divider)]" aria-label="Embedding Model">
-              <span class="info-label text-sm text-[var(--pd-content-text-secondary)]">Embedding Model</span>
-              <span class="info-value text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{chunkProviderName}</span>
-            </div>
-            <div class="info-row flex justify-between py-3 border-b-0" aria-label="Source Files">
-              <span class="info-label text-sm text-[var(--pd-content-text-secondary)]">Source Files</span>
-              <span class="info-value text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{files.length} files</span>
+            <div class="bg-[var(--pd-content-card-bg)] border border-[var(--pd-content-divider)] rounded-lg p-5">
+              <h3 class="text-sm font-semibold text-[var(--pd-content-text-secondary)] mb-4 uppercase tracking-wider">Configuration</h3>
+              <div class="flex justify-between py-3 border-b border-[var(--pd-content-divider)]" aria-label="Vector Store">
+                <span class="text-sm text-[var(--pd-content-text-secondary)]">Vector Store</span>
+                <span class="text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{databaseName}</span>
+              </div>
+              <div class="flex justify-between py-3 border-b border-[var(--pd-content-divider)]" aria-label="Embedding Model">
+                <span class="text-sm text-[var(--pd-content-text-secondary)]">Embedding Model</span>
+                <span class="text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{chunkProviderName}</span>
+              </div>
+              <div class="flex justify-between py-3" aria-label="Source Files">
+                <span class="text-sm text-[var(--pd-content-text-secondary)]">Source Files</span>
+                <span class="text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{files.length} files</span>
+              </div>
             </div>
           </div>
         </div>
@@ -148,51 +149,52 @@ async function handleRemoveFile(filePath: string): Promise<void> {
     </Route>
     <Route path="/sources" breadcrumb="Sources" navigationHint="tab">
       {#if ragEnvironment}
-        <!-- Sources Tab -->
-        <div
-          class="upload-area border-2 border-dashed border-[var(--pd-content-divider)] rounded-lg py-12 px-6 text-center hover:border-[var(--pd-button-primary)] hover:bg-[color-mix(in_srgb,var(--pd-button-primary)_5%,transparent)] transition-all duration-200 mb-6"
-        >
-          <Button
-            onclick={handleAddFile} type="link"
+        <div class="flex flex-col px-5 py-4 gap-4">
+          <div
+            class="border-2 border-dashed border-[var(--pd-content-divider)] rounded-lg py-12 px-6 text-center hover:border-[var(--pd-button-primary)] hover:bg-[color-mix(in_srgb,var(--pd-button-primary)_5%,transparent)] transition-all duration-200"
           >
-            <Icon icon="fas fa-upload" class="fa-4x"/>
-            <div class="upload-text text-base text-[var(--pd-content-text)] mb-2">Click to upload</div>
-            <div class="upload-subtext text-sm text-[var(--pd-content-text-secondary)]">Supports PDF, TXT, MD, and more</div>
-          </Button>
-        </div>
-
-        <div class="sources-list bg-[var(--pd-content-card-bg)] border border-[var(--pd-content-divider)] rounded-lg overflow-hidden">
-          <div class="sources-header px-5 py-4 border-b border-[var(--pd-content-divider)] bg-[var(--pd-content-card-inset-bg)]">
-            <h3 class="sources-title text-base font-semibold text-[var(--pd-content-text)]">Uploaded Files ({files.length})</h3>
+            <Button
+              onclick={handleAddFile} type="link"
+            >
+              <Icon icon="fas fa-upload" class="fa-4x"/>
+              <div class="text-base text-[var(--pd-content-text)] mb-2">Click to upload</div>
+              <div class="text-sm text-[var(--pd-content-text-secondary)]">Supports PDF, TXT, MD, and more</div>
+            </Button>
           </div>
 
-          {#if files.length > 0}
-            {#each files as file (file.path)}
-              <div class="source-item flex items-center justify-between px-5 py-4 border-b border-[var(--pd-content-divider)] last:border-b-0 hover:bg-[var(--pd-content-card-inset-bg)] transition-colors duration-200" aria-label="source file">
-                <div class="source-info flex items-center gap-3">
-                  <div class="w-8 h-8 bg-[var(--pd-content-card-inset-bg)] rounded-md flex items-center justify-center text-[var(--pd-content-text-secondary)]">
-                    <Icon icon="fas fa-file" class="fa-2x"/>
-                  </div>
-                  <div class="source-details">
-                    <h4 class="text-sm font-medium text-[var(--pd-content-text)] m-0 mb-1">{file.path.split('/').pop() ?? file.path}</h4>
-                    <div class="source-meta text-xs text-[var(--pd-content-text-secondary)]">{file.status}</div>
-                  </div>
-                </div>
-                <Button
-                  onclick={handleRemoveFile.bind(undefined, file.path)}
-                  type="link"
-                  aria-label="Remove file"
-                  title="Remove file from knowledge database"
-                  icon="fas fa-trash"
-                >
-                </Button>
-              </div>
-            {/each}
-          {:else}
-            <div class="flex items-center justify-center py-12">
-              <div class="text-sm text-[var(--pd-content-text-secondary)]">No files in this knowledge database.</div>
+          <div class="bg-[var(--pd-content-card-bg)] border border-[var(--pd-content-divider)] rounded-lg overflow-hidden">
+            <div class="px-5 py-4 border-b border-[var(--pd-content-divider)] bg-[var(--pd-content-card-inset-bg)]">
+              <h3 class="text-base font-semibold text-[var(--pd-content-text)]">Uploaded Files ({files.length})</h3>
             </div>
-          {/if}
+
+            {#if files.length > 0}
+              {#each files as file (file.path)}
+                <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--pd-content-divider)] last:border-b-0 hover:bg-[var(--pd-content-card-inset-bg)] transition-colors duration-200" aria-label="source file">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-[var(--pd-content-card-inset-bg)] rounded-md flex items-center justify-center text-[var(--pd-content-text-secondary)]">
+                      <Icon icon="fas fa-file" class="fa-2x"/>
+                    </div>
+                    <div>
+                      <h4 class="text-sm font-medium text-[var(--pd-content-text)] m-0 mb-1">{file.path.split('/').pop() ?? file.path}</h4>
+                      <div class="text-xs text-[var(--pd-content-text-secondary)]">{file.status}</div>
+                    </div>
+                  </div>
+                  <Button
+                    onclick={handleRemoveFile.bind(undefined, file.path)}
+                    type="link"
+                    aria-label="Remove file"
+                    title="Remove file from knowledge database"
+                    icon="fas fa-trash"
+                  >
+                  </Button>
+                </div>
+              {/each}
+            {:else}
+              <div class="flex items-center justify-center py-12">
+                <div class="text-sm text-[var(--pd-content-text-secondary)]">No files in this knowledge database.</div>
+              </div>
+            {/if}
+          </div>
         </div>
       {:else}
         <div class="flex items-center justify-center h-full">
@@ -202,16 +204,17 @@ async function handleRemoveFile(filePath: string): Promise<void> {
     </Route>
     <Route path="/vectorstore" breadcrumb="VectorStore" navigationHint="tab">
       {#if ragEnvironment}
-        <!-- VectorStore Tab -->
-        <div class="info-card bg-[var(--pd-content-card-bg)] border border-[var(--pd-content-divider)] rounded-lg p-5 max-w-2xl">
-          <h3 class="info-card-title text-sm font-semibold text-[var(--pd-content-text-secondary)] mb-4 uppercase tracking-wider">{databaseName} Configuration</h3>
-          <div class="info-row flex justify-between py-3 border-b border-[var(--pd-content-divider)]" aria-label="Database Type">
-            <span class="info-label text-sm text-[var(--pd-content-text-secondary)]">Database Type</span>
-            <span class="info-value text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{databaseName}</span>
-          </div>
-          <div class="info-row flex justify-between py-3 border-b border-[var(--pd-content-divider)]" aria-label="Collection Name">
-            <span class="info-label text-sm text-[var(--pd-content-text-secondary)]">Collection Name</span>
-            <span class="info-value text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{ragEnvironment.name.replace(/\W/g, '_')}</span>
+        <div class="flex flex-col px-5 py-4">
+          <div class="bg-[var(--pd-content-card-bg)] border border-[var(--pd-content-divider)] rounded-lg p-5 max-w-2xl">
+            <h3 class="text-sm font-semibold text-[var(--pd-content-text-secondary)] mb-4 uppercase tracking-wider">{databaseName} Configuration</h3>
+            <div class="flex justify-between py-3 border-b border-[var(--pd-content-divider)]" aria-label="Database Type">
+              <span class="text-sm text-[var(--pd-content-text-secondary)]">Database Type</span>
+              <span class="text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{databaseName}</span>
+            </div>
+            <div class="flex justify-between py-3" aria-label="Collection Name">
+              <span class="text-sm text-[var(--pd-content-text-secondary)]">Collection Name</span>
+              <span class="text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{ragEnvironment.name.replace(/\W/g, '_')}</span>
+            </div>
           </div>
         </div>
       {:else}
@@ -222,12 +225,13 @@ async function handleRemoveFile(filePath: string): Promise<void> {
     </Route>
     <Route path="/chunker" breadcrumb="Chunker" navigationHint="tab">
       {#if ragEnvironment}
-        <!-- Chunker Tab -->
-        <div class="info-card bg-[var(--pd-content-card-bg)] border border-[var(--pd-content-divider)] rounded-lg p-5 max-w-2xl">
-          <h3 class="info-card-title text-sm font-semibold text-[var(--pd-content-text-secondary)] mb-4 uppercase tracking-wider">{chunkProviderName} Configuration</h3>
-          <div class="info-row flex justify-between py-3 border-b border-[var(--pd-content-divider)]" aria-label="Model">
-            <span class="info-label text-sm text-[var(--pd-content-text-secondary)]">Model</span>
-            <span class="info-value text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{chunkProviderName}</span>
+        <div class="flex flex-col px-5 py-4">
+          <div class="bg-[var(--pd-content-card-bg)] border border-[var(--pd-content-divider)] rounded-lg p-5 max-w-2xl">
+            <h3 class="text-sm font-semibold text-[var(--pd-content-text-secondary)] mb-4 uppercase tracking-wider">{chunkProviderName} Configuration</h3>
+            <div class="flex justify-between py-3" aria-label="Model">
+              <span class="text-sm text-[var(--pd-content-text-secondary)]">Model</span>
+              <span class="text-sm text-[var(--pd-content-text)] font-medium" data-testid="info-value">{chunkProviderName}</span>
+            </div>
           </div>
         </div>
       {:else}
