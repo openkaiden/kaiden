@@ -72,13 +72,15 @@ function onToggle(): void {
     <div class="flex items-center gap-3">
       <span
         class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
-        bg-[var(--pd-label-bg)] text-[var(--pd-label-text)]">
+        bg-[var(--pd-label-bg)] text-[var(--pd-label-text)]"
+        aria-label="Skill type">
         {skillInfo?.managed ? 'Custom' : 'Pre-built'}
       </span>
       <span
         class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
         class:text-[var(--pd-status-running)]={skillInfo?.enabled}
-        class:text-[var(--pd-status-stopped)]={!skillInfo?.enabled}>
+        class:text-[var(--pd-status-stopped)]={!skillInfo?.enabled}
+        aria-label="Skill status">
         <span
           class="w-1.5 h-1.5 rounded-full"
           class:bg-[var(--pd-status-running)]={skillInfo?.enabled}

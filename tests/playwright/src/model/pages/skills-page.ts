@@ -22,6 +22,7 @@ import { handleDialogIfPresent } from 'src/utils/app-ready';
 
 import { BaseTablePage } from './base-table-page';
 import { SkillsCreatePage } from './skills-create-page';
+import { SkillsDetailsPage } from './skills-details-page';
 
 export class SkillsPage extends BaseTablePage {
   readonly header: Locator;
@@ -120,5 +121,14 @@ export class SkillsPage extends BaseTablePage {
     await expect(deleteButton).toBeEnabled();
     await deleteButton.click();
     await handleDialogIfPresent(this.page);
+  }
+
+  async openSkillDetails(name: string, exact = true): Promise<SkillsDetailsPage> {
+    await this.waitForLoad();
+    const row = await this.getRowLocatorByName(name, exact);
+    const nameButton = row.getByRole('button', { name });
+    await expect(nameButton).toBeVisible();
+    await nameButton.click();
+    return new SkillsDetailsPage(this.page, name);
   }
 }

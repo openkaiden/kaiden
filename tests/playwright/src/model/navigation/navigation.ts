@@ -108,6 +108,7 @@ export class NavigationBar {
     const settingsPage = await this.navigateToSettingsPage();
     const preferencesPage = await settingsPage.openPreferences();
     await preferencesPage.enableChatWindow();
+    await expect(this.chatLink).toBeVisible();
   }
 
   async navigateToWorkspacesPage(): Promise<AgentWorkspacesPage> {
