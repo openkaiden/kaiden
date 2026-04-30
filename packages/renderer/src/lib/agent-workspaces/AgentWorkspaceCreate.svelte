@@ -17,6 +17,8 @@ import type { ScrollableCardItem } from '/@/lib/ui/ScrollableCardSelector.svelte
 import WizardStepper from '/@/lib/ui/WizardStepper.svelte';
 import { handleNavigation } from '/@/navigation';
 import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
+import { providerInfos } from '/@/stores/providers';
+import { ragEnvironments } from '/@/stores/rag-environments';
 import { secretVaultInfos } from '/@/stores/secret-vault';
 import { skillInfos } from '/@/stores/skills';
 import { NavigationPage } from '/@api/navigation-page';
@@ -97,6 +99,19 @@ let skillItems: ChecklistItem[] = $derived(
 let mcpItems: ScrollableCardItem[] = $derived(
   $mcpRemoteServerInfos.map(m => ({ id: m.id, name: m.name, description: m.description })),
 );
+let knowledgeItems: ChecklistItem[] = $derived(
+  $ragEnvironments.map(r => {
+    const sourceCount = r.files.length;
+    const sourcesLabel = sourceCount > 0 ? `${sourceCount} source${sourceCount !== 1 ? 's' : ''}` : '';
+    const providerName =
+      $providerInfos.find(p => p.id === r.ragConnection.providerId)?.name ?? r.ragConnection.providerId;
+    return {
+      id: r.name,
+      name: r.name,
+      description: [providerName, sourcesLabel].filter(Boolean).join(' · '),
+    };
+  }),
+);
 
 // --- Form state ---
 let sourcePath = $state('');
@@ -107,6 +122,7 @@ let selectedFileAccess = $state('workspace');
 let selectedSkillIds = $derived(skillItems.map(s => s.id));
 let selectedMcpIds = $derived(mcpItems.map(m => m.id));
 let selectedSecretIds = $derived($secretVaultInfos.map(s => s.id));
+let selectedKnowledgeIds = $derived(knowledgeItems.map(k => k.id));
 let customPaths = $state<string[]>(['']);
 
 // --- Step 1 UI state ---
@@ -248,7 +264,9 @@ async function startWorkspace(): Promise<void> {
                 bind:selectedSkillIds
                 {mcpItems}
                 bind:selectedMcpIds
-                bind:selectedSecretIds />
+                bind:selectedSecretIds
+                {knowledgeItems}
+                bind:selectedKnowledgeIds />
             {:else if currentStepId === 'filesystem'}
               <AgentWorkspaceCreateStepFileSystem
                 {fileAccessOptions}

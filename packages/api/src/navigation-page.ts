@@ -64,6 +64,7 @@ export enum NavigationPage {
   AGENT_WORKSPACE_CREATE = 'agent-workspace-create',
   SKILLS = 'skills',
   SKILL_DETAILS = 'skill-details',
+  RAG_ENVIRONMENTS = 'rag-environments',
   RAG_ENVIRONMENT_DETAILS = 'rag-environment-details',
   SECRET_VAULT = 'secret-vault',
   SECRET_VAULT_CREATE = 'secret-vault-create',
