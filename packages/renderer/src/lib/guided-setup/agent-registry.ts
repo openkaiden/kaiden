@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import type { IconDefinition } from '@fortawesome/fontawesome-common-types';
-import { faDesktop } from '@fortawesome/free-solid-svg-icons';
+import { faCode, faDesktop, faO, faRobot, faWrench } from '@fortawesome/free-solid-svg-icons';
 import type { Component } from 'svelte';
 
 import type { CliAgent } from './guided-setup-steps';
@@ -26,20 +26,57 @@ import OpenCodePanel from './panels/OpenCodePanel.svelte';
 export interface AgentDefinition {
   cliName: CliAgent;
   title: string;
-  description: string;
-  badge: string;
   icon: IconDefinition;
+  colorClass: string;
+  description?: string;
+  badge?: string;
   panel?: Component;
 }
+
+const DEFAULT_DEFINITION: Omit<AgentDefinition, 'cliName' | 'title'> = {
+  icon: faRobot,
+  colorClass: 'bg-gradient-to-br from-purple-500 to-purple-600',
+};
 
 export const agentDefinitions: AgentDefinition[] = [
   {
     cliName: 'opencode',
     title: 'OpenCode',
+    icon: faDesktop,
+    colorClass: 'bg-gradient-to-br from-green-500 to-green-600',
     description:
       'Open-source agent on your machine - local models via Ollama or Ramalama, or cloud APIs (OpenAI, Gemini, and other providers OpenCode supports).',
     badge: 'Recommended',
-    icon: faDesktop,
     panel: OpenCodePanel,
   },
+  {
+    cliName: 'claude',
+    title: 'Claude',
+    icon: faRobot,
+    colorClass: 'bg-gradient-to-br from-amber-600 to-amber-500',
+  },
+  {
+    cliName: 'goose',
+    title: 'Goose',
+    icon: faWrench,
+    colorClass: 'bg-gradient-to-br from-red-600 to-red-700',
+  },
+  {
+    cliName: 'cursor',
+    title: 'Cursor',
+    icon: faCode,
+    colorClass: 'bg-gradient-to-br from-sky-500 to-sky-600',
+  },
+  {
+    cliName: 'codex',
+    title: 'Codex',
+    icon: faO,
+    colorClass: 'bg-gradient-to-br from-green-500 to-green-600',
+  },
 ];
+
+const agentMap = new Map(agentDefinitions.map(d => [d.cliName, d]));
+
+export function getAgentDefinition(name: string): AgentDefinition {
+  return agentMap.get(name as CliAgent) ?? { ...DEFAULT_DEFINITION, cliName: name as CliAgent, title: name };
+}

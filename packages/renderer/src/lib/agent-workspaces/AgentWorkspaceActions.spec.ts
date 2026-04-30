@@ -22,10 +22,9 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import AgentWorkspaceActions from '/@/lib/agent-workspaces/columns/AgentWorkspaceActions.svelte';
 import { agentWorkspaces } from '/@/stores/agent-workspaces.svelte';
 import type { AgentWorkspaceSummary } from '/@api/agent-workspace-info';
-
-import AgentWorkspaceActions from './AgentWorkspaceActions.svelte';
 
 const workspace: AgentWorkspaceSummary = {
   id: 'ws-1',
