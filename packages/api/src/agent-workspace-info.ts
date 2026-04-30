@@ -53,4 +53,5 @@ export interface AgentWorkspaceCreateOptions {
   runtime?: string;
   name?: string;
   project?: string;
+  skills?: string[];
 }

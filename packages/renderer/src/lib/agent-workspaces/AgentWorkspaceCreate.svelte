@@ -199,10 +199,13 @@ async function startWorkspace(): Promise<void> {
   handleNavigation({ page: NavigationPage.AGENT_WORKSPACES });
 
   try {
+    const selectedSkillPaths = $skillInfos.filter(s => selectedSkillIds.includes(s.name)).map(s => s.path);
+
     await window.createAgentWorkspace({
       sourcePath,
       agent: selectedAgent,
       name: sessionName,
+      skills: selectedSkillPaths.length > 0 ? selectedSkillPaths : undefined,
     });
   } catch (err: unknown) {
     console.error('Failed to create agent workspace', err);
