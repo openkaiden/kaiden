@@ -375,4 +375,51 @@ test('Expect Manage Skills button navigates to skills page', async () => {
   expect(handleNavigation).toHaveBeenCalledWith({ page: 'skills' });
 });
 
+test('Expect createAgentWorkspace called with skill paths', async () => {
+  vi.mocked(skillsStore).skillInfos = writable<SkillInfo[]>([
+    {
+      name: 'kubernetes',
+      description: 'Deploy & manage clusters',
+      path: '/home/user/.kaiden/skills/kubernetes',
+      enabled: true,
+      managed: false,
+    },
+    {
+      name: 'code-review',
+      description: 'Analyze code quality',
+      path: '/home/user/.kaiden/skills/code-review',
+      enabled: true,
+      managed: true,
+    },
+  ]);
+
+  render(AgentWorkspaceCreate);
+
+  await fireEvent.input(screen.getByPlaceholderText('/path/to/project'), {
+    target: { value: '/home/user/my-repo' },
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Use all defaults and create workspace' }));
+
+  expect(window.createAgentWorkspace).toHaveBeenCalledWith(
+    expect.objectContaining({
+      skills: ['/home/user/.kaiden/skills/kubernetes', '/home/user/.kaiden/skills/code-review'],
+    }),
+  );
+});
+
+test('Expect createAgentWorkspace called without skills when none available', async () => {
+  render(AgentWorkspaceCreate);
+
+  await fireEvent.input(screen.getByPlaceholderText('/path/to/project'), {
+    target: { value: '/home/user/my-repo' },
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Use all defaults and create workspace' }));
+
+  expect(window.createAgentWorkspace).toHaveBeenCalledWith(
+    expect.objectContaining({
+      skills: undefined,
+    }),
+  );
+});
+
 const wizardStepCount = 5;
