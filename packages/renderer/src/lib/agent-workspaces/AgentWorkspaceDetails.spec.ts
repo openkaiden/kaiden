@@ -31,8 +31,8 @@ import AgentWorkspaceDetails from './AgentWorkspaceDetails.svelte';
 vi.mock(import('tinro'));
 
 const routerStore = writable({
-  path: '/agent-workspaces/ws-1/summary',
-  url: '/agent-workspaces/ws-1/summary',
+  path: '/agent-workspaces/ws-1/overview',
+  url: '/agent-workspaces/ws-1/overview',
   from: '/',
   query: {} as Record<string, string>,
   hash: '',
@@ -68,7 +68,7 @@ beforeEach(() => {
   agentWorkspaces.set([{ ...workspaceSummary }]);
 });
 
-test('Expect page title to use workspace summary name', async () => {
+test('Expect page title to use workspace overview name', async () => {
   render(AgentWorkspaceDetails, { workspaceId: 'ws-1' });
 
   await waitFor(() => {
@@ -82,15 +82,15 @@ test('Expect getAgentWorkspaceConfiguration called with workspace id', () => {
   expect(window.getAgentWorkspaceConfiguration).toHaveBeenCalledWith('ws-1');
 });
 
-test('Expect Summary tab is present', async () => {
+test('Expect Overview tab is present', async () => {
   render(AgentWorkspaceDetails, { workspaceId: 'ws-1' });
 
   await waitFor(() => {
-    expect(screen.getByText('Summary')).toBeInTheDocument();
+    expect(screen.getByText('Overview')).toBeInTheDocument();
   });
 });
 
-test('Expect workspace summary with project is resolved from the store', () => {
+test('Expect workspace overview with project is resolved from the store', () => {
   render(AgentWorkspaceDetails, { workspaceId: 'ws-1' });
 
   const storeValue = [workspaceSummary];
@@ -108,7 +108,7 @@ test('Expect page shell renders when configuration fetch fails', async () => {
   await waitFor(() => {
     expect(screen.getByRole('button', { name: 'Start Workspace' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove Workspace' })).toBeInTheDocument();
-    expect(screen.getByText('Summary')).toBeInTheDocument();
+    expect(screen.getByText('Overview')).toBeInTheDocument();
   });
 });
 
