@@ -127,7 +127,8 @@ export class KdnCli {
 
   async writeWorkspaceConfig(options: AgentWorkspaceCreateOptions): Promise<void> {
     const mcpServers = options.mcp?.servers;
-    if (!mcpServers?.length) {
+    const mcpCommands = options.mcp?.commands;
+    if (!mcpServers?.length && !mcpCommands?.length) {
       return;
     }
 
@@ -144,15 +145,49 @@ export class KdnCli {
 
     existing.mcp = {
       ...existing.mcp,
-      servers: mcpServers.map(s => ({
-        name: s.name,
-        url: s.url,
-        ...(s.headers && Object.keys(s.headers).length > 0 ? { headers: s.headers } : {}),
-      })),
+      ...(mcpServers?.length
+        ? {
+            servers: mcpServers.map(s => ({
+              name: s.name,
+              url: s.url,
+              ...(s.headers && Object.keys(s.headers).length > 0 ? { headers: s.headers } : {}),
+            })),
+          }
+        : {}),
+      ...(mcpCommands?.length
+        ? {
+            commands: mcpCommands.map(c => ({
+              name: c.name,
+              command: c.command,
+              ...(c.args?.length ? { args: c.args } : {}),
+              ...(c.env && Object.keys(c.env).length > 0 ? { env: c.env } : {}),
+            })),
+          }
+        : {}),
     };
+
+    const hasPypi = mcpCommands?.some(c => c.command === 'uvx');
+    if (hasPypi) {
+      existing.features = {
+        ...existing.features,
+        './uv-feature': existing.features?.['./uv-feature'] ?? {},
+      };
+      await this.ensureUvFeature(configDir);
+    }
 
     await mkdir(configDir, { recursive: true });
     await writeFile(configPath, JSON.stringify(existing, undefined, 2) + '\n', 'utf-8');
+  }
+
+  private async ensureUvFeature(configDir: string): Promise<void> {
+    const featureDir = join(configDir, 'uv-feature');
+    await mkdir(featureDir, { recursive: true });
+    await writeFile(
+      join(featureDir, 'devcontainer-feature.json'),
+      JSON.stringify({ id: 'uv', version: '0.1.0', name: 'uv Python package manager' }, undefined, 2) + '\n',
+      'utf-8',
+    );
+    await writeFile(join(featureDir, 'install.sh'), '#!/bin/sh\npip install uv\n', 'utf-8');
   }
 
   async listWorkspaces(): Promise<AgentWorkspaceSummary[]> {

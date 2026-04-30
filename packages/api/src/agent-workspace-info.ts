@@ -47,17 +47,28 @@ export type CliInfo = cliComponents['schemas']['Info'];
 /**
  * A URL-based MCP server to attach to the workspace.
  */
-export interface AgentWorkspaceMcpServer {
+export interface AgentWorkspaceMcpRemoteServer {
   name: string;
   url: string;
   headers?: Record<string, string>;
 }
 
 /**
+ * A command-based MCP server (e.g. pypi via uvx, npm via npx).
+ */
+export interface AgentWorkspaceMcpCommandServer {
+  name: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
+/**
  * MCP configuration for workspace creation.
  */
 export interface AgentWorkspaceMcpConfig {
-  servers?: AgentWorkspaceMcpServer[];
+  servers?: AgentWorkspaceMcpRemoteServer[];
+  commands?: AgentWorkspaceMcpCommandServer[];
 }
 
 /**

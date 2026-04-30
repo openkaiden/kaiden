@@ -402,6 +402,7 @@ test('Expect MCP servers listed when store has entries', async () => {
       name: 'GitHub MCP',
       description: 'Repos, issues & PRs',
       url: 'https://mcp.github.com/sse',
+      setupType: 'remote',
       infos: { internalProviderId: 'p1', serverId: 's1', remoteId: 1 },
       tools: { 'list-repos': {}, 'create-issue': {} },
     },
@@ -410,6 +411,7 @@ test('Expect MCP servers listed when store has entries', async () => {
       name: 'RHEL MCP',
       description: 'System management',
       url: 'https://mcp.redhat.com/sse',
+      setupType: 'remote',
       infos: { internalProviderId: 'p2', serverId: 's2', remoteId: 2 },
       tools: {},
     },
@@ -444,6 +446,7 @@ test('Expect createAgentWorkspace called with MCP server data', async () => {
       name: 'GitHub MCP',
       description: 'Repos & PRs',
       url: 'https://mcp.github.com/sse',
+      setupType: 'remote',
       infos: { internalProviderId: 'p1', serverId: 's1', remoteId: 1 },
       tools: { 'list-repos': {} },
     },
@@ -460,6 +463,78 @@ test('Expect createAgentWorkspace called with MCP server data', async () => {
     expect.objectContaining({
       mcp: {
         servers: [{ name: 'GitHub MCP', url: 'https://mcp.github.com/sse' }],
+      },
+    }),
+  );
+});
+
+test('Expect createAgentWorkspace called with command-based MCP server data for package servers', async () => {
+  vi.mocked(mcpStore).mcpRemoteServerInfos = writable<MCPRemoteServerInfo[]>([
+    {
+      id: 'mcp-pypi',
+      name: 'PyPI MCP',
+      description: 'Python MCP server',
+      url: '',
+      setupType: 'package',
+      commandSpec: { command: 'uvx', args: ['mcp-server-example==2.0.0', '--port', '3000'] },
+      infos: { internalProviderId: 'p1', serverId: 's1', remoteId: 0 },
+      tools: { 'run-python': {} },
+    },
+  ]);
+
+  render(AgentWorkspaceCreate);
+
+  await fireEvent.input(screen.getByPlaceholderText('/path/to/project'), {
+    target: { value: '/home/user/my-repo' },
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Use all defaults and create workspace' }));
+
+  expect(window.createAgentWorkspace).toHaveBeenCalledWith(
+    expect.objectContaining({
+      mcp: {
+        commands: [
+          { name: 'PyPI MCP', command: 'uvx', args: ['mcp-server-example==2.0.0', '--port', '3000'], env: undefined },
+        ],
+      },
+    }),
+  );
+});
+
+test('Expect createAgentWorkspace called with both remote and command servers', async () => {
+  vi.mocked(mcpStore).mcpRemoteServerInfos = writable<MCPRemoteServerInfo[]>([
+    {
+      id: 'mcp-remote',
+      name: 'GitHub MCP',
+      description: 'Repos & PRs',
+      url: 'https://mcp.github.com/sse',
+      setupType: 'remote',
+      infos: { internalProviderId: 'p1', serverId: 's1', remoteId: 1 },
+      tools: { 'list-repos': {} },
+    },
+    {
+      id: 'mcp-pkg',
+      name: 'NPM MCP',
+      description: 'Node MCP server',
+      url: '',
+      setupType: 'package',
+      commandSpec: { command: 'npx', args: ['@example/mcp@1.0.0'] },
+      infos: { internalProviderId: 'p2', serverId: 's2', remoteId: 0 },
+      tools: {},
+    },
+  ]);
+
+  render(AgentWorkspaceCreate);
+
+  await fireEvent.input(screen.getByPlaceholderText('/path/to/project'), {
+    target: { value: '/home/user/my-repo' },
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Use all defaults and create workspace' }));
+
+  expect(window.createAgentWorkspace).toHaveBeenCalledWith(
+    expect.objectContaining({
+      mcp: {
+        servers: [{ name: 'GitHub MCP', url: 'https://mcp.github.com/sse' }],
+        commands: [{ name: 'NPM MCP', command: 'npx', args: ['@example/mcp@1.0.0'], env: undefined }],
       },
     }),
   );

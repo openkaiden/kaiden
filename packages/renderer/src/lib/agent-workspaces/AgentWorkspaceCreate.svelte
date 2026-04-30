@@ -206,15 +206,28 @@ async function startWorkspace(): Promise<void> {
   handleNavigation({ page: NavigationPage.AGENT_WORKSPACES });
 
   try {
-    const selectedServers = $mcpRemoteServerInfos
-      .filter(m => selectedMcpIds.includes(m.id))
-      .map(m => ({ name: m.name, url: m.url }));
+    const selected = $mcpRemoteServerInfos.filter(m => selectedMcpIds.includes(m.id));
+    const remoteServers = selected.filter(m => m.setupType === 'remote').map(m => ({ name: m.name, url: m.url }));
+    const commandServers = selected
+      .filter(m => m.setupType === 'package' && m.commandSpec)
+      .map(m => ({
+        name: m.name,
+        command: m.commandSpec!.command,
+        args: m.commandSpec!.args,
+        env: m.commandSpec!.env,
+      }));
+    const hasMcp = remoteServers.length > 0 || commandServers.length > 0;
 
     await window.createAgentWorkspace({
       sourcePath,
       agent: selectedAgent,
       name: sessionName,
-      mcp: selectedServers.length > 0 ? { servers: selectedServers } : undefined,
+      mcp: hasMcp
+        ? {
+            ...(remoteServers.length > 0 ? { servers: remoteServers } : {}),
+            ...(commandServers.length > 0 ? { commands: commandServers } : {}),
+          }
+        : undefined,
     });
   } catch (err: unknown) {
     console.error('Failed to create agent workspace', err);
