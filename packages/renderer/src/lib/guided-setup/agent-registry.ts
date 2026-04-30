@@ -32,7 +32,8 @@ export interface AgentDefinition {
   badge: string;
   icon: IconDefinition;
   panel?: Component;
-  extensionId?: string;
+  /** Compound selector in the form `extensionId:providerId` (e.g. `kaiden.claude:claude`). */
+  providerSelector?: string;
   secretType?: string;
 }
 
@@ -53,7 +54,7 @@ export const agentDefinitions: AgentDefinition[] = [
     badge: 'Cloud',
     icon: faClaude,
     panel: ClaudePanel,
-    extensionId: 'claude',
+    providerSelector: 'kaiden.claude:claude',
     secretType: 'anthropic',
   },
 ];

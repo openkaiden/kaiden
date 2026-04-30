@@ -15,13 +15,18 @@ interface Props {
 
 let { definition, onboarding }: Props = $props();
 
-const extensionId = $derived(definition?.extensionId ?? 'claude');
+function parseSelector(selector?: string): { extensionId: string; providerId: string } {
+  const [extensionId = 'kaiden.claude', providerId = 'claude'] = (selector ?? 'kaiden.claude:claude').split(':');
+  return { extensionId, providerId };
+}
+
+const { providerId } = $derived(parseSelector(definition?.providerSelector));
 const secretType = $derived(definition?.secretType ?? 'anthropic');
 
 let apiKey = $state('');
 let errorMessage = $state('');
 
-let claudeProvider = $derived($providerInfos.find(p => p.id === extensionId));
+let claudeProvider = $derived($providerInfos.find(p => p.id === providerId));
 
 async function validate(): Promise<boolean> {
   errorMessage = '';
