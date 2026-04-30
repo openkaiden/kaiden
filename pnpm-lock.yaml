@@ -213,8 +213,8 @@ importers:
         specifier: ^0.9.0
         version: 0.9.0
       '@openkaiden/mcp-registry-types':
-        specifier: ^1.3.10
-        version: 1.3.10
+        specifier: ^1.7.1
+        version: 1.7.1
       '@openkaiden/workspace-configuration':
         specifier: ^0.8.0
         version: 0.8.0
@@ -1821,8 +1821,8 @@ packages:
   '@openkaiden/kdn-api@0.9.0':
     resolution: {integrity: sha512-Tc0btrG95VrdGjHQDTIFPYhdwsMhQfjbQur3qeheze78FQJVBydTeEkCsa+ilcp5L/JlmPZ875MdT39APS04Vg==}
 
-  '@openkaiden/mcp-registry-types@1.3.10':
-    resolution: {integrity: sha512-3DJ7Pi+FtnkBC5ynYPDqK0jP9l9KkUS4GLgC/+uv0vTYRXXn/NrjOnqXqPqCmlyLTTYtwEegIR4X5vKUU2dDaw==}
+  '@openkaiden/mcp-registry-types@1.7.1':
+    resolution: {integrity: sha512-OJ1SxTc8q3tE6pXAoFejIewyW4mYMj56Nn6vsiZ79EnI/ujxgztrZWYPiXyhdEmY2ULj6F3bvLfKbPaoGpbD+A==}
 
   '@openkaiden/workspace-configuration@0.8.0':
     resolution: {integrity: sha512-BWsKFLmNYy4jgBUd++fj0pzL1pWRWmcTy0/kc/2kwz79CQZRYlKSPekFe1KqO+TXQYGL8GQEUCaQz1kkDag6Rw==}
@@ -2860,6 +2860,9 @@ packages:
 
   ajv@8.18.0:
     resolution: {integrity: sha512-PlXPeEWMXMZ7sPYOHqmDyCJzcfNrUr3fGNKtezX14ykXOEIvyK81d+qydx89KY5O71FKMPaQ2vBfBFI5NHR63A==}
+
+  ajv@8.20.0:
+    resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
 
   ansi-escapes@4.3.2:
     resolution: {integrity: sha512-gKXj5ALrKWQLsYG9jlTRmR/xKluxHV+Z9QEwNIgCfM1/uwPMCuzVVnh5mwTd+OuBZcwSIMbqssNWRm1lE51QaQ==}
@@ -7976,7 +7979,7 @@ snapshots:
   '@commitlint/config-validator@20.4.0':
     dependencies:
       '@commitlint/types': 20.4.0
-      ajv: 8.18.0
+      ajv: 8.20.0
 
   '@commitlint/ensure@20.4.1':
     dependencies:
@@ -8094,8 +8097,8 @@ snapshots:
 
   '@develar/schema-utils@2.6.5':
     dependencies:
-      ajv: 6.14.0
-      ajv-keywords: 3.5.2(ajv@6.14.0)
+      ajv: 6.15.0
+      ajv-keywords: 3.5.2(ajv@6.15.0)
 
   '@docker/extension-api-client-types@0.4.2': {}
 
@@ -8808,9 +8811,9 @@ snapshots:
 
   '@openkaiden/kdn-api@0.9.0': {}
 
-  '@openkaiden/mcp-registry-types@1.3.10':
+  '@openkaiden/mcp-registry-types@1.7.1':
     dependencies:
-      ajv: 8.18.0
+      ajv: 8.20.0
 
   '@openkaiden/workspace-configuration@0.8.0': {}
 
@@ -9906,9 +9909,9 @@ snapshots:
     optionalDependencies:
       ajv: 8.18.0
 
-  ajv-keywords@3.5.2(ajv@6.14.0):
+  ajv-keywords@3.5.2(ajv@6.15.0):
     dependencies:
-      ajv: 6.14.0
+      ajv: 6.15.0
 
   ajv@6.14.0:
     dependencies:
@@ -9925,6 +9928,13 @@ snapshots:
       uri-js: 4.4.1
 
   ajv@8.18.0:
+    dependencies:
+      fast-deep-equal: 3.1.3
+      fast-uri: 3.1.0
+      json-schema-traverse: 1.0.0
+      require-from-string: 2.0.2
+
+  ajv@8.20.0:
     dependencies:
       fast-deep-equal: 3.1.3
       fast-uri: 3.1.0
@@ -10992,7 +11002,7 @@ snapshots:
     dependencies:
       '@types/plist': 3.0.5
       '@types/verror': 1.10.11
-      ajv: 6.14.0
+      ajv: 6.15.0
       crc: 3.8.0
       iconv-corefoundation: 1.1.7
       plist: 3.1.0
