@@ -23,9 +23,11 @@ import { writable } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import * as mcpStore from '/@/stores/mcp-remote-servers';
+import * as ragStore from '/@/stores/rag-environments';
 import * as secretVaultStore from '/@/stores/secret-vault';
 import * as skillsStore from '/@/stores/skills';
 import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info';
+import type { RagEnvironment } from '/@api/rag/rag-environment';
 import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 import type { SkillInfo } from '/@api/skill/skill-info';
 
@@ -35,6 +37,7 @@ vi.mock(import('/@/navigation'));
 vi.mock(import('/@/stores/skills'));
 vi.mock(import('/@/stores/mcp-remote-servers'));
 vi.mock(import('/@/stores/secret-vault'));
+vi.mock(import('/@/stores/rag-environments'));
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -46,6 +49,7 @@ beforeEach(() => {
   vi.mocked(skillsStore).skillInfos = writable<SkillInfo[]>([]);
   vi.mocked(mcpStore).mcpRemoteServerInfos = writable<MCPRemoteServerInfo[]>([]);
   vi.mocked(secretVaultStore).secretVaultInfos = writable<readonly SecretVaultInfo[]>([]);
+  vi.mocked(ragStore).ragEnvironments = writable<RagEnvironment[]>([]);
 });
 
 test('Expect page title displayed', () => {
@@ -221,7 +225,7 @@ async function navigateToToolsSecretsStep(): Promise<void> {
 }
 
 async function expandCustomize(): Promise<void> {
-  await fireEvent.click(screen.getByRole('button', { name: /Customize skills, MCP servers, and vault/ }));
+  await fireEvent.click(screen.getByRole('button', { name: /Customize skills, MCP servers, vault, and knowledges/ }));
 }
 
 test('Expect summary card and customize toggle on tools & secrets step', async () => {
@@ -230,7 +234,9 @@ test('Expect summary card and customize toggle on tools & secrets step', async (
   await navigateToToolsSecretsStep();
 
   expect(screen.getByText(/Everything available is included/)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Customize skills, MCP servers, and vault/ })).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: /Customize skills, MCP servers, vault, and knowledges/ }),
+  ).toBeInTheDocument();
 });
 
 test('Expect secrets section visible after expanding customize', async () => {
@@ -478,6 +484,68 @@ test('Expect createAgentWorkspace called without MCP when no servers exist', asy
       mcp: undefined,
     }),
   );
+});
+
+test('Expect Knowledges section visible after expanding customize', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+  await expandCustomize();
+
+  expect(screen.getByText('Knowledges')).toBeInTheDocument();
+  expect(screen.getByText('Optional retrieval context for the agent')).toBeInTheDocument();
+});
+
+test('Expect Knowledges empty state shown when no knowledge bases available', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+  await expandCustomize();
+
+  expect(screen.getByText('No knowledge bases available yet.')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Manage Knowledges' })).toBeInTheDocument();
+});
+
+test('Expect knowledge bases listed when store has entries with MCP servers', async () => {
+  vi.mocked(ragStore).ragEnvironments = writable<RagEnvironment[]>([
+    {
+      name: 'kubernetes-knowledges',
+      ragConnection: { name: 'Milvus', providerId: 'milvus' },
+      chunkerId: 'docling',
+      files: [
+        { path: '/docs/k8s.md', status: 'indexed' },
+        { path: '/docs/pods.md', status: 'indexed' },
+      ],
+      mcpServer: {
+        id: 'mcp-k8s',
+        name: 'kaiden.milvus.mcp-server-milvus-kubernetes-knowledges',
+        description: 'Milvus MCP Server',
+        url: '',
+        infos: { internalProviderId: 'internal', serverId: 's1', remoteId: 0 },
+        tools: { search: {} },
+      },
+    },
+  ]);
+
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+  await expandCustomize();
+
+  expect(screen.getByText('kubernetes-knowledges')).toBeInTheDocument();
+  expect(screen.queryByText('No knowledge bases available yet.')).not.toBeInTheDocument();
+});
+
+test('Expect Manage Knowledges button navigates to rag environments page', async () => {
+  const { handleNavigation } = await import('/@/navigation');
+
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+  await expandCustomize();
+  await fireEvent.click(screen.getByRole('button', { name: 'Manage Knowledges' }));
+
+  expect(handleNavigation).toHaveBeenCalledWith({ page: 'rag-environments' });
 });
 
 const wizardStepCount = 5;

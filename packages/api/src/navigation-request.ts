@@ -83,6 +83,7 @@ export interface NavigationParameters {
   [NavigationPage.SKILL_DETAILS]: {
     name: string;
   };
+  [NavigationPage.RAG_ENVIRONMENTS]: never;
   [NavigationPage.RAG_ENVIRONMENT_DETAILS]: {
     name: string;
   };
