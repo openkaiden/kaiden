@@ -1,12 +1,9 @@
 <script lang="ts">
 import { faKey, faServer, faWrench } from '@fortawesome/free-solid-svg-icons';
 import { Button, Expandable } from '@podman-desktop/ui-svelte';
-import { Icon } from '@podman-desktop/ui-svelte/icons';
 
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import ChecklistPanel from '/@/lib/ui/ChecklistPanel.svelte';
-import type { ScrollableCardItem } from '/@/lib/ui/ScrollableCardSelector.svelte';
-import ScrollableCardSelector from '/@/lib/ui/ScrollableCardSelector.svelte';
 import { handleNavigation } from '/@/navigation';
 import { secretVaultInfos } from '/@/stores/secret-vault';
 import { NavigationPage } from '/@api/navigation-page';
@@ -14,7 +11,7 @@ import { NavigationPage } from '/@api/navigation-page';
 interface Props {
   skillItems: ChecklistItem[];
   selectedSkillIds: string[];
-  mcpItems: ScrollableCardItem[];
+  mcpItems: ChecklistItem[];
   selectedMcpIds: string[];
   selectedSecretIds: string[];
 }
@@ -53,6 +50,10 @@ function navigateToSkills(): void {
   handleNavigation({ page: NavigationPage.SKILLS });
 }
 
+function navigateToMcps(): void {
+  handleNavigation({ page: NavigationPage.MCPS });
+}
+
 function navigateToSecretVault(): void {
   handleNavigation({ page: NavigationPage.SECRET_VAULT });
 }
@@ -87,20 +88,17 @@ function navigateToSecretVault(): void {
         {/snippet}
       </ChecklistPanel>
 
-      {#if mcpItems.length > 0}
-        <div>
-          <div class="flex items-center gap-3 mb-5">
-            <div class="w-9 h-9 rounded-[9px] flex items-center justify-center bg-[var(--pd-label-secondary-bg)] text-[var(--pd-label-secondary-text)]">
-              <Icon icon={faServer} class="text-xl" />
-            </div>
-            <div>
-              <span class="text-lg font-semibold text-[var(--pd-modal-text)]">MCP Servers</span>
-              <p class="text-sm text-[var(--pd-content-card-text)] opacity-70 mt-0.5">Connect to Model Context Protocol servers for extended capabilities</p>
-            </div>
-          </div>
-          <ScrollableCardSelector items={mcpItems} bind:selected={selectedMcpIds} placeholder="Search MCP servers..." />
-        </div>
-      {/if}
+      <ChecklistPanel
+        title="MCP Servers"
+        subtitle="Connect to Model Context Protocol servers for extended capabilities"
+        icon={faServer}
+        items={mcpItems}
+        bind:selected={selectedMcpIds}
+        emptyMessage="No MCP servers connected yet.">
+        {#snippet headerAction()}
+          <Button type="secondary" onclick={navigateToMcps}>Add Server</Button>
+        {/snippet}
+      </ChecklistPanel>
 
       <ChecklistPanel
         title="Secret Vault"

@@ -70,6 +70,7 @@ export interface NavigationParameters {
     connectionName: string;
     flowId: string;
   };
+  [NavigationPage.MCPS]: never;
   [NavigationPage.MCP_DETAILS]: {
     id: string;
   };

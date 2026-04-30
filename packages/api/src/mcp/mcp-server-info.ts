@@ -18,12 +18,20 @@ export type MCPServerDetail = ValidatedServerDetail & {
   serverId: string;
 };
 
+export interface MCPCommandSpec {
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+}
+
 export interface MCPRemoteServerInfo {
   id: string;
   infos: { internalProviderId: string; serverId: string; remoteId: number };
   name: string;
   description: string;
   url: string;
+  setupType: 'remote' | 'package';
+  commandSpec?: MCPCommandSpec;
   tools: Record<string, { description?: string }>;
   isValidSchema?: boolean;
 }

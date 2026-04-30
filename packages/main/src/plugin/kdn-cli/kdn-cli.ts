@@ -16,7 +16,11 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import type { RunError, RunOptions } from '@openkaiden/api';
+import type { components as workspaceComponents } from '@openkaiden/workspace-configuration';
 import { inject, injectable } from 'inversify';
 
 import { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
@@ -28,6 +32,8 @@ import type {
   CliInfo,
 } from '/@api/agent-workspace-info.js';
 import type { SecretCreateOptions, SecretInfo, SecretName, SecretService } from '/@api/secret-info.js';
+
+type WorkspaceConfiguration = workspaceComponents['schemas']['WorkspaceConfiguration'];
 
 /**
  * Low-level wrapper around the `kdn` CLI binary.
@@ -97,6 +103,8 @@ export class KdnCli {
   }
 
   async createWorkspace(options: AgentWorkspaceCreateOptions): Promise<AgentWorkspaceId> {
+    await this.writeWorkspaceConfig(options);
+
     const cliPath = this.getCliPath();
     const runtime = options.runtime ?? 'podman';
     const args = ['init', options.sourcePath, '--runtime', runtime, '--agent', options.agent, '--output', 'json'];
@@ -115,6 +123,71 @@ export class KdnCli {
       console.error(`kdn failed: ${cliPath} ${args.join(' ')} — ${detail}`);
       throw new Error(detail);
     }
+  }
+
+  async writeWorkspaceConfig(options: AgentWorkspaceCreateOptions): Promise<void> {
+    const mcpServers = options.mcp?.servers;
+    const mcpCommands = options.mcp?.commands;
+    if (!mcpServers?.length && !mcpCommands?.length) {
+      return;
+    }
+
+    const configDir = join(options.sourcePath, '.kaiden');
+    const configPath = join(configDir, 'workspace.json');
+
+    let existing: WorkspaceConfiguration = {};
+    try {
+      const content = await readFile(configPath, 'utf-8');
+      existing = JSON.parse(content) as WorkspaceConfiguration;
+    } catch {
+      // file doesn't exist yet — start fresh
+    }
+
+    existing.mcp = {
+      ...existing.mcp,
+      ...(mcpServers?.length
+        ? {
+            servers: mcpServers.map(s => ({
+              name: s.name,
+              url: s.url,
+              ...(s.headers && Object.keys(s.headers).length > 0 ? { headers: s.headers } : {}),
+            })),
+          }
+        : {}),
+      ...(mcpCommands?.length
+        ? {
+            commands: mcpCommands.map(c => ({
+              name: c.name,
+              command: c.command,
+              ...(c.args?.length ? { args: c.args } : {}),
+              ...(c.env && Object.keys(c.env).length > 0 ? { env: c.env } : {}),
+            })),
+          }
+        : {}),
+    };
+
+    const hasPypi = mcpCommands?.some(c => c.command === 'uvx');
+    if (hasPypi) {
+      existing.features = {
+        ...existing.features,
+        './uv-feature': existing.features?.['./uv-feature'] ?? {},
+      };
+      await this.ensureUvFeature(configDir);
+    }
+
+    await mkdir(configDir, { recursive: true });
+    await writeFile(configPath, JSON.stringify(existing, undefined, 2) + '\n', 'utf-8');
+  }
+
+  private async ensureUvFeature(configDir: string): Promise<void> {
+    const featureDir = join(configDir, 'uv-feature');
+    await mkdir(featureDir, { recursive: true });
+    await writeFile(
+      join(featureDir, 'devcontainer-feature.json'),
+      JSON.stringify({ id: 'uv', version: '0.1.0', name: 'uv Python package manager' }, undefined, 2) + '\n',
+      'utf-8',
+    );
+    await writeFile(join(featureDir, 'install.sh'), '#!/bin/sh\npip install uv\n', 'utf-8');
   }
 
   async listWorkspaces(): Promise<AgentWorkspaceSummary[]> {

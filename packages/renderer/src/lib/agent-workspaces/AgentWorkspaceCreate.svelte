@@ -13,7 +13,6 @@ import AgentWorkspaceCreateStepWorkspace from '/@/lib/agent-workspaces/AgentWork
 import type { CardSelectorOption } from '/@/lib/ui/CardSelector.svelte';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
-import type { ScrollableCardItem } from '/@/lib/ui/ScrollableCardSelector.svelte';
 import WizardStepper from '/@/lib/ui/WizardStepper.svelte';
 import { handleNavigation } from '/@/navigation';
 import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
@@ -94,8 +93,16 @@ let skillItems: ChecklistItem[] = $derived(
     group: s.managed ? 'Custom' : 'Pre-built',
   })),
 );
-let mcpItems: ScrollableCardItem[] = $derived(
-  $mcpRemoteServerInfos.map(m => ({ id: m.id, name: m.name, description: m.description })),
+let mcpItems: ChecklistItem[] = $derived(
+  $mcpRemoteServerInfos.map(m => {
+    const toolCount = Object.keys(m.tools).length;
+    const toolsLabel = toolCount > 0 ? `${toolCount} tool${toolCount !== 1 ? 's' : ''}` : '';
+    return {
+      id: m.id,
+      name: m.name,
+      description: [toolsLabel, m.description].filter(Boolean).join(' · '),
+    };
+  }),
 );
 
 // --- Form state ---
@@ -199,10 +206,28 @@ async function startWorkspace(): Promise<void> {
   handleNavigation({ page: NavigationPage.AGENT_WORKSPACES });
 
   try {
+    const selected = $mcpRemoteServerInfos.filter(m => selectedMcpIds.includes(m.id));
+    const remoteServers = selected.filter(m => m.setupType === 'remote').map(m => ({ name: m.name, url: m.url }));
+    const commandServers = selected
+      .filter(m => m.setupType === 'package' && m.commandSpec)
+      .map(m => ({
+        name: m.name,
+        command: m.commandSpec!.command,
+        args: m.commandSpec!.args,
+        env: m.commandSpec!.env,
+      }));
+    const hasMcp = remoteServers.length > 0 || commandServers.length > 0;
+
     await window.createAgentWorkspace({
       sourcePath,
       agent: selectedAgent,
       name: sessionName,
+      mcp: hasMcp
+        ? {
+            ...(remoteServers.length > 0 ? { servers: remoteServers } : {}),
+            ...(commandServers.length > 0 ? { commands: commandServers } : {}),
+          }
+        : undefined,
     });
   } catch (err: unknown) {
     console.error('Failed to create agent workspace', err);

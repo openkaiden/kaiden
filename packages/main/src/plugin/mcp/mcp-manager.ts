@@ -24,7 +24,7 @@ import { inject, injectable, preDestroy } from 'inversify';
 import { MCPExchanges, MCPMessageExchange } from '/@/plugin/mcp/mcp-exchanges.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import { IAsyncDisposable } from '/@api/async-disposable.js';
-import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info.js';
+import type { MCPCommandSpec, MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info.js';
 
 /**
  * experimental_createMCPClient return `Promise<MCPClient>` but they did not exported this type...
@@ -136,6 +136,7 @@ export class MCPManager implements IAsyncDisposable {
     url?: string,
     description?: string,
     isValidSchema?: boolean,
+    commandSpec?: MCPCommandSpec,
   ): Promise<void> {
     const key = this.getKey(internalProviderId, serverId, setupType, index);
 
@@ -161,6 +162,8 @@ export class MCPManager implements IAsyncDisposable {
       infos: { internalProviderId, remoteId: index, serverId },
       name: connectionName,
       url: url ?? '',
+      setupType,
+      commandSpec,
       description: description ?? '',
       tools,
       isValidSchema,

@@ -282,6 +282,7 @@ export class MCPRegistry {
             undefined,
             server.description,
             server.isValidSchema,
+            spawner.buildCommandSpec(),
           );
         }
       }
@@ -446,6 +447,7 @@ export class MCPRegistry {
     }
 
     let transport: Transport;
+    let commandSpec: { command: string; args: string[]; env?: Record<string, string> } | undefined;
     let config: StorageConfigFormat;
 
     let url: string | undefined;
@@ -511,6 +513,7 @@ export class MCPRegistry {
           environmentVariables: config.environmentVariables,
         });
         transport = await spawner.spawn();
+        commandSpec = spawner.buildCommandSpec();
         break;
       }
       default:
@@ -530,6 +533,7 @@ export class MCPRegistry {
       url,
       description,
       isValidSchema,
+      commandSpec,
     );
 
     // persist configuration
