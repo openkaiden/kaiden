@@ -601,7 +601,7 @@ importers:
     dependencies:
       ollama-ai-provider-v2:
         specifier: ^3.5.0
-        version: 3.5.0(ai@6.0.169(zod@4.3.6))(zod@4.3.6)
+        version: 3.5.0(ai@6.0.170(zod@4.3.6))(zod@4.3.6)
     devDependencies:
       '@openkaiden/api':
         specifier: workspace:*
@@ -712,8 +712,8 @@ importers:
   packages/renderer:
     dependencies:
       '@ai-sdk/svelte':
-        specifier: ^4.0.169
-        version: 4.0.169(svelte@5.47.0)(zod@4.3.6)
+        specifier: ^4.0.170
+        version: 4.0.170(svelte@5.47.0)(zod@4.3.6)
       '@ai-sdk/ui-utils':
         specifier: ^1.2.11
         version: 1.2.11(zod@4.3.6)
@@ -993,8 +993,8 @@ packages:
     resolution: {integrity: sha512-/ngMKqKdL9dSlY/eQ3NFDzzFyw0Hix+cbFFlyuKEKcOgpHdBt/spKUvX/i0wGrDLFPYJeVvv3N0j92LxWRL7yQ==}
     engines: {node: '>=18'}
 
-  '@ai-sdk/svelte@4.0.169':
-    resolution: {integrity: sha512-3ONgVijTLTApK/JGZaVz90dSw39ZjiCm9pA62ZfnNb6+PLY9XHZc9LvJGfcsGKHcpeFvzR2AxJjPAa0a+EH3Vw==}
+  '@ai-sdk/svelte@4.0.170':
+    resolution: {integrity: sha512-/Aq5erXTVVPaMDDFMVjdjo2DZkXJ+nBcIt+5c5X5cUPhSzWVcYRsKAxPOcCiS9fNNFAJl6pgJ37Q0QFr3tkqtg==}
     engines: {node: '>=18'}
     peerDependencies:
       svelte: ^5.31.0
@@ -2835,6 +2835,12 @@ packages:
 
   ai@6.0.169:
     resolution: {integrity: sha512-eDAIc8bJJ3Ktk5qvBvWfAK7Uwj6zrOMI9VvQ6yLfF+7HdqnR0TSxgkLuIONrmowB2OujeAuVF9jalpNPJSN57g==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  ai@6.0.170:
+    resolution: {integrity: sha512-FWTKeGGDRcYJtPWIrdZDSuvOW5LCjI2NZUJmaml8OTOaPEsXnFdFvmawCXbT+wTGxyWKJTgZ9sZtCjbJsmjM2Q==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -7852,10 +7858,10 @@ snapshots:
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/svelte@4.0.169(svelte@5.47.0)(zod@4.3.6)':
+  '@ai-sdk/svelte@4.0.170(svelte@5.47.0)(zod@4.3.6)':
     dependencies:
       '@ai-sdk/provider-utils': 4.0.24(zod@4.3.6)
-      ai: 6.0.169(zod@4.3.6)
+      ai: 6.0.170(zod@4.3.6)
       svelte: 5.47.0
     transitivePeerDependencies:
       - zod
@@ -9902,6 +9908,14 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       zod: 4.3.6
 
+  ai@6.0.170(zod@4.3.6):
+    dependencies:
+      '@ai-sdk/gateway': 3.0.105(zod@4.3.6)
+      '@ai-sdk/provider': 3.0.9
+      '@ai-sdk/provider-utils': 4.0.24(zod@4.3.6)
+      '@opentelemetry/api': 1.9.0
+      zod: 4.3.6
+
   ajv-formats@3.0.1(ajv@8.18.0):
     optionalDependencies:
       ajv: 8.18.0
@@ -11687,7 +11701,7 @@ snapshots:
 
   eventsource@3.0.7:
     dependencies:
-      eventsource-parser: 3.0.6
+      eventsource-parser: 3.0.8
 
   expand-template@2.0.3: {}
 
@@ -13688,11 +13702,11 @@ snapshots:
 
   obug@2.1.1: {}
 
-  ollama-ai-provider-v2@3.5.0(ai@6.0.169(zod@4.3.6))(zod@4.3.6):
+  ollama-ai-provider-v2@3.5.0(ai@6.0.170(zod@4.3.6))(zod@4.3.6):
     dependencies:
       '@ai-sdk/provider': 3.0.8
       '@ai-sdk/provider-utils': 4.0.23(zod@4.3.6)
-      ai: 6.0.169(zod@4.3.6)
+      ai: 6.0.170(zod@4.3.6)
       zod: 4.3.6
 
   on-finished@2.4.1:
