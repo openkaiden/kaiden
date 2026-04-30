@@ -230,6 +230,10 @@ export class OpenShiftAI implements Disposable {
 
     const connectionInfos = await this.getInferenceServices(baseURL, token);
 
+    if (connectionInfos.length === 0) {
+      throw new Error('no inference services found on the cluster');
+    }
+
     for (const connectionInfo of connectionInfos) {
       // get hash of the token (used for Map)
       if (this.connections.has(connectionInfo)) {
