@@ -34,6 +34,18 @@ const SERVICE_LABELS: Record<string, string> = {
 
 export const OTHER_TYPE = 'other';
 
+export const KNOWN_SERVICES = new Set(Object.keys(SERVICE_LABELS));
+export const KNOWN_GROUP_LABEL = 'Built-in integrations';
+export const OTHER_GROUP_LABEL = 'Other secrets';
+
+export function isKnownService(type?: string): boolean {
+  return !!type && KNOWN_SERVICES.has(type);
+}
+
+export function getSecretGroupLabel(type?: string): string {
+  return isKnownService(type) ? KNOWN_GROUP_LABEL : OTHER_GROUP_LABEL;
+}
+
 export function getServiceIcon(name: string): IconDefinition {
   return SERVICE_ICONS[name] ?? faPlug;
 }
