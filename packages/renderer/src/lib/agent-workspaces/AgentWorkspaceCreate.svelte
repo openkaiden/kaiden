@@ -7,6 +7,7 @@ import { toast } from 'svelte-sonner';
 import AgentWorkspaceCreateStepAgentModel from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepAgentModel.svelte';
 import type { FileAccessOption } from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepFileSystem.svelte';
 import AgentWorkspaceCreateStepFileSystem from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepFileSystem.svelte';
+import type { NetworkAccessOption } from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepNetworking.svelte';
 import AgentWorkspaceCreateStepNetworking from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepNetworking.svelte';
 import AgentWorkspaceCreateStepToolsSecrets from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepToolsSecrets.svelte';
 import AgentWorkspaceCreateStepWorkspace from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepWorkspace.svelte';
@@ -78,6 +79,38 @@ const fileAccessOptions: FileAccessOption[] = [
   },
 ];
 
+const networkOptions: NetworkAccessOption[] = [
+  {
+    value: 'blocked',
+    name: 'Deny All',
+    description: 'No outbound HTTP/HTTPS from the sandbox.',
+    access: 'None',
+    notes: 'Strict',
+  },
+  {
+    value: 'registries',
+    name: 'Developer Preset',
+    description: 'Allow npm, PyPI, and similar registries — not arbitrary public hosts.',
+    access: 'Registries',
+    notes: 'Balanced default',
+    badge: 'Recommended',
+  },
+  {
+    value: 'agent_mode',
+    name: 'Agent mode',
+    description: 'The agent requests each outbound access; you approve before traffic leaves the sandbox.',
+    access: 'Per request',
+    notes: 'Human in the loop',
+  },
+  {
+    value: 'open',
+    name: 'Unrestricted',
+    description: 'Permit all outbound traffic. Best for trusted dev setups.',
+    access: 'All hosts',
+    notes: 'Trusted setups',
+  },
+];
+
 const wizardSteps = [
   { id: 'workspace', title: 'Workspace' },
   { id: 'agent-model', title: 'Agent & Model' },
@@ -104,6 +137,7 @@ let sessionName = $state('');
 let description = $state('');
 let selectedAgent = $state('opencode');
 let selectedFileAccess = $state('workspace');
+let selectedNetwork = $state('registries');
 let selectedSkillIds = $derived(skillItems.map(s => s.id));
 let selectedMcpIds = $derived(mcpItems.map(m => m.id));
 let selectedSecretIds = $derived($secretVaultInfos.map(s => s.id));
@@ -259,7 +293,7 @@ async function startWorkspace(): Promise<void> {
                 onRemoveCustomPath={removeCustomPath}
                 onUpdateCustomPath={updateCustomPath} />
             {:else if currentStepId === 'networking'}
-              <AgentWorkspaceCreateStepNetworking />
+              <AgentWorkspaceCreateStepNetworking {networkOptions} bind:selectedNetwork />
             {/if}
           </div>
 

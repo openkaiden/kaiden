@@ -375,4 +375,62 @@ test('Expect Manage Skills button navigates to skills page', async () => {
   expect(handleNavigation).toHaveBeenCalledWith({ page: 'skills' });
 });
 
+async function navigateToNetworkingStep(): Promise<void> {
+  await fireEvent.input(screen.getByPlaceholderText('/path/to/project'), {
+    target: { value: '/home/user/my-repo' },
+  });
+  // Workspace → Agent & Model → Tools & Secrets → File System → Networking
+  for (let i = 0; i < 4; i++) {
+    await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  }
+}
+
+test('Expect networking step shows Network Policy heading', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToNetworkingStep();
+
+  expect(screen.getByText('Network Policy')).toBeInTheDocument();
+  expect(screen.getByText('Outbound network for this workspace sandbox')).toBeInTheDocument();
+});
+
+test('Expect all four network options rendered', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToNetworkingStep();
+
+  expect(screen.getByRole('button', { name: 'Deny All' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Developer Preset' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Agent mode' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Unrestricted' })).toBeInTheDocument();
+});
+
+test('Expect Developer Preset selected by default on networking step', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToNetworkingStep();
+
+  expect(screen.getByRole('radio', { name: 'Use Developer Preset' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: 'Use Deny All' })).not.toBeChecked();
+});
+
+test('Expect allowlists hint text displayed on networking step', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToNetworkingStep();
+
+  expect(screen.getByText(/Fine-grained host allowlists and static egress rules/)).toBeInTheDocument();
+});
+
+test('Expect selecting a different network option updates the radio', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToNetworkingStep();
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Unrestricted' }));
+
+  expect(screen.getByRole('radio', { name: 'Use Unrestricted' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: 'Use Developer Preset' })).not.toBeChecked();
+});
+
 const wizardStepCount = 5;
