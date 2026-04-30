@@ -3,7 +3,10 @@ import { faPlay, faStop, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { ErrorMessage, Tab } from '@podman-desktop/ui-svelte';
 import { router } from 'tinro';
 
-import AgentWorkspaceDetailsSummary from '/@/lib/agent-workspaces/AgentWorkspaceDetailsSummary.svelte';
+import AgentWorkspaceDetailsFiles from '/@/lib/agent-workspaces/AgentWorkspaceDetailsFiles.svelte';
+import AgentWorkspaceDetailsOverview from '/@/lib/agent-workspaces/AgentWorkspaceDetailsOverview.svelte';
+import AgentWorkspaceDetailsSettings from '/@/lib/agent-workspaces/AgentWorkspaceDetailsSettings.svelte';
+import AgentWorkspaceDetailsTerminal from '/@/lib/agent-workspaces/AgentWorkspaceDetailsTerminal.svelte';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import DetailsPage from '/@/lib/ui/DetailsPage.svelte';
 import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
@@ -90,14 +93,26 @@ function handleRemove(): void {
       icon={faTrash} />
   {/snippet}
   {#snippet tabsSnippet()}
-    <Tab title="Summary" selected={isTabSelected($router.path, 'summary')} url={getTabUrl($router.path, 'summary')} />
+    <Tab title="Overview" selected={isTabSelected($router.path, 'overview')} url={getTabUrl($router.path, 'overview')} />
+    <Tab title="Terminal" selected={isTabSelected($router.path, 'terminal')} url={getTabUrl($router.path, 'terminal')} />
+    <Tab title="Files" selected={isTabSelected($router.path, 'files')} url={getTabUrl($router.path, 'files')} />
+    <Tab title="Settings" selected={isTabSelected($router.path, 'settings')} url={getTabUrl($router.path, 'settings')} />
   {/snippet}
   {#snippet contentSnippet()}
-    <Route path="/summary" breadcrumb="Summary" navigationHint="tab">
+    <Route path="/overview" breadcrumb="Overview" navigationHint="tab">
       {#if configurationError}
         <ErrorMessage error={configurationError} />
       {/if}
-      <AgentWorkspaceDetailsSummary {workspaceSummary} {configuration} />
+      <AgentWorkspaceDetailsOverview {workspaceSummary} {configuration} />
+    </Route>
+    <Route path="/terminal" breadcrumb="Terminal" navigationHint="tab">
+      <AgentWorkspaceDetailsTerminal />
+    </Route>
+    <Route path="/files" breadcrumb="Files" navigationHint="tab">
+      <AgentWorkspaceDetailsFiles />
+    </Route>
+    <Route path="/settings" breadcrumb="Settings" navigationHint="tab">
+      <AgentWorkspaceDetailsSettings />
     </Route>
   {/snippet}
 </DetailsPage>
