@@ -77,6 +77,7 @@ async function handleSkip(): Promise<void> {
 }
 
 function handleStepClick(index: number): void {
+  if (advancing) return;
   const stepState = getStepState(index);
   if (stepState === 'completed' || index === currentStepIndex) {
     currentStepIndex = index;
