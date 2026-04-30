@@ -22,5 +22,8 @@ export interface SecretVaultInfo {
   type?: string;
   description?: string;
   hosts?: string[];
-  expiration?: Date;
+  path?: string;
+  header?: string;
+  headerTemplate?: string;
+  envs?: string[];
 }

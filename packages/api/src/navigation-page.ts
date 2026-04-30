@@ -67,5 +67,6 @@ export enum NavigationPage {
   RAG_ENVIRONMENT_DETAILS = 'rag-environment-details',
   SECRET_VAULT = 'secret-vault',
   SECRET_VAULT_CREATE = 'secret-vault-create',
+  SECRET_VAULT_DETAILS = 'secret-vault-details',
   MODELS = 'models',
 }

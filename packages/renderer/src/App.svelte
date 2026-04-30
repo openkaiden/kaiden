@@ -85,6 +85,7 @@ import PreferencesPage from './lib/preferences/PreferencesPage.svelte';
 import PVCDetails from './lib/pvc/PVCDetails.svelte';
 import PVCList from './lib/pvc/PVCList.svelte';
 import SecretVaultCreate from './lib/secret-vault/SecretVaultCreate.svelte';
+import SecretVaultDetails from './lib/secret-vault/SecretVaultDetails.svelte';
 import SecretVaultList from './lib/secret-vault/SecretVaultList.svelte';
 import ServiceDetails from './lib/service/ServiceDetails.svelte';
 import ServicesList from './lib/service/ServicesList.svelte';
@@ -281,12 +282,15 @@ tablePersistence.storage = new PodmanDesktopStoragePersist();
         </Route>
 
         <!-- Secret Vault -->
-        <Route path="/secret-vault/*" breadcrumb="Secret Vault" navigationHint="root">
-          <Route path="/">
+        <Route path="/secret-vault/*" breadcrumb="Secret Vault" navigationHint="root" firstmatch>
+          <Route path="/" breadcrumb="Secret Vault" navigationHint="root">
             <SecretVaultList />
           </Route>
           <Route path="/create" breadcrumb="Add Secret" navigationHint="details">
             <SecretVaultCreate />
+          </Route>
+          <Route path="/:id/*" let:meta breadcrumb="Secret Details" navigationHint="details">
+            <SecretVaultDetails id={decodeURIComponent(meta.params.id)} />
           </Route>
         </Route>
 

@@ -31,6 +31,11 @@ function secretInfoToVaultInfo(info: SecretInfo): SecretVaultInfo {
     name: info.name,
     type: info.type,
     description: info.description,
+    hosts: info.hosts,
+    path: info.path,
+    header: info.header,
+    headerTemplate: info.headerTemplate,
+    envs: info.envs,
   };
 }
 
