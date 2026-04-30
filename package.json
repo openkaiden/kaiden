@@ -100,7 +100,7 @@
     "@openkaiden/kdn-api": "^0.9.0",
     "@openkaiden/workspace-configuration": "^0.8.0",
     "@openkaiden/api": "workspace:",
-    "@openkaiden/mcp-registry-types": "^1.3.10",
+    "@openkaiden/mcp-registry-types": "^1.7.1",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@sveltejs/opencode": "^0.1.6",
