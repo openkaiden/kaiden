@@ -58,6 +58,9 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
         `/flows/${encodeURIComponent(request.parameters.providerId)}/${encodeURIComponent(request.parameters.connectionName)}/${encodeURIComponent(request.parameters.flowId)}/run`,
       );
       break;
+    case NavigationPage.MCPS:
+      router.goto('/mcps/');
+      break;
     case NavigationPage.MCP_INSTALL_FROM_REGISTRY:
       router.goto(`/mcp-install-from-registry/${encodeURIComponent(request.parameters.serverId)}`);
       break;

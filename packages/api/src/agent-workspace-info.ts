@@ -45,6 +45,22 @@ export type AgentWorkspaceConfiguration = configComponents['schemas']['Workspace
 export type CliInfo = cliComponents['schemas']['Info'];
 
 /**
+ * A URL-based MCP server to attach to the workspace.
+ */
+export interface AgentWorkspaceMcpServer {
+  name: string;
+  url: string;
+  headers?: Record<string, string>;
+}
+
+/**
+ * MCP configuration for workspace creation.
+ */
+export interface AgentWorkspaceMcpConfig {
+  servers?: AgentWorkspaceMcpServer[];
+}
+
+/**
  * Options for creating (initializing) a new workspace via `kdn init`.
  */
 export interface AgentWorkspaceCreateOptions {
@@ -53,4 +69,5 @@ export interface AgentWorkspaceCreateOptions {
   runtime?: string;
   name?: string;
   project?: string;
+  mcp?: AgentWorkspaceMcpConfig;
 }

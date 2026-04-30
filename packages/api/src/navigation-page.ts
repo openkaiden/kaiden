@@ -22,6 +22,7 @@ export enum NavigationPage {
   FLOW_CREATE = 'flow-create',
   FLOW_DETAILS = 'flow-details',
   FLOW_RUN = 'flow-run',
+  MCPS = 'mcps',
   MCP_INSTALL_FROM_REGISTRY = 'mcp-install-from-registry',
   CONTAINERS = 'containers',
   CONTAINER_EXPORT = 'container-export',
