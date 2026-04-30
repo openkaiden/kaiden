@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import { globSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { expect, workerTest as test } from '../fixtures/electron-app';
@@ -26,10 +26,9 @@ import { waitForNavigationReady } from '../utils/app-ready';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SKILL_FILES = globSync(resolve(__dirname, '../../../../.agents/skills/*/SKILL.md'));
-const MANUAL_SKILL_CONTENT = readFileSync(
-  resolve(__dirname, '../../../../.agents/skills/playwright-testing/SKILL.md'),
-  'utf-8',
-);
+const TEST_SKILL = SKILL_FILES.find(f => f.includes('/playwright-testing/')) ?? SKILL_FILES[0] ?? '';
+const TEST_SKILL_NAME = TEST_SKILL ? basename(dirname(TEST_SKILL)) : '';
+const MANUAL_SKILL_CONTENT = TEST_SKILL ? readFileSync(TEST_SKILL, 'utf-8') : '';
 
 test.describe('Skills page - initial state', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page, navigationBar }) => {
@@ -204,5 +203,94 @@ test.describe
         await skillsPage.deleteSkillByName(name);
       }
       await expect(skillsPage.noSkillsMessage).toBeVisible();
+    });
+  });
+
+test.describe
+  .serial('Skills page - skill details', { tag: '@smoke' }, () => {
+    test.skip(!TEST_SKILL, 'No SKILL.md files found — nothing to import');
+
+    test.beforeAll(async ({ page, electronApp, navigationBar, skillsPage }) => {
+      await waitForNavigationReady(page);
+      await navigationBar.navigateToSkillsPage();
+      await skillsPage.importSkill(TEST_SKILL, electronApp);
+      await skillsPage.waitForLoad();
+      await skillsPage.ensureRowExists(TEST_SKILL_NAME);
+    });
+
+    test.afterAll(async ({ navigationBar, skillsPage }) => {
+      await navigationBar.navigateToSkillsPage();
+      await skillsPage.waitForLoad();
+      if (await skillsPage.checkIfSkillsPageIsEmpty()) return;
+      await skillsPage.deleteSkillByName(TEST_SKILL_NAME);
+    });
+
+    test.beforeEach(async ({ page, navigationBar }) => {
+      await waitForNavigationReady(page);
+      await navigationBar.navigateToSkillsPage();
+    });
+
+    test('[SKL-DETAIL-01] Summary tab shows skill information', async ({ skillsPage }) => {
+      const detailsPage = await skillsPage.openSkillDetails(TEST_SKILL_NAME);
+      await detailsPage.waitForLoad();
+
+      await test.step('about section displays skill description', async () => {
+        await expect(detailsPage.tabContentRegion).not.toBeEmpty();
+      });
+
+      for (const field of ['Name', 'Type', 'Status', 'Path']) {
+        await test.step(`general information field "${field}" is visible and populated`, async () => {
+          await expect(detailsPage.getDetailRowValue(field)).toBeVisible();
+          await expect(detailsPage.getDetailRowValue(field)).not.toHaveText('');
+        });
+      }
+
+      for (const field of ['Instructions Size', 'Bundled Resources']) {
+        await test.step(`metadata field "${field}" is visible and populated`, async () => {
+          await expect(detailsPage.getDetailRowValue(field)).toBeVisible();
+          await expect(detailsPage.getDetailRowValue(field)).not.toHaveText('');
+        });
+      }
+    });
+
+    test('[SKL-DETAIL-02] Instructions tab displays SKILL.md content', async ({ skillsPage }) => {
+      const detailsPage = await skillsPage.openSkillDetails(TEST_SKILL_NAME);
+      await detailsPage.waitForLoad();
+      await detailsPage.switchToInstructionsTab();
+
+      await expect(detailsPage.instructionsFilename).toBeVisible();
+      await expect(detailsPage.instructionsContent).toBeVisible();
+      await expect(detailsPage.instructionsContent).not.toBeEmpty();
+    });
+
+    test('[SKL-DETAIL-03] Resources tab lists bundled resource files', async ({ skillsPage }) => {
+      const detailsPage = await skillsPage.openSkillDetails(TEST_SKILL_NAME);
+      await detailsPage.waitForLoad();
+      await detailsPage.switchToResourcesTab();
+
+      await expect(detailsPage.resourcesHeader).toContainText(/Bundled Resources \(\d+\)/);
+    });
+
+    test('[SKL-DETAIL-04] Detail page reflects skill status changed from list', async ({ skillsPage }) => {
+      await test.step('disabled status is reflected in detail page', async () => {
+        const row = await skillsPage.getRowLocatorByName(TEST_SKILL_NAME);
+        await skillsPage.disableSkill(row);
+        await skillsPage.expectSkillEnabledState(row, false);
+
+        const detailsPage = await skillsPage.openSkillDetails(TEST_SKILL_NAME);
+        await detailsPage.waitForLoad();
+        await detailsPage.expectStatusEnabled(false);
+        await detailsPage.closeDetailsPage();
+      });
+
+      await test.step('enabled status is reflected in detail page', async () => {
+        const row = await skillsPage.getRowLocatorByName(TEST_SKILL_NAME);
+        await skillsPage.enableSkill(row);
+        await skillsPage.expectSkillEnabledState(row, true);
+
+        const detailsPage = await skillsPage.openSkillDetails(TEST_SKILL_NAME);
+        await detailsPage.waitForLoad();
+        await detailsPage.expectStatusEnabled(true);
+      });
     });
   });

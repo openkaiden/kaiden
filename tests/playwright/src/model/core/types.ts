@@ -68,6 +68,7 @@ export type ProxyConfigurationOption = (typeof proxyConfigurations)[number]['opt
 
 export enum PreferenceOption {
   APPEARANCE = 'Appearance',
+  CHAT = 'Chat',
   EDITOR = 'Editor',
   EXIT_ON_CLOSE = 'Exit On Close',
   EXTENSIONS = 'Extensions',

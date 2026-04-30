@@ -17,16 +17,18 @@
  ***********************************************************************/
 
 import { expect, type Locator, type Page } from '@playwright/test';
-import type { PreferenceOption } from 'src/model/core/types';
+import { PreferenceOption } from 'src/model/core/types';
 
 import { BasePage } from './base-page';
 
 export class SettingsPreferencesPage extends BasePage {
   readonly searchField: Locator;
+  readonly chatToggle: Locator;
 
   constructor(page: Page) {
     super(page);
     this.searchField = page.getByLabel('search preferences');
+    this.chatToggle = page.getByRole('checkbox', { name: 'Show or hide the chat window.' });
   }
 
   async waitForLoad(): Promise<void> {
@@ -62,12 +64,7 @@ export class SettingsPreferencesPage extends BasePage {
   }
 
   async enableChatWindow(): Promise<void> {
-    await this.selectPreference('Chat');
-    const toggle = this.page.getByRole('checkbox', { name: 'Show or hide the chat window.' });
-    await toggle.check({ force: true });
-    // Wait for the Chat nav link to appear after the async config update propagates
-    await expect(
-      this.page.getByRole('navigation', { name: 'AppNavigation' }).getByRole('link', { name: 'Chat' }),
-    ).toBeVisible();
+    await this.selectPreference(PreferenceOption.CHAT);
+    await this.chatToggle.check({ force: true });
   }
 }

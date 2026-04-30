@@ -9,11 +9,12 @@ interface Props {
 let { label, value, title, truncate = false }: Props = $props();
 </script>
 
-<div class="flex justify-between py-3">
+<div class="flex justify-between py-3" aria-label={label}>
   <span class="text-sm text-[var(--pd-content-card-text)]">{label}</span>
   <span
     class={`text-sm font-medium text-[var(--pd-content-text)] ${truncate ? 'max-w-[200px] text-right truncate' : 'text-right break-all'}`}
-    title={title}>
+    title={title}
+    aria-label="{label} value">
     {value}
   </span>
 </div>
