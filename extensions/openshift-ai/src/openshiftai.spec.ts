@@ -81,6 +81,17 @@ beforeEach(() => {
   vi.mocked(PROVIDER_API_MOCK.createProvider).mockReturnValue(PROVIDER_MOCK as Provider);
   vi.mocked(createOpenAICompatible).mockReturnValue(OPENAI_PROVIDER_MOCK);
   vi.mocked(SECRET_STORAGE_MOCK.get).mockResolvedValue(undefined);
+
+  const coreAPI = {
+    listClusterCustomObject: listClusterCustomObjectMock,
+    listNamespacedSecret: listNamespacedSecretMock,
+  };
+  vi.mocked(KubeConfig.prototype.makeApiClient).mockReturnValueOnce(coreAPI);
+  const genericAPI = {
+    listNamespacedCustomObject: listNamespacedCustomObjectMock,
+    listClusterCustomObject: listClusterCustomObjectMock,
+  };
+  vi.mocked(KubeConfig.prototype.makeApiClient).mockReturnValueOnce(genericAPI);
 });
 
 test('constructor should not do anything', async () => {
@@ -196,16 +207,6 @@ describe('factory', () => {
         },
       ],
     });
-    const coreAPI = {
-      listClusterCustomObject: listClusterCustomObjectMock,
-      listNamespacedSecret: listNamespacedSecretMock,
-    };
-    vi.mocked(KubeConfig.prototype.makeApiClient).mockReturnValueOnce(coreAPI);
-    const genericAPI = {
-      listNamespacedCustomObject: listNamespacedCustomObjectMock,
-      listClusterCustomObject: listClusterCustomObjectMock,
-    };
-    vi.mocked(KubeConfig.prototype.makeApiClient).mockReturnValueOnce(genericAPI);
 
     fetchMock.mockResolvedValue({
       status: 200,
