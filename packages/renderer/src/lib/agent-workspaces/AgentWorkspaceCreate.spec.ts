@@ -375,4 +375,109 @@ test('Expect Manage Skills button navigates to skills page', async () => {
   expect(handleNavigation).toHaveBeenCalledWith({ page: 'skills' });
 });
 
+test('Expect MCP section visible after expanding customize', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+  await expandCustomize();
+
+  expect(screen.getByText('MCP Servers')).toBeInTheDocument();
+  expect(screen.getByText('Connect to Model Context Protocol servers for extended capabilities')).toBeInTheDocument();
+});
+
+test('Expect MCP empty state shown when no servers connected', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+  await expandCustomize();
+
+  expect(screen.getByText('No MCP servers connected yet.')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Add Server' })).toBeInTheDocument();
+});
+
+test('Expect MCP servers listed when store has entries', async () => {
+  vi.mocked(mcpStore).mcpRemoteServerInfos = writable<MCPRemoteServerInfo[]>([
+    {
+      id: 'mcp-1',
+      name: 'GitHub MCP',
+      description: 'Repos, issues & PRs',
+      url: 'https://mcp.github.com/sse',
+      infos: { internalProviderId: 'p1', serverId: 's1', remoteId: 1 },
+      tools: { 'list-repos': {}, 'create-issue': {} },
+    },
+    {
+      id: 'mcp-2',
+      name: 'RHEL MCP',
+      description: 'System management',
+      url: 'https://mcp.redhat.com/sse',
+      infos: { internalProviderId: 'p2', serverId: 's2', remoteId: 2 },
+      tools: {},
+    },
+  ]);
+
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+  await expandCustomize();
+
+  expect(screen.getByText('GitHub MCP')).toBeInTheDocument();
+  expect(screen.getByText('RHEL MCP')).toBeInTheDocument();
+  expect(screen.queryByText('No MCP servers connected yet.')).not.toBeInTheDocument();
+});
+
+test('Expect Add Server button navigates to MCP page', async () => {
+  const { handleNavigation } = await import('/@/navigation');
+
+  render(AgentWorkspaceCreate);
+
+  await navigateToToolsSecretsStep();
+  await expandCustomize();
+  await fireEvent.click(screen.getByRole('button', { name: 'Add Server' }));
+
+  expect(handleNavigation).toHaveBeenCalledWith({ page: 'mcps' });
+});
+
+test('Expect createAgentWorkspace called with MCP server data', async () => {
+  vi.mocked(mcpStore).mcpRemoteServerInfos = writable<MCPRemoteServerInfo[]>([
+    {
+      id: 'mcp-1',
+      name: 'GitHub MCP',
+      description: 'Repos & PRs',
+      url: 'https://mcp.github.com/sse',
+      infos: { internalProviderId: 'p1', serverId: 's1', remoteId: 1 },
+      tools: { 'list-repos': {} },
+    },
+  ]);
+
+  render(AgentWorkspaceCreate);
+
+  await fireEvent.input(screen.getByPlaceholderText('/path/to/project'), {
+    target: { value: '/home/user/my-repo' },
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Use all defaults and create workspace' }));
+
+  expect(window.createAgentWorkspace).toHaveBeenCalledWith(
+    expect.objectContaining({
+      mcp: {
+        servers: [{ name: 'GitHub MCP', url: 'https://mcp.github.com/sse' }],
+      },
+    }),
+  );
+});
+
+test('Expect createAgentWorkspace called without MCP when no servers exist', async () => {
+  render(AgentWorkspaceCreate);
+
+  await fireEvent.input(screen.getByPlaceholderText('/path/to/project'), {
+    target: { value: '/home/user/my-repo' },
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Use all defaults and create workspace' }));
+
+  expect(window.createAgentWorkspace).toHaveBeenCalledWith(
+    expect.objectContaining({
+      mcp: undefined,
+    }),
+  );
+});
+
 const wizardStepCount = 5;
