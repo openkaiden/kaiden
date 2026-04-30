@@ -22,10 +22,11 @@ import type { Component } from 'svelte';
 
 import CodingAgentStep from './CodingAgentStep.svelte';
 
-export type CliAgent = 'opencode';
+export type CliAgent = 'opencode' | 'claude';
 
 export interface OnboardingState {
   agent: CliAgent;
+  beforeAdvance?: () => Promise<boolean>;
 }
 
 export interface GuidedSetupStepProps {

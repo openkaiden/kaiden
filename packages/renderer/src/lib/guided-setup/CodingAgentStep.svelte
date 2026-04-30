@@ -63,6 +63,6 @@ $effect(() => {
   </div>
 
   {#if activeDefinition?.panel}
-    <activeDefinition.panel />
+    <activeDefinition.panel definition={activeDefinition} {onboarding} />
   {/if}
 </div>
