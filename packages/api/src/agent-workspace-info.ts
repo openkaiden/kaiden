@@ -50,6 +50,7 @@ export type CliInfo = cliComponents['schemas']['Info'];
 export interface AgentWorkspaceCreateOptions {
   sourcePath: string;
   agent: string;
+  model?: string;
   runtime?: string;
   name?: string;
   project?: string;

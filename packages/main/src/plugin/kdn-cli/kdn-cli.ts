@@ -100,6 +100,16 @@ export class KdnCli {
     const cliPath = this.getCliPath();
     const runtime = options.runtime ?? 'podman';
     const args = ['init', options.sourcePath, '--runtime', runtime, '--agent', options.agent, '--output', 'json'];
+    if (options.model) {
+      // TODO: for now only opencode supports providerId::modelId scheme for ollama and ramalama, so we check for that pattern before adding the model arg. In the future we may want to support that scheme more generally and then this check would move to the CLI tool registry or similar.
+      // TODO: kdn also needs to support that scheme without the 3rd baseUrl part, see https://github.com/openkaiden/kdn/issues/354
+      const supported = options.model.startsWith('ollama::') || options.model.startsWith('ramalama::');
+      if (!supported) {
+        console.warn(`Skipping unsupported model format for kdn init --model: ${options.model}`);
+      } else {
+        args.push('--model', options.model);
+      }
+    }
     if (options.name) {
       args.push('--name', options.name);
     }

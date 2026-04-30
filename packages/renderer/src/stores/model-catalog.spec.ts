@@ -33,28 +33,43 @@ beforeEach(() => {
   disabledModels.set(new Set());
 });
 
-test('modelKey joins providerId and label with colon', () => {
-  expect(modelKey('gemini', 'gemini-2.5-flash')).toBe('gemini:gemini-2.5-flash');
+test('modelKey joins providerId and label with double colon', () => {
+  expect(modelKey('gemini', 'gemini-2.5-flash')).toBe('gemini::gemini-2.5-flash');
 });
 
 test('toggleModel adds then removes model from disabled set', () => {
   toggleModel('prov', 'model');
-  expect(get(disabledModels).has('prov:model')).toBe(true);
-  expect(updateConfigurationValueMock).toHaveBeenCalledWith('modelCatalog.disabledModels', ['prov:model']);
+  expect(get(disabledModels).has('prov::model')).toBe(true);
+  expect(updateConfigurationValueMock).toHaveBeenCalledWith('modelCatalog.disabledModels', ['prov::model']);
 
   toggleModel('prov', 'model');
-  expect(get(disabledModels).has('prov:model')).toBe(false);
+  expect(get(disabledModels).has('prov::model')).toBe(false);
 });
 
 test('isModelEnabled checks disabled set', () => {
   expect(isModelEnabled(new Set(), 'p', 'm')).toBe(true);
-  expect(isModelEnabled(new Set(['p:m']), 'p', 'm')).toBe(false);
+  expect(isModelEnabled(new Set(['p::m']), 'p', 'm')).toBe(false);
 });
 
 test('loads disabled models from configuration on configurationProperties change', async () => {
-  getConfigurationValueMock.mockResolvedValue(['provA:modelX']);
+  getConfigurationValueMock.mockResolvedValue(['provA::modelX']);
 
   configurationProperties.set([]);
 
-  await vi.waitFor(() => expect(get(disabledModels).has('provA:modelX')).toBe(true));
+  await vi.waitFor(() => expect(get(disabledModels).has('provA::modelX')).toBe(true));
+});
+
+test('migrates legacy single-colon keys to double-colon format', async () => {
+  getConfigurationValueMock.mockResolvedValue(['provA:modelX', 'provB::modelY']);
+
+  configurationProperties.set([]);
+
+  await vi.waitFor(() => {
+    expect(get(disabledModels).has('provA::modelX')).toBe(true);
+    expect(get(disabledModels).has('provB::modelY')).toBe(true);
+  });
+  expect(updateConfigurationValueMock).toHaveBeenCalledWith('modelCatalog.disabledModels', [
+    'provA::modelX',
+    'provB::modelY',
+  ]);
 });

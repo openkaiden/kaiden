@@ -50,7 +50,7 @@ export class AgentWorkspaceCreatePage extends BasePage {
     this.browseButton = this.page.getByLabel('Browse for folder');
     this.descriptionToggle = this.page.getByRole('button', { name: /Description/ });
     this.descriptionInput = this.page.getByPlaceholder('Short note for your team (optional)');
-    this.agentSelector = this.page.getByRole('region', { name: 'Select Coding Agent' });
+    this.agentSelector = this.page.getByRole('listbox', { name: 'Coding agent' });
     this.toolsSummary = this.page.getByText(/Everything available is included|Expand.*Customize/);
     this.customizeExpandable = this.page.getByText('Customize skills, MCP servers, and vault');
     this.mcpServersSearchInput = this.page.getByPlaceholder('Search MCP servers...');
@@ -109,15 +109,15 @@ export class AgentWorkspaceCreatePage extends BasePage {
   }
 
   getAgentCard(agent: CodingAgent): Locator {
-    return this.agentSelector.getByLabel(agent);
+    return this.agentSelector.getByRole('option', { name: agent });
   }
 
   async selectAgent(agent: CodingAgent): Promise<void> {
     const card = this.getAgentCard(agent);
-    if ((await card.getAttribute('aria-pressed')) !== 'true') {
+    if ((await card.getAttribute('aria-selected')) !== 'true') {
       await card.click();
     }
-    await expect(card).toHaveAttribute('aria-pressed', 'true');
+    await expect(card).toHaveAttribute('aria-selected', 'true');
   }
 
   async expandCustomize(): Promise<void> {

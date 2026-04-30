@@ -22,7 +22,7 @@ import type { Component } from 'svelte';
 
 import CodingAgentStep from './CodingAgentStep.svelte';
 
-export type CliAgent = 'opencode';
+export type CliAgent = 'opencode' | 'claude' | 'cursor' | 'goose';
 
 export interface OnboardingState {
   agent: CliAgent;

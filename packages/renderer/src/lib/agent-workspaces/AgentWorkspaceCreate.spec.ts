@@ -173,9 +173,9 @@ test('Expect navigating to agent & model step shows coding agent options', async
   await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
   expect(screen.getAllByText('Coding Agent').length).toBeGreaterThanOrEqual(1);
-  expect(screen.getByText('Claude')).toBeInTheDocument();
+  expect(screen.getByText('Claude Code')).toBeInTheDocument();
   expect(screen.getByText('Goose')).toBeInTheDocument();
-  expect(screen.getByText('OpenCode')).toBeInTheDocument();
+  expect(screen.getAllByText('OpenCode').length).toBeGreaterThanOrEqual(1);
   expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
 });
 
