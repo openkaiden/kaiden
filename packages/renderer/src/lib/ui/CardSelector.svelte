@@ -4,7 +4,7 @@ import { Icon } from '@podman-desktop/ui-svelte/icons';
 
 export interface CardSelectorOption {
   title: string;
-  badge: string;
+  badge?: string;
   value: string;
   icon?: IconDefinition | string;
   description?: string;
@@ -60,14 +60,16 @@ function handleClick(value: string): void {
             {/if}
           </div>
         </div>
-        <div class="flex flex-row grow w-full mt-2 items-end">
-          <div class="flex">
-            <div
-              class="text-[var(--pd-content-card-text)] border-[var(--pd-content-card-border-selected)] border text-xs font-medium me-2 px-2 py-0.5 rounded-xl truncate">
-              {option.badge}
+        {#if option.badge}
+          <div class="flex flex-row grow w-full mt-2 items-end">
+            <div class="flex">
+              <div
+                class="text-[var(--pd-content-card-text)] border-[var(--pd-content-card-border-selected)] border text-xs font-medium me-2 px-2 py-0.5 rounded-xl truncate">
+                {option.badge}
+              </div>
             </div>
           </div>
-        </div>
+        {/if}
       </button>
     {/each}
   </div>
