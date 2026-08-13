@@ -298,7 +298,7 @@ describe('inference connection lifecycle', () => {
   };
 
   test('getSecretForModel returns SecretInfo matching by name', async () => {
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
+    vi.mocked(providerRegistry.getInferenceConnectionLegacy).mockReturnValue({
       connection: mockConnection,
       providerId: 'kaiden.cursor',
     });
@@ -313,14 +313,14 @@ describe('inference connection lifecycle', () => {
   });
 
   test('getSecretForModel returns undefined for unknown model', async () => {
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue(undefined);
+    vi.mocked(providerRegistry.getInferenceConnectionLegacy).mockReturnValue(undefined);
 
     const secret = await manager.getSecretForModel('unknown::model::');
     expect(secret).toBeUndefined();
   });
 
   test('getSecretForModel returns correct type for vertex-ai provider', async () => {
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
+    vi.mocked(providerRegistry.getInferenceConnectionLegacy).mockReturnValue({
       connection: mockConnection,
       providerId: 'kaiden.vertex-ai',
     });
@@ -426,7 +426,7 @@ describe('ensureSecretForModel', () => {
   };
 
   test('returns existing secret without creating', async () => {
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
+    vi.mocked(providerRegistry.getInferenceConnectionLegacy).mockReturnValue({
       connection: mockConnection,
       providerId: 'kaiden.cursor',
     });
@@ -440,7 +440,7 @@ describe('ensureSecretForModel', () => {
   });
 
   test('creates and returns secret when missing but connection exists', async () => {
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
+    vi.mocked(providerRegistry.getInferenceConnectionLegacy).mockReturnValue({
       connection: mockConnection,
       providerId: 'kaiden.cursor',
     });
@@ -495,7 +495,7 @@ describe('ensureSecretForModel', () => {
   });
 
   test('returns undefined when no inference connection found', async () => {
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue(undefined);
+    vi.mocked(providerRegistry.getInferenceConnectionLegacy).mockReturnValue(undefined);
 
     const result = await manager.ensureSecretForModel('unknown::model::');
 
