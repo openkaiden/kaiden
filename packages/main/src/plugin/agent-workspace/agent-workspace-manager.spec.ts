@@ -41,6 +41,7 @@ import type { Directories } from '/@/plugin/directories.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
+import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import type { ProviderImpl } from '/@/plugin/provider-impl.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
@@ -89,6 +90,15 @@ const apiSender: ApiSenderType = {
 };
 const ipcHandle: IPCHandle = vi.fn();
 const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry);
+const sdkSandbox = {
+  create: vi.fn(),
+  delete: vi.fn(),
+  waitDeleted: vi.fn(),
+  waitReady: vi.fn(),
+};
+const openshellSdkClientManager = {
+  getClient: vi.fn().mockResolvedValue({ sandbox: sdkSandbox }),
+} as unknown as OpenshellSdkClientManager;
 
 const agentRegistry = {
   getAgentRegistration: vi.fn(),
@@ -182,8 +192,13 @@ function getCreateLocalGatewayHandler(): (listener: unknown, options: unknown) =
   ) => Promise<GatewayInfo[]>;
 }
 
+function getSandboxUploads(): Array<{ local: string; remote: string }> {
+  return vi.mocked(openshellCli.uploadToSandbox).mock.calls.map(([, local, remote]) => ({ local, remote }));
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(openshellSdkClientManager.getClient).mockResolvedValue({ sandbox: sdkSandbox } as never);
   vi.mocked(taskManager.createTask).mockReturnValue(mockTask);
   mockTask.state = '' as TaskState;
   mockTask.status = '' as TaskStatus;
@@ -244,6 +259,7 @@ beforeEach(() => {
     providerRegistry,
     secretManager,
     openshellCli,
+    openshellSdkClientManager,
     agentRegistry,
     openshellGateway,
     openshellGatewayStateManager,
@@ -382,24 +398,32 @@ describe('create – OpenShell mode', () => {
   };
 
   beforeEach(() => {
-    vi.mocked(openshellCli.createSandbox).mockResolvedValue(undefined);
+    vi.mocked(sdkSandbox.create).mockResolvedValue(undefined);
     vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue(mockAgent);
     vi.mocked(readFile).mockRejectedValue(mockEnoent());
   });
 
-  test('calls openshellCli.createSandbox with gateway, name, providers, workspace label, and agent label', async () => {
+  test('calls sdkSandbox.create with gateway, name, providers, workspace label, and agent label', async () => {
     const options = { ...defaultOptions, secrets: ['my-secret'] };
     await manager.create(options);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'my-sandbox',
-        gateway: 'kaiden',
         providers: ['my-secret'],
-        labels: { ...encodeWorkspaceLabels('/tmp/my-project'), [AGENT_LABEL]: 'claude' },
-        detach: true,
-        tty: true,
+        labels: { gateway: 'kaiden', ...encodeWorkspaceLabels('/tmp/my-project'), [AGENT_LABEL]: 'claude' },
       }),
+    );
+    expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith('kaiden');
+    expect(sdkSandbox.waitReady).toHaveBeenCalledWith('my-sandbox', 120);
+    expect(vi.mocked(sdkSandbox.create).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(apiSender.send).mock.invocationCallOrder[0]!,
+    );
+    expect(vi.mocked(apiSender.send).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(sdkSandbox.waitReady).mock.invocationCallOrder[0]!,
+    );
+    expect(vi.mocked(sdkSandbox.waitReady).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(openshellCli.uploadToSandbox).mock.invocationCallOrder[0]!,
     );
   });
 
@@ -414,7 +438,7 @@ describe('create – OpenShell mode', () => {
 
     await expect(manager.create(defaultOptions)).rejects.toThrow('gateway "kaiden" is unreachable');
 
-    expect(openshellCli.createSandbox).not.toHaveBeenCalled();
+    expect(sdkSandbox.create).not.toHaveBeenCalled();
   });
 
   test('waits for the gateway cache before checking reachability', async () => {
@@ -463,7 +487,7 @@ describe('create – OpenShell mode', () => {
     };
     const result = await manager.create(options);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(expect.objectContaining({ name: 'my-project' }));
+    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'my-project' }));
     expect(result).toEqual({ id: 'my-project' });
   });
 
@@ -474,7 +498,7 @@ describe('create – OpenShell mode', () => {
     };
 
     await expect(manager.create(options)).rejects.toThrow(/must not exceed 19 characters/);
-    expect(openshellCli.createSandbox).not.toHaveBeenCalled();
+    expect(sdkSandbox.create).not.toHaveBeenCalled();
   });
 
   test('rejects basename-derived names longer than the hostname limit', async () => {
@@ -487,7 +511,7 @@ describe('create – OpenShell mode', () => {
     };
 
     await expect(manager.create(options)).rejects.toThrow(/must not exceed 19 characters/);
-    expect(openshellCli.createSandbox).not.toHaveBeenCalled();
+    expect(sdkSandbox.create).not.toHaveBeenCalled();
   });
 
   test('passes agent baseImage as from option to createSandbox', async () => {
@@ -498,9 +522,9 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(defaultOptions);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: 'registry.example.com/agent-base:v1',
+        image: 'registry.example.com/agent-base:v1',
       }),
     );
   });
@@ -517,11 +541,13 @@ describe('create – OpenShell mode', () => {
     };
     await manager.create(options);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        uploads: expect.arrayContaining([{ local: join(homedir(), 'my-project'), remote: '.' }]),
         labels: expect.objectContaining(encodeWorkspaceLabels(join(homedir(), 'my-project'))),
       }),
+    );
+    expect(getSandboxUploads()).toEqual(
+      expect.arrayContaining([{ local: join(homedir(), 'my-project'), remote: '.' }]),
     );
   });
 
@@ -541,11 +567,7 @@ describe('create – OpenShell mode', () => {
     };
     await manager.create(options);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        uploads: expect.arrayContaining([{ local: '/real/path/project', remote: '.' }]),
-      }),
-    );
+    expect(getSandboxUploads()).toEqual(expect.arrayContaining([{ local: '/real/path/project', remote: '.' }]));
   });
 
   test('resolves symlinks in mount host paths via realpath', async () => {
@@ -563,11 +585,7 @@ describe('create – OpenShell mode', () => {
       mounts: [{ host: '$HOME/linked-dir', target: '$HOME/linked-dir', ro: false }],
     });
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        uploads: expect.arrayContaining([{ local: '/real/linked-dir', remote: '~' }]),
-      }),
-    );
+    expect(getSandboxUploads()).toEqual(expect.arrayContaining([{ local: '/real/linked-dir', remote: '~' }]));
   });
 
   test('uses user-specified image over agent baseImage when provided', async () => {
@@ -578,9 +596,9 @@ describe('create – OpenShell mode', () => {
 
     await manager.create({ ...defaultOptions, image: 'custom-registry.io/my-image:latest' });
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: 'custom-registry.io/my-image:latest',
+        image: 'custom-registry.io/my-image:latest',
       }),
     );
   });
@@ -593,9 +611,9 @@ describe('create – OpenShell mode', () => {
 
     await manager.create({ ...defaultOptions, image: undefined });
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: 'registry.example.com/agent-base:v1',
+        image: 'registry.example.com/agent-base:v1',
       }),
     );
   });
@@ -642,23 +660,15 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(defaultOptions);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        uploads: expect.arrayContaining([
-          { local: expect.any(String), remote: '/home/user/.config/agent/config.toml' },
-        ]),
-      }),
+    expect(getSandboxUploads()).toEqual(
+      expect.arrayContaining([{ local: expect.any(String), remote: '/home/user/.config/agent/config.toml' }]),
     );
   });
 
   test('uploads workspace filesystem even when agent has no config files', async () => {
     await manager.create(defaultOptions);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        uploads: expect.arrayContaining([{ local: '/tmp/my-project', remote: '.' }]),
-      }),
-    );
+    expect(getSandboxUploads()).toEqual(expect.arrayContaining([{ local: '/tmp/my-project', remote: '.' }]));
   });
 
   test('uploads config files even when preWorkspaceStart does not update them', async () => {
@@ -673,12 +683,8 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(defaultOptions);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        uploads: expect.arrayContaining([
-          { local: expect.any(String), remote: '/home/user/.config/agent/config.toml' },
-        ]),
-      }),
+    expect(getSandboxUploads()).toEqual(
+      expect.arrayContaining([{ local: expect.any(String), remote: '/home/user/.config/agent/config.toml' }]),
     );
   });
 
@@ -690,13 +696,11 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(options);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        uploads: expect.arrayContaining([
-          { local: '/home/user/.kaiden/skills/github', remote: '.claude/skills' },
-          { local: '/home/user/.kaiden/skills/kubernetes', remote: '.claude/skills' },
-        ]),
-      }),
+    expect(getSandboxUploads()).toEqual(
+      expect.arrayContaining([
+        { local: '/home/user/.kaiden/skills/github', remote: '.claude/skills' },
+        { local: '/home/user/.kaiden/skills/kubernetes', remote: '.claude/skills' },
+      ]),
     );
   });
 
@@ -711,10 +715,8 @@ describe('create – OpenShell mode', () => {
       mounts: [{ host: '/Users/fbricon/Dev/projects/gh-dashboard', target: 'gh-dashboard', ro: false }],
     });
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        uploads: expect.arrayContaining([{ local: '/Users/fbricon/Dev/projects/gh-dashboard', remote: '.' }]),
-      }),
+    expect(getSandboxUploads()).toEqual(
+      expect.arrayContaining([{ local: '/Users/fbricon/Dev/projects/gh-dashboard', remote: '.' }]),
     );
   });
 
@@ -727,14 +729,12 @@ describe('create – OpenShell mode', () => {
       ],
     });
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        uploads: expect.arrayContaining([
-          { local: '/tmp/my-project', remote: '.' },
-          { local: resolve('/tmp/my-project', './subdir'), remote: 'subdir' },
-          { local: resolve(homedir(), '.gitconfig'), remote: '~/.gitconfig' },
-        ]),
-      }),
+    expect(getSandboxUploads()).toEqual(
+      expect.arrayContaining([
+        { local: '/tmp/my-project', remote: '.' },
+        { local: resolve('/tmp/my-project', './subdir'), remote: 'subdir' },
+        { local: resolve(homedir(), '.gitconfig'), remote: '~/.gitconfig' },
+      ]),
     );
   });
 
@@ -747,8 +747,7 @@ describe('create – OpenShell mode', () => {
       ],
     });
 
-    const sandboxOptions = vi.mocked(openshellCli.createSandbox).mock.calls[0]?.[0];
-    expect(sandboxOptions?.uploads).toEqual(
+    expect(getSandboxUploads()).toEqual(
       expect.arrayContaining([
         { local: '/tmp/my-project', remote: '.' },
         { local: homedir(), remote: '~' },
@@ -768,10 +767,8 @@ describe('create – OpenShell mode', () => {
       skills: ['/home/user/.kaiden/skills/github'],
     });
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        uploads: expect.arrayContaining([{ local: '/home/user/.kaiden/skills/github', remote: '.agents/skills' }]),
-      }),
+    expect(getSandboxUploads()).toEqual(
+      expect.arrayContaining([{ local: '/home/user/.kaiden/skills/github', remote: '.agents/skills' }]),
     );
   });
 
@@ -780,7 +777,7 @@ describe('create – OpenShell mode', () => {
 
     await expect(manager.create(defaultOptions)).rejects.toThrow('agent claude not registered');
 
-    expect(openshellCli.createSandbox).not.toHaveBeenCalled();
+    expect(sdkSandbox.create).not.toHaveBeenCalled();
   });
 
   test('updates policy with endpoint flags after sandbox creation for deny mode with hosts', async () => {
@@ -791,7 +788,7 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(options);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
+    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellCli.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
       expect.arrayContaining([
@@ -809,7 +806,7 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(options);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
+    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellCli.updatePolicy).not.toHaveBeenCalled();
   });
 
@@ -818,7 +815,7 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(options);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
+    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellCli.updatePolicy).not.toHaveBeenCalled();
   });
 
@@ -830,14 +827,14 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(options);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
+    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellCli.updatePolicy).not.toHaveBeenCalled();
   });
 
   test('does not set policy when network is undefined and no model endpoint', async () => {
     await manager.create(defaultOptions);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
+    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellCli.updatePolicy).not.toHaveBeenCalled();
   });
 
@@ -847,11 +844,22 @@ describe('create – OpenShell mode', () => {
       network: { mode: 'deny' as const, hosts: ['registry.npmjs.org'] },
     };
     vi.mocked(openshellCli.updatePolicy).mockRejectedValue(new Error('policy update failed'));
-    vi.mocked(openshellCli.deleteSandbox).mockResolvedValue(undefined);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     await expect(manager.create(options)).rejects.toThrow('policy update failed');
 
-    expect(openshellCli.deleteSandbox).toHaveBeenCalledWith('my-sandbox', 'kaiden');
+    expect(sdkSandbox.delete).toHaveBeenCalledWith('my-sandbox');
+  });
+
+  test('deletes sandbox and rethrows when it does not become ready', async () => {
+    vi.mocked(sdkSandbox.waitReady).mockRejectedValue(new Error('timed out waiting for sandbox'));
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+
+    await expect(manager.create(defaultOptions)).rejects.toThrow('timed out waiting for sandbox');
+
+    expect(sdkSandbox.delete).toHaveBeenCalledWith('my-sandbox');
+    expect(openshellCli.uploadToSandbox).not.toHaveBeenCalled();
+    expect(apiSender.send).toHaveBeenCalledTimes(2);
   });
 
   test('emits agent-workspace-update even when creation fails', async () => {
@@ -860,17 +868,21 @@ describe('create – OpenShell mode', () => {
       network: { mode: 'deny' as const, hosts: ['registry.npmjs.org'] },
     };
     vi.mocked(openshellCli.updatePolicy).mockRejectedValue(new Error('policy update failed'));
-    vi.mocked(openshellCli.deleteSandbox).mockResolvedValue(undefined);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     await expect(manager.create(options)).rejects.toThrow('policy update failed');
 
-    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+    expect(apiSender.send).toHaveBeenCalledTimes(2);
+    expect(apiSender.send).toHaveBeenNthCalledWith(1, 'agent-workspace-update');
+    expect(apiSender.send).toHaveBeenNthCalledWith(2, 'agent-workspace-update');
   });
 
   test('emits agent-workspace-update on successful creation', async () => {
     await manager.create(defaultOptions);
 
-    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+    expect(apiSender.send).toHaveBeenCalledTimes(2);
+    expect(apiSender.send).toHaveBeenNthCalledWith(1, 'agent-workspace-update');
+    expect(apiSender.send).toHaveBeenNthCalledWith(2, 'agent-workspace-update');
   });
 
   test('attaches secret to sandbox when ensureSecretForModel returns a secret', async () => {
@@ -879,7 +891,7 @@ describe('create – OpenShell mode', () => {
     const options = { ...defaultOptions, model: 'vertexai::claude-sonnet-4::' };
     await manager.create(options);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({
         providers: expect.arrayContaining(['vertex-ai-conn-1']),
       }),
@@ -890,8 +902,8 @@ describe('create – OpenShell mode', () => {
     const options = { ...defaultOptions };
     await manager.create(options);
 
-    const call = vi.mocked(openshellCli.createSandbox).mock.calls[0]![0];
-    expect(call!.env).toBeUndefined();
+    const call = vi.mocked(sdkSandbox.create).mock.calls[0]![0];
+    expect(call!.environment).toBeUndefined();
   });
 
   test('filters out empty string values from environment before createSandbox', async () => {
@@ -905,15 +917,15 @@ describe('create – OpenShell mode', () => {
     const options = { ...defaultOptions };
     await manager.create(options);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        env: {
+        environment: {
           VALID_VAR: 'valid-value',
         },
       }),
     );
-    const call = vi.mocked(openshellCli.createSandbox).mock.calls[0]![0];
-    expect(call!.env).not.toHaveProperty('EMPTY_VAR');
+    const call = vi.mocked(sdkSandbox.create).mock.calls[0]![0];
+    expect(call!.environment).not.toHaveProperty('EMPTY_VAR');
   });
 
   test('calls setInference during create when secret type requires it', async () => {
@@ -964,8 +976,8 @@ describe('create – OpenShell mode', () => {
     const options = { ...defaultOptions };
     await manager.create(options);
 
-    const call = vi.mocked(openshellCli.createSandbox).mock.calls[0]![0];
-    expect(call!.env).toBeUndefined();
+    const call = vi.mocked(sdkSandbox.create).mock.calls[0]![0];
+    expect(call!.environment).toBeUndefined();
   });
 
   test('updates policy with model endpoint', async () => {
@@ -1081,7 +1093,7 @@ describe('create – no-folder workspace', () => {
   };
 
   beforeEach(() => {
-    vi.mocked(openshellCli.createSandbox).mockResolvedValue(undefined);
+    vi.mocked(sdkSandbox.create).mockResolvedValue(undefined);
     vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue(mockAgent);
     vi.mocked(readFile).mockRejectedValue(mockEnoent());
     vi.mocked(realpath).mockImplementation(async (p: unknown) => p as string);
@@ -1091,34 +1103,33 @@ describe('create – no-folder workspace', () => {
     await expect(manager.create({ ...noFolderOptions, name: '../../etc' })).rejects.toThrow(
       'Workspace name must contain only lowercase letters (a-z), digits (0-9), and hyphens (-)',
     );
-    expect(openshellCli.createSandbox).not.toHaveBeenCalled();
+    expect(sdkSandbox.create).not.toHaveBeenCalled();
   });
 
   test('throws when sourcePath is absent and name is not provided', async () => {
     await expect(manager.create({ ...noFolderOptions, name: undefined })).rejects.toThrow(
       'workspace name is required when no project folder is specified',
     );
-    expect(openshellCli.createSandbox).not.toHaveBeenCalled();
+    expect(sdkSandbox.create).not.toHaveBeenCalled();
   });
 
   test('creates sandbox without source file uploads when sourcePath is absent', async () => {
     await manager.create(noFolderOptions);
 
-    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'empty-sandbox',
-        gateway: 'kaiden',
+        labels: expect.objectContaining({ gateway: 'kaiden' }),
       }),
     );
-    const callArg = vi.mocked(openshellCli.createSandbox).mock.calls[0]![0]!;
-    expect(callArg.uploads).toBeUndefined();
+    expect(openshellCli.uploadToSandbox).not.toHaveBeenCalled();
   });
 
   test('does not add WORKSPACE_LABEL when sourcePath is absent', async () => {
     await manager.create(noFolderOptions);
 
-    const callArg = vi.mocked(openshellCli.createSandbox).mock.calls[0]![0]!;
-    expect(callArg.labels).toEqual({ [AGENT_LABEL]: 'claude' });
+    const callArg = vi.mocked(sdkSandbox.create).mock.calls[0]![0]!;
+    expect(callArg.labels).toEqual({ gateway: 'kaiden', [AGENT_LABEL]: 'claude' });
   });
 
   test('writes config to global directory scoped by gateway and name', async () => {
@@ -1150,8 +1161,7 @@ describe('create – no-folder workspace', () => {
 
     await manager.create(noFolderOptions);
 
-    const callArg = vi.mocked(openshellCli.createSandbox).mock.calls[0]![0]!;
-    expect(callArg.uploads).toEqual([{ local: '/Users/me/repos/lib', remote: 'lib' }]);
+    expect(getSandboxUploads()).toEqual([{ local: '/Users/me/repos/lib', remote: 'lib' }]);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('skipping mount "$SOURCES/sub"'));
     spy.mockRestore();
     warnSpy.mockRestore();
@@ -1322,17 +1332,18 @@ describe('listOpenshellGateways', () => {
 describe('remove', () => {
   test('delegates to kdnCli.remove and returns the workspace id', async () => {
     vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
-    vi.mocked(openshellCli.deleteSandbox).mockResolvedValue(undefined);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     const result = await manager.remove('ws-1', 'kaiden');
 
-    expect(openshellCli.deleteSandbox).toHaveBeenCalledWith('test-workspace-1', 'kaiden');
+    expect(sdkSandbox.delete).toHaveBeenCalledWith('test-workspace-1');
+    expect(sdkSandbox.waitDeleted).toHaveBeenCalledWith('test-workspace-1', 120);
     expect(result).toEqual({ id: 'ws-1' });
   });
 
   test('creates a task with workspace name and sets success status on completion', async () => {
     vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
-    vi.mocked(openshellCli.deleteSandbox).mockResolvedValue(undefined);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     await manager.remove('ws-1', 'kaiden');
 
@@ -1343,7 +1354,7 @@ describe('remove', () => {
 
   test('uses workspace id as fallback when workspace not found in list', async () => {
     vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue([]);
-    vi.mocked(openshellCli.deleteSandbox).mockResolvedValue(undefined);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     await manager.remove('unknown-id', 'kaiden');
 
@@ -1352,7 +1363,7 @@ describe('remove', () => {
 
   test('sets task failure status when CLI fails', async () => {
     vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
-    vi.mocked(openshellCli.deleteSandbox).mockRejectedValue(new Error('workspace not found: unknown-id'));
+    vi.mocked(sdkSandbox.delete).mockRejectedValue(new Error('workspace not found: unknown-id'));
 
     await expect(manager.remove('unknown-id', 'kaiden')).rejects.toThrow('workspace not found: unknown-id');
 
@@ -1363,7 +1374,7 @@ describe('remove', () => {
 
   test('preserves error detail in task error message', async () => {
     vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
-    vi.mocked(openshellCli.deleteSandbox).mockRejectedValue(new Error('failed to remove workspace: permission denied'));
+    vi.mocked(sdkSandbox.delete).mockRejectedValue(new Error('failed to remove workspace: permission denied'));
 
     await expect(manager.remove('ws-1', 'kaiden')).rejects.toThrow('failed to remove workspace: permission denied');
 
@@ -1372,16 +1383,21 @@ describe('remove', () => {
 
   test('emits agent-workspace-update event', async () => {
     vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
-    vi.mocked(openshellCli.deleteSandbox).mockResolvedValue(undefined);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     await manager.remove('ws-1', 'kaiden');
 
-    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+    expect(apiSender.send).toHaveBeenCalledTimes(2);
+    expect(apiSender.send).toHaveBeenNthCalledWith(1, 'agent-workspace-update');
+    expect(apiSender.send).toHaveBeenNthCalledWith(2, 'agent-workspace-update');
+    expect(vi.mocked(apiSender.send).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(rm).mock.invocationCallOrder[0]!,
+    );
   });
 
   test('cleans up global config directory after sandbox deletion', async () => {
     vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
-    vi.mocked(openshellCli.deleteSandbox).mockResolvedValue(undefined);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     await manager.remove('ws-1', 'kaiden');
 
@@ -1394,15 +1410,16 @@ describe('remove', () => {
 
 describe('deleteOpenshellSandbox', () => {
   test('deletes the sandbox from the requested gateway', async () => {
-    vi.mocked(openshellCli.deleteSandbox).mockResolvedValue(undefined);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     await manager.deleteOpenshellSandbox('shared-name', 'remote-gateway');
 
-    expect(openshellCli.deleteSandbox).toHaveBeenCalledWith('shared-name', 'remote-gateway');
+    expect(sdkSandbox.delete).toHaveBeenCalledWith('shared-name');
+    expect(sdkSandbox.waitDeleted).toHaveBeenCalledWith('shared-name', 120);
   });
 
   test('cleans up global config directory after sandbox deletion', async () => {
-    vi.mocked(openshellCli.deleteSandbox).mockResolvedValue(undefined);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     await manager.deleteOpenshellSandbox('my-workspace', 'kaiden');
 
