@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Website Updater Result",
+  "type": "object",
+  "required": ["status", "pr_title", "pr_body", "changes"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["changes_found", "no_changes", "error"]
+    },
+    "pr_title": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "pr_body": {
+      "type": "string",
+      "maxLength": 5000
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "action", "description"],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": ["modify", "create"]
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      }
+    },
+    "audit_summary": {
+      "type": "object",
+      "properties": {
+        "providers_checked": { "type": "number" },
+        "agents_checked": { "type": "number" },
+        "preferences_checked": { "type": "number" },
+        "gaps_found": { "type": "number" }
+      }
+    }
+  }
+}

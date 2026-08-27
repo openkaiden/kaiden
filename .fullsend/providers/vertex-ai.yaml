@@ -1,0 +1,4 @@
+name: vertex-ai
+type: fullsend-vertex-ai
+credentials:
+  _NOOP_VERTEX_AI: ""

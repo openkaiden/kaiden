@@ -26,6 +26,8 @@ agents:
       source: code.yaml
     - name: fix
       source: fix.yaml
+    - name: webupd
+      source: harness/webupd.yaml
 inference:
     project: fullsend-eval
     wif_provider: projects/457914409018/locations/global/workloadIdentityPools/fullsend-inference/providers/gh-openkaiden-kaiden
