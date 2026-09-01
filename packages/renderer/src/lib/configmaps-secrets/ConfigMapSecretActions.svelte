@@ -14,11 +14,17 @@ const configmapSecretUtils = new ConfigMapSecretUtils();
 
 async function deleteConfigMapSecret(): Promise<void> {
   configMapSecret.status = 'DELETING';
+  configMapSecret.actionError = '';
 
-  if (configmapSecretUtils.isSecret(configMapSecret)) {
-    await window.kubernetesDeleteSecret(configMapSecret.name);
-  } else {
-    await window.kubernetesDeleteConfigMap((configMapSecret as ConfigMapSecretUI).name);
+  try {
+    if (configmapSecretUtils.isSecret(configMapSecret)) {
+      await window.kubernetesDeleteSecret(configMapSecret.name);
+    } else {
+      await window.kubernetesDeleteConfigMap((configMapSecret as ConfigMapSecretUI).name);
+    }
+  } catch (e) {
+    configMapSecret.actionError = String(e);
+    configMapSecret.status = 'ERROR';
   }
 }
 </script>
