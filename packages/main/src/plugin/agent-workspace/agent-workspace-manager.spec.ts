@@ -88,7 +88,7 @@ const apiSender: ApiSenderType = {
   receive: vi.fn(),
 };
 const ipcHandle: IPCHandle = vi.fn();
-const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry);
+const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry, {} as never);
 
 const agentRegistry = {
   getAgentRegistration: vi.fn(),

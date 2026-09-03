@@ -19,8 +19,8 @@
 import type { OpenShellClient } from '@nvidia/openshell-sdk';
 import { inject, injectable, preDestroy } from 'inversify';
 
-import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellGatewayConfig } from '/@/plugin/openshell-cli/openshell-gateway-config.js';
+import { OpenshellGatewayDiscovery } from '/@/plugin/openshell-cli/openshell-gateway-discovery.js';
 import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
 
 /**
@@ -35,8 +35,8 @@ export class OpenshellSdkClientManager {
   readonly #cache = new Map<string, OpenShellClient>();
 
   constructor(
-    @inject(OpenshellCli)
-    private readonly openshellCli: OpenshellCli,
+    @inject(OpenshellGatewayDiscovery)
+    private readonly gatewayDiscovery: OpenshellGatewayDiscovery,
     @inject(OpenshellGatewayConfig)
     private readonly gatewayConfig: OpenshellGatewayConfig,
   ) {}
@@ -70,7 +70,7 @@ export class OpenshellSdkClientManager {
   }
 
   async #resolveGateway(gatewayName?: string): Promise<GatewayInfo> {
-    const gateways = await this.openshellCli.listGateways();
+    const gateways = await this.gatewayDiscovery.listGateways();
 
     if (gatewayName) {
       const match = gateways.find(g => g.name === gatewayName);

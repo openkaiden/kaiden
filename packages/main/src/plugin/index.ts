@@ -74,6 +74,7 @@ import { NavigationManager } from '/@/plugin/navigation/navigation-manager.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { OpenshellGatewayConfig } from '/@/plugin/openshell-cli/openshell-gateway-config.js';
+import { OpenshellGatewayDiscovery } from '/@/plugin/openshell-cli/openshell-gateway-discovery.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
 import { OpenshellImageBuilder } from '/@/plugin/openshell-cli/openshell-image-builder.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
@@ -606,6 +607,7 @@ export class PluginSystem {
     container.bind<OpenShellRegistry>(OpenShellRegistry).toSelf().inSingletonScope();
     container.bind<OpenshellCli>(OpenshellCli).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayConfig>(OpenshellGatewayConfig).toSelf();
+    container.bind<OpenshellGatewayDiscovery>(OpenshellGatewayDiscovery).toSelf();
     container.bind<OpenshellSdkClientManager>(OpenshellSdkClientManager).toSelf().inSingletonScope();
     container.bind<OpenshellGateway>(OpenshellGateway).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayStateManager>(OpenshellGatewayStateManager).toSelf().inSingletonScope();

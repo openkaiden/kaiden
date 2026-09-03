@@ -40,6 +40,7 @@ const exec = new Exec({} as Proxy);
 const cliToolRegistry = {
   getCliToolInfos: vi.fn().mockReturnValue([{ name: 'openshell', path: OPENSHELL_CLI_PATH }]),
 } as unknown as CliToolRegistry;
+const sdkClientManager = { getClient: vi.fn() };
 
 function mockExecResult(stdout: string): RunResult {
   return { command: OPENSHELL_CLI_PATH, stdout, stderr: '' };
@@ -61,7 +62,7 @@ beforeEach(() => {
   vi.mocked(cliToolRegistry.getCliToolInfos).mockReturnValue([
     { name: 'openshell', path: OPENSHELL_CLI_PATH },
   ] as unknown as CliToolInfo[]);
-  openshellCli = new OpenshellCli(exec, cliToolRegistry);
+  openshellCli = new OpenshellCli(exec, cliToolRegistry, sdkClientManager as never);
 });
 
 describe('getCliPath', () => {
@@ -405,37 +406,43 @@ describe('createSandbox', () => {
 });
 
 describe('updatePolicy', () => {
-  test('executes policy update with --add-endpoint flags', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(''));
+  test('sets a sandbox-scoped network policy through the SDK', async () => {
+    const setPolicy = vi.fn();
+    sdkClientManager.getClient.mockResolvedValue({ sandbox: { setPolicy } });
 
     await openshellCli.updatePolicy('my-sandbox', ['api.example.com:443:full:rest', 'host.local:11434']);
 
-    expect(exec.exec).toHaveBeenCalledWith(
-      OPENSHELL_CLI_PATH,
-      [
-        'policy',
-        'update',
-        'my-sandbox',
-        '--add-endpoint',
-        'api.example.com:443:full:rest',
-        '--add-endpoint',
-        'host.local:11434',
-      ],
-      undefined,
+    expect(setPolicy).toHaveBeenCalledWith(
+      'my-sandbox',
+      expect.objectContaining({
+        version: 1,
+        networkPolicies: {
+          'kdn-network': expect.objectContaining({
+            endpoints: [
+              expect.objectContaining({ host: 'api.example.com', port: 443, access: 'full', protocol: 'rest' }),
+              expect.objectContaining({ host: 'host.local', port: 11434 }),
+            ],
+          }),
+        },
+      }),
+      { wait: true },
     );
   });
 
-  test('includes --binary flags when provided', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(''));
+  test('includes binaries in the SDK policy', async () => {
+    const setPolicy = vi.fn();
+    sdkClientManager.getClient.mockResolvedValue({ sandbox: { setPolicy } });
 
     await openshellCli.updatePolicy('my-sandbox', ['api.example.com:443'], ['/**']);
 
-    expect(exec.exec).toHaveBeenCalledWith(
-      OPENSHELL_CLI_PATH,
-      ['policy', 'update', 'my-sandbox', '--add-endpoint', 'api.example.com:443', '--binary', '/**'],
-      undefined,
+    expect(setPolicy).toHaveBeenCalledWith(
+      'my-sandbox',
+      expect.objectContaining({
+        networkPolicies: {
+          'kdn-network': expect.objectContaining({ binaries: [{ path: '/**' }] }),
+        },
+      }),
+      { wait: true },
     );
   });
 });
@@ -1661,44 +1668,22 @@ describe('setInference', () => {
 });
 
 describe('isV2ProviderEnabled', () => {
-  const GLOBAL_SETTINGS = {
-    scope: 'global',
-    settings: {
-      agent_policy_proposals_enabled: '<unset>',
-      ocsf_json_enabled: '<unset>',
-      proposal_approval_mode: '<unset>',
-      providers_v2_enabled: '<unset>',
-    },
-    settings_revision: 0,
-  };
-
   test('returns true when setting is globally enabled', async () => {
-    vi.mocked(exec.exec).mockResolvedValue(
-      mockExecResult(
-        JSON.stringify({ ...GLOBAL_SETTINGS, settings: { ...GLOBAL_SETTINGS.settings, providers_v2_enabled: true } }),
-      ),
-    );
+    const getGatewayConfig = vi.fn().mockResolvedValue({
+      settings: { providers_v2_enabled: { value: { case: 'boolValue', value: true } } },
+    });
+    sdkClientManager.getClient.mockResolvedValue({ raw: { getGatewayConfig } });
 
     const result = await openshellCli.isV2ProviderEnabled();
 
     expect(result).toBe(true);
-    expect(exec.exec).toHaveBeenCalledWith(OPENSHELL_CLI_PATH, ['settings', 'get', '--global', '--json']);
-  });
-
-  test('returns true when value is string "true"', async () => {
-    vi.mocked(exec.exec).mockResolvedValue(
-      mockExecResult(
-        JSON.stringify({ ...GLOBAL_SETTINGS, settings: { ...GLOBAL_SETTINGS.settings, providers_v2_enabled: 'true' } }),
-      ),
-    );
-
-    const result = await openshellCli.isV2ProviderEnabled();
-
-    expect(result).toBe(true);
+    expect(getGatewayConfig).toHaveBeenCalledWith({});
   });
 
   test('returns false when setting is unset', async () => {
-    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(JSON.stringify(GLOBAL_SETTINGS)));
+    sdkClientManager.getClient.mockResolvedValue({
+      raw: { getGatewayConfig: vi.fn().mockResolvedValue({ settings: {} }) },
+    });
 
     const result = await openshellCli.isV2ProviderEnabled();
 
@@ -1706,7 +1691,7 @@ describe('isV2ProviderEnabled', () => {
   });
 
   test('returns false when command fails', async () => {
-    vi.mocked(exec.exec).mockRejectedValue(new Error('setting not found'));
+    sdkClientManager.getClient.mockRejectedValue(new Error('setting not found'));
 
     const result = await openshellCli.isV2ProviderEnabled();
 
@@ -1715,23 +1700,23 @@ describe('isV2ProviderEnabled', () => {
 });
 
 describe('enableV2Provider', () => {
-  test('executes settings set with --global flag', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(''));
+  test('updates the global setting through the raw SDK client', async () => {
+    const updateConfig = vi.fn();
+    sdkClientManager.getClient.mockResolvedValue({ raw: { updateConfig } });
 
     await openshellCli.enableV2Provider();
 
-    expect(exec.exec).toHaveBeenCalledWith(
-      OPENSHELL_CLI_PATH,
-      ['settings', 'set', '--global', '--key', 'providers_v2_enabled', '--value', 'true', '--yes'],
-      undefined,
-    );
+    expect(updateConfig).toHaveBeenCalledWith({
+      global: true,
+      settingKey: 'providers_v2_enabled',
+      settingValue: { value: { case: 'boolValue', value: true } },
+    });
   });
 
-  test('rejects when CLI fails', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.mocked(exec.exec).mockRejectedValue(new Error('settings update failed'));
+  test('rejects when SDK update fails', async () => {
+    sdkClientManager.getClient.mockResolvedValue({
+      raw: { updateConfig: vi.fn().mockRejectedValue(new Error('settings update failed')) },
+    });
 
     await expect(openshellCli.enableV2Provider()).rejects.toThrow('settings update failed');
   });
