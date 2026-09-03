@@ -263,6 +263,35 @@ test('Expect bulk delete calls removeSecret for each selected secret', async () 
   });
 });
 
+test('Expect bulk delete shows error message when removeSecret fails', async () => {
+  secretVaultInfos.set([localSecret, remoteSecret]);
+
+  render(SecretVaultList);
+  await tick();
+
+  const checkboxes = screen.getAllByRole('checkbox', { name: 'Toggle secret-vault' });
+  await fireEvent.click(checkboxes[0]);
+  await tick();
+  await fireEvent.click(checkboxes[1]);
+  await tick();
+
+  vi.mocked(window.getConfigurationValue).mockResolvedValue(true);
+  vi.mocked(window.showMessageBox).mockResolvedValue({ response: 0 });
+  vi.mocked(window.removeSecret).mockResolvedValueOnce({ name: '' }).mockRejectedValueOnce(new Error('network error'));
+
+  const deleteButton = await screen.findByRole('button', { name: 'Delete selected secrets' });
+  await fireEvent.click(deleteButton);
+
+  await waitFor(() => {
+    expect(window.showMessageBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Error',
+        message: 'Failed to delete 1 secret',
+      }),
+    );
+  });
+});
+
 test('Expect bulk delete shows confirmation dialog when bulk confirmation is enabled', async () => {
   secretVaultInfos.set([localSecret]);
 

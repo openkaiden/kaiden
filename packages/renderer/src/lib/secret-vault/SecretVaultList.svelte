@@ -89,16 +89,24 @@ async function deleteSelectedSecrets(): Promise<void> {
 
   bulkDeleteInProgress = true;
 
-  await Promise.all(
-    selectedSecrets.map(async secret => {
-      try {
-        await window.removeSecret(secret.name, secret.gateway);
-      } catch (e) {
-        console.error('error while removing secret', e);
-      }
-    }),
-  );
-  bulkDeleteInProgress = false;
+  try {
+    const results = await Promise.allSettled(
+      selectedSecrets.map(secret => window.removeSecret(secret.name, secret.gateway)),
+    );
+
+    const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failures.length > 0) {
+      await window.showMessageBox({
+        title: 'Error',
+        type: 'error',
+        message: `Failed to delete ${failures.length} secret${failures.length > 1 ? 's' : ''}`,
+        detail: failures.map(f => String(f.reason)).join('\n'),
+        buttons: ['OK'],
+      });
+    }
+  } finally {
+    bulkDeleteInProgress = false;
+  }
 }
 
 function addSecret(): void {
