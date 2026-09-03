@@ -38,6 +38,7 @@ import type { Event } from '/@api/event.js';
 import {
   type CreateLocalGatewayOptions,
   GATEWAY_NAME_PATTERN,
+  type GatewayInfo,
   KAIDEN_LOCAL_GATEWAY_NAME,
   type LocalGatewayDriver,
   type OpenshellGatewayStartOptions,
@@ -278,8 +279,11 @@ export class OpenshellGateway implements Disposable {
     );
   }
 
-  async supportsMounts(name: string): Promise<boolean> {
-    const configPath = join(this.getGatewayStorageDirectory(name), 'gateway.toml');
+  async supportsMounts(gateway: GatewayInfo): Promise<boolean> {
+    if (gateway.type !== 'local' || gateway.is_remote || !this.isLocalEndpoint(gateway.endpoint)) {
+      return false;
+    }
+    const configPath = join(this.getGatewayStorageDirectory(gateway.name), 'gateway.toml');
     try {
       const config = await readFile(configPath, 'utf-8');
       return /^enable_bind_mounts\s*=\s*true\s*$/m.test(config);

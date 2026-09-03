@@ -746,6 +746,7 @@ describe('create – OpenShell mode', () => {
       {
         name: 'kaiden',
         endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
         driver: 'podman',
         gatewayState: { reachable: true, health: 'healthy' },
       },
@@ -780,6 +781,7 @@ describe('create – OpenShell mode', () => {
       {
         name: 'kaiden',
         endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
         driver: 'podman',
         gatewayState: { reachable: true, health: 'healthy' },
       },
@@ -791,6 +793,30 @@ describe('create – OpenShell mode', () => {
       expect.objectContaining({ uploads: expect.arrayContaining([{ local: '/home/testuser', remote: '~' }]) }),
     );
     expect(vi.mocked(openshellCli.createSandbox).mock.calls[0]?.[0]?.driverConfig).toBeUndefined();
+  });
+
+  test.each([
+    { host: '$SOURCES/foo/..', target: '$SOURCES/foo/..', remote: 'foo/..' },
+    { host: '$SOURCES/../etc', target: '$SOURCES/../etc', remote: '../etc' },
+  ])('falls back to uploads for unsafe normalized mount target $target', async mount => {
+    vi.mocked(openshellGateway.supportsMounts).mockResolvedValue(true);
+    vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
+      {
+        name: 'kaiden',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver: 'podman',
+        gatewayState: { reachable: true, health: 'healthy' },
+      },
+    ]);
+
+    await manager.create({ ...defaultOptions, mounts: [{ host: mount.host, target: mount.target, ro: false }] });
+
+    const sandboxOptions = vi.mocked(openshellCli.createSandbox).mock.calls[0]?.[0];
+    expect(sandboxOptions?.driverConfig).toBeUndefined();
+    expect(sandboxOptions?.uploads).toEqual(
+      expect.arrayContaining([{ local: expect.any(String), remote: mount.remote }]),
+    );
   });
 
   test('uploads broad host access mounts when creating an openshell sandbox', async () => {

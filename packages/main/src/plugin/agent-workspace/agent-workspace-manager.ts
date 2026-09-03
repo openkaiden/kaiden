@@ -241,7 +241,7 @@ export class AgentWorkspaceManager implements Disposable {
       }
     }
 
-    const supportsMounts = !!gateway?.driver && (await this.openshellGateway.supportsMounts(options.gateway));
+    const supportsMounts = !!gateway.driver && (await this.openshellGateway.supportsMounts(gateway));
     const filesystem = await this.buildOpenshellFilesystem(options.sourcePath, workspace, supportsMounts);
     uploads.push(...filesystem.uploads);
 
@@ -380,12 +380,18 @@ export class AgentWorkspaceManager implements Disposable {
       return undefined;
     }
     if (path.startsWith('~/')) {
-      return posix.join('/sandbox', path.slice(2));
+      return this.resolveOpenshellWorkspaceMountTarget(path.slice(2));
     }
     if (isAbsolute(path)) {
-      return posix.normalize(path);
+      const normalized = posix.normalize(path);
+      return normalized === '/' ? undefined : normalized;
     }
-    return posix.join('/sandbox', path);
+    return this.resolveOpenshellWorkspaceMountTarget(path);
+  }
+
+  private resolveOpenshellWorkspaceMountTarget(path: string): string | undefined {
+    const normalized = posix.join('/sandbox', path);
+    return normalized.startsWith('/sandbox/') ? normalized : undefined;
   }
 
   private async resolveUploadRemotePath(local: string, remote: string): Promise<string> {
