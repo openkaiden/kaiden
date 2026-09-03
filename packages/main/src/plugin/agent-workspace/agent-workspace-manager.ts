@@ -382,7 +382,7 @@ export class AgentWorkspaceManager implements Disposable {
     if (path.startsWith('~/')) {
       return this.resolveOpenshellWorkspaceMountTarget(path.slice(2));
     }
-    if (isAbsolute(path)) {
+    if (posix.isAbsolute(path)) {
       const normalized = posix.normalize(path);
       return normalized === '/' ? undefined : normalized;
     }

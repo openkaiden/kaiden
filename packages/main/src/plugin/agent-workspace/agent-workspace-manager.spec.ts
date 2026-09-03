@@ -766,8 +766,18 @@ describe('create – OpenShell mode', () => {
         driverConfig: {
           podman: {
             mounts: [
-              { type: 'bind', source: '/tmp/my-project/subdir', target: '/sandbox/subdir', read_only: false },
-              { type: 'bind', source: '/home/testuser/.gitconfig', target: '/sandbox/.gitconfig', read_only: true },
+              {
+                type: 'bind',
+                source: resolve('/tmp/my-project', 'subdir'),
+                target: '/sandbox/subdir',
+                read_only: false,
+              },
+              {
+                type: 'bind',
+                source: resolve(homedir(), '.gitconfig'),
+                target: '/sandbox/.gitconfig',
+                read_only: true,
+              },
             ],
           },
         },
