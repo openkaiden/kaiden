@@ -20,7 +20,7 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import type { WriteStream } from 'node:fs';
 import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, open, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { Disposable } from '@openkaiden/api';
@@ -276,6 +276,16 @@ export class OpenshellGateway implements Disposable {
       GATEWAY_NAME_PATTERN.test(name) &&
       existsSync(join(this.getGatewayStorageDirectory(name), 'gateway.toml'))
     );
+  }
+
+  async supportsMounts(name: string): Promise<boolean> {
+    const configPath = join(this.getGatewayStorageDirectory(name), 'gateway.toml');
+    try {
+      const config = await readFile(configPath, 'utf-8');
+      return /^enable_bind_mounts\s*=\s*true\s*$/m.test(config);
+    } catch {
+      return false;
+    }
   }
 
   private async startCreatedGateway(name: string, endpoint: string): Promise<void> {
