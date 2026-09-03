@@ -953,6 +953,40 @@ describe('create – OpenShell mode', () => {
     });
   });
 
+  test('calls setInference for an OpenAI connection', async () => {
+    vi.mocked(secretManager.ensureSecretForModel).mockResolvedValue({ name: 'openai-conn-1', type: 'openai' });
+    vi.mocked(providerRegistry.getInferenceConnectionCredentials).mockReturnValue({
+      credentials: {},
+      llmMetadataName: 'openai',
+    });
+    vi.mocked(secretManager.getConnectionProperties).mockReturnValue({
+      config: {} as Configuration,
+      connectionProperties: [],
+    });
+    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
+      connection: {
+        name: 'openai',
+        id: 'openai',
+        type: 'cloud',
+        sdk: {} as AISDKInferenceProvider,
+        credentials: (): Record<string, string> => ({}),
+        status: (): ProviderConnectionStatus => 'started',
+        models: [{ label: 'gpt-5.4-mini' }],
+      },
+      providerId: 'openai',
+    });
+    vi.mocked(providerRegistry.getProvider).mockReturnValue({
+      extensionId: 'kaiden.openai-compatible',
+    } as ProviderImpl);
+
+    await manager.create({ ...defaultOptions, model: 'openai::gpt-5.4-mini::' });
+
+    expect(openshellCli.setInference).toHaveBeenCalledWith({
+      provider: 'openai-conn-1',
+      model: 'gpt-5.4-mini',
+    });
+  });
+
   test('does not pass env when all environment values are filtered out', async () => {
     vi.spyOn(configWriter, 'writeWorkspaceConfig').mockResolvedValue({
       environment: [

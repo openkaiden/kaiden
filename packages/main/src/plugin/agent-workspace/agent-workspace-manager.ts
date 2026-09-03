@@ -227,7 +227,7 @@ export class AgentWorkspaceManager implements Disposable {
         const provider = this.providerRegistry.getProvider(connection?.providerId);
         const { connectionProperties } = this.secretManager.getConnectionProperties(connection.connection, provider);
         const hasFlags = connectionProperties.find(([fullKey]) => fullKey.endsWith('._flags'));
-        if (hasFlags) {
+        if (hasFlags || connectionInfo?.llmMetadataName === 'openai') {
           await this.openshellCli.setInference({
             provider: secretName,
             model: modelName,
