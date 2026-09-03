@@ -525,9 +525,26 @@ export class OpenshellCli {
 
   // ── policy commands ──────────────────────────────────────────────
 
-  async updatePolicy(sandboxName: string, endpoints: string[], binaries?: string[]): Promise<void> {
-    const client = await this.sdkClientManager.getClient();
-    await client.sandbox.setPolicy(sandboxName, buildSdkNetworkPolicy(endpoints, binaries), { wait: true });
+  async updatePolicy(sandboxName: string, endpoints: string[], binaries?: string[], gateway?: string): Promise<void> {
+    const client = await this.sdkClientManager.getClient(gateway);
+    const generatedPolicy = buildSdkNetworkPolicy(endpoints, binaries);
+    const config = await client.sandbox.getConfig(sandboxName);
+    const currentPolicy = config.policy;
+    await client.sandbox.setPolicy(
+      sandboxName,
+      {
+        version: currentPolicy?.version ?? generatedPolicy.version,
+        filesystem: currentPolicy?.filesystem,
+        landlock: currentPolicy?.landlock,
+        process: currentPolicy?.process,
+        networkPolicies: {
+          ...currentPolicy?.networkPolicies,
+          ...generatedPolicy.networkPolicies,
+        },
+        networkMiddlewares: currentPolicy?.networkMiddlewares,
+      },
+      { wait: true },
+    );
   }
 
   // ── helpers ───────────────────────────────────────────────────────

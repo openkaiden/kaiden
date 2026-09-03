@@ -408,7 +408,8 @@ describe('createSandbox', () => {
 describe('updatePolicy', () => {
   test('sets a sandbox-scoped network policy through the SDK', async () => {
     const setPolicy = vi.fn();
-    sdkClientManager.getClient.mockResolvedValue({ sandbox: { setPolicy } });
+    const getConfig = vi.fn().mockResolvedValue({ policy: undefined });
+    sdkClientManager.getClient.mockResolvedValue({ sandbox: { getConfig, setPolicy } });
 
     await openshellCli.updatePolicy('my-sandbox', ['api.example.com:443:full:rest', 'host.local:11434']);
 
@@ -431,7 +432,8 @@ describe('updatePolicy', () => {
 
   test('includes binaries in the SDK policy', async () => {
     const setPolicy = vi.fn();
-    sdkClientManager.getClient.mockResolvedValue({ sandbox: { setPolicy } });
+    const getConfig = vi.fn().mockResolvedValue({ policy: undefined });
+    sdkClientManager.getClient.mockResolvedValue({ sandbox: { getConfig, setPolicy } });
 
     await openshellCli.updatePolicy('my-sandbox', ['api.example.com:443'], ['/**']);
 
@@ -441,6 +443,37 @@ describe('updatePolicy', () => {
         networkPolicies: {
           'kdn-network': expect.objectContaining({ binaries: [{ path: '/**' }] }),
         },
+      }),
+      { wait: true },
+    );
+  });
+
+  test('preserves existing policy fields and targets the selected gateway', async () => {
+    const setPolicy = vi.fn();
+    const existingRule = { name: 'existing', endpoints: [], binaries: [] };
+    const getConfig = vi.fn().mockResolvedValue({
+      policy: {
+        version: 1,
+        filesystem: { includeWorkdir: true },
+        networkPolicies: { existing: existingRule },
+        networkMiddlewares: { audit: { name: 'audit', middleware: 'audit' } },
+      },
+    });
+    sdkClientManager.getClient.mockResolvedValue({ sandbox: { getConfig, setPolicy } });
+
+    await openshellCli.updatePolicy('my-sandbox', ['api.example.com:443'], ['/**'], 'remote');
+
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
+    expect(getConfig).toHaveBeenCalledWith('my-sandbox');
+    expect(setPolicy).toHaveBeenCalledWith(
+      'my-sandbox',
+      expect.objectContaining({
+        filesystem: { includeWorkdir: true },
+        networkPolicies: {
+          existing: existingRule,
+          'kdn-network': expect.any(Object),
+        },
+        networkMiddlewares: { audit: { name: 'audit', middleware: 'audit' } },
       }),
       { wait: true },
     );
