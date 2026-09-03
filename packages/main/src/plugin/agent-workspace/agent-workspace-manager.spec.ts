@@ -987,6 +987,45 @@ describe('create – OpenShell mode', () => {
     });
   });
 
+  test('calls setInference for an OpenAI connection from workspace configuration secrets', async () => {
+    vi.mocked(secretManager.getSecretForModel).mockResolvedValue({ name: 'openai-conn-1', type: 'openai' });
+    vi.mocked(providerRegistry.getInferenceConnectionCredentials).mockReturnValue({
+      credentials: {},
+      llmMetadataName: 'openai',
+    });
+    vi.mocked(secretManager.getConnectionProperties).mockReturnValue({
+      config: {} as Configuration,
+      connectionProperties: [],
+    });
+    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
+      connection: {
+        name: 'openai',
+        id: 'openai',
+        type: 'cloud',
+        sdk: {} as AISDKInferenceProvider,
+        credentials: (): Record<string, string> => ({}),
+        status: (): ProviderConnectionStatus => 'started',
+        models: [{ label: 'gpt-5.4-mini' }],
+      },
+      providerId: 'openai',
+    });
+    vi.mocked(providerRegistry.getProvider).mockReturnValue({
+      extensionId: 'kaiden.openai-compatible',
+    } as ProviderImpl);
+
+    await manager.create({
+      ...defaultOptions,
+      model: 'openai::gpt-5.4-mini::',
+      workspaceConfiguration: { secrets: ['openai-conn-1'] },
+    });
+
+    expect(secretManager.ensureSecretForModel).not.toHaveBeenCalled();
+    expect(openshellCli.setInference).toHaveBeenCalledWith({
+      provider: 'openai-conn-1',
+      model: 'gpt-5.4-mini',
+    });
+  });
+
   test('does not pass env when all environment values are filtered out', async () => {
     vi.spyOn(configWriter, 'writeWorkspaceConfig').mockResolvedValue({
       environment: [
@@ -1248,14 +1287,17 @@ describe('ensureModelSecret', () => {
     gateway: 'kaiden',
   };
 
-  test('skips when workspaceConfiguration already has secrets (e.g. onboarding)', async () => {
+  test('resolves the model secret when workspaceConfiguration already has secrets', async () => {
+    vi.mocked(secretManager.getSecretForModel).mockResolvedValue({ name: 'anthropic', type: 'anthropic' });
     const options = {
       ...baseOptions,
       model: 'anthropic::claude-sonnet-4-20250514::',
       workspaceConfiguration: { secrets: ['anthropic'] },
     } as AgentWorkspaceCreateOptions;
-    await manager.ensureModelSecret(options);
+    const result = await manager.ensureModelSecret(options);
 
+    expect(result).toBe('anthropic');
+    expect(secretManager.getSecretForModel).toHaveBeenCalledWith('anthropic::claude-sonnet-4-20250514::', 'kaiden');
     expect(secretManager.ensureSecretForModel).not.toHaveBeenCalled();
   });
 

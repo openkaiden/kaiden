@@ -450,8 +450,10 @@ export class AgentWorkspaceManager implements Disposable {
    * model. Return undefined if there is no secret associated with this connection
 ·   */
   async ensureModelSecret(options: AgentWorkspaceCreateOptions): Promise<string | undefined> {
-    if (options.workspaceConfiguration?.secrets?.length) {
-      return undefined;
+    const configuredSecrets = options.workspaceConfiguration?.secrets;
+    if (configuredSecrets?.length) {
+      const secret = await this.secretManager.getSecretForModel(options.model, options.gateway);
+      return secret && configuredSecrets.includes(secret.name) ? secret.name : undefined;
     }
 
     return this.ensureModelSecretFromConfig(options);
