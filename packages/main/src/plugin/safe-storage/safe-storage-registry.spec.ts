@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, rename, writeFile } from 'node:fs/promises';
 
 import { safeStorage } from 'electron';
 import { beforeEach, expect, test, vi } from 'vitest';
@@ -90,10 +90,20 @@ test('should init safe storage', async () => {
     [fullKey]: base64Encrypted,
   };
 
+  // Allow the serialized write chain to flush
+  await vi.waitFor(() => {
+    expect(vi.mocked(rename)).toHaveBeenCalled();
+  });
+
+  // atomic write: data is written to a .tmp file, then renamed into place
   expect(vi.mocked(writeFile)).toHaveBeenCalledWith(
-    expect.stringContaining('data.json'),
+    expect.stringContaining('data.json.tmp'),
     JSON.stringify(expectedData),
     'utf-8',
+  );
+  expect(vi.mocked(rename)).toHaveBeenCalledWith(
+    expect.stringContaining('data.json.tmp'),
+    expect.stringContaining('data.json'),
   );
 
   // read again the value
@@ -102,8 +112,24 @@ test('should init safe storage', async () => {
 
   // check delete
   events.length = 0;
+  vi.mocked(writeFile).mockClear();
+  vi.mocked(rename).mockClear();
   await extensionSpecificStorage.delete('key1');
-  expect(vi.mocked(writeFile)).toHaveBeenCalledWith(expect.stringContaining('data.json'), JSON.stringify({}), 'utf-8');
+
+  // Allow the serialized write chain to flush
+  await vi.waitFor(() => {
+    expect(vi.mocked(rename)).toHaveBeenCalled();
+  });
+
+  expect(vi.mocked(writeFile)).toHaveBeenCalledWith(
+    expect.stringContaining('data.json.tmp'),
+    JSON.stringify({}),
+    'utf-8',
+  );
+  expect(vi.mocked(rename)).toHaveBeenCalledWith(
+    expect.stringContaining('data.json.tmp'),
+    expect.stringContaining('data.json'),
+  );
 
   // check change event
   expect(events).toEqual([{ key: 'key1' }]);
@@ -119,6 +145,56 @@ test('should init safe storage if error', async () => {
   const notifications = await safeStorageRegistry.init();
   expect(notifications).toBeDefined();
   expect(notifications.length).toBe(1);
+});
+
+test('should serialize concurrent onDidChange writes', async () => {
+  vi.mocked(existsSync).mockReturnValue(true);
+  vi.mocked(readFile).mockResolvedValue('{}');
+
+  const encryptedValue = Buffer.from('enc');
+  vi.mocked(safeStorage.encryptString).mockReturnValue(encryptedValue);
+  vi.mocked(safeStorage.decryptString).mockReturnValue('val');
+
+  await safeStorageRegistry.init();
+  const storage = safeStorageRegistry.getExtensionStorage('ext1');
+
+  // Track write order to ensure serialization
+  const writeOrder: string[] = [];
+  vi.mocked(writeFile).mockImplementation(async filePath => {
+    writeOrder.push(`write:${String(filePath)}`);
+  });
+  vi.mocked(rename).mockImplementation(async (src, _dest) => {
+    writeOrder.push(`rename:${String(src)}`);
+  });
+
+  // Trigger three rapid set() calls — these fire onDidChange synchronously
+  await storage.store('a', '1');
+  await storage.store('b', '2');
+  await storage.store('c', '3');
+
+  // Allow all queued microtasks to flush
+  await vi.waitFor(() => {
+    expect(writeOrder).toHaveLength(6);
+  });
+
+  // Each write+rename pair must complete before the next starts
+  expect(writeOrder).toEqual([
+    expect.stringContaining('write:'),
+    expect.stringContaining('rename:'),
+    expect.stringContaining('write:'),
+    expect.stringContaining('rename:'),
+    expect.stringContaining('write:'),
+    expect.stringContaining('rename:'),
+  ]);
+});
+
+test('should return notification when data.json is corrupt', async () => {
+  vi.mocked(existsSync).mockReturnValue(true);
+  vi.mocked(readFile).mockResolvedValue('');
+
+  const notifications = await safeStorageRegistry.init();
+  expect(notifications).toHaveLength(1);
+  expect(notifications[0]!.title).toBe('Corrupted secure storage');
 });
 
 test('should throw error if not initialized', async () => {

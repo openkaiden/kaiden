@@ -121,6 +121,10 @@ beforeAll(async () => {
       BrowserWindow: {
         getAllWindows: vi.fn(),
       },
+      Notification: vi.fn().mockImplementation(() => ({
+        show: vi.fn(),
+        close: vi.fn(),
+      })),
     };
   });
   const trayMenuMock = {} as unknown as TrayMenu;

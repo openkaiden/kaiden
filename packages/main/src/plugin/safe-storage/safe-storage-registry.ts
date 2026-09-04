@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import { cpSync, existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { SecretStorage } from '@openkaiden/api';
@@ -88,9 +88,17 @@ export class SafeStorageRegistry {
     }
     this.#extensionStorage = new SafeStorage(data);
 
-    // in case of an update, persists the new data to the file
-    this.#extensionStorage.onDidChange(async () => {
-      await writeFile(safeStoragePath, JSON.stringify(data), 'utf-8');
+    // Serialize and coalesce writes so concurrent set()/delete()
+    // calls do not race, and use an atomic write pattern (write to
+    // a temp file, then rename) so a crash mid-write cannot leave
+    // the data file truncated to 0 bytes.
+    let writeChain = Promise.resolve();
+    this.#extensionStorage.onDidChange(() => {
+      writeChain = writeChain.then(async () => {
+        const tmpPath = `${safeStoragePath}.tmp`;
+        await writeFile(tmpPath, JSON.stringify(data), 'utf-8');
+        await rename(tmpPath, safeStoragePath);
+      });
     });
     return notifications;
   }
