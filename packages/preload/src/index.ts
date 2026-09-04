@@ -138,7 +138,10 @@ import type { OnboardingInfo, OnboardingStatus } from '/@api/onboarding';
 import type {
   CreateLocalGatewayOptions,
   GatewayInfo,
+  GatewayMetadata,
+  GatewayRuntimeInfo,
   GatewaySandboxes,
+  ListedGateway,
   OpenshellProfile,
 } from '/@api/openshell-gateway-info';
 import type { V1Route } from '/@api/openshift-types';
@@ -413,6 +416,32 @@ export function initExposure(): void {
   contextBridge.exposeInMainWorld('deleteOpenshellSandbox', async (name: string, gateway: string): Promise<void> => {
     return ipcInvoke('agent-workspace:deleteOpenshellSandbox', name, gateway);
   });
+
+  // OpenshellGatewayManager — direct config folder + gRPC gateway access
+  contextBridge.exposeInMainWorld('openshellGatewayManagerListGateways', async (): Promise<ListedGateway[]> => {
+    return ipcInvoke('openshell-gateway-manager:listGateways');
+  });
+  contextBridge.exposeInMainWorld(
+    'openshellGatewayManagerGetGateway',
+    async (name: string): Promise<GatewayMetadata> => {
+      return ipcInvoke('openshell-gateway-manager:getGateway', name);
+    },
+  );
+  contextBridge.exposeInMainWorld('openshellGatewayManagerGetActiveGateway', async (): Promise<string | undefined> => {
+    return ipcInvoke('openshell-gateway-manager:getActiveGateway');
+  });
+  contextBridge.exposeInMainWorld(
+    'openshellGatewayManagerGetGatewayInfo',
+    async (name?: string): Promise<GatewayRuntimeInfo> => {
+      return ipcInvoke('openshell-gateway-manager:getGatewayInfo', name);
+    },
+  );
+  contextBridge.exposeInMainWorld(
+    'openshellGatewayManagerHealth',
+    async (name?: string): Promise<{ status: string; version: string }> => {
+      return ipcInvoke('openshell-gateway-manager:health', name);
+    },
+  );
 
   // Agent Workspace Terminal
   let onDataCallbacksShellInAgentWorkspaceId = 0;
