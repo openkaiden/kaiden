@@ -25,6 +25,7 @@ import { isLinux, isMac, isWindows } from '/@/util.js';
 import type { IDisposable } from '/@api/disposable.js';
 import product from '/@product.json' with { type: 'json' };
 
+import { configureDevInstance } from './dev-instance.js';
 import { ProtocolLauncher } from './protocol-launcher.js';
 
 export type AdditionalData = {
@@ -75,6 +76,12 @@ export class Main implements IDisposable {
   }
 
   protected init(additionalData: AdditionalData): void {
+    /**
+     * In dev mode, redirect userData and rename the app so that a dev instance
+     * can run alongside the packaged one without conflicting locks or data.
+     */
+    configureDevInstance(this.app);
+
     /**
      * Prevent multiple instances
      */

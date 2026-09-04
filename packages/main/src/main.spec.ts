@@ -30,6 +30,7 @@ import { Main } from './main.js';
 vi.mock('electron');
 vi.mock('/@/util.js');
 vi.mock('/@/security-restrictions.js');
+vi.mock(import('./dev-instance.js'));
 vi.mock(import('electron-context-menu'), () => ({
   default: vi.fn(),
 }));
