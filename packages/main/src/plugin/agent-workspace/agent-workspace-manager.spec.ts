@@ -88,7 +88,7 @@ const apiSender: ApiSenderType = {
   receive: vi.fn(),
 };
 const ipcHandle: IPCHandle = vi.fn();
-const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry);
+const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry, {} as never);
 
 const agentRegistry = {
   getAgentRegistration: vi.fn(),
@@ -801,6 +801,7 @@ describe('create – OpenShell mode', () => {
         'pypi.python.org:80:full:rest',
       ]),
       ['/**'],
+      'kaiden',
     );
   });
 
@@ -983,6 +984,7 @@ describe('create – OpenShell mode', () => {
       'my-sandbox',
       expect.arrayContaining(['api.example.com:443']),
       ['/**'],
+      'kaiden',
     );
   });
 
@@ -1009,6 +1011,7 @@ describe('create – OpenShell mode', () => {
       'my-sandbox',
       expect.arrayContaining(['host.openshell.internal:11434']),
       ['/**'],
+      'kaiden',
     );
   });
 
@@ -1035,6 +1038,7 @@ describe('create – OpenShell mode', () => {
       'my-sandbox',
       expect.arrayContaining(['host.openshell.internal:11434']),
       ['/**'],
+      'kaiden',
     );
   });
 
@@ -1058,6 +1062,7 @@ describe('create – OpenShell mode', () => {
       'my-sandbox',
       expect.arrayContaining(['registry.npmjs.org:443:full:rest', 'api.openai.com:443']),
       ['/**'],
+      'kaiden',
     );
   });
 });

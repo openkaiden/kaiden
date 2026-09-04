@@ -18,6 +18,8 @@
 
 import { isIPv6 } from 'node:net';
 
+import type { MessageInitShape } from '@bufbuild/protobuf';
+import type { SandboxPolicySchema } from '@nvidia/openshell-sdk/raw';
 import z from 'zod';
 
 import type { NetworkConfiguration } from '/@api/agent-workspace-info.js';
@@ -259,6 +261,41 @@ export function collectEndpointFlags(policy: OpenshellPolicy): string[] {
 export function collectBinaryFlags(policy: OpenshellPolicy): string[] {
   if (!policy.network_policies) return [];
   return [...new Set(Object.values(policy.network_policies).flatMap(rule => (rule.binaries ?? []).map(b => b.path)))];
+}
+
+/** Converts the legacy CLI endpoint/binary arguments into the SDK policy shape. */
+export function buildSdkNetworkPolicy(
+  endpoints: string[],
+  binaries: string[] = [],
+): MessageInitShape<typeof SandboxPolicySchema> {
+  const parsedEndpoints = endpoints.map(endpoint => {
+    const [host, rawPort, access = '', protocol = '', enforcement = '', rawOptions = ''] = endpoint.split(':');
+    const port = Number(rawPort);
+    if (!host || !Number.isInteger(port) || port <= 0 || port > 65535) {
+      throw new Error(`Invalid OpenShell endpoint: ${endpoint}`);
+    }
+    const options = new Set(rawOptions.split(',').filter(Boolean));
+    return {
+      host,
+      port,
+      access,
+      protocol,
+      enforcement,
+      websocketCredentialRewrite: options.has('websocket-credential-rewrite'),
+      requestBodyCredentialRewrite: options.has('request-body-credential-rewrite'),
+    };
+  });
+
+  return {
+    version: 1,
+    networkPolicies: {
+      [NETWORK_RULE_NAME]: {
+        name: NETWORK_RULE_NAME,
+        endpoints: parsedEndpoints,
+        binaries: binaries.map(path => ({ path })),
+      },
+    },
+  };
 }
 
 export function buildPolicyObject(network?: NetworkConfiguration, modelEndpoint?: string): OpenshellPolicy | undefined {

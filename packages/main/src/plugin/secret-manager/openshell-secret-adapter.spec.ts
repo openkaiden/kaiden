@@ -28,7 +28,7 @@ import { OpenshellSecretAdapter } from './openshell-secret-adapter.js';
 vi.mock(import('/@/plugin/openshell-cli/openshell-cli.js'));
 
 let adapter: OpenshellSecretAdapter;
-const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry);
+const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry, {} as never);
 
 beforeEach(() => {
   vi.resetAllMocks();
