@@ -1,0 +1,48 @@
+agent: agents/webupd.md
+image: ghcr.io/openkaiden/kaiden-fullsend-image@sha256:752de42626946c37a453a0b0ddd2effd7a2a4cecda86595586097d14b1c21635
+policy: policies/base.yaml
+openshell:
+  profiles:
+    - profiles/fullsend-vertex-ai.yaml
+providers:
+  - vertex-ai
+role: webupd
+slug: bsl-webupd
+trigger: |
+  event.source.system == "schedule"
+
+model: opus
+effort: high
+timeout_minutes: 30
+
+host_files:
+  - src: env/gcp-vertex.env
+    dest: /sandbox/workspace/.env.d/gcp-vertex.env
+    expand: true
+  - src: ${GOOGLE_APPLICATION_CREDENTIALS}
+    dest: /tmp/.gcp-credentials.json
+  - src: ${GCP_OIDC_TOKEN_FILE}
+    dest: /sandbox/workspace/.gcp-oidc-token
+    optional: true
+  - src: /tmp/workspace/kdn-info.json
+    dest: /sandbox/workspace/kdn-info.json
+    optional: true
+pre_script: scripts/pre-webupd.sh
+
+validation_loop:
+  script: scripts/validate-output-schema.sh
+  schema: schemas/webupd-result.schema.json
+  max_iterations: 1
+
+post_script: scripts/post-webupd.sh
+
+env:
+  runner:
+    GH_TOKEN: "${GH_TOKEN}"
+    WEBSITE_GH_TOKEN: "${WEBSITE_GH_TOKEN}"
+    WEBSITE_REPO_DIR: "${WEBSITE_REPO_DIR}"
+    REPO_FULL_NAME: "${REPO_FULL_NAME}"
+    KDN_INFO_FILE: "/sandbox/workspace/kdn-info.json"
+  sandbox:
+    KDN_INFO_FILE: "/sandbox/workspace/kdn-info.json"
+

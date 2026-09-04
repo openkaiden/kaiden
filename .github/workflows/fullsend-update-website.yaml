@@ -1,0 +1,110 @@
+#
+# Copyright (C) 2026 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: fullsend-webupd
+
+on:
+  schedule:
+    # Run daily at 3:00 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: webupd
+  cancel-in-progress: true
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout kdn repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Checkout website repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: openkaiden/website
+          token: ${{ secrets.KAIDEN_BOT_TOKEN }}
+          path: target-repo
+
+
+      - name: Checkout upstream defaults
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: fullsend-ai/fullsend
+          ref: 84c8bbbb821ff85136854150b06740253709b3b8 # v0.37.0
+          path: .defaults
+          sparse-checkout: |
+            internal/scaffold/fullsend-repo/
+
+
+      - name: Prepare workspace (upstream defaults)
+        run: |
+          set -euo pipefail
+          SRC=".defaults/internal/scaffold/fullsend-repo"
+          # Agent files (harness, agents, policies, etc.) are now resolved
+          # from the fullsend-ai/agents repo at runtime by `fullsend run`.
+          # Only infrastructure scripts remain in the scaffold.
+          LAYERED_DIRS="scripts"
+          for dir in ${LAYERED_DIRS}; do
+            if [[ -d "${SRC}/${dir}" ]]; then
+              mkdir -p ".fullsend/${dir}"
+              cp -r "${SRC}/${dir}/." ".fullsend/${dir}/"
+            fi
+          done
+          rm -rf .defaults
+
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ secrets.FULLSEND_GCP_WIF_PROVIDER }}
+          project_id: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
+
+      - name: Prepare sandbox credentials
+        run: bash .fullsend/scripts/prepare-sandbox-credentials.sh
+
+      - name: Install fullsend CLI
+        uses: fullsend-ai/fullsend@84c8bbbb821ff85136854150b06740253709b3b8 # v0.37.0
+        with:
+          agent: __install_only__
+
+      - name: Run webupd
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WEBSITE_GH_TOKEN: ${{ secrets.KAIDEN_BOT_TOKEN }}
+          WEBSITE_REPO_DIR: "${{ github.workspace }}/target-repo"
+          REPO_FULL_NAME: ${{ github.repository }}
+          ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
+          CLOUD_ML_REGION: ${{ vars.FULLSEND_GCP_REGION }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/output"
+          fullsend run webupd \
+            --fullsend-dir "$GITHUB_WORKSPACE/.fullsend" \
+            --target-repo "$GITHUB_WORKSPACE/target-repo" \
+            --output-dir "$GITHUB_WORKSPACE/output"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: fullsend-webupd
+          path: ${{ github.workspace }}/output
