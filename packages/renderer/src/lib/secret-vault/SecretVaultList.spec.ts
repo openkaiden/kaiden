@@ -18,7 +18,7 @@
 
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
@@ -201,4 +201,87 @@ test('Expect "Show all gateways" restores the full secrets list', async () => {
 
   expect(screen.getByText('github-pat')).toBeInTheDocument();
   expect(screen.queryByText(/No secrets on gateway 'remote'/)).not.toBeInTheDocument();
+});
+
+test('Expect bulk delete button is not visible when no secrets are selected', async () => {
+  secretVaultInfos.set([localSecret, remoteSecret]);
+
+  render(SecretVaultList);
+  await tick();
+
+  expect(screen.queryByRole('button', { name: 'Delete selected secrets' })).not.toBeInTheDocument();
+});
+
+test('Expect bulk delete calls removeSecret for each selected secret', async () => {
+  secretVaultInfos.set([localSecret, remoteSecret]);
+
+  render(SecretVaultList);
+  await tick();
+
+  const checkboxes = screen.getAllByRole('checkbox', { name: 'Toggle secret-vault' });
+  expect(checkboxes.length).toBeGreaterThanOrEqual(2);
+  await fireEvent.click(checkboxes[0]);
+  await tick();
+  await fireEvent.click(checkboxes[1]);
+  await tick();
+
+  vi.mocked(window.getConfigurationValue).mockResolvedValue(true);
+  vi.mocked(window.showMessageBox).mockResolvedValue({ response: 0 });
+  vi.mocked(window.removeSecret).mockResolvedValue({ name: '' });
+
+  const deleteButton = await screen.findByRole('button', { name: 'Delete selected secrets' });
+  await fireEvent.click(deleteButton);
+
+  await waitFor(() => {
+    expect(window.removeSecret).toHaveBeenCalledTimes(2);
+  });
+});
+
+test('Expect bulk delete shows error message when removeSecret fails', async () => {
+  secretVaultInfos.set([localSecret, remoteSecret]);
+
+  render(SecretVaultList);
+  await tick();
+
+  const checkboxes = screen.getAllByRole('checkbox', { name: 'Toggle secret-vault' });
+  await fireEvent.click(checkboxes[0]);
+  await tick();
+  await fireEvent.click(checkboxes[1]);
+  await tick();
+
+  vi.mocked(window.getConfigurationValue).mockResolvedValue(true);
+  vi.mocked(window.showMessageBox).mockResolvedValue({ response: 0 });
+  vi.mocked(window.removeSecret).mockResolvedValueOnce({ name: '' }).mockRejectedValueOnce(new Error('network error'));
+
+  const deleteButton = await screen.findByRole('button', { name: 'Delete selected secrets' });
+  await fireEvent.click(deleteButton);
+
+  await waitFor(() => {
+    expect(window.showMessageBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Error',
+        message: 'Failed to delete 1 secret',
+      }),
+    );
+  });
+});
+
+test('Expect bulk delete shows confirmation dialog when bulk confirmation is enabled', async () => {
+  secretVaultInfos.set([localSecret]);
+
+  render(SecretVaultList);
+  await tick();
+
+  const checkboxes = screen.getAllByRole('checkbox', { name: 'Toggle secret-vault' });
+  await fireEvent.click(checkboxes[0]);
+  await tick();
+
+  vi.mocked(window.getConfigurationValue).mockResolvedValue(true);
+  vi.mocked(window.showMessageBox).mockResolvedValue({ response: 1 });
+
+  const deleteButton = await screen.findByRole('button', { name: 'Delete selected secrets' });
+  await fireEvent.click(deleteButton);
+
+  expect(window.showMessageBox).toHaveBeenCalledOnce();
+  expect(window.removeSecret).not.toHaveBeenCalled();
 });
