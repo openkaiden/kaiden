@@ -77,3 +77,49 @@ test('Expect no error when deleting secret', async () => {
   // wait for the delete function to be called
   await waitFor(() => expect(deleteMock).toHaveBeenCalled());
 });
+
+test('Expect error status when secret deletion fails', async () => {
+  vi.mocked(window.showMessageBox).mockResolvedValue({ response: 0 });
+  deleteMock.mockRejectedValue(new Error('secret is in use by sandbox'));
+  const secret: ConfigMapSecretUI = {
+    name: 'my-secret',
+    namespace: '',
+    selected: false,
+    type: 'Secret',
+    status: '',
+    keys: [],
+  };
+  render(ConfigMapSecretActions, { configMapSecret: secret });
+
+  // click on delete button
+  const deleteButton = screen.getByRole('button', { name: 'Delete Secret' });
+  await fireEvent.click(deleteButton);
+
+  await waitFor(() => {
+    expect(secret.status).toBe('ERROR');
+    expect(secret.actionError).toContain('secret is in use by sandbox');
+  });
+});
+
+test('Expect error status when configmap deletion fails', async () => {
+  vi.mocked(window.showMessageBox).mockResolvedValue({ response: 0 });
+  deleteMock.mockRejectedValue(new Error('configmap deletion failed'));
+  const configMap: ConfigMapSecretUI = {
+    name: 'my-configmap',
+    namespace: '',
+    selected: false,
+    type: 'ConfigMap',
+    status: '',
+    keys: [],
+  };
+  render(ConfigMapSecretActions, { configMapSecret: configMap });
+
+  // click on delete button
+  const deleteButton = screen.getByRole('button', { name: 'Delete ConfigMap' });
+  await fireEvent.click(deleteButton);
+
+  await waitFor(() => {
+    expect(configMap.status).toBe('ERROR');
+    expect(configMap.actionError).toContain('configmap deletion failed');
+  });
+});
