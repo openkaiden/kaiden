@@ -33,8 +33,15 @@ const McpServerEntrySchema = z.looseObject({
 
 const CodexConfigSchema = z.looseObject({
   model: z.string().optional(),
+  model_provider: z.string().optional(),
+  model_providers: z.record(z.string(), z.looseObject({})).optional(),
+  projects: z.record(z.string(), z.looseObject({ trust_level: z.string().optional() })).optional(),
   mcp_servers: z.record(z.string(), McpServerEntrySchema).optional(),
 });
+
+const OPENSHELL_PROVIDER = 'openshell';
+const OPENAI_API_KEY = 'OPENAI_API_KEY';
+const WORKSPACE_PATH = '/sandbox';
 
 export async function activate(extensionContext: ExtensionContext): Promise<void> {
   const disposable = agents.registerAgent({
@@ -68,6 +75,27 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
       const config = CodexConfigSchema.parse(raw ? parse(raw) : {});
 
       config.model = context.model.model.label;
+      config.model_provider = OPENSHELL_PROVIDER;
+      config.model_providers ??= {};
+      config.model_providers[OPENSHELL_PROVIDER] = {
+        name: 'OpenShell',
+        base_url: 'https://inference.local/v1',
+        env_key: OPENAI_API_KEY,
+        wire_api: 'responses',
+        supports_websockets: false,
+      };
+      config.projects ??= {};
+      config.projects[WORKSPACE_PATH] = {
+        ...config.projects[WORKSPACE_PATH],
+        trust_level: 'trusted',
+      };
+
+      context.workspace.environment ??= [];
+      const apiKeyIndex = context.workspace.environment.findIndex(entry => entry.name === OPENAI_API_KEY);
+      if (apiKeyIndex >= 0) {
+        context.workspace.environment.splice(apiKeyIndex, 1);
+      }
+      context.workspace.environment.push({ name: OPENAI_API_KEY, value: 'unused' });
 
       const mcpServers = context.workspace.mcp?.servers;
       const mcpCommands = context.workspace.mcp?.commands;
