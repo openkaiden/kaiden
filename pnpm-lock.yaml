@@ -912,6 +912,40 @@ importers:
         specifier: ^4.0.10
         version: 4.0.18(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.31.1)(msw@2.12.10(@types/node@24.13.3)(typescript@5.9.3))(terser@5.36.0)(tsx@4.20.3)(yaml@2.8.2)
 
+  extensions/vllm-semantic-router:
+    dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: ^3.0.5
+        version: 3.0.14(zod@4.4.3)
+      inversify:
+        specifier: ^7.7.1
+        version: 7.11.0(reflect-metadata@0.2.2)
+      yaml:
+        specifier: ^2.8.0
+        version: 2.8.2
+      zod:
+        specifier: ^4.3.5
+        version: 4.4.3
+    devDependencies:
+      '@openkaiden/api':
+        specifier: workspace:*
+        version: link:../../packages/extension-api
+      '@openkaiden/container-extension-api':
+        specifier: workspace:*
+        version: link:../container/packages/api
+      adm-zip:
+        specifier: ^0.5.16
+        version: 0.5.16
+      mkdirp:
+        specifier: ^3.0.1
+        version: 3.0.1
+      vite:
+        specifier: ^7.1.2
+        version: 7.3.1(@types/node@24.13.3)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.36.0)(tsx@4.20.3)(yaml@2.8.2)
+      vitest:
+        specifier: ^4.0.10
+        version: 4.0.18(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.31.1)(msw@2.12.10(@types/node@24.13.3)(typescript@5.9.3))(terser@5.36.0)(tsx@4.20.3)(yaml@2.8.2)
+
   packages/extension-api:
     dependencies:
       '@ai-sdk/provider':

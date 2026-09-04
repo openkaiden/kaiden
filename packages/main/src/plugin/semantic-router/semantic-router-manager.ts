@@ -20,13 +20,17 @@ import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
+import { InferenceProviderConnection } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
+import { stringify } from 'yaml';
 
 import { IPCHandle } from '/@/plugin/api.js';
 import { Directories } from '/@/plugin/directories.js';
 import { ProviderRegistry } from '/@/plugin/provider-registry.js';
+import { SafeStorageRegistry } from '/@/plugin/safe-storage/safe-storage-registry.js';
+import { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
-import type { SemanticRouterConfigInfo, SemanticRouterInfo } from '/@api/semantic-router-info.js';
+import type { ModelRef, SemanticRouterConfigInfo, SemanticRouterInfo } from '/@api/semantic-router-info.js';
 import { SemanticRouterConfigSchema } from '/@api/semantic-router-info.js';
 
 @injectable()
@@ -38,6 +42,8 @@ export class SemanticRouterManager {
     @inject(IPCHandle) private readonly ipcHandle: IPCHandle,
     @inject(Directories) private readonly directories: Directories,
     @inject(ProviderRegistry) private readonly providerRegistry: ProviderRegistry,
+    @inject(SecretManager) private readonly secretManager: SecretManager,
+    @inject(SafeStorageRegistry) private readonly safeStorageRegistry: SafeStorageRegistry,
   ) {}
 
   async init(): Promise<void> {
@@ -47,6 +53,12 @@ export class SemanticRouterManager {
     }
 
     await this.loadFromDisk();
+
+    this.providerRegistry.onDidSetSemanticRouterConnectionFactory(() => {
+      this.processUninstantiatedConfigs().catch((e: unknown) => {
+        console.error('Failed to process uninstantiated semantic router configs', e);
+      });
+    });
 
     this.ipcHandle('semantic-router-manager:list', async (): Promise<SemanticRouterInfo[]> => {
       return this.list();
@@ -98,10 +110,10 @@ export class SemanticRouterManager {
       try {
         const semanticRouter = await factoryResult.factory.create({
           name: parsed.name,
-          config: JSON.stringify(parsed),
+          config: await this.convertToYaml(parsed),
         });
         entry.connection = {
-          providerId: factoryResult.internalId,
+          providerInternalId: factoryResult.internalId,
           connectionId: semanticRouter.connectionId,
         };
       } catch (err: unknown) {
@@ -123,6 +135,167 @@ export class SemanticRouterManager {
     this.configs.delete(name);
     this.apiSender.send('semantic-router-update');
     await this.providerRegistry.deleteInferenceConnectionBySemanticRouter(name);
+  }
+
+  private async tryInstantiate(entry: SemanticRouterInfo): Promise<void> {
+    const result = this.providerRegistry.getSemanticRouterFactory();
+    if (result) {
+      try {
+        const connection = await result.factory.create({ name: entry.name, config: await this.convertToYaml(entry) });
+        entry.connection = {
+          providerInternalId: result.internalId,
+          connectionId: connection.connectionId,
+        };
+      } catch (err: unknown) {
+        console.error('Failed to create semantic router', err);
+        /* empty */
+      }
+    }
+  }
+
+  async processUninstantiatedConfigs(): Promise<void> {
+    for (const [, entry] of this.configs) {
+      if (!entry.connection) {
+        await this.tryInstantiate(entry);
+      }
+    }
+  }
+
+  getModelKey(model: { providerId: string; connectionId: string; label: string }): string {
+    return `${model.providerId}::${model.connectionId}::${model.label}`;
+  }
+
+  async convertToYaml(config: SemanticRouterConfigInfo): Promise<string> {
+    const models = new Map<
+      string,
+      { endpoint: string; protocol: string; label: string; api_format: string; api_key?: string }
+    >();
+
+    for (const decision of config.routing.decisions) {
+      for (const rule of decision.rules) {
+        for (const ref of rule.modelRefs) {
+          await this.addModelIfRequired(ref, models);
+        }
+      }
+    }
+    if (config.routing.defaultModelRef !== undefined) {
+      await this.addModelIfRequired(config.routing.defaultModelRef, models);
+    }
+
+    const yamlConfig: Record<string, unknown> = {
+      version: 'v0.3',
+      listeners: config.listeners.map(l => ({
+        name: `http-${l.port}`,
+        address: l.address,
+        port: l.port,
+        ...(l.timeout !== undefined && { timeout: `${l.timeout}s` }),
+      })),
+      providers: {
+        models: Array.from(models.entries()).map(([name, { endpoint, label, protocol, api_format, api_key }]) => ({
+          name,
+          provider_model_id: label,
+          backend_refs: [
+            {
+              name: 'primary',
+              endpoint: api_format === 'gemini' ? `${endpoint}/v1beta/openai` : endpoint,
+              protocol,
+              weight: 100,
+              api_key,
+            },
+          ],
+        })),
+        defaults: {
+          default_model: config.routing.defaultModelRef ? this.getModelKey(config.routing.defaultModelRef) : undefined,
+        },
+      },
+      routing: {
+        modelCards: Array.from(models.entries()).map(([name, _unused]) => ({
+          name,
+          //modality: 'text',
+          //capabilities: ['chat', 'reasoning', 'thinking'],
+        })),
+        signals: {
+          keywords: config.routing.keywords.map(k => ({
+            name: k.name,
+            operator: k.operator,
+            keywords: k.keywords,
+            case_sensitive: k.caseSensitive,
+          })),
+        },
+        decisions: config.routing.decisions.map(d => {
+          const allConditions = d.rules.flatMap(r => r.conditions);
+          const allModelRefs = d.rules.flatMap(r => r.modelRefs);
+
+          return {
+            name: d.name,
+            ...{ description: d.description ?? d.name },
+            priority: d.priority,
+            rules: {
+              operator: d.rules[0]?.operator ?? 'AND',
+              conditions: allConditions.map(c => ({ type: c.type, name: c.name })),
+            },
+            modelRefs: allModelRefs.map(ref => ({
+              model: this.getModelKey(ref),
+              use_reasoning: ref.useReasoning,
+            })),
+          };
+        }),
+      },
+      global: {
+        router: {
+          auto_model_name: `Semantic Router ${config.name}`,
+        },
+        services: {
+          router_replay: {
+            enabled: true,
+            store_backend: 'memory',
+          },
+        },
+      },
+    };
+
+    return stringify(yamlConfig);
+  }
+
+  private async getApiKey(connection: InferenceProviderConnection, providerId: string): Promise<string | undefined> {
+    const provider = this.providerRegistry.getProvider(providerId);
+    const { config, connectionProperties } = this.secretManager.getConnectionProperties(connection, provider);
+    const configKeys = connectionProperties
+      .filter(([fullKey, _schema]) => !fullKey.endsWith('._type') && !fullKey.endsWith('._flags'))
+      .filter(([_fullKey, schema]) => schema.format === 'password');
+    if (configKeys.length > 0) {
+      const name = configKeys[0]?.[0];
+      if (name !== undefined) {
+        const secretName = config.get<string>(name);
+        if (secretName !== undefined) {
+          const extensionStorage = this.safeStorageRegistry.getExtensionStorage(provider.extensionId);
+          return extensionStorage.get(secretName);
+        }
+      }
+    }
+    return undefined;
+  }
+
+  private async addModelIfRequired(
+    ref: ModelRef,
+    models: Map<string, { endpoint: string; protocol: string; label: string; api_format: string; api_key?: string }>,
+  ): Promise<void> {
+    const key = this.getModelKey(ref);
+    if (!models.has(key)) {
+      const connection = this.providerRegistry.getInferenceConnection(ref.providerId, ref.connectionId);
+      const apiKey = await this.getApiKey(connection, ref.providerId);
+      const rawEndpoint = connection.endpoint;
+      if (rawEndpoint) {
+        const url = new URL(rawEndpoint);
+        models.set(key, {
+          endpoint: url.host,
+          protocol: url.protocol.replace(':', ''),
+          label: ref.label,
+          api_format: connection.llmMetadata?.name ?? 'openai',
+          api_key: apiKey,
+        });
+      }
+    }
   }
 
   private async loadFromDisk(): Promise<void> {

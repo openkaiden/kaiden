@@ -222,7 +222,7 @@ export class AgentWorkspaceManager implements Disposable {
     }
 
     if (secretName !== undefined) {
-      const connection = this.providerRegistry.getInferenceConnection(options.model);
+      const connection = this.providerRegistry.getInferenceConnectionLegacy(options.model);
       if (connection) {
         const provider = this.providerRegistry.getProvider(connection?.providerId);
         const { connectionProperties } = this.secretManager.getConnectionProperties(connection.connection, provider);
