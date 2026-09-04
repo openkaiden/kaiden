@@ -5611,6 +5611,13 @@ declare module '@openkaiden/api' {
      * ${HOME}/path1/path2
      */
     readonly destinationSkillsFolder: string;
+    /**
+     * Optional shell command to run inside the sandbox after creation via
+     * `openshell sandbox exec`. Use this for one-time setup that needs
+     * runtime context (e.g. environment variables resolved by the provider
+     * system) which is not available during {@link preWorkspaceStart}.
+     */
+    readonly setupCommand?: string;
     isSupportedModelType?(type: ModelType): boolean | Promise<boolean>;
     preWorkspaceStart(context: AgentWorkspaceContext): Promise<void>;
   }

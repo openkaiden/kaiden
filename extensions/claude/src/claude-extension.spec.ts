@@ -112,6 +112,16 @@ describe('ClaudeExtension', () => {
     expect(agent.configurationFiles[1]!.path).toBe(CLAUDE_JSON_PATH);
   });
 
+  test('registers agent with setupCommand that approves ANTHROPIC_API_KEY suffix', async () => {
+    await claudeExtension.activate();
+
+    const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
+    expect(agent.setupCommand).toBeDefined();
+    expect(agent.setupCommand).toContain('ANTHROPIC_API_KEY');
+    expect(agent.setupCommand).toContain('.slice(-20)');
+    expect(agent.setupCommand).toContain('customApiKeyResponses');
+  });
+
   describe('preWorkspaceStart', () => {
     function createContext(
       configFiles: AgentConfigurationFile[],
@@ -222,36 +232,6 @@ describe('ClaudeExtension', () => {
       const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
       expect(written.hasCompletedOnboarding).toBe(true);
       expect(written.projects['/sandbox'].hasTrustDialogAccepted).toBe(true);
-      expect(written.customApiKeyResponses).toEqual({
-        approved: ['unused'],
-        rejected: [],
-      });
-    });
-
-    test('approves unused Claude API key response in .claude.json', async () => {
-      await claudeExtension.activate();
-      const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
-
-      const updateMock = vi.fn();
-      const existing = JSON.stringify({
-        customApiKeyResponses: {
-          approved: ['existing'],
-          rejected: ['unused', 'other'],
-        },
-      });
-      const configFile: AgentConfigurationFile = {
-        path: CLAUDE_JSON_PATH,
-        read: vi.fn().mockResolvedValue(existing),
-        update: updateMock,
-      };
-
-      await agent.preWorkspaceStart(createContext([configFile]));
-
-      const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
-      expect(written.customApiKeyResponses).toEqual({
-        approved: ['existing', 'unused'],
-        rejected: ['other'],
-      });
     });
 
     test('writes command MCP servers as stdio in .claude.json', async () => {

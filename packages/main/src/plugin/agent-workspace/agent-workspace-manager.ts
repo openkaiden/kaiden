@@ -289,7 +289,14 @@ export class AgentWorkspaceManager implements Disposable {
 
     const tPolicy = performance.now();
     console.log(`[workspace-timing] updatePolicy: ${(tPolicy - tSandbox).toFixed(0)}ms`);
-    console.log(`[workspace-timing] total createOpenshell: ${(tPolicy - t0).toFixed(0)}ms`);
+
+    if (agent.setupCommand) {
+      await this.openshellCli.execInSandbox(sandboxName, ['bash', '-c', agent.setupCommand], options.gateway);
+    }
+
+    const tSetup = performance.now();
+    console.log(`[workspace-timing] setupCommand: ${(tSetup - tPolicy).toFixed(0)}ms`);
+    console.log(`[workspace-timing] total createOpenshell: ${(tSetup - t0).toFixed(0)}ms`);
 
     return { id: sandboxName };
   }

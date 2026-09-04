@@ -841,6 +841,23 @@ describe('create – OpenShell mode', () => {
     expect(openshellCli.updatePolicy).not.toHaveBeenCalled();
   });
 
+  test('runs setupCommand via execInSandbox after sandbox creation', async () => {
+    vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({
+      ...mockAgent,
+      setupCommand: 'echo hello',
+    });
+
+    await manager.create(defaultOptions);
+
+    expect(openshellCli.execInSandbox).toHaveBeenCalledWith('my-sandbox', ['bash', '-c', 'echo hello'], 'kaiden');
+  });
+
+  test('does not call execInSandbox when agent has no setupCommand', async () => {
+    await manager.create(defaultOptions);
+
+    expect(openshellCli.execInSandbox).not.toHaveBeenCalled();
+  });
+
   test('deletes sandbox and rethrows when updatePolicy fails', async () => {
     const options = {
       ...defaultOptions,

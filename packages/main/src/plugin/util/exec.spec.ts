@@ -75,6 +75,7 @@ describe('exec', () => {
       }
     }) as unknown as Readable;
     const spawnMock = vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: setEncodingMock },
       stderr: { on, setEncoding: setEncodingMock },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
@@ -103,6 +104,7 @@ describe('exec', () => {
       }
     }) as unknown as Readable;
     const spawnMock = vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: setEncodingMock },
       stderr: { on, setEncoding: setEncodingMock },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
@@ -130,6 +132,7 @@ describe('exec', () => {
       }
     }) as unknown as Readable;
     vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: setEncodingMock },
       stderr: { on, setEncoding: setEncodingMock },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
@@ -160,6 +163,7 @@ describe('exec', () => {
     }) as unknown as Readable;
     const error = new Error('Error message');
     vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: setEncodingMock },
       stderr: { on, setEncoding: setEncodingMock },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: Error) => void) => {
@@ -188,6 +192,7 @@ describe('exec', () => {
 
     const childProcessMock: unknown = {
       killed: false,
+      stdin: { end: vi.fn() },
       stdout: { on: vi.fn(), setEncoding: setEncodingMock },
       stderr: { on: vi.fn(), setEncoding: setEncodingMock },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
@@ -243,6 +248,7 @@ describe('exec', () => {
       }
     }) as unknown as Readable;
     const spawnMock = vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: setEncodingMock },
       stderr: { on, setEncoding: setEncodingMock },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
@@ -280,6 +286,7 @@ describe('exec', () => {
       }
     }) as unknown as Readable;
     const spawnMock = vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: setEncodingMock },
       stderr: { on, setEncoding: setEncodingMock },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
@@ -317,6 +324,7 @@ describe('exec', () => {
       }
     }) as unknown as Readable;
     const spawnMock = vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: setEncodingMock },
       stderr: { on, setEncoding: setEncodingMock },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
@@ -354,6 +362,7 @@ describe('exec', () => {
       }
     }) as unknown as Readable;
     const spawnMock = vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: vi.fn() },
       stderr: { on, setEncoding: vi.fn() },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
@@ -390,6 +399,7 @@ describe('exec', () => {
       }
     }) as unknown as Readable;
     const spawnMock = vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: vi.fn() },
       stderr: { on, setEncoding: vi.fn() },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
@@ -423,6 +433,7 @@ describe('exec', () => {
       }
     }) as unknown as Readable;
     const spawnMock = vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: vi.fn() },
       stderr: { on, setEncoding: vi.fn() },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
@@ -463,6 +474,7 @@ describe('exec', () => {
       }
     }) as unknown as Readable;
     const spawnMock = vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: vi.fn() },
       stderr: { on, setEncoding: vi.fn() },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
@@ -502,6 +514,7 @@ describe('exec', () => {
       }
     }) as unknown as Readable;
     const spawnMock = vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: vi.fn() },
       stderr: { on, setEncoding: vi.fn() },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
@@ -533,6 +546,7 @@ describe('exec', () => {
       }
     }) as unknown as Readable;
     const spawnMock = vi.mocked(spawn).mockReturnValue({
+      stdin: { end: vi.fn() },
       stdout: { on, setEncoding: setEncodingMock },
       stderr: { on, setEncoding: setEncodingMock },
       on: vi.fn().mockImplementation((event: string, cb: (arg0: number) => void) => {
