@@ -21,6 +21,7 @@ import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join, normalize } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
+import AdmZip from 'adm-zip';
 import * as tar from 'tar';
 
 import { sha256 } from './sha256';
@@ -39,6 +40,7 @@ interface AssetSpec {
 export interface GitHubArtifactDownload {
   name: string;
   repository: string;
+  tagPrefix?: string;
   assets: Record<string, AssetSpec[]>;
 }
 
@@ -127,21 +129,33 @@ export const OPENSHELL_IMAGE_BUILDER_DOWNLOAD: GitHubArtifactDownload = {
   },
 };
 
+export const OPENSHELL_WINDOWS_GATEWAY_DOWNLOAD: GitHubArtifactDownload = {
+  name: 'openshell-windows-gateway',
+  repository: 'jeffmaury/openshell-dist',
+  tagPrefix: '',
+  assets: {
+    'win32-x64': [{ assetName: 'openshell-x86_64-pc-windows-msvc.zip', binaryName: 'openshell-gateway.exe' }],
+    'win32-arm64': [{ assetName: 'openshell-aarch64-pc-windows-msvc.zip', binaryName: 'openshell-gateway.exe' }],
+  },
+};
+
 export async function getRelease(downloadConfig: GitHubArtifactDownload, version: string): Promise<ReleaseInfo> {
   const headers: Record<string, string> = { Accept: 'application/vnd.github.v3+json' };
   const token = process.env['GITHUB_TOKEN'];
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const res = await fetch(`https://api.github.com/repos/${downloadConfig.repository}/releases/tags/v${version}`, {
+  const prefix = downloadConfig.tagPrefix ?? 'v';
+  const tag = `${prefix}${version}`;
+  const res = await fetch(`https://api.github.com/repos/${downloadConfig.repository}/releases/tags/${tag}`, {
     headers,
     redirect: 'follow',
   });
   if (!res.ok) {
-    throw new Error(`failed to fetch ${downloadConfig.name} release v${version}: ${res.status} ${res.statusText}`);
+    throw new Error(`failed to fetch ${downloadConfig.name} release ${tag}: ${res.status} ${res.statusText}`);
   }
   const data = (await res.json()) as { tag_name: string; assets: { name: string; digest: string | null }[] };
-  const resolvedVersion = data.tag_name.replace(/^v/, '');
+  const resolvedVersion = prefix ? data.tag_name.replace(new RegExp(`^${prefix}`), '') : data.tag_name;
   const digests = new Map<string, string>();
   for (const asset of data.assets) {
     if (asset.digest) {
@@ -190,6 +204,15 @@ async function extract(archive: string, outDir: string): Promise<void> {
   });
 }
 
+function extractZip(archive: string, outDir: string): void {
+  const zip = new AdmZip(archive);
+  for (const entry of zip.getEntries()) {
+    if (!entry.isDirectory && isSafePath(entry.entryName)) {
+      zip.extractEntryTo(entry, outDir, false, true);
+    }
+  }
+}
+
 export async function downloadBinaries(
   downloadConfig: GitHubArtifactDownload,
   version: string,
@@ -228,7 +251,8 @@ export async function downloadBinaries(
 
     const assetNames = Array.isArray(asset.assetName) ? asset.assetName : [asset.assetName];
     const assetName = assetNames.find(name => digests.has(name)) ?? assetNames[0];
-    const url = `https://github.com/${downloadConfig.repository}/releases/download/v${version}/${assetName}`;
+    const prefix = downloadConfig.tagPrefix ?? 'v';
+    const url = `https://github.com/${downloadConfig.repository}/releases/download/${prefix}${version}/${assetName}`;
     const downloadPath = join(assetDir, assetName);
     const binaryPath = join(assetDir, asset.binaryName);
 
@@ -239,6 +263,10 @@ export async function downloadBinaries(
     if (assetName.endsWith('.tar.gz')) {
       console.log(`extracting ${asset.binaryName}...`);
       await extract(downloadPath, assetDir);
+      await rm(downloadPath);
+    } else if (assetName.endsWith('.zip')) {
+      console.log(`extracting ${asset.binaryName}...`);
+      extractZip(downloadPath, assetDir);
       await rm(downloadPath);
     } else if (downloadPath !== binaryPath) {
       await rename(downloadPath, binaryPath);

@@ -21,6 +21,8 @@ import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
+import type { IZipEntry } from 'adm-zip';
+import AdmZip from 'adm-zip';
 import * as tar from 'tar';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -29,12 +31,19 @@ import {
   getRelease,
   OPENSHELL_DOWNLOAD,
   OPENSHELL_IMAGE_BUILDER_DOWNLOAD,
+  OPENSHELL_WINDOWS_GATEWAY_DOWNLOAD,
 } from './openshell-download';
 import { sha256 } from './sha256';
 
 vi.mock(import('node:fs'));
 vi.mock(import('node:fs/promises'));
 vi.mock(import('node:stream/promises'));
+vi.mock('adm-zip', () => {
+  const AdmZip = vi.fn();
+  AdmZip.prototype.getEntries = vi.fn().mockReturnValue([]);
+  AdmZip.prototype.extractEntryTo = vi.fn();
+  return { default: AdmZip };
+});
 vi.mock(import('tar'));
 vi.mock(import('./sha256'));
 
@@ -201,6 +210,26 @@ describe('downloadBinaries', () => {
     expect(mkdir).toHaveBeenCalledWith('/output', { recursive: true });
   });
 
+  test('extracts Windows gateway from zip archive and skips chmod', async () => {
+    stubDownloadFetch();
+    const mockEntries: IZipEntry[] = [
+      { isDirectory: false, entryName: 'openshell-gateway.exe' } as IZipEntry,
+      { isDirectory: true, entryName: 'subdir/' } as IZipEntry,
+    ];
+    vi.mocked(AdmZip.prototype.getEntries).mockReturnValue(mockEntries);
+    vi.mocked(AdmZip.prototype.extractEntryTo).mockImplementation((_entry: unknown, outDir: string) => {
+      fileMap.set(normPath(path.join(outDir, 'openshell-gateway.exe')), true);
+      return true;
+    });
+    const digests = new Map([['openshell-x86_64-pc-windows-msvc.zip', 'abc123']]);
+
+    await downloadBinaries(OPENSHELL_WINDOWS_GATEWAY_DOWNLOAD, 'abc123', 'win32', 'x64', '/output', digests);
+
+    expect(AdmZip).toHaveBeenCalled();
+    expect(tar.extract).not.toHaveBeenCalled();
+    expect(chmod).not.toHaveBeenCalled();
+  });
+
   test('sends Authorization header when GITHUB_TOKEN is set', async () => {
     vi.stubEnv('GITHUB_TOKEN', 'test-token');
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, body: new PassThrough() });
@@ -270,6 +299,22 @@ describe('getRelease', () => {
       'https://api.github.com/repos/openkaiden/openshell-image-builder/releases/tags/v0.9.0',
       expect.any(Object),
     );
+  });
+
+  test('uses empty tag prefix for Windows gateway config', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => ({ tag_name: 'c93b2fa7', assets: [] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const release = await getRelease(OPENSHELL_WINDOWS_GATEWAY_DOWNLOAD, 'c93b2fa7');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.github.com/repos/jeffmaury/openshell-dist/releases/tags/c93b2fa7',
+      expect.any(Object),
+    );
+    expect(release.version).toBe('c93b2fa7');
   });
 
   test('throws on fetch failure', async () => {

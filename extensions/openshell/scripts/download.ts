@@ -27,6 +27,7 @@ import {
   getRelease,
   OPENSHELL_DOWNLOAD,
   OPENSHELL_IMAGE_BUILDER_DOWNLOAD,
+  OPENSHELL_WINDOWS_GATEWAY_DOWNLOAD,
   type GitHubArtifactDownload,
 } from '../src/openshell-download';
 import { downloadMkfsExt4 } from '../src/e2fsprogs-download';
@@ -38,12 +39,15 @@ const SUPPORTED_TARGETS: { platform: string; arch: string }[] = [
   { platform: 'darwin', arch: 'arm64' },
   { platform: 'linux', arch: 'x64' },
   { platform: 'linux', arch: 'arm64' },
+  { platform: 'win32', arch: 'x64' },
+  { platform: 'win32', arch: 'arm64' },
 ];
 
 interface PackageJson {
   e2fsprogsVersion: string;
   openshellVersion: string;
   openshellImageBuilderVersion: string;
+  openshellWindowsGatewayVersion: string;
 }
 
 interface DownloadEntry {
@@ -64,6 +68,11 @@ const DOWNLOADS: DownloadEntry[] = [
     config: OPENSHELL_IMAGE_BUILDER_DOWNLOAD,
     versionProperty: 'openshellImageBuilderVersion',
     outputSubdirectory: 'image-builder',
+  },
+  {
+    id: 'windows-gateway',
+    config: OPENSHELL_WINDOWS_GATEWAY_DOWNLOAD,
+    versionProperty: 'openshellWindowsGatewayVersion',
   },
 ];
 
@@ -129,6 +138,11 @@ if (targets.length === 0) {
     console.log(`${downloadEntry.config.name} pinned release: v${version}`);
 
     for (const { platform, arch } of targets) {
+      const key = `${platform}-${arch}`;
+      if (!downloadEntry.config.assets[key]) {
+        console.log(`No ${downloadEntry.config.name} assets for ${key}, skipping.`);
+        continue;
+      }
       const outputDir = downloadEntry.outputSubdirectory
         ? resolve(ASSETS_DIR, downloadEntry.outputSubdirectory, `${platform}-${arch}`)
         : resolve(ASSETS_DIR, `${platform}-${arch}`);

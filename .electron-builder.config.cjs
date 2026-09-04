@@ -120,41 +120,44 @@ const config = {
     // download & package remote extensions
     await packageRemoteExtensions(context);
 
-    // include pre-downloaded OpenShell binaries (not available on Windows)
+    // include pre-downloaded OpenShell binaries
     const openshellArchMap = { [Arch.x64]: 'x64', [Arch.arm64]: 'arm64' };
     const openshellArch = openshellArchMap[context.arch];
-    if (openshellArch && context.electronPlatformName !== 'win32') {
+    if (openshellArch) {
       const openshellAssetsDir = path.join(
         'extensions',
         'openshell',
         'assets',
         `${context.electronPlatformName}-${openshellArch}`,
       );
-      if (!fs.existsSync(openshellAssetsDir)) {
+      if (fs.existsSync(openshellAssetsDir)) {
+        context.packager.config.extraResources.push({
+          from: openshellAssetsDir,
+          to: 'openshell',
+          filter: ['!.openshell-version', '!.openshell-windows-gateway-version'],
+        });
+      } else if (context.electronPlatformName !== 'win32') {
         throw new Error(
           `OpenShell assets not found at ${openshellAssetsDir}. Run "pnpm --filter openshell download" (or "pnpm --filter openshell download:all") before packaging.`,
         );
       }
-      context.packager.config.extraResources.push({
-        from: openshellAssetsDir,
-        to: 'openshell',
-        filter: ['!.openshell-version'],
-      });
 
-      // include pre-downloaded openshell-image-builder binary (same platform filter)
-      const ibAssetsDir = path.join(
-        'extensions',
-        'openshell',
-        'assets',
-        'image-builder',
-        `${context.electronPlatformName}-${openshellArch}`,
-      );
-      if (fs.existsSync(ibAssetsDir)) {
-        context.packager.config.extraResources.push({
-          from: ibAssetsDir,
-          to: 'openshell-image-builder',
-          filter: ['!.openshell-image-builder-version'],
-        });
+      // include pre-downloaded openshell-image-builder binary (not available on Windows)
+      if (context.electronPlatformName !== 'win32') {
+        const ibAssetsDir = path.join(
+          'extensions',
+          'openshell',
+          'assets',
+          'image-builder',
+          `${context.electronPlatformName}-${openshellArch}`,
+        );
+        if (fs.existsSync(ibAssetsDir)) {
+          context.packager.config.extraResources.push({
+            from: ibAssetsDir,
+            to: 'openshell-image-builder',
+            filter: ['!.openshell-image-builder-version'],
+          });
+        }
       }
     }
 
