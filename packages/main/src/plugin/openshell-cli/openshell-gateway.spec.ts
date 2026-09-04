@@ -19,7 +19,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createWriteStream, existsSync, type WriteStream } from 'node:fs';
-import { type FileHandle, mkdir, open, writeFile } from 'node:fs/promises';
+import { type FileHandle, mkdir, open, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { RunResult } from '@openkaiden/api';
@@ -1127,6 +1127,43 @@ describe('onDidGatewayInitFailed', () => {
 
     expect(failListener).not.toHaveBeenCalled();
     expect(notificationRegistry.addNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe('supportsMounts', () => {
+  test('returns true when the managed gateway config enables bind mounts', async () => {
+    vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true\n');
+
+    await expect(
+      gateway.supportsMounts({
+        name: 'kaiden-local',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+      }),
+    ).resolves.toBe(true);
+    expect(readFile).toHaveBeenCalledWith(GATEWAY_CONFIG_PATH, 'utf-8');
+  });
+
+  test('returns false for gateways without a managed bind-mount config', async () => {
+    vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
+
+    await expect(
+      gateway.supportsMounts({ name: 'kaiden-local', endpoint: 'http://127.0.0.1:17670', type: 'local' }),
+    ).resolves.toBe(false);
+  });
+
+  test('returns false for a remote registration with stale managed storage', async () => {
+    vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true\n');
+
+    await expect(
+      gateway.supportsMounts({
+        name: 'kaiden-local',
+        endpoint: 'https://gateway.example.com',
+        type: 'remote',
+        is_remote: true,
+      }),
+    ).resolves.toBe(false);
+    expect(readFile).not.toHaveBeenCalled();
   });
 });
 

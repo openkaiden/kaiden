@@ -252,6 +252,22 @@ describe('createSandbox', () => {
     );
   });
 
+  test('includes driver config JSON when provided', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(''));
+    const driverConfig = {
+      podman: { mounts: [{ type: 'bind', source: '/host/project', target: '/sandbox/project' }] },
+    };
+
+    await openshellCli.createSandbox({ driverConfig });
+
+    expect(exec.exec).toHaveBeenCalledWith(
+      OPENSHELL_CLI_PATH,
+      ['sandbox', 'create', '--driver-config-json', JSON.stringify(driverConfig)],
+      undefined,
+    );
+  });
+
   test('places --upload flags before -- command separator', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.mocked(exec.exec).mockResolvedValue(mockExecResult(''));

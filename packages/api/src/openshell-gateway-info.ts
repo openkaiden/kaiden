@@ -118,6 +118,7 @@ export interface CreateSandboxOptions {
   env?: Record<string, string>;
   labels?: Record<string, string>;
   uploads?: Array<{ local: string; remote: string }>;
+  driverConfig?: Record<string, unknown>;
   command?: string[];
   noTty?: boolean;
   tty?: boolean;

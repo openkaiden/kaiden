@@ -216,6 +216,9 @@ export class OpenshellCli {
         args.push('--upload', `${upload.local}:${upload.remote}`);
       }
     }
+    if (options.driverConfig) {
+      args.push('--driver-config-json', JSON.stringify(options.driverConfig));
+    }
     if (options.noTty) {
       args.push('--no-tty');
     }

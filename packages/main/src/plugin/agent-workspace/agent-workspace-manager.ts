@@ -64,6 +64,7 @@ const SOURCES_VARIABLE = '$SOURCES';
 const MOUNT_HOME_PREFIX = '$HOME';
 
 type OpenshellUpload = { local: string; remote: string };
+type OpenshellBindMount = { type: 'bind'; source: string; target: string; read_only: boolean };
 
 interface WorkspaceTerminalSession {
   callbackId: number;
@@ -157,7 +158,7 @@ export class AgentWorkspaceManager implements Disposable {
       }
 
       const secretName = await this.ensureModelSecret(options);
-      const workspaceId = await this.createOpenshell(options, secretName);
+      const workspaceId = await this.createOpenshell(options, gateway, secretName);
       task.status = 'success';
       return workspaceId;
     } catch (err: unknown) {
@@ -171,7 +172,11 @@ export class AgentWorkspaceManager implements Disposable {
     }
   }
 
-  private async createOpenshell(options: AgentWorkspaceCreateOptions, secretName?: string): Promise<AgentWorkspaceId> {
+  private async createOpenshell(
+    options: AgentWorkspaceCreateOptions,
+    gateway: GatewayInfo,
+    secretName?: string,
+  ): Promise<AgentWorkspaceId> {
     const connectionInfo = this.providerRegistry.getInferenceConnectionCredentials(options.model);
 
     const modelName = options.model.split('::')[1] ?? '';
@@ -236,7 +241,9 @@ export class AgentWorkspaceManager implements Disposable {
       }
     }
 
-    uploads.push(...(await this.buildOpenshellFilesystemUploads(options.sourcePath, workspace)));
+    const supportsMounts = !!gateway.driver && (await this.openshellGateway.supportsMounts(gateway));
+    const filesystem = await this.buildOpenshellFilesystem(options.sourcePath, workspace, supportsMounts);
+    uploads.push(...filesystem.uploads);
 
     const env = workspace.environment
       ?.filter(entry => typeof entry.value === 'string' && entry.value !== '')
@@ -267,6 +274,10 @@ export class AgentWorkspaceManager implements Disposable {
         [AGENT_LABEL]: options.agent,
       },
       uploads: dedupedUploads.length > 0 ? dedupedUploads : undefined,
+      driverConfig:
+        gateway.driver && filesystem.mounts.length > 0
+          ? { [gateway.driver]: { mounts: filesystem.mounts } }
+          : undefined,
       detach: true,
       tty: true,
     });
@@ -327,11 +338,13 @@ export class AgentWorkspaceManager implements Disposable {
     return resolved.map(local => ({ local, remote: remoteBase }));
   }
 
-  private async buildOpenshellFilesystemUploads(
+  private async buildOpenshellFilesystem(
     sourcePath: string | undefined,
     workspace: AgentWorkspaceConfiguration,
-  ): Promise<OpenshellUpload[]> {
+    supportsMounts: boolean,
+  ): Promise<{ uploads: OpenshellUpload[]; mounts: OpenshellBindMount[] }> {
     const uploads: OpenshellUpload[] = [];
+    const mounts: OpenshellBindMount[] = [];
     if (sourcePath) {
       uploads.push({ local: await realpath(sourcePath), remote: '.' });
     }
@@ -352,9 +365,33 @@ export class AgentWorkspaceManager implements Disposable {
         throw new Error(`Mount host path does not exist: ${raw}`);
       }
       const resolvedRemote = await this.resolveUploadRemotePath(local, remote);
-      uploads.push({ local, remote: resolvedRemote });
+      const mountTarget = supportsMounts ? this.resolveOpenshellMountTarget(remote) : undefined;
+      if (mountTarget) {
+        mounts.push({ type: 'bind', source: local, target: mountTarget, read_only: mount.ro });
+      } else {
+        uploads.push({ local, remote: resolvedRemote });
+      }
     }
-    return uploads;
+    return { uploads, mounts };
+  }
+
+  private resolveOpenshellMountTarget(path: string): string | undefined {
+    if (path === '.' || path === '~' || path === '/') {
+      return undefined;
+    }
+    if (path.startsWith('~/')) {
+      return this.resolveOpenshellWorkspaceMountTarget(path.slice(2));
+    }
+    if (posix.isAbsolute(path)) {
+      const normalized = posix.normalize(path);
+      return normalized === '/' ? undefined : normalized;
+    }
+    return this.resolveOpenshellWorkspaceMountTarget(path);
+  }
+
+  private resolveOpenshellWorkspaceMountTarget(path: string): string | undefined {
+    const normalized = posix.join('/sandbox', path);
+    return normalized.startsWith('/sandbox/') ? normalized : undefined;
   }
 
   private async resolveUploadRemotePath(local: string, remote: string): Promise<string> {

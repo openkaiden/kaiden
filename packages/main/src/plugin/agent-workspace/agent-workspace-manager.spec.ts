@@ -137,6 +137,7 @@ let sandboxListChangeCallback: (() => void) | undefined;
 
 const openshellGateway = {
   createLocalGateway: vi.fn(),
+  supportsMounts: vi.fn(),
   onDidGatewayStart: vi.fn((cb: () => void) => {
     gatewayStartCallback = cb;
     return { dispose: vi.fn() };
@@ -192,6 +193,7 @@ beforeEach(() => {
   vi.mocked(rm).mockResolvedValue(undefined);
   vi.mocked(openshellGatewayStateManager.refresh).mockResolvedValue(undefined);
   vi.mocked(openshellGatewayStateManager.whenReady).mockResolvedValue(undefined);
+  vi.mocked(openshellGateway.supportsMounts).mockResolvedValue(false);
   vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
     {
       name: 'kaiden',
@@ -735,6 +737,95 @@ describe('create – OpenShell mode', () => {
           { local: resolve(homedir(), '.gitconfig'), remote: '~/.gitconfig' },
         ]),
       }),
+    );
+  });
+
+  test('uses bind mounts for configured paths when the gateway supports them', async () => {
+    vi.mocked(openshellGateway.supportsMounts).mockResolvedValue(true);
+    vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
+      {
+        name: 'kaiden',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver: 'podman',
+        gatewayState: { reachable: true, health: 'healthy' },
+      },
+    ]);
+
+    await manager.create({
+      ...defaultOptions,
+      mounts: [
+        { host: '$SOURCES/subdir', target: '$SOURCES/subdir', ro: false },
+        { host: '$HOME/.gitconfig', target: '$HOME/.gitconfig', ro: true },
+      ],
+    });
+
+    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        uploads: expect.arrayContaining([{ local: '/tmp/my-project', remote: '.' }]),
+        driverConfig: {
+          podman: {
+            mounts: [
+              {
+                type: 'bind',
+                source: resolve('/tmp/my-project', 'subdir'),
+                target: '/sandbox/subdir',
+                read_only: false,
+              },
+              {
+                type: 'bind',
+                source: resolve(homedir(), '.gitconfig'),
+                target: '/sandbox/.gitconfig',
+                read_only: true,
+              },
+            ],
+          },
+        },
+      }),
+    );
+  });
+
+  test('keeps workspace-root mounts as uploads when bind mounts cannot target the workspace root', async () => {
+    vi.mocked(openshellGateway.supportsMounts).mockResolvedValue(true);
+    vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
+      {
+        name: 'kaiden',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver: 'podman',
+        gatewayState: { reachable: true, health: 'healthy' },
+      },
+    ]);
+
+    await manager.create({ ...defaultOptions, mounts: [{ host: '$HOME', target: '$HOME', ro: false }] });
+
+    expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+      expect.objectContaining({ uploads: expect.arrayContaining([{ local: '/home/testuser', remote: '~' }]) }),
+    );
+    expect(vi.mocked(openshellCli.createSandbox).mock.calls[0]?.[0]?.driverConfig).toBeUndefined();
+  });
+
+  test.each([
+    { host: '$SOURCES/foo/..', target: '$SOURCES/foo/..', remote: 'foo/..' },
+    { host: '$SOURCES/../etc', target: '$SOURCES/../etc', remote: '../etc' },
+  ])('falls back to uploads for unsafe normalized mount target $target', async mount => {
+    vi.mocked(openshellGateway.supportsMounts).mockResolvedValue(true);
+    vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
+      {
+        name: 'kaiden',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver: 'podman',
+        gatewayState: { reachable: true, health: 'healthy' },
+      },
+    ]);
+
+    await manager.create({ ...defaultOptions, mounts: [{ host: mount.host, target: mount.target, ro: false }] });
+
+    const sandboxOptions = vi.mocked(openshellCli.createSandbox).mock.calls[0]?.[0];
+    expect(sandboxOptions?.driverConfig).toBeUndefined();
+    expect(sandboxOptions?.uploads).toEqual(
+      expect.arrayContaining([{ local: expect.any(String), remote: mount.remote }]),
     );
   });
 
