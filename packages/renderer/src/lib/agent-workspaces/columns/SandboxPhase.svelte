@@ -15,7 +15,7 @@ const statusLabel = $derived(
 const phaseCategory = $derived(
   object.phase.toLowerCase() === 'ready' || object.phase.toLowerCase() === 'running'
     ? 'running'
-    : object.phase.toLowerCase() === 'pending' || object.phase.toLowerCase() === 'creating'
+    : ['pending', 'creating', 'provisioning'].includes(object.phase.toLowerCase())
       ? 'waiting'
       : 'terminated',
 );
@@ -33,7 +33,7 @@ const textColor = $derived(
     ? 'text-[var(--pd-status-running)]'
     : phaseCategory === 'waiting'
       ? 'text-[var(--pd-status-waiting)]'
-      : 'text-[var(--pd-table-body-text)] opacity-60',
+      : 'text-[var(--pd-status-terminated)]',
 );
 </script>
 

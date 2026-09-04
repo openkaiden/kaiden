@@ -38,6 +38,19 @@ export async function checkForUpdate(eventName: string): Promise<boolean> {
 
 export const openshellSandboxes: Writable<GatewaySandboxes[]> = writable([]);
 
+export function setSandboxPhase(name: string, gatewayName: string, phase: SandboxInfo['phase']): void {
+  openshellSandboxes.update(gateways =>
+    gateways.map(entry =>
+      entry.gateway.name === gatewayName
+        ? {
+            ...entry,
+            sandboxes: entry.sandboxes.map(sandbox => (sandbox.name === name ? { ...sandbox, phase } : sandbox)),
+          }
+        : entry,
+    ),
+  );
+}
+
 const listOpenshellSandboxes = (): Promise<GatewaySandboxes[]> => {
   return window.listOpenshellSandboxes();
 };

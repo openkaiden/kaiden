@@ -60,9 +60,9 @@ const statusStyle = $derived.by(() => {
   }
   if (state === 'Deleting') {
     return {
-      stateColor: 'text-[var(--pd-status-waiting)]',
+      stateColor: 'text-[var(--pd-status-terminated)]',
       sandboxLabel: 'Sandbox Stopping',
-      sandboxColor: 'var(--pd-status-waiting)',
+      sandboxColor: 'var(--pd-status-terminated)',
     };
   }
   return {

@@ -19,10 +19,11 @@
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
-import type { SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
+import { openshellSandboxes, type SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
 
 import SandboxActions from './SandboxActions.svelte';
 
@@ -43,9 +44,24 @@ beforeEach(() => {
 });
 
 test('deletes the sandbox from its gateway', async () => {
+  openshellSandboxes.set([{ gateway: { name: 'remote-gateway', endpoint: 'http://gateway' }, sandboxes: [sandbox] }]);
+  let resolveDelete!: () => void;
+  vi.mocked(window.deleteOpenshellSandbox).mockReturnValue(new Promise(resolve => (resolveDelete = resolve)));
   render(SandboxActions, { object: sandbox });
 
   await fireEvent.click(screen.getByRole('button', { name: 'Remove workspace' }));
 
   expect(window.deleteOpenshellSandbox).toHaveBeenCalledWith('shared-name', 'remote-gateway');
+  expect(get(openshellSandboxes)[0]?.sandboxes[0]?.phase).toBe('Deleting');
+  resolveDelete();
+});
+
+test('restores the previous phase when deletion fails', async () => {
+  openshellSandboxes.set([{ gateway: { name: 'remote-gateway', endpoint: 'http://gateway' }, sandboxes: [sandbox] }]);
+  vi.mocked(window.deleteOpenshellSandbox).mockRejectedValue(new Error('delete failed'));
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  render(SandboxActions, { object: sandbox });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Remove workspace' }));
+  await vi.waitFor(() => expect(get(openshellSandboxes)[0]?.sandboxes[0]?.phase).toBe('Ready'));
 });

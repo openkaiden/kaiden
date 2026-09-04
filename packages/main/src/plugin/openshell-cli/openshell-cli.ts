@@ -29,7 +29,6 @@ import { Exec } from '/@/plugin/util/exec.js';
 import type { Event } from '/@api/event.js';
 import {
   type CreateProviderOptions,
-  type CreateSandboxOptions,
   type GatewayAddOptions,
   type GatewayInfo,
   GatewayInfoSchema,
@@ -62,11 +61,9 @@ const OpenshellSettingsSchema = z.looseObject({
  * Low-level wrapper around the `openshell` CLI binary.
  *
  * Sandbox commands:
- *   - `openshell sandbox create`
  *   - `openshell sandbox list`
  *   - `openshell sandbox start`
  *   - `openshell sandbox stop`
- *   - `openshell sandbox delete`
  *   - `openshell sandbox connect`
  *   - `openshell --version`
  *
@@ -87,7 +84,6 @@ const OpenshellSettingsSchema = z.looseObject({
  */
 const TRANSITIONAL_PHASES = new Set(['Deleting', 'Provisioning']);
 const TRANSITIONAL_POLL_INTERVAL_MS = 5_000;
-const EARLY_POLL_DELAY_MS = 500;
 const MAX_TRANSITIONAL_POLL_RETRIES = 3;
 
 @injectable()
@@ -95,7 +91,6 @@ export class OpenshellCli {
   private readonly _onDidSandboxListChange = new Emitter<GatewaySandboxes[]>();
   readonly onDidSandboxListChange: Event<GatewaySandboxes[]> = this._onDidSandboxListChange.event;
   private _transitionalPollTimer: ReturnType<typeof setTimeout> | undefined;
-  private readonly _delayedRefreshTimers = new Set<ReturnType<typeof setTimeout>>();
 
   constructor(
     @inject(Exec)
@@ -172,68 +167,6 @@ export class OpenshellCli {
 
   // ── sandbox commands ──────────────────────────────────────────────
 
-  async createSandbox(options: CreateSandboxOptions = {}): Promise<void> {
-    const args = ['sandbox', 'create'];
-    if (options.name) {
-      args.push('--name', options.name);
-    }
-    if (options.from) {
-      args.push('--from', options.from);
-    }
-    if (options.gateway) {
-      args.push('-g', options.gateway);
-      args.push('--label', `gateway=${options.gateway}`);
-    }
-    if (options.gpu) {
-      args.push('--gpu');
-    }
-    if (options.gpuDevice) {
-      args.push('--gpu-device', options.gpuDevice);
-    }
-    if (options.cpu) {
-      args.push('--cpu', options.cpu);
-    }
-    if (options.memory) {
-      args.push('--memory', options.memory);
-    }
-    if (options.providers) {
-      for (const provider of options.providers) {
-        args.push('--provider', provider);
-      }
-    }
-    if (options.env) {
-      for (const [key, value] of Object.entries(options.env)) {
-        args.push('--env', `${key}=${value}`);
-      }
-    }
-    if (options.labels) {
-      for (const [key, value] of Object.entries(options.labels)) {
-        args.push('--label', `${key}=${value}`);
-      }
-    }
-    if (options.uploads) {
-      for (const upload of options.uploads) {
-        args.push('--upload', `${upload.local}:${upload.remote}`);
-      }
-    }
-    if (options.noTty) {
-      args.push('--no-tty');
-    }
-    if (options.tty) {
-      args.push('--tty');
-    }
-    if (options.detach) {
-      args.push('--detach');
-    }
-    if (options.policy) {
-      args.push('--policy', options.policy);
-    }
-    if (options.command?.length) {
-      args.push('--', ...options.command);
-    }
-    await this.runCliWithOperationPoll(args, { redact: true });
-  }
-
   async listSandboxes(gatewayName?: string): Promise<SandboxInfo[]> {
     const args = ['sandbox', 'list'];
     if (gatewayName) {
@@ -249,14 +182,6 @@ export class OpenshellCli {
 
   async stopSandbox(name: string): Promise<void> {
     await this.runCli(['sandbox', 'stop', name]);
-  }
-
-  async deleteSandbox(name: string, gatewayName?: string): Promise<void> {
-    const args = ['sandbox', 'delete', name];
-    if (gatewayName) {
-      args.push('-g', gatewayName);
-    }
-    await this.runCliWithOperationPoll(args);
   }
 
   async deleteAllSandboxes(gatewayName?: string): Promise<void> {
@@ -347,44 +272,6 @@ export class OpenshellCli {
           this.scheduleTransitionalPollIfNeeded(results, retries + 1);
         });
     }, TRANSITIONAL_POLL_INTERVAL_MS);
-  }
-
-  // Operation poll for create/delete: two targeted refreshes instead of
-  // continuous polling. The emitter update causes the renderer to re-fetch
-  // via listSandboxesPerGateway(), which activates the 5s transitional poll
-  // if transitional sandboxes are present. This is desirable: after the CLI
-  // completes, the transitional poll keeps monitoring until the sandbox
-  // reaches its final state (e.g. actually disappears after deletion).
-  private async runCliWithOperationPoll(
-    args: string[],
-    options?: { redact?: boolean; env?: { [p: string]: string }; quiet?: boolean },
-  ): Promise<void> {
-    let cliDone = false;
-    const earlyPoll = setTimeout(() => {
-      if (cliDone) return;
-      this.listSandboxesPerGateway()
-        .then(updated => this._onDidSandboxListChange.fire(updated))
-        .catch(() => {});
-    }, EARLY_POLL_DELAY_MS);
-    try {
-      await this.runCli(args, options);
-    } finally {
-      cliDone = true;
-      clearTimeout(earlyPoll);
-      this.listSandboxesPerGateway()
-        .then(updated => this._onDidSandboxListChange.fire(updated))
-        .catch(() => {});
-      // Delayed refresh — the server may not have fully processed the
-      // operation when the CLI returns (e.g. sandbox still briefly visible
-      // as Deleting after the delete command completes).
-      const delayedRefresh = setTimeout(() => {
-        this._delayedRefreshTimers.delete(delayedRefresh);
-        this.listSandboxesPerGateway()
-          .then(updated => this._onDidSandboxListChange.fire(updated))
-          .catch(() => {});
-      }, EARLY_POLL_DELAY_MS);
-      this._delayedRefreshTimers.add(delayedRefresh);
-    }
   }
 
   // ── gateway registration commands ─────────────────────────────────
@@ -592,10 +479,6 @@ export class OpenshellCli {
       clearTimeout(this._transitionalPollTimer);
       this._transitionalPollTimer = undefined;
     }
-    for (const timer of this._delayedRefreshTimers) {
-      clearTimeout(timer);
-    }
-    this._delayedRefreshTimers.clear();
     this._onDidSandboxListChange.dispose();
   }
 }
