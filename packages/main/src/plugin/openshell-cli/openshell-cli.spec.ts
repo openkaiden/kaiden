@@ -757,6 +757,15 @@ describe('getGatewayInfo', () => {
       undefined,
     );
   });
+
+  test('does not log to console.error when CLI fails', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(exec.exec).mockRejectedValue(new Error('connection refused'));
+
+    await expect(openshellCli.getGatewayInfo('unreachable')).rejects.toThrow('connection refused');
+
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe('listSandboxesForGateway', () => {
