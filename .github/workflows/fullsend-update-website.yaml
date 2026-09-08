@@ -36,10 +36,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout kdn repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Checkout website repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: openkaiden/website
           token: ${{ secrets.KAIDEN_BOT_TOKEN }}
@@ -47,7 +47,7 @@ jobs:
 
 
       - name: Checkout upstream defaults
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: fullsend-ai/fullsend
           ref: 4665685a1d9d471a7a044908a68f00bed78caba7 # v0.42.0
