@@ -49,6 +49,14 @@ export const settingsNavigationEntries: SettingsNavItemConfig[] = [
     children: [{ title: 'Coding agents', href: '/preferences/coding-agents', visible: true, icon: faTerminal }],
   },
   {
+    title: 'OpenShell',
+    href: '/preferences/openshell',
+    visible: true,
+    expanded: true,
+    icon: faShield,
+    children: [{ title: 'Gateways', href: '/preferences/openshell/gateways', visible: true, icon: faServer }],
+  },
+  {
     title: 'Connections',
     href: '/preferences/connections',
     visible: true,
@@ -59,13 +67,5 @@ export const settingsNavigationEntries: SettingsNavItemConfig[] = [
       { title: 'Proxy', href: '/preferences/proxies', visible: true, icon: ProxyIcon },
       { title: 'CLI Tools', href: '/preferences/cli-tools', visible: true, icon: CLIToolsIcon },
     ],
-  },
-  {
-    title: 'OpenShell',
-    href: '/preferences/openshell',
-    visible: true,
-    expanded: true,
-    icon: faShield,
-    children: [{ title: 'Gateways', href: '/preferences/openshell/gateways', visible: true, icon: faServer }],
   },
 ];

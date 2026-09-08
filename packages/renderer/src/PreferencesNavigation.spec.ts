@@ -217,6 +217,17 @@ test.skip('experimental configuration should be visible if one property has expe
   });
 });
 
+test('settings navbar renders root entries in correct order: AI Tools, OpenShell, Connections', () => {
+  const titles = settingsNavigationEntries.map(entry => entry.title);
+
+  const aiToolsIndex = titles.indexOf('AI tools');
+  const openShellIndex = titles.indexOf('OpenShell');
+  const connectionsIndex = titles.indexOf('Connections');
+
+  expect(aiToolsIndex).toBeLessThan(openShellIndex);
+  expect(openShellIndex).toBeLessThan(connectionsIndex);
+});
+
 test('Gateways nav entry is always visible', () => {
   render(PreferencesNavigation, {
     meta: {
