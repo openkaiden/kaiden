@@ -219,10 +219,10 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
       router.goto('/projects/create');
       break;
     case NavigationPage.MODELS:
-      router.goto('/models');
+      router.goto('/preferences/models');
       break;
     case NavigationPage.SEMANTIC_ROUTERS:
-      router.goto('/models/semantic-routers');
+      router.goto('/preferences/models/semantic-routers');
       break;
     case NavigationPage.ACP_SESSIONS:
       router.goto('/acp-sessions');

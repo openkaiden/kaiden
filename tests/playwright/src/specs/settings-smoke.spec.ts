@@ -47,7 +47,7 @@ test.describe('Settings page navigation', { tag: '@smoke' }, () => {
 
   test('[SET-01] All settings tabs are visible', async ({ settingsPage }) => {
     const tabs = settingsPage.getAllTabs();
-    const expectedTabCount = 5; // Resources, CLI, Proxy, Coding agents, Preferences
+    const expectedTabCount = 6; // Resources, CLI, Proxy, Coding agents, Models, Preferences
 
     expect(tabs).toHaveLength(expectedTabCount);
 

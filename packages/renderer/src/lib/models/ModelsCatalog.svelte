@@ -165,7 +165,7 @@ function filterRoutersBySearch(routers: SemanticRouterInfo[], term: string): Sem
 }
 
 function addSemanticRouter(): void {
-  router.goto('/models/semantic-router/create');
+  router.goto('/preferences/models/semantic-router/create');
 }
 
 function selectCategory(cat: Category): void {
@@ -189,7 +189,7 @@ function selectCategory(cat: Category): void {
       {#each categories as cat (cat.id)}
         <SettingsNavItem
           title={cat.label}
-          href="/models"
+          href="/preferences/models"
           icon={cat.icon}
           selected={activeCategory === cat.id}
           onClick={(): void => selectCategory(cat.id)} />

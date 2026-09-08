@@ -16,23 +16,19 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { faCubes } from '@fortawesome/free-solid-svg-icons/faCubes';
+import { expect, type Locator, type Page } from '@playwright/test';
 
-import type { NavigationRegistryEntry } from './navigation-registry';
+import { BasePage } from './base-page';
 
-const count = $state(0);
+export class SettingsModelsPage extends BasePage {
+  readonly modelsRegion: Locator;
 
-export function createNavigationModelsEntry(): NavigationRegistryEntry {
-  const registry: NavigationRegistryEntry = {
-    name: 'Models',
-    icon: { faIcon: { definition: faCubes, size: 'lg' } },
-    link: '/models',
-    tooltip: 'Models',
-    type: 'entry',
+  constructor(page: Page) {
+    super(page);
+    this.modelsRegion = page.getByRole('region', { name: 'Models' });
+  }
 
-    get counter() {
-      return count;
-    },
-  };
-  return registry;
+  async waitForLoad(): Promise<void> {
+    await expect(this.modelsRegion).toBeVisible();
+  }
 }

@@ -318,13 +318,13 @@ test(`Test navigationHandle for ${NavigationPage.AGENT_WORKSPACES}`, () => {
 test(`Test navigationHandle for ${NavigationPage.MODELS}`, () => {
   handleNavigation({ page: NavigationPage.MODELS });
 
-  expect(vi.mocked(router.goto)).toHaveBeenCalledWith('/models');
+  expect(vi.mocked(router.goto)).toHaveBeenCalledWith('/preferences/models');
 });
 
 test(`Test navigationHandle for ${NavigationPage.SEMANTIC_ROUTERS}`, () => {
   handleNavigation({ page: NavigationPage.SEMANTIC_ROUTERS });
 
-  expect(vi.mocked(router.goto)).toHaveBeenCalledWith('/models/semantic-routers');
+  expect(vi.mocked(router.goto)).toHaveBeenCalledWith('/preferences/models/semantic-routers');
 });
 
 test(`Test navigationHandle for ${NavigationPage.SKILL_CREATE}`, () => {

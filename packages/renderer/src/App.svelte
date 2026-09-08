@@ -76,8 +76,6 @@ import PortForwardingList from './lib/kubernetes-port-forward/PortForwardingList
 import ManifestDetails from './lib/manifest/ManifestDetails.svelte';
 import McpRegistryCreateFromRegistryForm from './lib/mcp/MCPRegistryCreateFromRegistryForm.svelte';
 import McpServerList from './lib/mcp/MCPServerList.svelte';
-import ModelsCatalog from './lib/models/ModelsCatalog.svelte';
-import SemanticRouterCreate from './lib/models/SemanticRouterCreate.svelte';
 import CreateNetwork from './lib/network/CreateNetwork.svelte';
 import NetworkDetails from './lib/network/NetworkDetails.svelte';
 import NetworksList from './lib/network/NetworksList.svelte';
@@ -332,19 +330,6 @@ tablePersistence.storage = new PodmanDesktopStoragePersist();
         </Route>
         <Route path="/mcp-install-from-registry/:serverId/*" breadcrumb="Install MCP Server from Registry" let:meta>
           <McpRegistryCreateFromRegistryForm serverId={decodeURIComponent(meta.params.serverId)} />
-        </Route>
-
-        <!-- Models -->
-        <Route path="/models/*" breadcrumb="Models" navigationHint="root" firstmatch>
-          <Route path="/" breadcrumb="Models" navigationHint="root">
-            <ModelsCatalog />
-          </Route>
-          <Route path="/semantic-routers" breadcrumb="Semantic Routers" navigationHint="root">
-            <ModelsCatalog initialCategory="router" />
-          </Route>
-          <Route path="/semantic-router/create" breadcrumb="Add Semantic Router" navigationHint="details">
-            <SemanticRouterCreate />
-          </Route>
         </Route>
 
         <!-- Skills -->

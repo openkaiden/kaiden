@@ -2,6 +2,8 @@
 import { onMount } from 'svelte';
 
 import CodingAgentsPage from '/@/lib/coding-agents/CodingAgentsPage.svelte';
+import ModelsCatalog from '/@/lib/models/ModelsCatalog.svelte';
+import SemanticRouterCreate from '/@/lib/models/SemanticRouterCreate.svelte';
 import Onboarding from '/@/lib/onboarding/Onboarding.svelte';
 import ExperimentalPage from '/@/lib/preferences/ExperimentalPage.svelte';
 import PreferencesContainerConnectionEdit from '/@/lib/preferences/PreferencesContainerConnectionEdit.svelte';
@@ -86,6 +88,17 @@ onMount(async () => {
   </Route>
   <Route path="/coding-agents" breadcrumb="Coding Agents">
     <CodingAgentsPage />
+  </Route>
+  <Route path="/models/*" breadcrumb="Models" firstmatch>
+    <Route path="/" breadcrumb="Models">
+      <ModelsCatalog />
+    </Route>
+    <Route path="/semantic-routers" breadcrumb="Semantic Routers">
+      <ModelsCatalog initialCategory="router" />
+    </Route>
+    <Route path="/semantic-router/create" breadcrumb="Add Semantic Router">
+      <SemanticRouterCreate />
+    </Route>
   </Route>
   <Route path="/kubernetes-contexts" breadcrumb="Kubernetes Contexts">
     <PreferencesKubernetesContextsRendering />
