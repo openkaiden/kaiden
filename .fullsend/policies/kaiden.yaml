@@ -28,6 +28,18 @@ network_policies:
   nodegyp_releases:
     name: nodegyp-releases
     endpoints:
+      - host: github.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: POST, path: /electron/node-gyp.git/git-upload-pack }
+      - host: release-assets.githubusercontent.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: GET, path: /** }
       - host: codeload.github.com
         port: 443
         protocol: rest
@@ -65,8 +77,22 @@ network_policies:
         port: 443
         protocol: rest
         enforcement: enforce
+        allow_encoded_slash: true
         rules:
           - allow: { method: GET, path: /** }
+    binaries:
+      - path: "**/node"
+
+  # pnpm runs an optional security audit during install
+  npm_audit:
+    name: npm-audit
+    endpoints:
+      - host: registry.npmjs.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: POST, path: /-/npm/v1/security/advisories/bulk }
     binaries:
       - path: "**/node"
 
