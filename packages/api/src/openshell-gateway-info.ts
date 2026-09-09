@@ -173,6 +173,9 @@ export type GatewayRuntimeInfo = z.output<typeof GatewayRuntimeInfoSchema>;
 /**
  * Minimum gateway version required for compatibility with this Kaiden release.
  * Gateways reporting a version below this are treated as unusable.
+ *
+ * Note: `extensions/openshell/package.json` declares `openshellVersion` for the
+ * bundled CLI binary version. Keep these in sync when bumping either value.
  */
 export const MIN_GATEWAY_VERSION = '0.4.0';
 
@@ -183,6 +186,10 @@ export const MIN_GATEWAY_VERSION = '0.4.0';
  * Handles `major.minor.patch` (with optional leading `v`).
  * Returns `true` when the version string is missing or unparseable so that
  * gateways that predate version reporting are not silently blocked.
+ *
+ * Note: `semver` is already a root dependency used in `packages/main`, but
+ * `packages/api` ships to the renderer bundle where the extra dependency
+ * weight is undesirable. This inline comparison is intentional.
  */
 export function isGatewayVersionCompatible(version: string | undefined): boolean {
   if (!version) {
@@ -198,11 +205,11 @@ export function isGatewayVersionCompatible(version: string | undefined): boolean
   if (!gw || !min) {
     return true;
   }
-  for (let i = 0; i < 3; i++) {
-    if (gw[i]! > min[i]!) return true;
-    if (gw[i]! < min[i]!) return false;
-  }
-  return true;
+  const [gwMajor, gwMinor, gwPatch] = gw;
+  const [minMajor, minMinor, minPatch] = min;
+  if (gwMajor !== minMajor) return gwMajor > minMajor;
+  if (gwMinor !== minMinor) return gwMinor > minMinor;
+  return gwPatch >= minPatch;
 }
 
 export interface GatewaySandboxes {

@@ -5,7 +5,7 @@ import { Button, EmptyScreen } from '@podman-desktop/ui-svelte';
 import EngineIcon from '/@/lib/ui/EngineIcon.svelte';
 import { extensionInfos } from '/@/stores/extensions';
 import { openshellGateways } from '/@/stores/openshell-gateways';
-import { type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME } from '/@api/openshell-gateway-info';
+import { isGatewayVersionCompatible, type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME } from '/@api/openshell-gateway-info';
 
 import PreferencesOpenshellGatewayCreate from './PreferencesOpenshellGatewayCreate.svelte';
 import SettingsPage from './SettingsPage.svelte';
@@ -34,25 +34,6 @@ function getTypeBadge(gateway: GatewayInfo): string {
   return 'Referenced';
 }
 
-function getStatusColor(gateway: GatewayInfo): string {
-  if (!gateway.gatewayState) {
-    return 'bg-(--pd-status-unknown)';
-  }
-  if (!gateway.gatewayState.reachable) {
-    return 'bg-(--pd-status-stopped)';
-  }
-  switch (gateway.gatewayState.health) {
-    case 'healthy':
-      return 'bg-(--pd-status-running)';
-    case 'degraded':
-      return 'bg-(--pd-status-degraded)';
-    case 'unhealthy':
-      return 'bg-(--pd-status-terminated)';
-    default:
-      return 'bg-(--pd-status-unknown)';
-  }
-}
-
 function getDetails(gateway: GatewayInfo): string {
   const parts: string[] = [];
   if (gateway.type) {
@@ -63,10 +44,16 @@ function getDetails(gateway: GatewayInfo): string {
   }
   parts.push(gateway.endpoint);
 
+  if (gateway.version) {
+    parts.push(`v${gateway.version}`);
+  }
+
   if (!gateway.gatewayState) {
     parts.push('Unknown');
   } else if (!gateway.gatewayState.reachable) {
     parts.push('Disconnected');
+  } else if (!isGatewayVersionCompatible(gateway.version)) {
+    parts.push('Incompatible');
   } else {
     switch (gateway.gatewayState.health) {
       case 'healthy':
@@ -84,6 +71,28 @@ function getDetails(gateway: GatewayInfo): string {
   }
 
   return parts.join(' · ');
+}
+
+function getStatusColor(gateway: GatewayInfo): string {
+  if (!gateway.gatewayState) {
+    return 'bg-(--pd-status-unknown)';
+  }
+  if (!gateway.gatewayState.reachable) {
+    return 'bg-(--pd-status-stopped)';
+  }
+  if (!isGatewayVersionCompatible(gateway.version)) {
+    return 'bg-(--pd-status-terminated)';
+  }
+  switch (gateway.gatewayState.health) {
+    case 'healthy':
+      return 'bg-(--pd-status-running)';
+    case 'degraded':
+      return 'bg-(--pd-status-degraded)';
+    case 'unhealthy':
+      return 'bg-(--pd-status-terminated)';
+    default:
+      return 'bg-(--pd-status-unknown)';
+  }
 }
 </script>
 

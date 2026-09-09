@@ -17,6 +17,7 @@ import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
 import { disabledModels, isModelEnabled, modelKey } from '/@/stores/model-catalog';
 import { catalogModels } from '/@/stores/models';
 import { openshellGateways } from '/@/stores/openshell-gateways';
+import { isGatewayVersionCompatible } from '/@api/openshell-gateway-info';
 import { allOpenshellSandboxes } from '/@/stores/openshell-sandboxes';
 import { providerInfos } from '/@/stores/providers';
 import { ragEnvironments } from '/@/stores/rag-environments';
@@ -208,7 +209,11 @@ onMount(async () => {
   }
 });
 let customHosts = $derived(wizard.draft.hostsByMode[wizard.draft.selectedNetwork] ?? []);
-let reachableGateways = $derived($openshellGateways.filter(gateway => gateway.gatewayState?.reachable === true));
+let reachableGateways = $derived(
+  $openshellGateways.filter(
+    gateway => gateway.gatewayState?.reachable === true && isGatewayVersionCompatible(gateway.version),
+  ),
+);
 
 $effect.pre(() => {
   const gateways = reachableGateways;

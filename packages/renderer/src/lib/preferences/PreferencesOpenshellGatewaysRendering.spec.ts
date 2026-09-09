@@ -303,3 +303,37 @@ test('shows connected state text and running color for healthy gateway', () => {
   const statusDot = screen.getByLabelText('Gateway state');
   expect(statusDot).toHaveClass('bg-(--pd-status-running)');
 });
+
+test('displays version in gateway details when available', () => {
+  setOpenshellStarted();
+  openshellGateways.set([
+    {
+      name: 'versioned-gw',
+      endpoint: 'http://localhost:17670',
+      active: true,
+      version: '0.5.0',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+  ]);
+  render(PreferencesOpenshellGatewaysRendering);
+
+  expect(screen.getByText('http://localhost:17670 · v0.5.0 · Connected')).toBeInTheDocument();
+});
+
+test('shows incompatible status and terminated color for version-incompatible gateway', () => {
+  setOpenshellStarted();
+  openshellGateways.set([
+    {
+      name: 'old-gw',
+      endpoint: 'http://localhost:17670',
+      active: true,
+      version: '0.1.0',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+  ]);
+  render(PreferencesOpenshellGatewaysRendering);
+
+  expect(screen.getByText('http://localhost:17670 · v0.1.0 · Incompatible')).toBeInTheDocument();
+  const statusDot = screen.getByLabelText('Gateway state');
+  expect(statusDot).toHaveClass('bg-(--pd-status-terminated)');
+});
