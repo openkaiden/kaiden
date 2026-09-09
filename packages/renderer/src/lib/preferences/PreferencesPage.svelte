@@ -3,13 +3,13 @@ import { onMount } from 'svelte';
 
 import CodingAgentsPage from '/@/lib/coding-agents/CodingAgentsPage.svelte';
 import ModelsCatalog from '/@/lib/models/ModelsCatalog.svelte';
-import SkillCreate from '/@/lib/skills/SkillCreate.svelte';
-import SkillDetails from '/@/lib/skills/SkillDetails.svelte';
-import SkillsList from '/@/lib/skills/SkillsList.svelte';
 import SemanticRouterCreate from '/@/lib/models/SemanticRouterCreate.svelte';
 import Onboarding from '/@/lib/onboarding/Onboarding.svelte';
 import ExperimentalPage from '/@/lib/preferences/ExperimentalPage.svelte';
 import PreferencesContainerConnectionEdit from '/@/lib/preferences/PreferencesContainerConnectionEdit.svelte';
+import SkillCreate from '/@/lib/skills/SkillCreate.svelte';
+import SkillDetails from '/@/lib/skills/SkillDetails.svelte';
+import SkillsList from '/@/lib/skills/SkillsList.svelte';
 import Route from '/@/Route.svelte';
 import { configurationProperties } from '/@/stores/configurationProperties';
 import type { IConfigurationPropertyRecordedSchema } from '/@api/configuration/models.js';

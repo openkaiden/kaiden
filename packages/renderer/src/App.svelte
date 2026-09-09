@@ -94,7 +94,6 @@ import SecretVaultDetails from './lib/secret-vault/SecretVaultDetails.svelte';
 import SecretVaultList from './lib/secret-vault/SecretVaultList.svelte';
 import ServiceDetails from './lib/service/ServiceDetails.svelte';
 import ServicesList from './lib/service/ServicesList.svelte';
-
 import StatusBar from './lib/statusbar/StatusBar.svelte';
 import IconsStyle from './lib/style/IconsStyle.svelte';
 import { PodmanDesktopStoragePersist } from './lib/table/PodmanDesktopStoragePersist';
