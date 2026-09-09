@@ -25,7 +25,7 @@ import { BaseTablePage } from './base-table-page';
 import { SkillsCreatePage } from './skills-create-page';
 import { SkillsDetailsPage } from './skills-details-page';
 
-export class SkillsPage extends BaseTablePage {
+export class SettingsSkillsPage extends BaseTablePage {
   readonly header: Locator;
   readonly heading: Locator;
   readonly additionalActionsButtonGroup: Locator;

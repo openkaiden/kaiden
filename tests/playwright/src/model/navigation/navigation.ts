@@ -26,14 +26,12 @@ import { ExtensionsPage } from '/@/model/pages/extensions-page';
 import { KnowledgePage } from '/@/model/pages/knowledge-page';
 import { McpPage } from '/@/model/pages/mcp-page';
 import { SettingsPage } from '/@/model/pages/settings-page';
-import { SkillsPage } from '/@/model/pages/skills-page';
 
 export class NavigationBar {
   readonly page: Page;
   readonly navigationLocator: Locator;
   readonly chatLink: Locator;
   readonly mcpLink: Locator;
-  readonly skillsLink: Locator;
   readonly knowledgesLink: Locator;
   readonly extensionsLink: Locator;
   readonly workspacesLink: Locator;
@@ -45,7 +43,6 @@ export class NavigationBar {
     this.navigationLocator = this.page.getByRole('navigation', { name: 'AppNavigation' });
     this.chatLink = this.navigationLocator.getByRole('link', { name: 'Chat' });
     this.mcpLink = this.navigationLocator.getByRole('link', { name: 'MCP' });
-    this.skillsLink = this.navigationLocator.getByRole('link', { name: 'Skills', exact: true });
     this.knowledgesLink = this.navigationLocator.getByRole('link', { name: 'Knowledges', exact: true });
     this.extensionsLink = this.navigationLocator.getByRole('link', { name: 'Extensions', exact: true });
     this.workspacesLink = this.navigationLocator.getByRole('link', { name: 'Workspaces', exact: true });
@@ -53,7 +50,6 @@ export class NavigationBar {
     this.links = [
       this.chatLink,
       this.mcpLink,
-      this.skillsLink,
       this.knowledgesLink,
       this.extensionsLink,
       this.workspacesLink,
@@ -80,10 +76,6 @@ export class NavigationBar {
 
   async navigateToMCPPage(): Promise<McpPage> {
     return this.navigateTo(this.mcpLink, McpPage);
-  }
-
-  async navigateToSkillsPage(): Promise<SkillsPage> {
-    return this.navigateTo(this.skillsLink, SkillsPage);
   }
 
   async navigateToKnowledgePage(): Promise<KnowledgePage> {

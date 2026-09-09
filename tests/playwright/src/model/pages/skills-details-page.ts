@@ -19,7 +19,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
 import { BasePage } from './base-page';
-import { SkillsPage } from './skills-page';
+import { SettingsSkillsPage } from './settings-skills-tab-page';
 
 export class SkillsDetailsPage extends BasePage {
   readonly skillName: string;
@@ -82,10 +82,10 @@ export class SkillsDetailsPage extends BasePage {
     await expect(this.getStatusBadge()).toHaveText(label);
   }
 
-  async closeDetailsPage(): Promise<SkillsPage> {
+  async closeDetailsPage(): Promise<SettingsSkillsPage> {
     await expect(this.closeButton).toBeEnabled();
     await this.closeButton.click();
-    const skillsPage = new SkillsPage(this.page);
+    const skillsPage = new SettingsSkillsPage(this.page);
     await skillsPage.waitForLoad();
     return skillsPage;
   }
