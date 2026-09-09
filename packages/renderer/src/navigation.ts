@@ -174,7 +174,7 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
       router.goto(`/extensions?screen=catalog&searchTerm=${encodeURIComponent(request.parameters.searchTerm ?? '')}`);
       break;
     case NavigationPage.MCP_DETAILS:
-      router.goto(`/mcps/${encodeURIComponent(request.parameters.id)}/summary`);
+      router.goto(`/preferences/mcps/${encodeURIComponent(request.parameters.id)}/summary`);
       break;
     case NavigationPage.AGENT_WORKSPACES:
       router.goto('/agent-workspaces');

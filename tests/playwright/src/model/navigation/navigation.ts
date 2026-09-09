@@ -24,7 +24,6 @@ import type { BasePage } from '/@/model/pages/base-page';
 import { ChatPage } from '/@/model/pages/chat-page';
 import { ExtensionsPage } from '/@/model/pages/extensions-page';
 import { KnowledgePage } from '/@/model/pages/knowledge-page';
-import { McpPage } from '/@/model/pages/mcp-page';
 import { SettingsPage } from '/@/model/pages/settings-page';
 import { SkillsPage } from '/@/model/pages/skills-page';
 
@@ -32,7 +31,6 @@ export class NavigationBar {
   readonly page: Page;
   readonly navigationLocator: Locator;
   readonly chatLink: Locator;
-  readonly mcpLink: Locator;
   readonly skillsLink: Locator;
   readonly knowledgesLink: Locator;
   readonly extensionsLink: Locator;
@@ -44,7 +42,6 @@ export class NavigationBar {
     this.page = page;
     this.navigationLocator = this.page.getByRole('navigation', { name: 'AppNavigation' });
     this.chatLink = this.navigationLocator.getByRole('link', { name: 'Chat' });
-    this.mcpLink = this.navigationLocator.getByRole('link', { name: 'MCP' });
     this.skillsLink = this.navigationLocator.getByRole('link', { name: 'Skills', exact: true });
     this.knowledgesLink = this.navigationLocator.getByRole('link', { name: 'Knowledges', exact: true });
     this.extensionsLink = this.navigationLocator.getByRole('link', { name: 'Extensions', exact: true });
@@ -52,7 +49,6 @@ export class NavigationBar {
     this.settingsLink = this.navigationLocator.getByRole('link', { name: 'Settings', exact: true });
     this.links = [
       this.chatLink,
-      this.mcpLink,
       this.skillsLink,
       this.knowledgesLink,
       this.extensionsLink,
@@ -76,10 +72,6 @@ export class NavigationBar {
 
   async navigateToChatPage(): Promise<ChatPage> {
     return this.navigateTo(this.chatLink, ChatPage);
-  }
-
-  async navigateToMCPPage(): Promise<McpPage> {
-    return this.navigateTo(this.mcpLink, McpPage);
   }
 
   async navigateToSkillsPage(): Promise<SkillsPage> {

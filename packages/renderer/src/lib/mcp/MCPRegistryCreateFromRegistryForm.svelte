@@ -61,11 +61,11 @@ async function register(options: MCPSetupPackageOptions): Promise<void> {
 }
 
 async function navigateToMcps(): Promise<void> {
-  router.goto('/mcps?tab=READY');
+  router.goto('/preferences/mcps?tab=READY');
 }
 
 async function close(): Promise<void> {
-  router.goto('/mcps?tab=INSTALL');
+  router.goto('/preferences/mcps?tab=INSTALL');
 }
 </script>
 

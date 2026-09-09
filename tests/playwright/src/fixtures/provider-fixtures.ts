@@ -105,7 +105,8 @@ export const test = base.extend<ElectronFixtures, WorkerFixtures>({
       const configuredServers: Array<{ id: MCPServerId; serverName: string }> = [];
 
       try {
-        const mcpPage = await workerNavigationBar.navigateToMCPPage();
+        const settingsPage = await workerNavigationBar.navigateToSettingsPage();
+        const mcpPage = await settingsPage.openMcp();
 
         for (const id of mcpServers) {
           const server = MCP_SERVERS[id];
@@ -123,7 +124,8 @@ export const test = base.extend<ElectronFixtures, WorkerFixtures>({
         await use();
       } finally {
         if (configuredServers.length > 0) {
-          const mcpPage = await workerNavigationBar.navigateToMCPPage();
+          const settingsPage = await workerNavigationBar.navigateToSettingsPage();
+          const mcpPage = await settingsPage.openMcp();
 
           await Promise.allSettled(
             configuredServers.map(({ id, serverName }) =>

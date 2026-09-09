@@ -71,181 +71,174 @@ test.describe('Knowledge Database provider tests', () => {
     await waitForNavigationReady(page);
   });
 
-  test.describe
-    .serial('Knowledge Database page - UI creation', { tag: ['@knowledge-provider', '@smoke'] }, () => {
-      const ENVIRONMENT_NAME = 'test-knowledge-base';
+  test.describe.serial('Knowledge Database page - UI creation', { tag: ['@knowledge-provider', '@smoke'] }, () => {
+    const ENVIRONMENT_NAME = 'test-knowledge-base';
 
-      test('[KDB-02] Create knowledge database via UI and verify row appears', async ({
-        milvusSetup: vectorStoreName,
-        doclingSetup: _doclingSetup,
-        workerNavigationBar,
-      }) => {
-        const knowledgePage = await workerNavigationBar.navigateToKnowledgePage();
-        await knowledgePage.createEnvironment(ENVIRONMENT_NAME, vectorStoreName, EMBEDDING_MODEL_NAME);
-      });
+    test('[KDB-02] Create knowledge database via UI and verify row appears', async ({
+      milvusSetup: vectorStoreName,
+      doclingSetup: _doclingSetup,
+      workerNavigationBar,
+    }) => {
+      const knowledgePage = await workerNavigationBar.navigateToKnowledgePage();
+      await knowledgePage.createEnvironment(ENVIRONMENT_NAME, vectorStoreName, EMBEDDING_MODEL_NAME);
+    });
 
-      test('[KDB-03] Details page shows all tabs and Sources tab has zero files', async ({ workerNavigationBar }) => {
-        const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
+    test('[KDB-03] Details page shows all tabs and Sources tab has zero files', async ({ workerNavigationBar }) => {
+      const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
 
-        await expect(detailsPage.heading).toContainText(ENVIRONMENT_NAME);
-        await expect(detailsPage.summaryTabLink).toBeVisible();
-        await expect(detailsPage.sourcesTabLink).toBeVisible();
-        await expect(detailsPage.vectorStoreTabLink).toBeVisible();
-        await expect(detailsPage.chunkerTabLink).toBeVisible();
+      await expect(detailsPage.heading).toContainText(ENVIRONMENT_NAME);
+      await expect(detailsPage.summaryTabLink).toBeVisible();
+      await expect(detailsPage.sourcesTabLink).toBeVisible();
+      await expect(detailsPage.vectorStoreTabLink).toBeVisible();
+      await expect(detailsPage.chunkerTabLink).toBeVisible();
 
-        await detailsPage.switchToSourcesTab();
-        await expect(detailsPage.uploadedFilesHeader).toContainText('0');
+      await detailsPage.switchToSourcesTab();
+      await expect(detailsPage.uploadedFilesHeader).toContainText('0');
 
-        await detailsPage.switchToChunkerTab();
-        await expect(detailsPage.getInfoValue('Model')).toContainText(EMBEDDING_MODEL_NAME);
-      });
+      await detailsPage.switchToChunkerTab();
+      await expect(detailsPage.getInfoValue('Model')).toContainText(EMBEDDING_MODEL_NAME);
+    });
 
-      test('[KDB-04] Upload a file and verify it appears in Sources tab', async ({
+    test('[KDB-04] Upload a file and verify it appears in Sources tab', async ({
+      workerElectronApp,
+      workerNavigationBar,
+    }) => {
+      const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
+      await detailsPage.switchToSourcesTab();
+
+      await uploadAndAssertStatus(
+        detailsPage,
         workerElectronApp,
-        workerNavigationBar,
-      }) => {
-        const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
-        await detailsPage.switchToSourcesTab();
+        TEST_FILE_PATH,
+        'test-doc.pdf',
+        'pending',
+        TIMEOUTS.STANDARD,
+      );
+      await expect(detailsPage.uploadedFilesHeader).toContainText('1');
+    });
 
-        await uploadAndAssertStatus(
-          detailsPage,
-          workerElectronApp,
-          TEST_FILE_PATH,
-          'test-doc.pdf',
-          'pending',
-          TIMEOUTS.STANDARD,
-        );
-        await expect(detailsPage.uploadedFilesHeader).toContainText('1');
-      });
+    test('[KDB-10] Uploaded PDF is indexed successfully', async ({ workerNavigationBar }) => {
+      const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
+      await detailsPage.switchToSourcesTab();
 
-      test('[KDB-10] Uploaded PDF is indexed successfully', async ({ workerNavigationBar }) => {
-        const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
-        await detailsPage.switchToSourcesTab();
-
-        await expect(detailsPage.getUploadedFileRow('test-doc.pdf')).toContainText('indexed', {
-          timeout: TIMEOUTS.IMAGE_PULL,
-        });
-      });
-
-      test('[KDB-12] Uploaded non-PDF source (.md) is indexed successfully', async ({
-        workerElectronApp,
-        workerNavigationBar,
-      }) => {
-        const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
-        await detailsPage.switchToSourcesTab();
-
-        await uploadAndAssertStatus(detailsPage, workerElectronApp, TEST_MD_FILE_PATH, 'test-doc.md', 'indexed');
-      });
-
-      test('[KDB-14] Uploaded HTML source is indexed successfully', async ({
-        workerElectronApp,
-        workerNavigationBar,
-      }) => {
-        const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
-        await detailsPage.switchToSourcesTab();
-
-        await uploadAndAssertStatus(detailsPage, workerElectronApp, TEST_HTML_FILE_PATH, 'test-doc.html', 'indexed');
-      });
-
-      test('[KDB-13] Uploading a file with an unsupported extension fails with error status', async ({
-        workerElectronApp,
-        workerNavigationBar,
-      }) => {
-        const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
-        await detailsPage.switchToSourcesTab();
-
-        // The file picker filters by extension, but the OS dialog is mocked in e2e, so an
-        // unsupported extension can still reach the backend here — exercising the failure path.
-        await uploadAndAssertStatus(
-          detailsPage,
-          workerElectronApp,
-          TEST_UNSUPPORTED_FILE_PATH,
-          'test-doc.bin',
-          'error',
-        );
-      });
-
-      test('[KDB-05] Delete knowledge database from details page', async ({ workerNavigationBar }) => {
-        const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
-
-        const listPage = await detailsPage.deleteEnvironment();
-        await listPage.waitForLoad();
-        await listPage.ensureRowDoesNotExist(ENVIRONMENT_NAME);
+      await expect(detailsPage.getUploadedFileRow('test-doc.pdf')).toContainText('indexed', {
+        timeout: TIMEOUTS.IMAGE_PULL,
       });
     });
 
-  test.describe
-    .serial('Knowledge Database Pipeline with Milvus', { tag: ['@knowledge-provider', '@smoke'] }, () => {
-      const ENVIRONMENT_NAME = 'connected-knowledge-base';
-      const EXPECTED_COLLECTION_NAME = 'connected_knowledge_base';
-      const MCP_SERVER_NAME = `kaiden.milvus.mcp-server-milvus-${VECTOR_STORE_NAME}`;
+    test('[KDB-12] Uploaded non-PDF source (.md) is indexed successfully', async ({
+      workerElectronApp,
+      workerNavigationBar,
+    }) => {
+      const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
+      await detailsPage.switchToSourcesTab();
 
-      test('[KDB-06] Milvus connection is visible in Settings Resources', async ({
-        milvusSetup: _milvusSetup,
-        workerNavigationBar,
-      }) => {
-        const settingsPage = await workerNavigationBar.navigateToSettingsPage();
-        const resourcesPage = await settingsPage.openResources();
-        await resourcesPage.waitForLoad();
+      await uploadAndAssertStatus(detailsPage, workerElectronApp, TEST_MD_FILE_PATH, 'test-doc.md', 'indexed');
+    });
 
-        const milvusRegion = resourcesPage.getProviderRegion('milvus');
-        await expect(milvusRegion).toBeVisible();
+    test('[KDB-14] Uploaded HTML source is indexed successfully', async ({
+      workerElectronApp,
+      workerNavigationBar,
+    }) => {
+      const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
+      await detailsPage.switchToSourcesTab();
 
-        const connection = resourcesPage.getCreatedConnectionFor('milvus', 'rag');
-        await expect(connection).toBeVisible();
+      await uploadAndAssertStatus(detailsPage, workerElectronApp, TEST_HTML_FILE_PATH, 'test-doc.html', 'indexed');
+    });
+
+    test('[KDB-13] Uploading a file with an unsupported extension fails with error status', async ({
+      workerElectronApp,
+      workerNavigationBar,
+    }) => {
+      const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
+      await detailsPage.switchToSourcesTab();
+
+      // The file picker filters by extension, but the OS dialog is mocked in e2e, so an
+      // unsupported extension can still reach the backend here — exercising the failure path.
+      await uploadAndAssertStatus(detailsPage, workerElectronApp, TEST_UNSUPPORTED_FILE_PATH, 'test-doc.bin', 'error');
+    });
+
+    test('[KDB-05] Delete knowledge database from details page', async ({ workerNavigationBar }) => {
+      const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
+
+      const listPage = await detailsPage.deleteEnvironment();
+      await listPage.waitForLoad();
+      await listPage.ensureRowDoesNotExist(ENVIRONMENT_NAME);
+    });
+  });
+
+  test.describe.serial('Knowledge Database Pipeline with Milvus', { tag: ['@knowledge-provider', '@smoke'] }, () => {
+    const ENVIRONMENT_NAME = 'connected-knowledge-base';
+    const EXPECTED_COLLECTION_NAME = 'connected_knowledge_base';
+    const MCP_SERVER_NAME = `kaiden.milvus.mcp-server-milvus-${VECTOR_STORE_NAME}`;
+
+    test('[KDB-06] Milvus connection is visible in Settings Resources', async ({
+      milvusSetup: _milvusSetup,
+      workerNavigationBar,
+    }) => {
+      const settingsPage = await workerNavigationBar.navigateToSettingsPage();
+      const resourcesPage = await settingsPage.openResources();
+      await resourcesPage.waitForLoad();
+
+      const milvusRegion = resourcesPage.getProviderRegion('milvus');
+      await expect(milvusRegion).toBeVisible();
+
+      const connection = resourcesPage.getCreatedConnectionFor('milvus', 'rag');
+      await expect(connection).toBeVisible();
+    });
+
+    test('[KDB-07] Create knowledge database via UI and verify it appears', async ({
+      milvusSetup: vectorStoreName,
+      doclingSetup: _doclingSetup,
+      workerNavigationBar,
+    }) => {
+      const knowledgePage = await workerNavigationBar.navigateToKnowledgePage();
+      await knowledgePage.createEnvironment(ENVIRONMENT_NAME, vectorStoreName, EMBEDDING_MODEL_NAME);
+    });
+
+    test('[KDB-08] Details page shows Milvus info in Summary and VectorStore tabs', async ({
+      milvusSetup: vectorStoreName,
+      workerNavigationBar,
+    }) => {
+      const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
+
+      await detailsPage.switchToSummaryTab();
+      await expect(detailsPage.getInfoValue('Vector Store')).toContainText(vectorStoreName, {
+        timeout: TIMEOUTS.DEFAULT,
       });
 
-      test('[KDB-07] Create knowledge database via UI and verify it appears', async ({
-        milvusSetup: vectorStoreName,
-        doclingSetup: _doclingSetup,
-        workerNavigationBar,
-      }) => {
-        const knowledgePage = await workerNavigationBar.navigateToKnowledgePage();
-        await knowledgePage.createEnvironment(ENVIRONMENT_NAME, vectorStoreName, EMBEDDING_MODEL_NAME);
-      });
-
-      test('[KDB-08] Details page shows Milvus info in Summary and VectorStore tabs', async ({
-        milvusSetup: vectorStoreName,
-        workerNavigationBar,
-      }) => {
-        const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
-
-        await detailsPage.switchToSummaryTab();
-        await expect(detailsPage.getInfoValue('Vector Store')).toContainText(vectorStoreName, {
-          timeout: TIMEOUTS.DEFAULT,
-        });
-
-        await detailsPage.switchToVectorStoreTab();
-        await expect(detailsPage.getInfoRow('Database Type')).toBeVisible({ timeout: TIMEOUTS.DEFAULT });
-        await expect(detailsPage.getInfoValue('Collection Name')).toHaveText(EXPECTED_COLLECTION_NAME, {
-          timeout: TIMEOUTS.DEFAULT,
-        });
-      });
-
-      test('[KDB-11] Milvus MCP server is auto-spawned and knowledge database status is RUNNING', async ({
-        workerNavigationBar,
-      }) => {
-        const knowledgePage = await workerNavigationBar.navigateToKnowledgePage();
-        await knowledgePage.waitForLoad();
-        await expect
-          .poll(async () => await knowledgePage.getEnvironmentStatus(ENVIRONMENT_NAME), {
-            timeout: TIMEOUTS.DEFAULT,
-          })
-          .toBe('RUNNING');
-
-        const mcpPage = await workerNavigationBar.navigateToMCPPage();
-        const readyTab = await mcpPage.openReadyTab();
-        await expect
-          .poll(async () => await readyTab.isServerConnected(MCP_SERVER_NAME), { timeout: TIMEOUTS.DEFAULT })
-          .toBeTruthy();
-      });
-
-      test('[KDB-09] Delete knowledge database from details page', async ({ workerNavigationBar }) => {
-        const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
-
-        const listPage = await detailsPage.deleteEnvironment();
-        await listPage.waitForLoad();
-        await listPage.ensureRowDoesNotExist(ENVIRONMENT_NAME);
+      await detailsPage.switchToVectorStoreTab();
+      await expect(detailsPage.getInfoRow('Database Type')).toBeVisible({ timeout: TIMEOUTS.DEFAULT });
+      await expect(detailsPage.getInfoValue('Collection Name')).toHaveText(EXPECTED_COLLECTION_NAME, {
+        timeout: TIMEOUTS.DEFAULT,
       });
     });
+
+    test('[KDB-11] Milvus MCP server is auto-spawned and knowledge database status is RUNNING', async ({
+      workerNavigationBar,
+    }) => {
+      const knowledgePage = await workerNavigationBar.navigateToKnowledgePage();
+      await knowledgePage.waitForLoad();
+      await expect
+        .poll(async () => await knowledgePage.getEnvironmentStatus(ENVIRONMENT_NAME), {
+          timeout: TIMEOUTS.DEFAULT,
+        })
+        .toBe('RUNNING');
+
+      const settingsPage = await workerNavigationBar.navigateToSettingsPage();
+      const mcpPage = await settingsPage.openMcp();
+      const readyTab = await mcpPage.openReadyTab();
+      await expect
+        .poll(async () => await readyTab.isServerConnected(MCP_SERVER_NAME), { timeout: TIMEOUTS.DEFAULT })
+        .toBeTruthy();
+    });
+
+    test('[KDB-09] Delete knowledge database from details page', async ({ workerNavigationBar }) => {
+      const detailsPage = await openKnowledgeDetails(workerNavigationBar, ENVIRONMENT_NAME);
+
+      const listPage = await detailsPage.deleteEnvironment();
+      await listPage.waitForLoad();
+      await listPage.ensureRowDoesNotExist(ENVIRONMENT_NAME);
+    });
+  });
 });
