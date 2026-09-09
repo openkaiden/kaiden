@@ -4,12 +4,14 @@ import { router } from 'tinro';
 
 import WarningMessage from '/@/lib/ui/WarningMessage.svelte';
 import { openshellGateways, openshellGatewaysReady } from '/@/stores/openshell-gateways';
-import type { GatewayInfo } from '/@api/openshell-gateway-info';
+import { isGatewayVersionCompatible, type GatewayInfo } from '/@api/openshell-gateway-info';
 
 const GATEWAY_SETTINGS_PATH = '/preferences/openshell/gateways';
 
 function noUsableGateways(gateways: GatewayInfo[]): boolean {
-  return !gateways.some(gateway => gateway.gatewayState?.reachable === true);
+  return !gateways.some(
+    gateway => gateway.gatewayState?.reachable === true && isGatewayVersionCompatible(gateway.version),
+  );
 }
 </script>
 
