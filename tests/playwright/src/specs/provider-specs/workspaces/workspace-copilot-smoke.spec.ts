@@ -21,34 +21,32 @@ import { CODING_AGENT, TERMINAL_READY_PATTERNS } from '/@/model/core/types';
 
 import { registerWorkspaceLifecycleTests } from './helpers/workspace-lifecycle-helper';
 
-test.describe
-  .serial('GitHub Copilot agent workspace with OpenAI model', { tag: '@workspace-provider' }, () => {
-    registerWorkspaceLifecycleTests(test, expect, {
-      testIdPrefix: 'WKS-OPENAI',
-      workspaceName: 'copilot-openai',
-      agent: CODING_AGENT.COPILOT,
-      requiredResource: 'openai',
-      selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
-      terminalReadyPatterns: TERMINAL_READY_PATTERNS.COPILOT,
-      promptTest: {
-        prompt: 'what is 123+456? reply with just the number',
-        expectedResponse: /579|insufficient|balance|credit|quota exceeded/i,
-      },
-    });
+test.describe.serial('GitHub Copilot agent workspace with OpenAI model', { tag: '@workspace-provider' }, () => {
+  registerWorkspaceLifecycleTests(test, expect, {
+    testIdPrefix: 'WKS-OPENAI',
+    workspaceName: 'copilot-openai',
+    agent: CODING_AGENT.COPILOT,
+    requiredResource: 'openai',
+    selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
+    terminalReadyPatterns: TERMINAL_READY_PATTERNS.COPILOT,
+    promptTest: {
+      prompt: 'what is 123+456? reply with just the number',
+      expectedResponse: /579|insufficient|balance|credit|quota exceeded/i,
+    },
   });
+});
 
-test.describe
-  .serial('GitHub Copilot agent workspace with Anthropic model', { tag: '@workspace-provider' }, () => {
-    registerWorkspaceLifecycleTests(test, expect, {
-      testIdPrefix: 'WKS-ANTHROPIC',
-      workspaceName: 'copilot-anthropic',
-      agent: CODING_AGENT.COPILOT,
-      requiredResource: 'claude',
-      selectModel: async createPage => createPage.searchAndSelectDefault('claude', 'Claude'),
-      terminalReadyPatterns: TERMINAL_READY_PATTERNS.COPILOT,
-      promptTest: {
-        prompt: 'what is 2+2? reply with just the number',
-        expectedResponse: /4|insufficient|balance|credit/i,
-      },
-    });
+test.describe.serial('GitHub Copilot agent workspace with Anthropic model', { tag: '@workspace-provider' }, () => {
+  registerWorkspaceLifecycleTests(test, expect, {
+    testIdPrefix: 'WKS-ANTHROPIC',
+    workspaceName: 'copilot-anthropic',
+    agent: CODING_AGENT.COPILOT,
+    requiredResource: 'claude',
+    selectModel: async createPage => createPage.searchAndSelectDefault('claude', 'Claude'),
+    terminalReadyPatterns: TERMINAL_READY_PATTERNS.COPILOT,
+    promptTest: {
+      prompt: 'what is 2+2? reply with just the number',
+      expectedResponse: /4|insufficient|balance|credit/i,
+    },
   });
+});

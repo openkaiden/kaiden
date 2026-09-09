@@ -46,7 +46,9 @@ const filteredSessions: SessionSelectable[] = $derived.by(() => {
       s =>
         !term ||
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- || is intentional: false must fall through to check prompt/sandbox
-        s.name?.toLowerCase().includes(term) ||
+        s.name
+          ?.toLowerCase()
+          .includes(term) ||
         s.prompt.toLowerCase().includes(term) ||
         s.sandboxName.toLowerCase().includes(term),
     )

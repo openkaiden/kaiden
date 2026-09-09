@@ -21,41 +21,39 @@ import { CODING_AGENT, TERMINAL_READY_PATTERNS } from '/@/model/core/types';
 
 import { registerWorkspaceLifecycleTests } from './helpers/workspace-lifecycle-helper';
 
-test.describe
-  .serial('Claude Code agent workspace with Anthropic model', { tag: '@workspace-provider' }, () => {
-    registerWorkspaceLifecycleTests(test, expect, {
-      testIdPrefix: 'WKS-CLAUDE',
-      workspaceName: 'claude-default',
-      agent: CODING_AGENT.CLAUDE,
-      requiredResource: 'claude',
-      selectModel: async createPage => {
-        await createPage.verifyModelRuntimes('Claude');
-        return createPage.selectDefaultModel();
-      },
-      terminalReadyPatterns: TERMINAL_READY_PATTERNS.CLAUDE,
-      promptTest: {
-        prompt: 'what is 2+2? reply with just the number',
-        expectedResponse: /4|insufficient|balance|credit/i,
-      },
-    });
+test.describe.serial('Claude Code agent workspace with Anthropic model', { tag: '@workspace-provider' }, () => {
+  registerWorkspaceLifecycleTests(test, expect, {
+    testIdPrefix: 'WKS-CLAUDE',
+    workspaceName: 'claude-default',
+    agent: CODING_AGENT.CLAUDE,
+    requiredResource: 'claude',
+    selectModel: async createPage => {
+      await createPage.verifyModelRuntimes('Claude');
+      return createPage.selectDefaultModel();
+    },
+    terminalReadyPatterns: TERMINAL_READY_PATTERNS.CLAUDE,
+    promptTest: {
+      prompt: 'what is 2+2? reply with just the number',
+      expectedResponse: /4|insufficient|balance|credit/i,
+    },
   });
+});
 
-test.describe
-  .serial('Claude Code agent workspace without a project folder', { tag: '@workspace-provider' }, () => {
-    registerWorkspaceLifecycleTests(test, expect, {
-      testIdPrefix: 'WKS-CLAUDE-NOFOLDER',
-      workspaceName: 'claude-nofolder',
-      agent: CODING_AGENT.CLAUDE,
-      requiredResource: 'claude',
-      noProjectFolder: true,
-      selectModel: async createPage => {
-        await createPage.verifyModelRuntimes('Claude');
-        return createPage.selectDefaultModel();
-      },
-      terminalReadyPatterns: TERMINAL_READY_PATTERNS.CLAUDE,
-      promptTest: {
-        prompt: 'what is 2+2? reply with just the number',
-        expectedResponse: /4|insufficient|balance|credit/i,
-      },
-    });
+test.describe.serial('Claude Code agent workspace without a project folder', { tag: '@workspace-provider' }, () => {
+  registerWorkspaceLifecycleTests(test, expect, {
+    testIdPrefix: 'WKS-CLAUDE-NOFOLDER',
+    workspaceName: 'claude-nofolder',
+    agent: CODING_AGENT.CLAUDE,
+    requiredResource: 'claude',
+    noProjectFolder: true,
+    selectModel: async createPage => {
+      await createPage.verifyModelRuntimes('Claude');
+      return createPage.selectDefaultModel();
+    },
+    terminalReadyPatterns: TERMINAL_READY_PATTERNS.CLAUDE,
+    promptTest: {
+      prompt: 'what is 2+2? reply with just the number',
+      expectedResponse: /4|insufficient|balance|credit/i,
+    },
   });
+});
