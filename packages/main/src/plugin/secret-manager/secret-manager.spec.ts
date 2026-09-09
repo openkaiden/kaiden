@@ -45,7 +45,7 @@ const apiSender: ApiSenderType = {
   receive: vi.fn(),
 };
 const ipcHandle: IPCHandle = vi.fn();
-const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry, {} as never);
+const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry);
 const openshellAdapter = new OpenshellSecretAdapter(openshellCli);
 
 let gatewayStartCallback: (() => void) | undefined;

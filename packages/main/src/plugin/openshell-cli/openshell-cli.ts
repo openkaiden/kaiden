@@ -25,8 +25,6 @@ import z from 'zod';
 
 import { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
 import { Emitter } from '/@/plugin/events/emitter.js';
-import { buildSdkNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
-import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { Exec } from '/@/plugin/util/exec.js';
 import type { Event } from '/@api/event.js';
 import {
@@ -46,6 +44,19 @@ import {
   SandboxInfoSchema,
   type SetInferenceOptions,
 } from '/@api/openshell-gateway-info.js';
+
+const SettingValue = z.union([z.string(), z.boolean(), z.number()]);
+
+const OpenshellSettingsSchema = z.looseObject({
+  scope: z.string(),
+  settings: z.looseObject({
+    agent_policy_proposals_enabled: SettingValue,
+    ocsf_json_enabled: SettingValue,
+    proposal_approval_mode: SettingValue,
+    providers_v2_enabled: SettingValue,
+  }),
+  settings_revision: z.number(),
+});
 
 /**
  * Low-level wrapper around the `openshell` CLI binary.
@@ -91,8 +102,6 @@ export class OpenshellCli {
     private readonly exec: Exec,
     @inject(CliToolRegistry)
     private readonly cliToolRegistry: CliToolRegistry,
-    @inject(OpenshellSdkClientManager)
-    private readonly sdkClientManager: OpenshellSdkClientManager,
   ) {}
 
   getCliPath(): string {
@@ -504,47 +513,19 @@ export class OpenshellCli {
   }
 
   async isV2ProviderEnabled(): Promise<boolean> {
+    const cliPath = this.getCliPath();
     try {
-      const client = await this.sdkClientManager.getClient();
-      const config = await client.raw.getGatewayConfig({});
-      const value = config.settings['providers_v2_enabled']?.value;
-      return value?.case === 'boolValue' && value.value;
+      const result = await this.exec.exec(cliPath, ['settings', 'get', '--global', '--json']);
+      const parsed = OpenshellSettingsSchema.parse(JSON.parse(result.stdout));
+      const value = parsed.settings.providers_v2_enabled;
+      return value === true || value === 'true';
     } catch {
       return false;
     }
   }
 
   async enableV2Provider(): Promise<void> {
-    const client = await this.sdkClientManager.getClient();
-    await client.raw.updateConfig({
-      global: true,
-      settingKey: 'providers_v2_enabled',
-      settingValue: { value: { case: 'boolValue', value: true } },
-    });
-  }
-
-  // ── policy commands ──────────────────────────────────────────────
-
-  async updatePolicy(sandboxName: string, endpoints: string[], binaries?: string[], gateway?: string): Promise<void> {
-    const client = await this.sdkClientManager.getClient(gateway);
-    const generatedPolicy = buildSdkNetworkPolicy(endpoints, binaries);
-    const config = await client.sandbox.getConfig(sandboxName);
-    const currentPolicy = config.policy;
-    await client.sandbox.setPolicy(
-      sandboxName,
-      {
-        version: currentPolicy?.version ?? generatedPolicy.version,
-        filesystem: currentPolicy?.filesystem,
-        landlock: currentPolicy?.landlock,
-        process: currentPolicy?.process,
-        networkPolicies: {
-          ...currentPolicy?.networkPolicies,
-          ...generatedPolicy.networkPolicies,
-        },
-        networkMiddlewares: currentPolicy?.networkMiddlewares,
-      },
-      { wait: true },
-    );
+    return this.runCli(['settings', 'set', '--global', '--key', 'providers_v2_enabled', '--value', 'true', '--yes']);
   }
 
   // ── helpers ───────────────────────────────────────────────────────
