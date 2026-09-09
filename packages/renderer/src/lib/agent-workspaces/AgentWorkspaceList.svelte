@@ -143,7 +143,7 @@ const sandboxColumns = [
       <NotificationsBox />
       <div class="px-5 pt-4 pb-4">
         <AgentWorkspaceStatCards sandboxes={$allOpenshellSandboxes} />
-        <div class="flex flex-row items-center gap-3">
+        <div class="flex flex-row items-center gap-3 min-h-9">
           <div class="w-72">
             <SearchInput bind:searchTerm={searchTerm} title="Agentic Workspaces" />
           </div>
