@@ -162,10 +162,6 @@ const sandboxColumns = [
           <span>On {selectedItemsNumber} selected items.</span>
           {/if}
         </div>
-        {#if selectedItemsNumber > 0}
-          <div class="flex flex-row items-center gap-2 mt-2">
-          </div>
-        {/if}
       </div>
 
       <div class="flex flex-col min-w-full min-h-0 flex-1 overflow-auto">
