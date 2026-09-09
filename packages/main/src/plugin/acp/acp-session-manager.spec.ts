@@ -636,6 +636,64 @@ describe('AcpSessionManager', () => {
       expect(sessions[0]!.id).toBe('session-resume');
     });
 
+    test('restores messageTurn from max turn in persisted events', async () => {
+      const { existsSync } = await import('node:fs');
+      const { readdir, readFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readdir).mockResolvedValue(['session-turn.json' as never]);
+
+      const events = [
+        { kind: 'prompt', text: 'hello', timestamp: 1000 },
+        { kind: 'agent_message', text: 'first response', messageId: 'msg-1', turn: 0, timestamp: 2000 },
+        { kind: 'tool_call', toolCallId: 'tc-1', title: 'tool', status: 'completed', timestamp: 3000 },
+        { kind: 'agent_message', text: 'after tool', messageId: 'msg-2', turn: 1, timestamp: 4000 },
+        { kind: 'prompt', text: 'follow up', timestamp: 5000 },
+        { kind: 'agent_message', text: 'second response', messageId: 'msg-3', turn: 2, timestamp: 6000 },
+      ];
+      const storedSession = {
+        info: {
+          id: 'session-turn',
+          sandboxName: 'sb',
+          sandboxId: 'sb-id',
+          prompt: 'hello',
+          status: 'completed',
+          createdAt: 1000,
+          updatedAt: 6000,
+        },
+        events,
+        acpSessionId: 'acp-456',
+        agentCommand: ['agent', 'acp'],
+        gatewayName: 'gw',
+      };
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify(storedSession));
+
+      await manager.init();
+
+      const sessionEvents = manager.getSessionEvents('session-turn');
+      expect(sessionEvents).toHaveLength(6);
+      const agentMessages = sessionEvents.filter(e => e.kind === 'agent_message');
+      expect(agentMessages).toHaveLength(3);
+      const maxTurn = Math.max(...agentMessages.map(e => ('turn' in e ? (e.turn as number) : 0)));
+      expect(maxTurn).toBe(2);
+
+      // Simulate a new agent_message_chunk arriving after resume — its turn
+      // must be 3 (maxTurn + 1), not collide with any persisted event.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (manager as any).handleSessionUpdate('session-turn', {
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          messageId: 'msg-new',
+          content: { type: 'text', text: 'new response' },
+        },
+      });
+
+      const updatedEvents = manager.getSessionEvents('session-turn');
+      const newMessage = updatedEvents.findLast(e => e.kind === 'agent_message' && 'turn' in e && e.turn === 3);
+      expect(newMessage).toBeDefined();
+      expect((newMessage as { text: string }).text).toBe('new response');
+    });
+
     test('handles missing resume fields in old persisted data', async () => {
       const { existsSync } = await import('node:fs');
       const { readdir, readFile } = await import('node:fs/promises');

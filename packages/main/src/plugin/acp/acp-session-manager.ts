@@ -1245,15 +1245,20 @@ export class AcpSessionManager {
           info.updatedAt = Date.now();
         }
 
+        const events = data.events ?? [];
+        const maxTurn = events.reduce(
+          (max, e) => ('turn' in e && typeof e.turn === 'number' && e.turn > max ? e.turn : max),
+          -1,
+        );
         const session: AcpSession = {
           info,
           ptyProcess: undefined!,
           connection: undefined!,
           acpSessionId: data.acpSessionId,
-          events: data.events ?? [],
+          events,
           pendingRequests: new Map(),
           stderrLines: [],
-          messageTurn: 0,
+          messageTurn: maxTurn + 1,
           connectionClosed: true,
           agentCommand: data.agentCommand ?? [],
           gatewayName: data.gatewayName,
