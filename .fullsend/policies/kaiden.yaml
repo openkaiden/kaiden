@@ -68,21 +68,7 @@ network_policies:
         rules:
           - allow: { method: GET, path: /** }
     binaries:
-      - path: "**/npm"
-      - path: "**/npx"
-      - path: "**/yarn"
-      - path: "**/yarnpkg"
-      - path: "**/pnpm"
       - path: "**/node"
-      - path: "**/pip"
-      - path: "**/pip3"
-      - path: "**/python"
-      - path: "**/python3"
-      - path: "**/python3.*"
-      - path: "**/uv"
-      - path: "**/uvx"
-      - path: "**/go"
-      - path: "**/pre-commit"
 
   # proxy.spec.ts tests call fetch('https://podman-desktop.io') to exercise
   # the proxy subsystem — allow the sandbox to reach this domain.
