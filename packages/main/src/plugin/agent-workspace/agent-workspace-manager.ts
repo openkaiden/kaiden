@@ -56,7 +56,13 @@ import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationNode } from '/@api/configuration/models.js';
 import { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { CreateLocalGatewayOptions, GatewayInfo, GatewaySandboxes } from '/@api/openshell-gateway-info.js';
-import { AGENT_LABEL, decodeWorkspaceLabels, WORKSPACE_LABEL } from '/@api/openshell-gateway-info.js';
+import {
+  AGENT_LABEL,
+  decodeWorkspaceLabels,
+  isGatewayVersionCompatible,
+  MIN_GATEWAY_VERSION,
+  WORKSPACE_LABEL,
+} from '/@api/openshell-gateway-info.js';
 
 const HOME_VARIABLE = '${HOME}';
 const LABEL_MAX_LENGTH = 63;
@@ -146,6 +152,11 @@ export class AgentWorkspaceManager implements Disposable {
         .find(candidate => candidate.name === options.gateway);
       if (!gateway?.gatewayState?.reachable) {
         throw new Error(`gateway "${options.gateway}" is unreachable`);
+      }
+      if (!isGatewayVersionCompatible(gateway.version)) {
+        throw new Error(
+          `gateway "${options.gateway}" version ${gateway.version} is below the minimum required version ${MIN_GATEWAY_VERSION}`,
+        );
       }
 
       if (options.replaceConfig) {

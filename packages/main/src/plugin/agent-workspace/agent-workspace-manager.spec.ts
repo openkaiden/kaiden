@@ -417,6 +417,23 @@ describe('create – OpenShell mode', () => {
     expect(openshellCli.createSandbox).not.toHaveBeenCalled();
   });
 
+  test('rejects a gateway below the minimum required version', async () => {
+    vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
+      {
+        name: 'kaiden',
+        endpoint: 'http://127.0.0.1:17670',
+        version: '0.1.0',
+        gatewayState: { reachable: true, health: 'healthy' },
+      },
+    ]);
+
+    await expect(manager.create(defaultOptions)).rejects.toThrow(
+      'gateway "kaiden" version 0.1.0 is below the minimum required version 0.4.0',
+    );
+
+    expect(openshellCli.createSandbox).not.toHaveBeenCalled();
+  });
+
   test('waits for the gateway cache before checking reachability', async () => {
     let resolveReady: () => void;
     vi.mocked(openshellGatewayStateManager.whenReady).mockReturnValue(

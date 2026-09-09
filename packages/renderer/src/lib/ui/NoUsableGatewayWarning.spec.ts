@@ -103,7 +103,7 @@ test('hides the warning when a gateway becomes available', async () => {
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
 });
 
-test('shows a warning when all gateways are below the minimum version', () => {
+test('shows a warning with minimum version when all gateways are below the minimum version', () => {
   openshellGateways.set([
     {
       name: 'gw1',
@@ -116,7 +116,9 @@ test('shows a warning when all gateways are below the minimum version', () => {
 
   render(NoUsableGatewayWarning);
 
-  expect(screen.getByRole('alert')).toHaveTextContent('No usable OpenShell gateways available.');
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'No usable OpenShell gateways available. Minimum required version: 0.4.0.',
+  );
 });
 
 test('hides the warning when a compatible gateway exists', () => {
