@@ -18,6 +18,7 @@
 
 // Import to access mocked functionionalities such as using vi.mock (we don't want to actually call node:fs methods)
 import * as fs from 'node:fs';
+import { rename, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -40,7 +41,6 @@ import type { NotificationRegistry } from './tasks/notification-registry.js';
 // mock the fs module
 vi.mock('node:fs', () => ({
   readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
   cpSync: vi.fn(),
   existsSync: vi.fn(),
   promises: {
@@ -49,7 +49,17 @@ vi.mock('node:fs', () => ({
     writeFile: vi.fn(),
     readFile: vi.fn(),
     copyFile: vi.fn(),
+    rename: vi.fn(),
   },
+}));
+
+vi.mock(import('node:fs/promises'), () => ({
+  writeFile: vi.fn(),
+  rename: vi.fn(),
+}));
+
+vi.mock(import('node:crypto'), () => ({
+  randomUUID: vi.fn().mockReturnValue('test-uuid'),
 }));
 
 vi.mock(import('node:os'), async importOriginal => {
@@ -587,8 +597,8 @@ describe('should be notified when a configuration is updated', async () => {
 });
 
 test('should remove the object configuration if value is equal to default one', async () => {
-  // Mock fs function needed for this specific test
-  const writeFileSync = vi.mocked(fs.writeFileSync);
+  const writeFileMock = vi.mocked(writeFile);
+  const renameMock = vi.mocked(rename);
 
   const node: IConfigurationNode = {
     id: 'custom',
@@ -628,20 +638,28 @@ test('should remove the object configuration if value is equal to default one', 
     { label: 'bar', value: 2 },
   ]);
 
-  expect(writeFileSync).toHaveBeenNthCalledWith(
+  // wait for the serialized write chain to flush
+  await vi.waitFor(() => {
+    expect(renameMock).toHaveBeenCalledTimes(2);
+  });
+
+  // atomic write: the second call should persist an empty config (value matches default)
+  expect(writeFileMock).toHaveBeenNthCalledWith(
     2,
-    expect.anything(),
+    expect.stringMatching(/settings\.json\.tmp-/),
     expect.stringContaining(JSON.stringify({}, undefined, 2)),
+    'utf-8',
   );
 });
 
 // Tests for applyManagedDefaults method
 describe('applyManagedDefaults function tests', () => {
-  let writeFileSync: ReturnType<typeof vi.mocked<typeof fs.writeFileSync>>;
+  let writeFileMock: ReturnType<typeof vi.mocked<typeof writeFile>>;
+  let renameMock: ReturnType<typeof vi.mocked<typeof rename>>;
 
   beforeEach(() => {
-    writeFileSync = vi.mocked(fs.writeFileSync);
-    writeFileSync.mockClear();
+    writeFileMock = vi.mocked(writeFile);
+    renameMock = vi.mocked(rename);
   });
 
   test('apply default-config.json values to undefined keys in config', async () => {
@@ -801,8 +819,10 @@ describe('applyManagedDefaults function tests', () => {
     const testRegistry = new ConfigurationRegistry(apiSender, directories, defaultConfiguration, lockedConfiguration);
     await testRegistry.init();
 
-    // saveDefault should have been called (via writeFileSync)
-    expect(writeFileSync).toHaveBeenCalled();
+    // saveDefault should have been called (via atomic write)
+    await vi.waitFor(() => {
+      expect(renameMock).toHaveBeenCalled();
+    });
   });
 
   test('should NOT write to file when no managed defaults are applied', async () => {
@@ -812,8 +832,8 @@ describe('applyManagedDefaults function tests', () => {
     const testRegistry = new ConfigurationRegistry(apiSender, directories, defaultConfiguration, lockedConfiguration);
     await testRegistry.init();
 
-    // saveDefault should NOT have been called
-    expect(writeFileSync).not.toHaveBeenCalled();
+    // saveDefault should NOT have been called (no rename means no atomic write was scheduled)
+    expect(renameMock).not.toHaveBeenCalled();
   });
 
   test('should not persist managed default to settings.json if it matches schema default', async () => {
@@ -844,12 +864,18 @@ describe('applyManagedDefaults function tests', () => {
 
     // Clear previous calls and trigger saveDefault to check what would be written
     // now that configurations are registered
-    writeFileSync.mockClear();
+    writeFileMock.mockClear();
+    renameMock.mockClear();
     testRegistry.saveDefault();
 
+    // wait for the serialized write chain to flush
+    await vi.waitFor(() => {
+      expect(renameMock).toHaveBeenCalled();
+    });
+
     // The value should NOT be in the settings.json since it matches the schema default
-    expect(writeFileSync).toHaveBeenCalled();
-    const writtenContent = JSON.parse(writeFileSync.mock.calls[0]?.[1] as string);
+    expect(writeFileMock).toHaveBeenCalled();
+    const writtenContent = JSON.parse(writeFileMock.mock.calls[0]?.[1] as string);
     expect(writtenContent['my.fake.property']).toBeUndefined();
   });
 
@@ -880,12 +906,18 @@ describe('applyManagedDefaults function tests', () => {
     testRegistry.registerConfigurations([node]);
 
     // Clear previous calls and trigger saveDefault to check what would be written
-    writeFileSync.mockClear();
+    writeFileMock.mockClear();
+    renameMock.mockClear();
     testRegistry.saveDefault();
 
+    // wait for the serialized write chain to flush
+    await vi.waitFor(() => {
+      expect(renameMock).toHaveBeenCalled();
+    });
+
     // The value SHOULD be in the settings.json since it differs from schema default
-    expect(writeFileSync).toHaveBeenCalled();
-    const writtenContent = JSON.parse(writeFileSync.mock.calls[0]?.[1] as string);
+    expect(writeFileMock).toHaveBeenCalled();
+    const writtenContent = JSON.parse(writeFileMock.mock.calls[0]?.[1] as string);
     expect(writtenContent['my.fake.property']).toEqual('customValue');
   });
 });
