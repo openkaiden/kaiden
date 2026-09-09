@@ -33,7 +33,6 @@ export class NavigationBar {
   readonly navigationLocator: Locator;
   readonly chatLink: Locator;
   readonly mcpLink: Locator;
-  readonly skillsLink: Locator;
   readonly knowledgesLink: Locator;
   readonly extensionsLink: Locator;
   readonly workspacesLink: Locator;
@@ -45,7 +44,6 @@ export class NavigationBar {
     this.navigationLocator = this.page.getByRole('navigation', { name: 'AppNavigation' });
     this.chatLink = this.navigationLocator.getByRole('link', { name: 'Chat' });
     this.mcpLink = this.navigationLocator.getByRole('link', { name: 'MCP' });
-    this.skillsLink = this.navigationLocator.getByRole('link', { name: 'Skills', exact: true });
     this.knowledgesLink = this.navigationLocator.getByRole('link', { name: 'Knowledges', exact: true });
     this.extensionsLink = this.navigationLocator.getByRole('link', { name: 'Extensions', exact: true });
     this.workspacesLink = this.navigationLocator.getByRole('link', { name: 'Workspaces', exact: true });
@@ -53,7 +51,6 @@ export class NavigationBar {
     this.links = [
       this.chatLink,
       this.mcpLink,
-      this.skillsLink,
       this.knowledgesLink,
       this.extensionsLink,
       this.workspacesLink,
@@ -83,7 +80,8 @@ export class NavigationBar {
   }
 
   async navigateToSkillsPage(): Promise<SkillsPage> {
-    return this.navigateTo(this.skillsLink, SkillsPage);
+    const settingsPage = await this.navigateToSettingsPage();
+    return settingsPage.openSkills();
   }
 
   async navigateToKnowledgePage(): Promise<KnowledgePage> {

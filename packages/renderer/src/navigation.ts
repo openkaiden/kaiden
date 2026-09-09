@@ -186,7 +186,7 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
       router.goto('/preferences/coding-agents');
       break;
     case NavigationPage.SKILL_DETAILS:
-      router.goto(`/skills/${encodeURIComponent(request.parameters.name)}/summary`);
+      router.goto(`/preferences/skills/${encodeURIComponent(request.parameters.name)}/summary`);
       break;
     case NavigationPage.RAG_ENVIRONMENTS:
       router.goto('/rag-environments/');
@@ -195,10 +195,10 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
       router.goto(`/rag-environments/${encodeURIComponent(request.parameters.name)}/summary`);
       break;
     case NavigationPage.SKILLS:
-      router.goto('/skills');
+      router.goto('/preferences/skills');
       break;
     case NavigationPage.SKILL_CREATE:
-      router.goto('/skills/create');
+      router.goto('/preferences/skills/create');
       break;
     case NavigationPage.SECRET_VAULT:
       router.goto('/secret-vault');

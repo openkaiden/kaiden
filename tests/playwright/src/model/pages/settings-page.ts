@@ -22,6 +22,7 @@ import type { ResourceId } from '/@/model/core/types';
 import { PROVIDERS, TIMEOUTS } from '/@/model/core/types';
 import { SettingsCodingAgentsPage } from '/@/model/pages/settings-coding-agents-tab-page';
 import { SettingsModelsPage } from '/@/model/pages/settings-models-tab-page';
+import { SkillsPage } from '/@/model/pages/skills-page';
 
 import { BasePage } from './base-page';
 import { SettingsCliPage } from './settings-cli-tab-page';
@@ -35,6 +36,7 @@ export class SettingsPage extends BasePage {
   readonly proxyTab: Locator;
   readonly codingAgentsTab: Locator;
   readonly modelsTab: Locator;
+  readonly skillsTab: Locator;
   readonly preferencesTab: Locator;
   private readonly tabs: Locator[];
 
@@ -45,6 +47,7 @@ export class SettingsPage extends BasePage {
     this.proxyTab = page.getByRole('link', { name: 'Proxy' });
     this.codingAgentsTab = page.getByRole('link', { name: 'Coding agents' });
     this.modelsTab = page.getByRole('link', { name: 'Models' });
+    this.skillsTab = page.getByRole('link', { name: 'Skills' });
     this.preferencesTab = page.getByRole('link', { name: 'Preferences' });
     this.tabs = [
       this.resourcesTab,
@@ -52,6 +55,7 @@ export class SettingsPage extends BasePage {
       this.proxyTab,
       this.codingAgentsTab,
       this.modelsTab,
+      this.skillsTab,
       this.preferencesTab,
     ];
   }
@@ -66,6 +70,7 @@ export class SettingsPage extends BasePage {
     await expect(this.proxyTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.codingAgentsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.modelsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
+    await expect(this.skillsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.preferencesTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
   }
 
@@ -91,6 +96,10 @@ export class SettingsPage extends BasePage {
 
   async openModels(): Promise<SettingsModelsPage> {
     return this.openTab(this.modelsTab, SettingsModelsPage);
+  }
+
+  async openSkills(): Promise<SkillsPage> {
+    return this.openTab(this.skillsTab, SkillsPage);
   }
 
   getAllTabs(): Locator[] {

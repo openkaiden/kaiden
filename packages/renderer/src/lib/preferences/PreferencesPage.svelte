@@ -3,6 +3,9 @@ import { onMount } from 'svelte';
 
 import CodingAgentsPage from '/@/lib/coding-agents/CodingAgentsPage.svelte';
 import ModelsCatalog from '/@/lib/models/ModelsCatalog.svelte';
+import SkillCreate from '/@/lib/skills/SkillCreate.svelte';
+import SkillDetails from '/@/lib/skills/SkillDetails.svelte';
+import SkillsList from '/@/lib/skills/SkillsList.svelte';
 import SemanticRouterCreate from '/@/lib/models/SemanticRouterCreate.svelte';
 import Onboarding from '/@/lib/onboarding/Onboarding.svelte';
 import ExperimentalPage from '/@/lib/preferences/ExperimentalPage.svelte';
@@ -98,6 +101,17 @@ onMount(async () => {
     </Route>
     <Route path="/semantic-router/create" breadcrumb="Add Semantic Router">
       <SemanticRouterCreate />
+    </Route>
+  </Route>
+  <Route path="/skills/*" breadcrumb="Skills" firstmatch>
+    <Route path="/" breadcrumb="Skills">
+      <SkillsList />
+    </Route>
+    <Route path="/create" breadcrumb="Create Skill">
+      <SkillCreate />
+    </Route>
+    <Route path="/:name/*" let:meta breadcrumb="Skill Details">
+      <SkillDetails name={decodeURIComponent(meta.params.name)} />
     </Route>
   </Route>
   <Route path="/kubernetes-contexts" breadcrumb="Kubernetes Contexts">
