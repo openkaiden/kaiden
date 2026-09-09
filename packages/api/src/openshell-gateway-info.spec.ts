@@ -18,7 +18,7 @@
 
 import { describe, expect, test } from 'vitest';
 
-import { SandboxInfoSchema } from './openshell-gateway-info.js';
+import { isGatewayVersionCompatible, MIN_GATEWAY_VERSION, SandboxInfoSchema } from './openshell-gateway-info.js';
 
 describe('SandboxInfoSchema created_at transform', () => {
   const baseSandbox = { id: 's1', name: 'test', phase: 'Ready' as const };
@@ -56,5 +56,40 @@ describe('SandboxInfoSchema created_at transform', () => {
   test('should append Z to space-separated timestamp from openshell', () => {
     const result = SandboxInfoSchema.parse({ ...baseSandbox, created_at: '2026-07-17 14:07:58' });
     expect(result.created_at).toBe('2026-07-17T14:07:58Z');
+  });
+});
+
+describe('isGatewayVersionCompatible', () => {
+  test('returns true when version is undefined', () => {
+    expect(isGatewayVersionCompatible(undefined)).toBe(true);
+  });
+
+  test('returns true when version equals MIN_GATEWAY_VERSION', () => {
+    expect(isGatewayVersionCompatible(MIN_GATEWAY_VERSION)).toBe(true);
+  });
+
+  test('returns true when version is above minimum', () => {
+    expect(isGatewayVersionCompatible('1.0.0')).toBe(true);
+  });
+
+  test('returns false when version is below minimum', () => {
+    expect(isGatewayVersionCompatible('0.1.0')).toBe(false);
+  });
+
+  test('returns false when only patch is below minimum', () => {
+    expect(isGatewayVersionCompatible('0.3.9')).toBe(false);
+  });
+
+  test('returns true when patch is above minimum', () => {
+    expect(isGatewayVersionCompatible('0.4.1')).toBe(true);
+  });
+
+  test('handles v-prefixed versions', () => {
+    expect(isGatewayVersionCompatible('v0.4.0')).toBe(true);
+    expect(isGatewayVersionCompatible('v0.1.0')).toBe(false);
+  });
+
+  test('returns true for unparseable version strings', () => {
+    expect(isGatewayVersionCompatible('not-a-version')).toBe(true);
   });
 });

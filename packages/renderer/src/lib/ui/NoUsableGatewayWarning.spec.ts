@@ -102,3 +102,50 @@ test('hides the warning when a gateway becomes available', async () => {
 
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
 });
+
+test('shows a warning when all gateways are below the minimum version', () => {
+  openshellGateways.set([
+    {
+      name: 'gw1',
+      endpoint: 'http://127.0.0.1:17670',
+      version: '0.1.0',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+  ]);
+  openshellGatewaysReady.set(true);
+
+  render(NoUsableGatewayWarning);
+
+  expect(screen.getByRole('alert')).toHaveTextContent('No usable OpenShell gateways available.');
+});
+
+test('hides the warning when a compatible gateway exists', () => {
+  openshellGateways.set([
+    {
+      name: 'gw1',
+      endpoint: 'http://127.0.0.1:17670',
+      version: '0.4.0',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+  ]);
+  openshellGatewaysReady.set(true);
+
+  render(NoUsableGatewayWarning);
+
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+test('treats a gateway without a version as compatible', () => {
+  openshellGateways.set([
+    {
+      name: 'gw1',
+      endpoint: 'http://127.0.0.1:17670',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+  ]);
+  openshellGatewaysReady.set(true);
+
+  render(NoUsableGatewayWarning);
+
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
