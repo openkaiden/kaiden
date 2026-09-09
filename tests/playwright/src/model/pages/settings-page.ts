@@ -46,7 +46,14 @@ export class SettingsPage extends BasePage {
     this.codingAgentsTab = page.getByRole('link', { name: 'Coding agents' });
     this.modelsTab = page.getByRole('link', { name: 'Models' });
     this.preferencesTab = page.getByRole('link', { name: 'Preferences' });
-    this.tabs = [this.resourcesTab, this.cliTab, this.proxyTab, this.codingAgentsTab, this.modelsTab, this.preferencesTab];
+    this.tabs = [
+      this.resourcesTab,
+      this.cliTab,
+      this.proxyTab,
+      this.codingAgentsTab,
+      this.modelsTab,
+      this.preferencesTab,
+    ];
   }
 
   async isCurrentPage(): Promise<boolean> {
