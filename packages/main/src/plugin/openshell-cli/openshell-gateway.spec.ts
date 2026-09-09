@@ -1225,6 +1225,33 @@ describe('onDidGatewayInitFailed', () => {
 });
 
 describe('supportsMounts', () => {
+  test.each([
+    { driver: 'podman' as const, config: '[openshell.drivers.docker]\nenable_bind_mounts = true', expected: false },
+    {
+      driver: 'podman' as const,
+      config:
+        '[openshell.drivers.podman]\nenable_bind_mounts = false\n[openshell.drivers.docker]\nenable_bind_mounts = true',
+      expected: false,
+    },
+    {
+      driver: 'docker' as const,
+      config: '[openshell.drivers.docker]\n  enable_bind_mounts = true # local sharing',
+      expected: true,
+    },
+    { driver: 'vm' as const, config: '[openshell.drivers.vm]\nenable_bind_mounts = true', expected: false },
+    { driver: undefined, config: '[openshell.drivers.podman]\nenable_bind_mounts = true', expected: false },
+  ])('checks the active driver: $driver, $config', async ({ driver, config, expected }) => {
+    vi.mocked(readFile).mockResolvedValue(config);
+    await expect(
+      gateway.supportsMounts({
+        name: 'kaiden-local',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver,
+      }),
+    ).resolves.toBe(expected);
+  });
+
   test('returns true when the managed gateway config enables bind mounts', async () => {
     vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true\n');
 
@@ -1233,6 +1260,7 @@ describe('supportsMounts', () => {
         name: 'kaiden-local',
         endpoint: 'http://127.0.0.1:17670',
         type: 'local',
+        driver: 'podman',
       }),
     ).resolves.toBe(true);
     expect(readFile).toHaveBeenCalledWith(GATEWAY_CONFIG_PATH, 'utf-8');
@@ -1242,7 +1270,12 @@ describe('supportsMounts', () => {
     vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
 
     await expect(
-      gateway.supportsMounts({ name: 'kaiden-local', endpoint: 'http://127.0.0.1:17670', type: 'local' }),
+      gateway.supportsMounts({
+        name: 'kaiden-local',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver: 'podman',
+      }),
     ).resolves.toBe(false);
   });
 
@@ -1254,6 +1287,7 @@ describe('supportsMounts', () => {
         name: 'kaiden-local',
         endpoint: 'https://gateway.example.com',
         type: 'remote',
+        driver: 'podman',
         is_remote: true,
       }),
     ).resolves.toBe(false);

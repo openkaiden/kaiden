@@ -280,13 +280,28 @@ export class OpenshellGateway implements Disposable {
   }
 
   async supportsMounts(gateway: GatewayInfo): Promise<boolean> {
-    if (gateway.type !== 'local' || gateway.is_remote || !this.isLocalEndpoint(gateway.endpoint)) {
+    if (
+      (gateway.driver !== 'podman' && gateway.driver !== 'docker') ||
+      gateway.type !== 'local' ||
+      gateway.is_remote ||
+      !this.isLocalEndpoint(gateway.endpoint)
+    ) {
       return false;
     }
     const configPath = join(this.getGatewayStorageDirectory(gateway.name), 'gateway.toml');
     try {
       const config = await readFile(configPath, 'utf-8');
-      return /^enable_bind_mounts\s*=\s*true\s*$/m.test(config);
+      // Read only the active driver's section in Kaiden's generated config.
+      let inDriverSection = false;
+      for (const rawLine of config.split('\n')) {
+        const line = rawLine.split('#', 1)[0]?.trim() ?? '';
+        if (line.startsWith('[')) {
+          inDriverSection = line === `[openshell.drivers.${gateway.driver}]`;
+        } else if (inDriverSection && /^enable_bind_mounts\s*=\s*true$/.test(line)) {
+          return true;
+        }
+      }
+      return false;
     } catch {
       return false;
     }
