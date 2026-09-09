@@ -22,6 +22,7 @@ import type { ResourceId } from '/@/model/core/types';
 import { PROVIDERS, TIMEOUTS } from '/@/model/core/types';
 import { SettingsCodingAgentsPage } from '/@/model/pages/settings-coding-agents-tab-page';
 import { SettingsModelsPage } from '/@/model/pages/settings-models-tab-page';
+import { SkillsPage } from '/@/model/pages/skills-page';
 
 import { BasePage } from './base-page';
 import { SettingsCliPage } from './settings-cli-tab-page';
@@ -34,6 +35,7 @@ export class SettingsPage extends BasePage {
   readonly cliTab: Locator;
   readonly proxyTab: Locator;
   readonly codingAgentsTab: Locator;
+  readonly skillsTab: Locator;
   readonly modelsTab: Locator;
   readonly preferencesTab: Locator;
   private readonly tabs: Locator[];
@@ -44,6 +46,7 @@ export class SettingsPage extends BasePage {
     this.cliTab = page.getByRole('link', { name: 'CLI' });
     this.proxyTab = page.getByRole('link', { name: 'Proxy' });
     this.codingAgentsTab = page.getByRole('link', { name: 'Coding agents' });
+    this.skillsTab = page.getByRole('link', { name: 'Skills' });
     this.modelsTab = page.getByRole('link', { name: 'Models' });
     this.preferencesTab = page.getByRole('link', { name: 'Preferences' });
     this.tabs = [
@@ -51,6 +54,7 @@ export class SettingsPage extends BasePage {
       this.cliTab,
       this.proxyTab,
       this.codingAgentsTab,
+      this.skillsTab,
       this.modelsTab,
       this.preferencesTab,
     ];
@@ -65,6 +69,7 @@ export class SettingsPage extends BasePage {
     await expect(this.cliTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.proxyTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.codingAgentsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
+    await expect(this.skillsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.modelsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.preferencesTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
   }
@@ -87,6 +92,10 @@ export class SettingsPage extends BasePage {
 
   async openCodingAgents(): Promise<SettingsCodingAgentsPage> {
     return this.openTab(this.codingAgentsTab, SettingsCodingAgentsPage);
+  }
+
+  async openSkills(): Promise<SkillsPage> {
+    return this.openTab(this.skillsTab, SkillsPage);
   }
 
   async openModels(): Promise<SettingsModelsPage> {
