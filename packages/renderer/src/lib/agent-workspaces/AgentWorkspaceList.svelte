@@ -65,7 +65,6 @@ async function deleteSelectedSandboxes(): Promise<void> {
   await Promise.all(
     selectedSandboxes.map(async sandbox => {
       try {
-        sandbox.phase = 'Deleting';
         await window.deleteOpenshellSandbox(sandbox.name, sandbox.gatewayName);
       } catch (error) {
         console.error(`error while removing workspace ${sandbox.name}`, error);
