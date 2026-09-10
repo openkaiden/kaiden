@@ -420,15 +420,19 @@ async function handleSendFollowUp(): Promise<void> {
     return;
   }
 
+  const savedText = followUpText;
+  const savedAttachments = pendingAttachments;
   try {
     sendError = undefined;
-    await window.sendAcpFollowUp(sessionId, textToSend, attachmentsToSend);
     followUpText = '';
     pendingAttachments = [];
+    await window.sendAcpFollowUp(sessionId, textToSend, attachmentsToSend);
     refreshEvents();
   } catch (err: unknown) {
     console.error('Failed to send follow-up', err);
     sendError = err instanceof Error ? err.message : String(err);
+    followUpText = savedText;
+    pendingAttachments = savedAttachments;
   }
 }
 

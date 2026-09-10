@@ -48,6 +48,56 @@ beforeEach(() => {
   vi.mocked(window.getAcpSessionEvents).mockResolvedValue([]);
 });
 
+describe('optimistic input clearing on send', () => {
+  test('should clear input immediately on send, before server responds', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+
+    let resolveFollowUp!: () => void;
+    vi.mocked(window.sendAcpFollowUp).mockImplementation(
+      () =>
+        new Promise<void>(resolve => {
+          resolveFollowUp = resolve;
+        }),
+    );
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const textarea = screen.getByRole('textbox');
+    await userEvent.type(textarea, 'hello agent');
+    expect(textarea).toHaveValue('hello agent');
+
+    const sendButton = screen.getByTitle('Send');
+    await userEvent.click(sendButton);
+
+    // Input should be cleared immediately, before the server responds
+    await vi.waitFor(() => {
+      expect(textarea).toHaveValue('');
+    });
+
+    // Resolve the server call
+    resolveFollowUp();
+  });
+
+  test('should restore input on send failure', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.sendAcpFollowUp).mockRejectedValue(new Error('network error'));
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const textarea = screen.getByRole('textbox');
+    await userEvent.type(textarea, 'important message');
+
+    const sendButton = screen.getByTitle('Send');
+    await userEvent.click(sendButton);
+
+    // Input should be restored after failure
+    await vi.waitFor(() => {
+      expect(textarea).toHaveValue('important message');
+    });
+    expect(await screen.findByText('network error')).toBeInTheDocument();
+  });
+});
+
 describe('sendFollowUp error display', () => {
   test('displays error when sendFollowUp fails', async () => {
     vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
