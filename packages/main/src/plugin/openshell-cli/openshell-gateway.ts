@@ -20,7 +20,7 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import type { WriteStream } from 'node:fs';
 import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, open, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { Disposable } from '@openkaiden/api';
@@ -290,20 +290,38 @@ export class OpenshellGateway implements Disposable {
     }
     const storageDirectory = this.getGatewayStorageDirectory(name);
     const configPath = join(storageDirectory, 'gateway.toml');
-    const { gatewayProcess, processState } = await this.spawnCreatedGateway(
-      name,
-      binaryPath,
-      configPath,
-      storageDirectory,
-      port,
-      url.hostname,
-      'a',
-    );
-    try {
-      await this.waitForIndependentGateway(gatewayProcess, name, processState);
-    } catch (err: unknown) {
-      await this.stopGateway(name);
-      throw err;
+    let migrationRetried = false;
+    for (;;) {
+      const { gatewayProcess, processState } = await this.spawnCreatedGateway(
+        name,
+        binaryPath,
+        configPath,
+        storageDirectory,
+        port,
+        url.hostname,
+        'a',
+      );
+      try {
+        await this.waitForIndependentGateway(gatewayProcess, name, processState);
+        return;
+      } catch (err: unknown) {
+        await this.stopGateway(name);
+        if (!migrationRetried) {
+          let logContent = '';
+          try {
+            logContent = await readFile(join(storageDirectory, GATEWAY_LOG_FILENAME), 'utf-8');
+          } catch {
+            // ignore if log can't be read
+          }
+          if (this.isMigrationError(logContent)) {
+            migrationRetried = true;
+            console.warn(`[openshell-gateway] migration error detected for "${name}", removing database and retrying`);
+            await this.deleteGatewayDatabase(name);
+            continue;
+          }
+        }
+        throw err;
+      }
     }
   }
 
@@ -355,46 +373,58 @@ export class OpenshellGateway implements Disposable {
 
     const configPath = await this.createGatewayConfig(binaryPath, options?.supervisorImage);
     const args = this.buildArgs(options?.disableTls ?? true, configPath);
-    console.log(`[openshell-gateway] starting: ${binaryPath} ${args.join(' ')}`);
-    await this.initializeGatewayLog();
 
-    const gatewayProcess = spawn(binaryPath, args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: false,
-    });
-    this.trackGatewayProcess(DEFAULT_GATEWAY_NAME, gatewayProcess);
+    let migrationRetried = false;
+    for (;;) {
+      console.log(`[openshell-gateway] starting: ${binaryPath} ${args.join(' ')}`);
+      await this.initializeGatewayLog();
 
-    gatewayProcess.stdout?.on('data', (data: Buffer) => {
-      this.#gatewayLogStream?.write(data);
-    });
-
-    const stderrChunks: string[] = [];
-    gatewayProcess.stderr?.on('data', (data: Buffer) => {
-      const text = data.toString().trimEnd();
-      this.#gatewayLogStream?.write(data);
-      stderrChunks.push(text);
-    });
-
-    gatewayProcess.on('exit', (code, signal) => {
-      console.log(`[openshell-gateway] exited with code=${code ?? 'none'} signal=${signal ?? 'none'}`);
-    });
-
-    gatewayProcess.on('error', (err: Error) => {
-      console.error(`[openshell-gateway] failed to start: ${err.message}`);
-    });
-
-    try {
-      await this.waitForReady();
-    } catch (err: unknown) {
-      await this.stop().catch((stopErr: unknown) => {
-        console.warn('[openshell-gateway] failed to stop after startup error:', stopErr);
+      const gatewayProcess = spawn(binaryPath, args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: false,
       });
-      this.#port = previousPort;
-      this.#bindAddress = previousBindAddress;
-      const stderrOutput = stderrChunks.join('\n').trim();
-      const baseMessage = err instanceof Error ? err.message : String(err);
-      throw new Error(stderrOutput ? `${baseMessage}: ${stderrOutput}` : baseMessage);
+      this.trackGatewayProcess(DEFAULT_GATEWAY_NAME, gatewayProcess);
+
+      gatewayProcess.stdout?.on('data', (data: Buffer) => {
+        this.#gatewayLogStream?.write(data);
+      });
+
+      const stderrChunks: string[] = [];
+      gatewayProcess.stderr?.on('data', (data: Buffer) => {
+        const text = data.toString().trimEnd();
+        this.#gatewayLogStream?.write(data);
+        stderrChunks.push(text);
+      });
+
+      gatewayProcess.on('exit', (code, signal) => {
+        console.log(`[openshell-gateway] exited with code=${code ?? 'none'} signal=${signal ?? 'none'}`);
+      });
+
+      gatewayProcess.on('error', (err: Error) => {
+        console.error(`[openshell-gateway] failed to start: ${err.message}`);
+      });
+
+      try {
+        await this.waitForReady();
+        break;
+      } catch (err: unknown) {
+        await this.stop().catch((stopErr: unknown) => {
+          console.warn('[openshell-gateway] failed to stop after startup error:', stopErr);
+        });
+        const stderrOutput = stderrChunks.join('\n').trim();
+        if (!migrationRetried && this.isMigrationError(stderrOutput)) {
+          migrationRetried = true;
+          console.warn('[openshell-gateway] migration error detected, removing database and retrying');
+          await this.deleteGatewayDatabase(DEFAULT_GATEWAY_NAME);
+          continue;
+        }
+        this.#port = previousPort;
+        this.#bindAddress = previousBindAddress;
+        const baseMessage = err instanceof Error ? err.message : String(err);
+        throw new Error(stderrOutput ? `${baseMessage}: ${stderrOutput}` : baseMessage);
+      }
     }
+
     if (!options?.skipRegistration) {
       try {
         await this.registerWithCli();
@@ -642,6 +672,17 @@ export class OpenshellGateway implements Disposable {
 
   private getGatewayStorageDirectory(name: string): string {
     return join(this.directories.getDataDirectory(), 'openshell-gateways', name);
+  }
+
+  private isMigrationError(output: string): boolean {
+    return output.includes('migration error');
+  }
+
+  private async deleteGatewayDatabase(name: string): Promise<void> {
+    const storageDirectory = this.getGatewayStorageDirectory(name);
+    for (const file of ['gateway.db', 'gateway.db-wal', 'gateway.db-shm']) {
+      await rm(join(storageDirectory, file), { force: true }).catch(() => {});
+    }
   }
 
   private async createNamedGatewayConfig(
