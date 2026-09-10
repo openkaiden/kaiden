@@ -46,7 +46,7 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
       router.goto('/flows');
       break;
     case NavigationPage.FLOW_CREATE:
-      router.goto(`/flows/create`);
+      router.goto('/flows/create');
       break;
     case NavigationPage.FLOW_DETAILS:
       router.goto(
@@ -71,7 +71,7 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
       router.goto(`/containers/${request.parameters.id}/`);
       break;
     case NavigationPage.EXISTING_IMAGE_CREATE_CONTAINER:
-      router.goto(`/images/existing-image-create-container`);
+      router.goto('/images/existing-image-create-container');
       break;
     case NavigationPage.CONTAINER_SUMMARY:
       router.goto(`/containers/${request.parameters.id}/summary`);
@@ -95,7 +95,7 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
       router.goto(`/deploy-to-kube/${request.parameters.id}/${request.parameters.engineId}`);
       break;
     case NavigationPage.IMAGES:
-      router.goto(`/images`);
+      router.goto('/images');
       break;
     case NavigationPage.IMAGE_BUILD:
       router.goto(`/images/build?taskId=${request.parameters.taskId}`);
@@ -114,7 +114,7 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
       router.goto(`/preferences/onboarding/${request.parameters.extensionId}`);
       break;
     case NavigationPage.PODMAN_PODS:
-      router.goto(`/pods`);
+      router.goto('/pods');
       break;
     case NavigationPage.PODMAN_POD_SUMMARY:
       router.goto(`/pods/podman/${request.parameters.name}/${request.parameters.engineId}/summary`);
@@ -138,7 +138,7 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
       router.goto('/help');
       break;
     case NavigationPage.CLI_TOOLS:
-      router.goto(`/preferences/cli-tools`);
+      router.goto('/preferences/cli-tools');
       break;
     case NavigationPage.PROVIDER_TASK:
       router.goto(`/preferences/provider-task/${request.parameters.internalId}/${request.parameters.taskId}`);
@@ -186,7 +186,7 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
       router.goto('/preferences/coding-agents');
       break;
     case NavigationPage.SKILL_DETAILS:
-      router.goto(`/skills/${encodeURIComponent(request.parameters.name)}/summary`);
+      router.goto(`/preferences/skills/${encodeURIComponent(request.parameters.name)}/summary`);
       break;
     case NavigationPage.RAG_ENVIRONMENTS:
       router.goto('/rag-environments/');
@@ -195,10 +195,10 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
       router.goto(`/rag-environments/${encodeURIComponent(request.parameters.name)}/summary`);
       break;
     case NavigationPage.SKILLS:
-      router.goto('/skills');
+      router.goto('/preferences/skills');
       break;
     case NavigationPage.SKILL_CREATE:
-      router.goto('/skills/create');
+      router.goto('/preferences/skills/create');
       break;
     case NavigationPage.SECRET_VAULT:
       router.goto('/secret-vault');

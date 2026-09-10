@@ -2,6 +2,9 @@
 import { onMount } from 'svelte';
 
 import CodingAgentsPage from '/@/lib/coding-agents/CodingAgentsPage.svelte';
+import SkillCreate from '/@/lib/skills/SkillCreate.svelte';
+import SkillDetails from '/@/lib/skills/SkillDetails.svelte';
+import SkillsList from '/@/lib/skills/SkillsList.svelte';
 import MCPDetails from '/@/lib/mcp/MCPDetails.svelte';
 import McpServerList from '/@/lib/mcp/MCPServerList.svelte';
 import ModelsCatalog from '/@/lib/models/ModelsCatalog.svelte';
@@ -90,6 +93,17 @@ onMount(async () => {
   </Route>
   <Route path="/coding-agents" breadcrumb="Coding Agents">
     <CodingAgentsPage />
+  </Route>
+  <Route path="/skills/*" breadcrumb="Skills" firstmatch>
+    <Route path="/" breadcrumb="Skills">
+      <SkillsList />
+    </Route>
+    <Route path="/create" breadcrumb="Create Skill" navigationHint="details">
+      <SkillCreate />
+    </Route>
+    <Route path="/:name/*" let:meta breadcrumb="Skill Details" navigationHint="details">
+      <SkillDetails name={decodeURIComponent(meta.params.name)} />
+    </Route>
   </Route>
   <Route path="/mcps/*" breadcrumb="MCPs" firstmatch>
     <Route path="/" breadcrumb="MCPs" let:meta>
