@@ -63,7 +63,9 @@ const HOME_VARIABLE = '${HOME}';
 const LABEL_MAX_LENGTH = 63;
 const SOURCES_VARIABLE = '$SOURCES';
 const MOUNT_HOME_PREFIX = '$HOME';
-const SANDBOX_READY_TIMEOUT_SECONDS = 120;
+// Allow cold image pulls time to finish. A failed wait must not delete a
+// sandbox that may still be provisioning on the gateway.
+const SANDBOX_READY_TIMEOUT_SECONDS = 300;
 const SANDBOX_DELETE_TIMEOUT_SECONDS = 120;
 
 type OpenshellUpload = { local: string; remote: string };
@@ -276,11 +278,11 @@ export class AgentWorkspaceManager implements Disposable {
     // Surface the Provisioning sandbox immediately. The final update from
     // create()'s finally block will publish its Ready/Error state later.
     this.apiSender.send('agent-workspace-update');
-    try {
-      await sdkClient.sandbox.waitReady(sandboxName, SANDBOX_READY_TIMEOUT_SECONDS);
-      const tSandbox = performance.now();
-      console.log(`[workspace-timing] createSandbox: ${(tSandbox - tV2).toFixed(0)}ms`);
+    await sdkClient.sandbox.waitReady(sandboxName, SANDBOX_READY_TIMEOUT_SECONDS);
+    const tSandbox = performance.now();
+    console.log(`[workspace-timing] createSandbox: ${(tSandbox - tV2).toFixed(0)}ms`);
 
+    try {
       for (const upload of dedupedUploads) {
         await this.openshellCli.uploadToSandbox(sandboxName, upload.local, upload.remote, options.gateway);
       }
@@ -297,7 +299,14 @@ export class AgentWorkspaceManager implements Disposable {
       console.log(`[workspace-timing] updatePolicy: ${(tPolicy - tSandbox).toFixed(0)}ms`);
       console.log(`[workspace-timing] total createOpenshell: ${(tPolicy - t0).toFixed(0)}ms`);
     } catch (err) {
-      await sdkClient.sandbox.delete(sandboxName).catch(() => {});
+      try {
+        await sdkClient.sandbox.delete(sandboxName);
+        await sdkClient.sandbox.waitDeleted(sandboxName, SANDBOX_DELETE_TIMEOUT_SECONDS);
+      } catch (cleanupError) {
+        const detail = err instanceof Error ? err.message : String(err);
+        const cleanupDetail = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        throw new Error(`${detail}; failed to clean up sandbox "${sandboxName}": ${cleanupDetail}`, { cause: err });
+      }
       throw err;
     }
 
@@ -483,18 +492,22 @@ export class AgentWorkspaceManager implements Disposable {
       .flatMap(entry => entry.sandboxes)
       .find(ws => ws.id === id);
     const workspaceName = workspace?.name ?? id;
-    const task = this.taskManager.createTask({ title: `Deleting workspace "${workspaceName}"` });
+    await this.deleteWorkspace(workspaceName, gateway, id);
+    return { id };
+  }
+
+  private async deleteWorkspace(name: string, gateway: string, terminalId?: string): Promise<void> {
+    const task = this.taskManager.createTask({ title: `Deleting workspace "${name}"` });
     task.state = 'running';
     task.status = 'in-progress';
     try {
       const sdkClient = await this.openshellSdkClientManager.getClient(gateway);
-      await sdkClient.sandbox.delete(workspaceName);
+      await sdkClient.sandbox.delete(name);
       this.apiSender.send('agent-workspace-update');
-      await sdkClient.sandbox.waitDeleted(workspaceName, SANDBOX_DELETE_TIMEOUT_SECONDS);
-      this.closeWorkspaceTerminal(id);
-      await rm(this.getGlobalConfigDir(gateway, workspaceName), { recursive: true, force: true });
+      await sdkClient.sandbox.waitDeleted(name, SANDBOX_DELETE_TIMEOUT_SECONDS);
+      if (terminalId) this.closeWorkspaceTerminal(terminalId);
+      await rm(this.getGlobalConfigDir(gateway, name), { recursive: true, force: true });
       task.status = 'success';
-      return { id };
     } catch (err: unknown) {
       const detail = err instanceof Error ? err.message : String(err);
       task.status = 'failure';
@@ -606,25 +619,7 @@ export class AgentWorkspaceManager implements Disposable {
   }
 
   async deleteOpenshellSandbox(name: string, gateway: string): Promise<void> {
-    const task = this.taskManager.createTask({ title: `Deleting workspace ${name}` });
-    task.state = 'running';
-    task.status = 'in-progress';
-    try {
-      const sdkClient = await this.openshellSdkClientManager.getClient(gateway);
-      await sdkClient.sandbox.delete(name);
-      this.apiSender.send('agent-workspace-update');
-      await sdkClient.sandbox.waitDeleted(name, SANDBOX_DELETE_TIMEOUT_SECONDS);
-      await rm(this.getGlobalConfigDir(gateway, name), { recursive: true, force: true });
-      task.status = 'success';
-    } catch (err: unknown) {
-      const detail = err instanceof Error ? err.message : String(err);
-      task.status = 'failure';
-      task.error = `Failed to delete workspace: ${detail}`;
-      throw new Error(detail);
-    } finally {
-      this.apiSender.send('agent-workspace-update');
-      task.state = 'completed';
-    }
+    await this.deleteWorkspace(name, gateway);
   }
 
   shellInAgentWorkspace(

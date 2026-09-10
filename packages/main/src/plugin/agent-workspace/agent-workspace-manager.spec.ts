@@ -415,7 +415,7 @@ describe('create – OpenShell mode', () => {
       }),
     );
     expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith('kaiden');
-    expect(sdkSandbox.waitReady).toHaveBeenCalledWith('my-sandbox', 120);
+    expect(sdkSandbox.waitReady).toHaveBeenCalledWith('my-sandbox', 300);
     expect(vi.mocked(sdkSandbox.create).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(apiSender.send).mock.invocationCallOrder[0]!,
     );
@@ -849,17 +849,43 @@ describe('create – OpenShell mode', () => {
     await expect(manager.create(options)).rejects.toThrow('policy update failed');
 
     expect(sdkSandbox.delete).toHaveBeenCalledWith('my-sandbox');
+    expect(sdkSandbox.waitDeleted).toHaveBeenCalledWith('my-sandbox', 120);
   });
 
-  test('deletes sandbox and rethrows when it does not become ready', async () => {
-    vi.mocked(sdkSandbox.waitReady).mockRejectedValue(new Error('timed out waiting for sandbox'));
-    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+  test.each([
+    'timed out waiting for sandbox',
+    'connection lost',
+    'sandbox entered error phase',
+  ])('preserves the sandbox for inspection when readiness fails: %s', async message => {
+    vi.mocked(sdkSandbox.waitReady).mockRejectedValue(new Error(message));
 
-    await expect(manager.create(defaultOptions)).rejects.toThrow('timed out waiting for sandbox');
+    await expect(manager.create(defaultOptions)).rejects.toThrow(message);
+
+    expect(sdkSandbox.delete).not.toHaveBeenCalled();
+    expect(openshellCli.uploadToSandbox).not.toHaveBeenCalled();
+    expect(openshellCli.updatePolicy).not.toHaveBeenCalled();
+    expect(apiSender.send).toHaveBeenCalledTimes(2);
+    expect(mockTask.status).toBe('failure');
+  });
+
+  test('rolls back and waits for deletion when an upload fails', async () => {
+    vi.mocked(openshellCli.uploadToSandbox).mockRejectedValue(new Error('upload failed'));
+
+    await expect(manager.create(defaultOptions)).rejects.toThrow('upload failed');
 
     expect(sdkSandbox.delete).toHaveBeenCalledWith('my-sandbox');
-    expect(openshellCli.uploadToSandbox).not.toHaveBeenCalled();
-    expect(apiSender.send).toHaveBeenCalledTimes(2);
+    expect(sdkSandbox.waitDeleted).toHaveBeenCalledWith('my-sandbox', 120);
+    expect(openshellCli.updatePolicy).not.toHaveBeenCalled();
+  });
+
+  test('reports both setup and rollback errors', async () => {
+    vi.mocked(openshellCli.uploadToSandbox).mockRejectedValue(new Error('upload failed'));
+    vi.mocked(sdkSandbox.waitDeleted).mockRejectedValue(new Error('deletion timed out'));
+
+    await expect(manager.create(defaultOptions)).rejects.toThrow(
+      'upload failed; failed to clean up sandbox "my-sandbox": deletion timed out',
+    );
+    expect(mockTask.error).toContain('deletion timed out');
   });
 
   test('emits agent-workspace-update even when creation fails', async () => {
@@ -1330,7 +1356,7 @@ describe('listOpenshellGateways', () => {
 });
 
 describe('remove', () => {
-  test('delegates to kdnCli.remove and returns the workspace id', async () => {
+  test('deletes through the SDK and returns the workspace id', async () => {
     vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
     vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
@@ -1361,7 +1387,7 @@ describe('remove', () => {
     expect(taskManager.createTask).toHaveBeenCalledWith({ title: 'Deleting workspace "unknown-id"' });
   });
 
-  test('sets task failure status when CLI fails', async () => {
+  test('sets task failure status when SDK deletion fails', async () => {
     vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
     vi.mocked(sdkSandbox.delete).mockRejectedValue(new Error('workspace not found: unknown-id'));
 
@@ -1409,6 +1435,17 @@ describe('remove', () => {
 });
 
 describe('deleteOpenshellSandbox', () => {
+  test('preserves local config until the gateway confirms deletion', async () => {
+    vi.mocked(sdkSandbox.waitDeleted).mockRejectedValue(new Error('deletion timed out'));
+
+    await expect(manager.deleteOpenshellSandbox('my-workspace', 'kaiden')).rejects.toThrow('deletion timed out');
+
+    expect(rm).not.toHaveBeenCalled();
+    expect(mockTask.status).toBe('failure');
+    expect(mockTask.state).toBe('completed');
+    expect(apiSender.send).toHaveBeenCalledTimes(2);
+  });
+
   test('deletes the sandbox from the requested gateway', async () => {
     vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
