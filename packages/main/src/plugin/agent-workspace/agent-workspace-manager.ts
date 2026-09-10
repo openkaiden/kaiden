@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { access, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { basename, isAbsolute, join, posix, resolve } from 'node:path';
 
@@ -58,13 +58,19 @@ import { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { CreateLocalGatewayOptions, GatewayInfo, GatewaySandboxes } from '/@api/openshell-gateway-info.js';
 import { AGENT_LABEL, decodeWorkspaceLabels, WORKSPACE_LABEL } from '/@api/openshell-gateway-info.js';
 
+import {
+  buildOpenshellUploadMount,
+  dedupeOpenshellMounts,
+  type OpenshellBindMount,
+  type OpenshellUpload,
+  partitionOpenshellUploads,
+  resolveOpenshellMountTarget,
+} from './openshell-mounts.js';
+
 const HOME_VARIABLE = '${HOME}';
 const LABEL_MAX_LENGTH = 63;
 const SOURCES_VARIABLE = '$SOURCES';
 const MOUNT_HOME_PREFIX = '$HOME';
-
-type OpenshellUpload = { local: string; remote: string };
-type OpenshellBindMount = { type: 'bind'; source: string; target: string; read_only: boolean };
 
 interface WorkspaceTerminalSession {
   callbackId: number;
@@ -201,11 +207,9 @@ export class AgentWorkspaceManager implements Disposable {
 
     if (agent) {
       if (supportsMounts && agent.configurationFiles.length > 0) {
-        // Persist bind sources, but isolate each attempt so a duplicate-name
-        // creation cannot overwrite configuration mounted by a running sandbox.
-        const sandboxConfigDir = this.getGlobalConfigDir(options.gateway, sandboxName);
-        await mkdir(sandboxConfigDir, { recursive: true });
-        mountedConfigDir = await mkdtemp(join(sandboxConfigDir, 'agent-config-'));
+        // Bind-mounted configuration must persist for the sandbox's lifetime.
+        mountedConfigDir = join(this.getGlobalConfigDir(options.gateway, sandboxName), 'agent-config');
+        await mkdir(mountedConfigDir, { recursive: true });
       }
       const writable = await Promise.all(
         agent.configurationFiles.map(
@@ -255,19 +259,9 @@ export class AgentWorkspaceManager implements Disposable {
     }
 
     const filesystem = await this.buildOpenshellFilesystem(options.sourcePath, workspace, supportsMounts);
-    if (supportsMounts) {
-      const remainingUploads: OpenshellUpload[] = [];
-      for (const upload of this.dedupeOpenshellUploads(uploads)) {
-        const mount = await this.buildOpenshellUploadMount(upload);
-        if (mount) {
-          filesystem.mounts.push(mount);
-        } else {
-          remainingUploads.push(upload);
-        }
-      }
-      uploads.splice(0, uploads.length, ...remainingUploads);
-    }
-    uploads.push(...filesystem.uploads);
+    const agentFilesystem = await partitionOpenshellUploads(this.dedupeOpenshellUploads(uploads), supportsMounts, true);
+    const dedupedUploads = this.dedupeOpenshellUploads([...agentFilesystem.uploads, ...filesystem.uploads]);
+    const mounts = dedupeOpenshellMounts([...filesystem.mounts, ...agentFilesystem.mounts]);
 
     const env = workspace.environment
       ?.filter(entry => typeof entry.value === 'string' && entry.value !== '')
@@ -275,17 +269,6 @@ export class AgentWorkspaceManager implements Disposable {
         acc[entry.name] = entry.value as string;
         return acc;
       }, {});
-    const dedupedUploads = this.dedupeOpenshellUploads(uploads);
-    const mounts = new Map<string, OpenshellBindMount>();
-    for (const mount of filesystem.mounts) {
-      const existing = mounts.get(mount.target);
-      if (existing && existing.source !== mount.source) {
-        throw new Error(`Conflicting bind mount sources for target "${mount.target}"`);
-      }
-      // Configured mounts follow the automatic project mount, so their ro flag wins.
-      mounts.set(mount.target, mount);
-    }
-
     const t0 = performance.now();
 
     const v2Globally = await this.openshellCli.isV2ProviderEnabled();
@@ -307,8 +290,7 @@ export class AgentWorkspaceManager implements Disposable {
         [AGENT_LABEL]: options.agent,
       },
       uploads: dedupedUploads.length > 0 ? dedupedUploads : undefined,
-      driverConfig:
-        gateway.driver && mounts.size > 0 ? { [gateway.driver]: { mounts: [...mounts.values()] } } : undefined,
+      driverConfig: gateway.driver && mounts.length > 0 ? { [gateway.driver]: { mounts } } : undefined,
       detach: true,
       tty: true,
     });
@@ -378,7 +360,7 @@ export class AgentWorkspaceManager implements Disposable {
     const mounts: OpenshellBindMount[] = [];
     if (sourcePath) {
       const upload = { local: await realpath(sourcePath), remote: '.' };
-      const mount = supportsMounts ? await this.buildOpenshellUploadMount(upload) : undefined;
+      const mount = supportsMounts ? await buildOpenshellUploadMount(upload) : undefined;
       if (mount) {
         mounts.push(mount);
       } else {
@@ -401,7 +383,7 @@ export class AgentWorkspaceManager implements Disposable {
       } catch {
         throw new Error(`Mount host path does not exist: ${raw}`);
       }
-      const mountTarget = supportsMounts ? this.resolveOpenshellMountTarget(remote) : undefined;
+      const mountTarget = supportsMounts ? resolveOpenshellMountTarget(remote) : undefined;
       if (mountTarget) {
         mounts.push({ type: 'bind', source: local, target: mountTarget, read_only: mount.ro });
       } else {
@@ -409,30 +391,6 @@ export class AgentWorkspaceManager implements Disposable {
       }
     }
     return { uploads, mounts };
-  }
-
-  private async buildOpenshellUploadMount(upload: OpenshellUpload): Promise<OpenshellBindMount | undefined> {
-    // Directory uploads retain their basename under the destination. In particular,
-    // project:. lands at /sandbox/project, not the reserved /sandbox root.
-    const stats = await lstat(upload.local);
-    const remote =
-      stats.isDirectory() || upload.remote.endsWith('/')
-        ? posix.join(upload.remote, basename(upload.local))
-        : upload.remote;
-    const target = this.resolveOpenshellMountTarget(remote);
-    return target ? { type: 'bind', source: await realpath(upload.local), target, read_only: false } : undefined;
-  }
-
-  private resolveOpenshellMountTarget(path: string): string | undefined {
-    if (path === '.' || path === '~' || path === '/') {
-      return undefined;
-    }
-    if (posix.isAbsolute(path)) {
-      const normalized = posix.normalize(path).replace(/\/$/, '');
-      return normalized === '' || normalized === '/sandbox' ? undefined : normalized;
-    }
-    const normalized = posix.join('/sandbox', path.startsWith('~/') ? path.slice(2) : path).replace(/\/$/, '');
-    return normalized.startsWith('/sandbox/') ? normalized : undefined;
   }
 
   private async resolveUploadRemotePath(local: string, remote: string): Promise<string> {

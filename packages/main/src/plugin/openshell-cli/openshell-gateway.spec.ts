@@ -1279,16 +1279,17 @@ describe('supportsMounts', () => {
     ).resolves.toBe(false);
   });
 
-  test('returns false for a remote registration with stale managed storage', async () => {
+  test.each([
+    { type: 'remote' as const, endpoint: 'https://gateway.example.com', is_remote: true },
+    { type: 'local' as const, endpoint: 'http://10.0.0.5:17670' },
+  ])('returns false for $type registration at $endpoint despite managed storage', async registration => {
     vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true\n');
 
     await expect(
       gateway.supportsMounts({
         name: 'kaiden-local',
-        endpoint: 'https://gateway.example.com',
-        type: 'remote',
+        ...registration,
         driver: 'podman',
-        is_remote: true,
       }),
     ).resolves.toBe(false);
     expect(readFile).not.toHaveBeenCalled();
