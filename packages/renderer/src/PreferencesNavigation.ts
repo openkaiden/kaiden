@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import type { IconDefinition } from '@fortawesome/free-regular-svg-icons';
-import { faBrain, faCubes, faLink, faServer, faShield, faTerminal } from '@fortawesome/free-solid-svg-icons';
+import { faBrain, faCubes, faLink, faServer, faShield, faTerminal, faWrench } from '@fortawesome/free-solid-svg-icons';
 import type { Component } from 'svelte';
 
 import CLIToolsIcon from '/@/lib/images/CLIToolsIcon.svelte';
@@ -51,6 +51,7 @@ export const settingsNavigationEntries: SettingsNavItemConfig[] = [
       { title: 'Coding agents', href: '/preferences/coding-agents', visible: true, icon: faTerminal },
       { title: 'MCP', href: '/preferences/mcps', visible: true, icon: MCPIcon },
       { title: 'Models', href: '/preferences/models', visible: true, icon: faCubes },
+      { title: 'Skills', href: '/preferences/skills', visible: true, icon: faWrench },
     ],
   },
   {
