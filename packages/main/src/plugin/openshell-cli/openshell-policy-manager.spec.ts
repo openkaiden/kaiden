@@ -99,8 +99,6 @@ test('times out when the revision remains pending', async () => {
     getSandboxPolicyStatus.mockResolvedValue({ revision: { status: PolicyStatus.PENDING } });
     const update = manager.updatePolicy('my-sandbox', policy);
     const rejection = expect(update).rejects.toThrow('Timed out waiting for OpenShell policy version 7 to load');
-    // Wait until the dynamic SDK import has completed and polling has started.
-    await vi.waitFor(() => expect(getSandboxPolicyStatus).toHaveBeenCalled());
     await vi.advanceTimersByTimeAsync(60_000);
     await rejection;
   } finally {

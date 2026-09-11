@@ -16,12 +16,12 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { PolicyStatus } from '@nvidia/openshell-sdk/raw';
 import { inject, injectable } from 'inversify';
 
 import type { OpenshellPolicy } from './openshell-network-policy.js';
 import { OpenshellSdkClientManager } from './openshell-sdk-client-manager.js';
 
-/** Applies sandbox network policy through the SDK and waits for it to load. */
 @injectable()
 export class OpenshellPolicyManager {
   constructor(
@@ -33,8 +33,7 @@ export class OpenshellPolicyManager {
     const client = await this.sdkClientManager.getClient(gateway);
     const config = await client.sandbox.getConfig(sandboxName);
     const currentPolicy = config.policy;
-    // getConfig returns the effective policy. Match `policy get --base` by
-    // excluding provider-composed rules; the gateway adds them back itself.
+    // The gateway adds provider rules back when composing the effective policy.
     const baseNetworkPolicies = Object.fromEntries(
       Object.entries(currentPolicy?.networkPolicies ?? {}).filter(([name]) => !name.startsWith('_provider_')),
     );
@@ -49,9 +48,7 @@ export class OpenshellPolicyManager {
       },
       networkMiddlewares: currentPolicy?.networkMiddlewares,
     });
-    // The SDK hash-based wait compares a base hash with the effective policy
-    // hash when providers are attached. Wait for the revision to load instead.
-    const { PolicyStatus } = await import('@nvidia/openshell-sdk/raw');
+    // The SDK's hash-based wait can finish before the sandbox reports the revision loaded.
     const deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
       const { revision } = await client.raw.getSandboxPolicyStatus(
