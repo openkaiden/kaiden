@@ -1,8 +1,11 @@
 <script lang="ts">
+import '/@/lib/chat/components/messages/code-copy.css';
+
 import { faBan, faCheck, faCircleNotch, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 import { Button } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
+import { codeCopyButtons } from '/@/lib/chat/components/messages/code-copy-action';
 import Markdown from '/@/lib/markdown/Markdown.svelte';
 import type { AcpFlowToolCallEvent } from '/@api/acp-session-info';
 
@@ -117,7 +120,7 @@ async function handleOption(optionId: string): Promise<void> {
 
   <!-- Output section -->
   {#if showOutput && event.content}
-    <div class="group/output relative border-t border-[var(--pd-content-divider)]">
+    <div class="group/output relative border-t border-[var(--pd-content-divider)]" use:codeCopyButtons>
       <div class="absolute top-1 right-1 opacity-0 group-hover/output:opacity-100 transition-opacity z-10">
         <AcpCopyButton text={event.content} />
       </div>

@@ -1,8 +1,11 @@
 <script lang="ts">
+import '/@/lib/chat/components/messages/code-copy.css';
+
 import { faChevronDown, faChevronRight } from '@fortawesome/free-solid-svg-icons';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 import humanizeDuration from 'humanize-duration';
 
+import { codeCopyButtons } from '/@/lib/chat/components/messages/code-copy-action';
 import Markdown from '/@/lib/markdown/Markdown.svelte';
 import type { AcpFlowThinkingEvent } from '/@api/acp-session-info';
 
@@ -33,7 +36,7 @@ const label = $derived(
     <span class="italic">{label}</span>
   </button>
   {#if expanded}
-    <div class="border-t border-[var(--pd-content-divider)] px-4 py-3 text-sm text-[var(--pd-content-text)] opacity-70">
+    <div class="border-t border-[var(--pd-content-divider)] px-4 py-3 text-sm text-[var(--pd-content-text)] opacity-70" use:codeCopyButtons>
       <Markdown markdown={event.text} />
     </div>
   {/if}
