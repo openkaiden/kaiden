@@ -18,10 +18,18 @@
 
 import '@testing-library/jest-dom/vitest';
 
-import { render, screen } from '@testing-library/svelte';
-import { expect, test } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/svelte';
+import { beforeEach, expect, test, vi } from 'vitest';
+
+import { NavigationPage } from '/@api/navigation-page';
 
 import AcpNoSandboxEmptyScreen from './AcpNoSandboxEmptyScreen.svelte';
+
+vi.mock(import('/@/navigation'));
+
+beforeEach(() => {
+  vi.resetAllMocks();
+});
 
 test('renders title and message', () => {
   render(AcpNoSandboxEmptyScreen);
@@ -30,4 +38,21 @@ test('renders title and message', () => {
   expect(
     screen.getByText('A ready sandbox is required to create an agent session. Create a workspace first.'),
   ).toBeInTheDocument();
+});
+
+test('renders Create Workspace button', () => {
+  render(AcpNoSandboxEmptyScreen);
+
+  expect(screen.getByRole('button', { name: 'Create Workspace' })).toBeInTheDocument();
+});
+
+test('clicking Create Workspace navigates to workspace creation', async () => {
+  const { handleNavigation } = await import('/@/navigation');
+
+  render(AcpNoSandboxEmptyScreen);
+
+  const button = screen.getByRole('button', { name: 'Create Workspace' });
+  await fireEvent.click(button);
+
+  expect(handleNavigation).toHaveBeenCalledWith({ page: NavigationPage.AGENT_WORKSPACE_CREATE });
 });
