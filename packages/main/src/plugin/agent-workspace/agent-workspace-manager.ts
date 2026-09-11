@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { access, lstat, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, lstat, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { basename, isAbsolute, join, posix, resolve } from 'node:path';
 
@@ -55,17 +55,16 @@ import { getSandboxNameValidationError } from '/@api/agent-workspace-info.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationNode } from '/@api/configuration/models.js';
 import { IConfigurationRegistry } from '/@api/configuration/models.js';
-import type { CreateLocalGatewayOptions, GatewayInfo, GatewaySandboxes } from '/@api/openshell-gateway-info.js';
+import type {
+  CreateLocalGatewayOptions,
+  GatewayInfo,
+  GatewaySandboxes,
+  OpenshellBindMount,
+  OpenshellUpload,
+} from '/@api/openshell-gateway-info.js';
 import { AGENT_LABEL, decodeWorkspaceLabels, WORKSPACE_LABEL } from '/@api/openshell-gateway-info.js';
 
-import {
-  buildOpenshellUploadMount,
-  dedupeOpenshellMounts,
-  type OpenshellBindMount,
-  type OpenshellUpload,
-  partitionOpenshellUploads,
-  resolveOpenshellMountTarget,
-} from './openshell-mounts.js';
+import { dedupeOpenshellMounts, partitionOpenshellUploads, resolveOpenshellMountTarget } from './openshell-mounts.js';
 
 const HOME_VARIABLE = '${HOME}';
 const LABEL_MAX_LENGTH = 63;
@@ -201,24 +200,15 @@ export class AgentWorkspaceManager implements Disposable {
     const configDir = options.sourcePath ? undefined : this.getGlobalConfigDir(options.gateway, sandboxName);
     const workspace = await writeWorkspaceConfig(options, configDir);
     const agent = this.agentRegistry.getAgentRegistration(options.agent);
-    const uploads: OpenshellUpload[] = [];
+    const configurationUploads: OpenshellUpload[] = [];
     const supportsMounts = await this.openshellGateway.supportsMounts(gateway);
-    let mountedConfigDir: string | undefined;
+    let skillUploads: OpenshellUpload[] = [];
 
     if (agent) {
-      if (supportsMounts && agent.configurationFiles.length > 0) {
-        // Bind-mounted configuration must persist for the sandbox's lifetime.
-        mountedConfigDir = join(this.getGlobalConfigDir(options.gateway, sandboxName), 'agent-config');
-        await mkdir(mountedConfigDir, { recursive: true });
-      }
       const writable = await Promise.all(
         agent.configurationFiles.map(
           async (base, i) =>
-            new WritableConfigurationFile(
-              base,
-              await base.read(),
-              mountedConfigDir ? join(mountedConfigDir, String(i)) : join(tmpdir(), `kaiden-config-${Date.now()}-${i}`),
-            ),
+            new WritableConfigurationFile(base, await base.read(), join(tmpdir(), `kaiden-config-${Date.now()}-${i}`)),
         ),
       );
 
@@ -234,11 +224,10 @@ export class AgentWorkspaceManager implements Disposable {
 
       for (const file of writable) {
         await writeFile(file.localPath, await file.read(), 'utf-8');
-        uploads.push({ local: file.localPath, remote: file.path });
+        configurationUploads.push({ local: file.localPath, remote: file.path });
       }
 
-      const skillUploads = await this.buildOpenshellSkillUploads(options.skills, agent.destinationSkillsFolder);
-      uploads.push(...skillUploads);
+      skillUploads = await this.buildOpenshellSkillUploads(options.skills, agent.destinationSkillsFolder);
     } else {
       throw new Error(`Unable to create workspace: agent ${options.agent} not registered`);
     }
@@ -258,10 +247,14 @@ export class AgentWorkspaceManager implements Disposable {
       }
     }
 
-    const filesystem = await this.buildOpenshellFilesystem(options.sourcePath, workspace, supportsMounts);
-    const agentFilesystem = await partitionOpenshellUploads(this.dedupeOpenshellUploads(uploads), supportsMounts, true);
-    const dedupedUploads = this.dedupeOpenshellUploads([...agentFilesystem.uploads, ...filesystem.uploads]);
-    const mounts = dedupeOpenshellMounts([...filesystem.mounts, ...agentFilesystem.mounts]);
+    const workspaceFiles = await this.buildOpenshellFilesystem(options.sourcePath, workspace, supportsMounts);
+    const skillFiles = await partitionOpenshellUploads(skillUploads, { supportsMounts, readOnly: true });
+    const uploads = this.dedupeOpenshellUploads([
+      ...configurationUploads,
+      ...skillFiles.uploads,
+      ...workspaceFiles.uploads,
+    ]);
+    const mounts = dedupeOpenshellMounts([...workspaceFiles.mounts, ...skillFiles.mounts]);
 
     const env = workspace.environment
       ?.filter(entry => typeof entry.value === 'string' && entry.value !== '')
@@ -289,7 +282,7 @@ export class AgentWorkspaceManager implements Disposable {
         ...(options.sourcePath ? encodeWorkspaceLabels(options.sourcePath) : {}),
         [AGENT_LABEL]: options.agent,
       },
-      uploads: dedupedUploads.length > 0 ? dedupedUploads : undefined,
+      uploads: uploads.length > 0 ? uploads : undefined,
       driverConfig: gateway.driver && mounts.length > 0 ? { [gateway.driver]: { mounts } } : undefined,
       detach: true,
       tty: true,
@@ -356,17 +349,10 @@ export class AgentWorkspaceManager implements Disposable {
     workspace: AgentWorkspaceConfiguration,
     supportsMounts: boolean,
   ): Promise<{ uploads: OpenshellUpload[]; mounts: OpenshellBindMount[] }> {
-    const uploads: OpenshellUpload[] = [];
-    const mounts: OpenshellBindMount[] = [];
-    if (sourcePath) {
-      const upload = { local: await realpath(sourcePath), remote: '.' };
-      const mount = supportsMounts ? await buildOpenshellUploadMount(upload) : undefined;
-      if (mount) {
-        mounts.push(mount);
-      } else {
-        uploads.push(upload);
-      }
-    }
+    const { uploads, mounts } = await partitionOpenshellUploads(
+      sourcePath ? [{ local: await realpath(sourcePath), remote: '.' }] : [],
+      { supportsMounts },
+    );
 
     for (const mount of workspace.mounts ?? []) {
       const raw = this.resolveHostPath(mount.host, sourcePath);

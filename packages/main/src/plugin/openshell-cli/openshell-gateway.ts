@@ -26,6 +26,8 @@ import { join } from 'node:path';
 import type { Disposable } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
 import Mustache from 'mustache';
+import { parse as parseToml } from 'smol-toml';
+import z from 'zod';
 
 import { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
 import { Directories } from '/@/plugin/directories.js';
@@ -54,6 +56,12 @@ const STOP_TIMEOUT_MS = 5000;
 const SUPERVISOR_IMAGE_BASE = 'ghcr.io/nvidia/openshell/supervisor';
 const GATEWAY_LOG_FILENAME = 'gateway.log';
 const DEFAULT_GATEWAY_NAME = KAIDEN_LOCAL_GATEWAY_NAME;
+
+const GatewayConfigSchema = z.object({
+  openshell: z.object({
+    drivers: z.record(z.string(), z.object({ enable_bind_mounts: z.boolean().optional() })),
+  }),
+});
 
 /**
  * Manages the `openshell-gateway` server binary lifecycle.
@@ -281,6 +289,7 @@ export class OpenshellGateway implements Disposable {
 
   async supportsMounts(gateway: GatewayInfo): Promise<boolean> {
     if (
+      !this.#gatewayProcesses.has(gateway.name) ||
       (gateway.driver !== 'podman' && gateway.driver !== 'docker') ||
       gateway.type !== 'local' ||
       gateway.is_remote ||
@@ -290,18 +299,8 @@ export class OpenshellGateway implements Disposable {
     }
     const configPath = join(this.getGatewayStorageDirectory(gateway.name), 'gateway.toml');
     try {
-      const config = await readFile(configPath, 'utf-8');
-      // Read only the active driver's section in Kaiden's generated config.
-      let inDriverSection = false;
-      for (const rawLine of config.split('\n')) {
-        const line = rawLine.split('#', 1)[0]?.trim() ?? '';
-        if (line.startsWith('[')) {
-          inDriverSection = line === `[openshell.drivers.${gateway.driver}]`;
-        } else if (inDriverSection && /^enable_bind_mounts\s*=\s*true$/.test(line)) {
-          return true;
-        }
-      }
-      return false;
+      const config = GatewayConfigSchema.parse(parseToml(await readFile(configPath, 'utf-8')));
+      return config.openshell.drivers[gateway.driver]?.enable_bind_mounts === true;
     } catch {
       return false;
     }

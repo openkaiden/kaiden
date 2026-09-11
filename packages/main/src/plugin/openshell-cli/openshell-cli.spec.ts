@@ -26,6 +26,7 @@ import type { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
 import type { Proxy } from '/@/plugin/proxy.js';
 import { Exec } from '/@/plugin/util/exec.js';
 import type { CliToolInfo } from '/@api/cli-tool-info.js';
+import type { CreateSandboxOptions } from '/@api/openshell-gateway-info.js';
 
 import { OpenshellCli } from './openshell-cli.js';
 
@@ -255,8 +256,8 @@ describe('createSandbox', () => {
   test('includes driver config JSON when provided', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.mocked(exec.exec).mockResolvedValue(mockExecResult(''));
-    const driverConfig = {
-      podman: { mounts: [{ type: 'bind', source: '/host/project', target: '/sandbox/project' }] },
+    const driverConfig: CreateSandboxOptions['driverConfig'] = {
+      podman: { mounts: [{ type: 'bind', source: '/host/project', target: '/sandbox/project', read_only: false }] },
     };
 
     await openshellCli.createSandbox({ driverConfig });

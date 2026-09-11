@@ -16,26 +16,10 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { lstat, realpath } from 'node:fs/promises';
+import { lstat } from 'node:fs/promises';
 import { basename, posix } from 'node:path';
 
-export type OpenshellUpload = { local: string; remote: string };
-export type OpenshellBindMount = { type: 'bind'; source: string; target: string; read_only: boolean };
-
-export async function buildOpenshellUploadMount(
-  upload: OpenshellUpload,
-  readOnly = false,
-): Promise<OpenshellBindMount | undefined> {
-  // Directory uploads retain their basename under the destination. In particular,
-  // project:. lands at /sandbox/project, not the reserved /sandbox root.
-  const stats = await lstat(upload.local);
-  const remote =
-    stats.isDirectory() || upload.remote.endsWith('/')
-      ? posix.join(upload.remote, basename(upload.local))
-      : upload.remote;
-  const target = resolveOpenshellMountTarget(remote);
-  return target ? { type: 'bind', source: await realpath(upload.local), target, read_only: readOnly } : undefined;
-}
+import type { OpenshellBindMount, OpenshellUpload } from '/@api/openshell-gateway-info.js';
 
 export function resolveOpenshellMountTarget(path: string): string | undefined {
   if (path === '.' || path === '~' || path === '/') {
@@ -51,15 +35,22 @@ export function resolveOpenshellMountTarget(path: string): string | undefined {
 
 export async function partitionOpenshellUploads(
   uploads: OpenshellUpload[],
-  supportsMounts: boolean,
-  readOnly = false,
+  { supportsMounts, readOnly = false }: { supportsMounts: boolean; readOnly?: boolean },
 ): Promise<{ uploads: OpenshellUpload[]; mounts: OpenshellBindMount[] }> {
+  if (!supportsMounts) {
+    return { uploads, mounts: [] };
+  }
   const remainingUploads: OpenshellUpload[] = [];
   const mounts: OpenshellBindMount[] = [];
   for (const upload of uploads) {
-    const mount = supportsMounts ? await buildOpenshellUploadMount(upload, readOnly) : undefined;
-    if (mount) {
-      mounts.push(mount);
+    const stats = await lstat(upload.local);
+    const destination =
+      stats.isDirectory() || upload.remote.endsWith('/')
+        ? posix.join(upload.remote, basename(upload.local))
+        : upload.remote;
+    const target = resolveOpenshellMountTarget(destination);
+    if (target) {
+      mounts.push({ type: 'bind', source: upload.local, target, read_only: readOnly });
     } else {
       remainingUploads.push(upload);
     }
@@ -68,14 +59,13 @@ export async function partitionOpenshellUploads(
 }
 
 export function dedupeOpenshellMounts(mounts: OpenshellBindMount[]): OpenshellBindMount[] {
-  const deduped = new Map<string, OpenshellBindMount>();
+  const mountsByTarget = new Map<string, OpenshellBindMount>();
   for (const mount of mounts) {
-    const existing = deduped.get(mount.target);
+    const existing = mountsByTarget.get(mount.target);
     if (existing && existing.source !== mount.source) {
       throw new Error(`Conflicting bind mount sources for target "${mount.target}"`);
     }
-    // Configured mounts follow the automatic project mount, so their ro flag wins.
-    deduped.set(mount.target, mount);
+    mountsByTarget.set(mount.target, mount);
   }
-  return [...deduped.values()];
+  return [...mountsByTarget.values()];
 }
