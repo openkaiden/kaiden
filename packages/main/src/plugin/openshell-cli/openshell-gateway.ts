@@ -20,7 +20,7 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import type { WriteStream } from 'node:fs';
 import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, open, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { Disposable } from '@openkaiden/api';
@@ -303,6 +303,24 @@ export class OpenshellGateway implements Disposable {
       await this.waitForIndependentGateway(gatewayProcess, name, processState);
     } catch (err: unknown) {
       await this.stopGateway(name);
+      let logContent = '';
+      try {
+        logContent = await readFile(join(storageDirectory, GATEWAY_LOG_FILENAME), 'utf-8');
+      } catch {
+        // ignore if log can't be read
+      }
+      if (this.isMigrationError(logContent)) {
+        console.warn(`[openshell-gateway] migration error detected for "${name}", backing up database`);
+        const backupPath = await this.backupGatewayDatabase(name);
+        this.notificationRegistry.addNotification({
+          title: 'OpenShell Gateway database migration error',
+          body: `The gateway "${name}" encountered a database migration error. The database has been backed up to ${backupPath}. Please restart the gateway.`,
+          extensionId: 'core',
+          type: 'warn',
+          highlight: true,
+          silent: false,
+        });
+      }
       throw err;
     }
   }
@@ -392,9 +410,22 @@ export class OpenshellGateway implements Disposable {
       this.#port = previousPort;
       this.#bindAddress = previousBindAddress;
       const stderrOutput = stderrChunks.join('\n').trim();
+      if (this.isMigrationError(stderrOutput)) {
+        console.warn('[openshell-gateway] migration error detected, backing up database');
+        const backupPath = await this.backupGatewayDatabase(DEFAULT_GATEWAY_NAME);
+        this.notificationRegistry.addNotification({
+          title: 'OpenShell Gateway database migration error',
+          body: `The gateway "${DEFAULT_GATEWAY_NAME}" encountered a database migration error. The database has been backed up to ${backupPath}. Please restart the gateway.`,
+          extensionId: 'core',
+          type: 'warn',
+          highlight: true,
+          silent: false,
+        });
+      }
       const baseMessage = err instanceof Error ? err.message : String(err);
       throw new Error(stderrOutput ? `${baseMessage}: ${stderrOutput}` : baseMessage);
     }
+
     if (!options?.skipRegistration) {
       try {
         await this.registerWithCli();
@@ -642,6 +673,18 @@ export class OpenshellGateway implements Disposable {
 
   private getGatewayStorageDirectory(name: string): string {
     return join(this.directories.getDataDirectory(), 'openshell-gateways', name);
+  }
+
+  private isMigrationError(output: string): boolean {
+    return output.includes('migration error');
+  }
+
+  private async backupGatewayDatabase(name: string): Promise<string> {
+    const storageDirectory = this.getGatewayStorageDirectory(name);
+    for (const file of ['gateway.db', 'gateway.db-wal', 'gateway.db-shm']) {
+      await rename(join(storageDirectory, file), join(storageDirectory, `${file}.backup`)).catch(() => {});
+    }
+    return join(storageDirectory, 'gateway.db.backup');
   }
 
   private async createNamedGatewayConfig(
