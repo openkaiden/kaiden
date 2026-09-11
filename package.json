@@ -256,6 +256,7 @@
     "node-pty": "^1.0.0",
     "os-locale": "^6.0.2",
     "semver": "^7.7.3",
+    "smol-toml": "^1.6.1",
     "stream-json": "^1.9.1",
     "tar": "^7.5.3",
     "tar-fs": "^3.1.1",

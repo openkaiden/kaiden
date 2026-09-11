@@ -106,6 +106,18 @@ export function decodeWorkspaceLabels(labels: Record<string, string>): string | 
   }
 }
 
+export interface OpenshellUpload {
+  local: string;
+  remote: string;
+}
+
+export interface OpenshellBindMount {
+  type: 'bind';
+  source: string;
+  target: string;
+  read_only: boolean;
+}
+
 export interface CreateSandboxOptions {
   name?: string;
   gateway?: string;
@@ -117,7 +129,8 @@ export interface CreateSandboxOptions {
   providers?: string[];
   env?: Record<string, string>;
   labels?: Record<string, string>;
-  uploads?: Array<{ local: string; remote: string }>;
+  uploads?: OpenshellUpload[];
+  driverConfig?: Partial<Record<'podman' | 'docker', { mounts: OpenshellBindMount[] }>>;
   command?: string[];
   noTty?: boolean;
   tty?: boolean;

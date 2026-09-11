@@ -19,7 +19,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createWriteStream, existsSync, type WriteStream } from 'node:fs';
-import { type FileHandle, mkdir, open, writeFile } from 'node:fs/promises';
+import { type FileHandle, mkdir, open, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { RunResult } from '@openkaiden/api';
@@ -1221,6 +1221,125 @@ describe('onDidGatewayInitFailed', () => {
 
     expect(failListener).not.toHaveBeenCalled();
     expect(notificationRegistry.addNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe('supportsMounts', () => {
+  beforeEach(async () => {
+    vi.mocked(spawn).mockReturnValue(createMockChildProcess());
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+    await gateway.start();
+  });
+
+  test('does not enable mounts for a discovered gateway even with a saved config', async () => {
+    vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true');
+    await expect(
+      gateway.supportsMounts({
+        name: 'discovered',
+        endpoint: 'http://127.0.0.1:17671',
+        type: 'local',
+        driver: 'podman',
+      }),
+    ).resolves.toBe(false);
+    expect(readFile).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { driver: 'podman' as const, config: '[openshell.drivers.docker]\nenable_bind_mounts = true', expected: false },
+    {
+      driver: 'podman' as const,
+      config:
+        '[openshell.drivers.podman]\nenable_bind_mounts = false\n[openshell.drivers.docker]\nenable_bind_mounts = true',
+      expected: false,
+    },
+    {
+      driver: 'docker' as const,
+      config: '[openshell.drivers.docker]\n  enable_bind_mounts = true # local sharing',
+      expected: true,
+    },
+    {
+      driver: 'podman' as const,
+      config: '[openshell.drivers."podman"]\nenable_bind_mounts = true',
+      expected: true,
+    },
+    { driver: 'podman' as const, config: 'openshell.drivers.podman.enable_bind_mounts = true', expected: true },
+    { driver: 'podman' as const, config: '[openshell.drivers.podman]\nenable_bind_mounts = "true"', expected: false },
+    {
+      driver: 'podman' as const,
+      config: '[openshell.drivers.podman]\nenable_bind_mounts = true\ninvalid = [',
+      expected: false,
+    },
+    { driver: 'podman' as const, config: '', expected: false },
+    { driver: 'vm' as const, config: '[openshell.drivers.vm]\nenable_bind_mounts = true', expected: false },
+    { driver: undefined, config: '[openshell.drivers.podman]\nenable_bind_mounts = true', expected: false },
+  ])('checks the active driver: $driver, $config', async ({ driver, config, expected }) => {
+    vi.mocked(readFile).mockResolvedValue(config);
+    await expect(
+      gateway.supportsMounts({
+        name: 'kaiden-local',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver,
+      }),
+    ).resolves.toBe(expected);
+  });
+
+  test('returns true when the managed gateway config enables bind mounts', async () => {
+    vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true\n');
+
+    await expect(
+      gateway.supportsMounts({
+        name: 'kaiden-local',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver: 'podman',
+      }),
+    ).resolves.toBe(true);
+    expect(readFile).toHaveBeenCalledWith(GATEWAY_CONFIG_PATH, 'utf-8');
+  });
+
+  test('returns false for gateways without a managed bind-mount config', async () => {
+    vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
+
+    await expect(
+      gateway.supportsMounts({
+        name: 'kaiden-local',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver: 'podman',
+      }),
+    ).resolves.toBe(false);
+  });
+
+  test('disables mount support when the managed gateway exits', async () => {
+    vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true\n');
+    const info = {
+      name: 'kaiden-local',
+      endpoint: 'http://127.0.0.1:17670',
+      type: 'local' as const,
+      driver: 'podman' as const,
+    };
+    await expect(gateway.supportsMounts(info)).resolves.toBe(true);
+
+    vi.mocked(spawn).mock.results[0]?.value.emit('exit', 0);
+
+    await expect(gateway.supportsMounts(info)).resolves.toBe(false);
+  });
+
+  test.each([
+    { type: 'remote' as const, endpoint: 'https://gateway.example.com', is_remote: true },
+    { type: 'local' as const, endpoint: 'http://10.0.0.5:17670' },
+  ])('returns false for $type registration at $endpoint despite managed storage', async registration => {
+    vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true\n');
+
+    await expect(
+      gateway.supportsMounts({
+        name: 'kaiden-local',
+        ...registration,
+        driver: 'podman',
+      }),
+    ).resolves.toBe(false);
+    expect(readFile).not.toHaveBeenCalled();
   });
 });
 

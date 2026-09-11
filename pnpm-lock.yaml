@@ -162,6 +162,9 @@ importers:
       semver:
         specifier: ^7.7.3
         version: 7.7.3
+      smol-toml:
+        specifier: ^1.6.1
+        version: 1.6.1
       stream-json:
         specifier: ^1.9.1
         version: 1.9.1

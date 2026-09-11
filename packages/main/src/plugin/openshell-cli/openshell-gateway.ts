@@ -20,12 +20,14 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import type { WriteStream } from 'node:fs';
 import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, open, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { Disposable } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
 import Mustache from 'mustache';
+import { parse as parseToml } from 'smol-toml';
+import z from 'zod';
 
 import { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
 import { Directories } from '/@/plugin/directories.js';
@@ -38,6 +40,7 @@ import type { Event } from '/@api/event.js';
 import {
   type CreateLocalGatewayOptions,
   GATEWAY_NAME_PATTERN,
+  type GatewayInfo,
   KAIDEN_LOCAL_GATEWAY_NAME,
   type LocalGatewayDriver,
   type OpenshellGatewayStartOptions,
@@ -53,6 +56,12 @@ const STOP_TIMEOUT_MS = 5000;
 const SUPERVISOR_IMAGE_BASE = 'ghcr.io/nvidia/openshell/supervisor';
 const GATEWAY_LOG_FILENAME = 'gateway.log';
 const DEFAULT_GATEWAY_NAME = KAIDEN_LOCAL_GATEWAY_NAME;
+
+const GatewayConfigSchema = z.object({
+  openshell: z.object({
+    drivers: z.record(z.string(), z.object({ enable_bind_mounts: z.boolean().optional() })),
+  }),
+});
 
 /**
  * Manages the `openshell-gateway` server binary lifecycle.
@@ -276,6 +285,25 @@ export class OpenshellGateway implements Disposable {
       GATEWAY_NAME_PATTERN.test(name) &&
       existsSync(join(this.getGatewayStorageDirectory(name), 'gateway.toml'))
     );
+  }
+
+  async supportsMounts(gateway: GatewayInfo): Promise<boolean> {
+    if (
+      !this.#gatewayProcesses.has(gateway.name) ||
+      (gateway.driver !== 'podman' && gateway.driver !== 'docker') ||
+      gateway.type !== 'local' ||
+      gateway.is_remote ||
+      !this.isLocalEndpoint(gateway.endpoint)
+    ) {
+      return false;
+    }
+    const configPath = join(this.getGatewayStorageDirectory(gateway.name), 'gateway.toml');
+    try {
+      const config = GatewayConfigSchema.parse(parseToml(await readFile(configPath, 'utf-8')));
+      return config.openshell.drivers[gateway.driver]?.enable_bind_mounts === true;
+    } catch {
+      return false;
+    }
   }
 
   private async startCreatedGateway(name: string, endpoint: string): Promise<void> {

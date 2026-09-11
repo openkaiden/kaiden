@@ -137,6 +137,7 @@ let sandboxListChangeCallback: (() => void) | undefined;
 
 const openshellGateway = {
   createLocalGateway: vi.fn(),
+  supportsMounts: vi.fn(),
   onDidGatewayStart: vi.fn((cb: () => void) => {
     gatewayStartCallback = cb;
     return { dispose: vi.fn() };
@@ -192,6 +193,7 @@ beforeEach(() => {
   vi.mocked(rm).mockResolvedValue(undefined);
   vi.mocked(openshellGatewayStateManager.refresh).mockResolvedValue(undefined);
   vi.mocked(openshellGatewayStateManager.whenReady).mockResolvedValue(undefined);
+  vi.mocked(openshellGateway.supportsMounts).mockResolvedValue(false);
   vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
     {
       name: 'kaiden',
@@ -736,6 +738,161 @@ describe('create – OpenShell mode', () => {
         ]),
       }),
     );
+  });
+
+  describe('bind mounts', () => {
+    beforeEach(() => {
+      vi.mocked(openshellGateway.supportsMounts).mockResolvedValue(true);
+      vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
+        {
+          name: 'kaiden',
+          endpoint: 'http://127.0.0.1:17670',
+          type: 'local',
+          driver: 'podman',
+          gatewayState: { reachable: true, health: 'healthy' },
+        },
+      ]);
+    });
+
+    test.each([
+      'podman',
+      'docker',
+    ] as const)('mounts project and skills but uploads mutable agent config using %s', async driver => {
+      vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
+        {
+          name: 'kaiden',
+          endpoint: 'http://127.0.0.1:17670',
+          type: 'local',
+          driver,
+          gatewayState: { reachable: true, health: 'healthy' },
+        },
+      ]);
+      vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({
+        ...mockAgent,
+        configurationFiles: [
+          { path: '.claude/settings.json', read: vi.fn().mockResolvedValue('{}') },
+          { path: '.claude.json', read: vi.fn().mockResolvedValue('{}') },
+        ],
+      });
+
+      await manager.create({ ...defaultOptions, skills: ['/home/user/.kaiden/skills/github'] });
+
+      expect(openshellGateway.supportsMounts).toHaveBeenCalledWith(expect.objectContaining({ name: 'kaiden', driver }));
+      expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({
+          uploads: [
+            { local: expect.any(String), remote: '.claude/settings.json' },
+            { local: expect.any(String), remote: '.claude.json' },
+          ],
+          driverConfig: {
+            [driver]: {
+              mounts: [
+                { type: 'bind', source: '/tmp/my-project', target: '/sandbox/my-project', read_only: false },
+                {
+                  type: 'bind',
+                  source: '/home/user/.kaiden/skills/github',
+                  target: '/sandbox/.claude/skills/github',
+                  read_only: true,
+                },
+              ],
+            },
+          },
+        }),
+      );
+    });
+
+    test('rejects conflicting sources before creating a sandbox', async () => {
+      await expect(
+        manager.create({
+          ...defaultOptions,
+          mounts: [{ host: '/different/project', target: '/sandbox/my-project', ro: false }],
+        }),
+      ).rejects.toThrow('Conflicting bind mount sources for target "/sandbox/my-project"');
+      expect(openshellCli.createSandbox).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      'podman',
+      'docker',
+      'vm',
+      undefined,
+    ] as const)('uploads project, skills and configured paths when mount support is unavailable: %s', async driver => {
+      vi.mocked(openshellGateway.supportsMounts).mockResolvedValue(false);
+      vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
+        {
+          name: 'kaiden',
+          endpoint: 'http://127.0.0.1:17670',
+          driver,
+          gatewayState: { reachable: true, health: 'healthy' },
+        },
+      ]);
+
+      await manager.create({
+        ...defaultOptions,
+        skills: ['/home/user/.kaiden/skills/github'],
+        mounts: [{ host: '$HOME/.gitconfig', target: '$HOME/.gitconfig', ro: true }],
+      });
+
+      expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({
+          driverConfig: undefined,
+          uploads: expect.arrayContaining([
+            { local: '/tmp/my-project', remote: '.' },
+            { local: '/home/user/.kaiden/skills/github', remote: '.claude/skills' },
+            { local: resolve(homedir(), '.gitconfig'), remote: '~/.gitconfig' },
+          ]),
+        }),
+      );
+    });
+
+    test('uses bind mounts for configured paths when the gateway supports them', async () => {
+      await manager.create({
+        ...defaultOptions,
+        mounts: [
+          { host: '$SOURCES', target: '/sandbox/my-project/', ro: true },
+          { host: '$SOURCES/subdir', target: '$SOURCES/subdir', ro: false },
+          { host: '$HOME/.gitconfig', target: '$HOME/.gitconfig', ro: true },
+        ],
+      });
+
+      expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({
+          uploads: undefined,
+          driverConfig: {
+            podman: {
+              mounts: [
+                { type: 'bind', source: '/tmp/my-project', target: '/sandbox/my-project', read_only: true },
+                {
+                  type: 'bind',
+                  source: resolve('/tmp/my-project', 'subdir'),
+                  target: '/sandbox/subdir',
+                  read_only: false,
+                },
+                {
+                  type: 'bind',
+                  source: resolve(homedir(), '.gitconfig'),
+                  target: '/sandbox/.gitconfig',
+                  read_only: true,
+                },
+              ],
+            },
+          },
+        }),
+      );
+    });
+
+    test('keeps workspace-root mounts as uploads when bind mounts cannot target the workspace root', async () => {
+      await manager.create({ ...defaultOptions, mounts: [{ host: '$HOME', target: '$HOME', ro: false }] });
+
+      expect(openshellCli.createSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({ uploads: expect.arrayContaining([{ local: '/home/testuser', remote: '~' }]) }),
+      );
+      expect(vi.mocked(openshellCli.createSandbox).mock.calls[0]?.[0]?.driverConfig).toEqual({
+        podman: {
+          mounts: [{ type: 'bind', source: '/tmp/my-project', target: '/sandbox/my-project', read_only: false }],
+        },
+      });
+    });
   });
 
   test('uploads broad host access mounts when creating an openshell sandbox', async () => {
