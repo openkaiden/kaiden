@@ -23,6 +23,7 @@ import { PROVIDERS, TIMEOUTS } from '/@/model/core/types';
 import { SettingsCodingAgentsPage } from '/@/model/pages/settings-coding-agents-tab-page';
 import { SettingsMcpPage } from '/@/model/pages/settings-mcp-tab-page';
 import { SettingsModelsPage } from '/@/model/pages/settings-models-tab-page';
+import { SettingsSkillsPage } from '/@/model/pages/settings-skills-tab-page';
 
 import { BasePage } from './base-page';
 import { SettingsCliPage } from './settings-cli-tab-page';
@@ -37,6 +38,7 @@ export class SettingsPage extends BasePage {
   readonly codingAgentsTab: Locator;
   readonly mcpTab: Locator;
   readonly modelsTab: Locator;
+  readonly skillsTab: Locator;
   readonly preferencesTab: Locator;
   private readonly tabs: Locator[];
 
@@ -49,6 +51,7 @@ export class SettingsPage extends BasePage {
     this.codingAgentsTab = sidebar.getByRole('link', { name: 'Coding agents' });
     this.mcpTab = sidebar.getByRole('link', { name: 'MCP' });
     this.modelsTab = sidebar.getByRole('link', { name: 'Models' });
+    this.skillsTab = sidebar.getByRole('link', { name: 'Skills' });
     this.preferencesTab = sidebar.getByRole('link', { name: 'Preferences' });
     this.tabs = [
       this.resourcesTab,
@@ -57,6 +60,7 @@ export class SettingsPage extends BasePage {
       this.codingAgentsTab,
       this.mcpTab,
       this.modelsTab,
+      this.skillsTab,
       this.preferencesTab,
     ];
   }
@@ -72,6 +76,7 @@ export class SettingsPage extends BasePage {
     await expect(this.codingAgentsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.mcpTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.modelsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
+    await expect(this.skillsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.preferencesTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
   }
 
@@ -101,6 +106,10 @@ export class SettingsPage extends BasePage {
 
   async openModels(): Promise<SettingsModelsPage> {
     return this.openTab(this.modelsTab, SettingsModelsPage);
+  }
+
+  async openSkills(): Promise<SettingsSkillsPage> {
+    return this.openTab(this.skillsTab, SettingsSkillsPage);
   }
 
   getAllTabs(): Locator[] {

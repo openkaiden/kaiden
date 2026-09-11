@@ -330,5 +330,5 @@ test(`Test navigationHandle for ${NavigationPage.SEMANTIC_ROUTERS}`, () => {
 test(`Test navigationHandle for ${NavigationPage.SKILL_CREATE}`, () => {
   handleNavigation({ page: NavigationPage.SKILL_CREATE });
 
-  expect(vi.mocked(router.goto)).toHaveBeenCalledWith('/skills/create');
+  expect(vi.mocked(router.goto)).toHaveBeenCalledWith('/preferences/skills/create');
 });
