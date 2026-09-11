@@ -311,10 +311,10 @@ export class OpenshellGateway implements Disposable {
       }
       if (this.isMigrationError(logContent)) {
         console.warn(`[openshell-gateway] migration error detected for "${name}", backing up database`);
-        await this.backupGatewayDatabase(name);
+        const backupPath = await this.backupGatewayDatabase(name);
         this.notificationRegistry.addNotification({
           title: 'OpenShell Gateway database migration error',
-          body: `The gateway "${name}" encountered a database migration error. The database has been backed up. Please restart the gateway.`,
+          body: `The gateway "${name}" encountered a database migration error. The database has been backed up to ${backupPath}. Please restart the gateway.`,
           extensionId: 'core',
           type: 'warn',
           highlight: true,
@@ -412,10 +412,10 @@ export class OpenshellGateway implements Disposable {
       const stderrOutput = stderrChunks.join('\n').trim();
       if (this.isMigrationError(stderrOutput)) {
         console.warn('[openshell-gateway] migration error detected, backing up database');
-        await this.backupGatewayDatabase(DEFAULT_GATEWAY_NAME);
+        const backupPath = await this.backupGatewayDatabase(DEFAULT_GATEWAY_NAME);
         this.notificationRegistry.addNotification({
           title: 'OpenShell Gateway database migration error',
-          body: 'The gateway encountered a database migration error. The database has been backed up. Please restart the gateway.',
+          body: `The gateway "${DEFAULT_GATEWAY_NAME}" encountered a database migration error. The database has been backed up to ${backupPath}. Please restart the gateway.`,
           extensionId: 'core',
           type: 'warn',
           highlight: true,
@@ -679,11 +679,12 @@ export class OpenshellGateway implements Disposable {
     return output.includes('migration error');
   }
 
-  private async backupGatewayDatabase(name: string): Promise<void> {
+  private async backupGatewayDatabase(name: string): Promise<string> {
     const storageDirectory = this.getGatewayStorageDirectory(name);
     for (const file of ['gateway.db', 'gateway.db-wal', 'gateway.db-shm']) {
       await rename(join(storageDirectory, file), join(storageDirectory, `${file}.backup`)).catch(() => {});
     }
+    return join(storageDirectory, 'gateway.db.backup');
   }
 
   private async createNamedGatewayConfig(
