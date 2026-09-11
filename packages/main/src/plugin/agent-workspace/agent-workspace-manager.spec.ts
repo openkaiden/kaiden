@@ -1363,7 +1363,7 @@ describe('remove', () => {
     const result = await manager.remove('ws-1', 'kaiden');
 
     expect(sdkSandbox.delete).toHaveBeenCalledWith('test-workspace-1');
-    expect(sdkSandbox.waitDeleted).toHaveBeenCalledWith('test-workspace-1', 120);
+    expect(sdkSandbox.waitDeleted).not.toHaveBeenCalled();
     expect(result).toEqual({ id: 'ws-1' });
   });
 
@@ -1435,15 +1435,15 @@ describe('remove', () => {
 });
 
 describe('deleteOpenshellSandbox', () => {
-  test('preserves local config until the gateway confirms deletion', async () => {
-    vi.mocked(sdkSandbox.waitDeleted).mockRejectedValue(new Error('deletion timed out'));
+  test('preserves local config when the deletion request fails', async () => {
+    vi.mocked(sdkSandbox.delete).mockRejectedValue(new Error('deletion failed'));
 
-    await expect(manager.deleteOpenshellSandbox('my-workspace', 'kaiden')).rejects.toThrow('deletion timed out');
+    await expect(manager.deleteOpenshellSandbox('my-workspace', 'kaiden')).rejects.toThrow('deletion failed');
 
     expect(rm).not.toHaveBeenCalled();
     expect(mockTask.status).toBe('failure');
     expect(mockTask.state).toBe('completed');
-    expect(apiSender.send).toHaveBeenCalledTimes(2);
+    expect(apiSender.send).toHaveBeenCalledTimes(1);
   });
 
   test('deletes the sandbox from the requested gateway', async () => {
@@ -1452,7 +1452,7 @@ describe('deleteOpenshellSandbox', () => {
     await manager.deleteOpenshellSandbox('shared-name', 'remote-gateway');
 
     expect(sdkSandbox.delete).toHaveBeenCalledWith('shared-name');
-    expect(sdkSandbox.waitDeleted).toHaveBeenCalledWith('shared-name', 120);
+    expect(sdkSandbox.waitDeleted).not.toHaveBeenCalled();
   });
 
   test('cleans up global config directory after sandbox deletion', async () => {

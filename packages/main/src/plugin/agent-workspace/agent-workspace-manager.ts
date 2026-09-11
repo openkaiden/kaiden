@@ -504,7 +504,6 @@ export class AgentWorkspaceManager implements Disposable {
       const sdkClient = await this.openshellSdkClientManager.getClient(gateway);
       await sdkClient.sandbox.delete(name);
       this.apiSender.send('agent-workspace-update');
-      await sdkClient.sandbox.waitDeleted(name, SANDBOX_DELETE_TIMEOUT_SECONDS);
       if (terminalId) this.closeWorkspaceTerminal(terminalId);
       await rm(this.getGlobalConfigDir(gateway, name), { recursive: true, force: true });
       task.status = 'success';
