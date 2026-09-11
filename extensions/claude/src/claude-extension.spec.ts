@@ -426,8 +426,10 @@ describe('ClaudeExtension', () => {
       expect(workspace.environment).not.toEqual(
         expect.arrayContaining([expect.objectContaining({ name: 'CLAUDE_CODE_SIMPLE' })]),
       );
-      expect(workspace.environment).toContainEqual({ name: 'ANTHROPIC_BASE_URL', value: 'https://inference.local' });
-      expect(workspace.environment).toContainEqual({ name: 'ANTHROPIC_API_KEY', value: 'unused' });
+      expect(workspace.environment).not.toEqual(expect.arrayContaining([expect.objectContaining({ name: 'ANTHROPIC_BASE_URL'})]));
+      expect(workspace.environment).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'ANTHROPIC_API_KEY' })]),
+      );
     });
 
     test('does not add Vertex AI environment variables for non-vertexai models', async () => {
@@ -491,9 +493,9 @@ describe('ClaudeExtension', () => {
       });
       expect(claudeCodeUseSimple).toHaveLength(0);
       expect(anthropicBaseURL).toHaveLength(1);
-      expect(anthropicBaseURL[0]).toEqual({ name: 'ANTHROPIC_BASE_URL', value: 'https://inference.local' });
+      expect(anthropicBaseURL[0]).toEqual({ name: 'ANTHROPIC_BASE_URL', value: 'https://api.anthropic.com' });
       expect(anthropicKey).toHaveLength(1);
-      expect(anthropicKey[0]).toEqual({ name: 'ANTHROPIC_API_KEY', value: 'unused' });
+      expect(anthropicKey[0]).toEqual({ name: 'ANTHROPIC_API_KEY', value: 'mykey' });
     });
   });
 });

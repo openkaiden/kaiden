@@ -156,8 +156,8 @@ export class AgentWorkspaceManager implements Disposable {
         }
       }
 
-      const secretName = await this.ensureModelSecret(options);
-      const workspaceId = await this.createOpenshell(options, secretName);
+      await this.ensureModelSecret(options);
+      const workspaceId = await this.createOpenshell(options);
       task.status = 'success';
       return workspaceId;
     } catch (err: unknown) {
@@ -171,7 +171,7 @@ export class AgentWorkspaceManager implements Disposable {
     }
   }
 
-  private async createOpenshell(options: AgentWorkspaceCreateOptions, secretName?: string): Promise<AgentWorkspaceId> {
+  private async createOpenshell(options: AgentWorkspaceCreateOptions): Promise<AgentWorkspaceId> {
     const connectionInfo = this.providerRegistry.getInferenceConnectionCredentials(options.model);
 
     const modelName = options.model.split('::')[1] ?? '';
@@ -221,21 +221,6 @@ export class AgentWorkspaceManager implements Disposable {
       throw new Error(`Unable to create workspace: agent ${options.agent} not registered`);
     }
 
-    if (secretName !== undefined) {
-      const connection = this.providerRegistry.getInferenceConnection(options.model);
-      if (connection) {
-        const provider = this.providerRegistry.getProvider(connection?.providerId);
-        const { connectionProperties } = this.secretManager.getConnectionProperties(connection.connection, provider);
-        const hasFlags = connectionProperties.find(([fullKey]) => fullKey.endsWith('._flags'));
-        if (hasFlags) {
-          await this.openshellCli.setInference({
-            provider: secretName,
-            model: modelName,
-          });
-        }
-      }
-    }
-
     uploads.push(...(await this.buildOpenshellFilesystemUploads(options.sourcePath, workspace)));
 
     const env = workspace.environment
@@ -247,14 +232,6 @@ export class AgentWorkspaceManager implements Disposable {
     const dedupedUploads = this.dedupeOpenshellUploads(uploads);
 
     const t0 = performance.now();
-
-    const v2Globally = await this.openshellCli.isV2ProviderEnabled();
-    if (!v2Globally) {
-      await this.openshellCli.enableV2Provider();
-    }
-
-    const tV2 = performance.now();
-    console.log(`[workspace-timing] enableV2Provider: ${(tV2 - t0).toFixed(0)}ms`);
 
     await this.openshellCli.createSandbox({
       name: sandboxName,
@@ -272,7 +249,7 @@ export class AgentWorkspaceManager implements Disposable {
     });
 
     const tSandbox = performance.now();
-    console.log(`[workspace-timing] createSandbox: ${(tSandbox - tV2).toFixed(0)}ms`);
+    console.log(`[workspace-timing] createSandbox: ${(tSandbox - t0).toFixed(0)}ms`);
 
     const networkPolicy = buildPolicyObject(workspace.network, endpoint);
     if (networkPolicy) {

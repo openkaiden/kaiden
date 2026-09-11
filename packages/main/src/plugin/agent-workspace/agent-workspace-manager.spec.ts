@@ -21,13 +21,7 @@ import { access, lstat, readFile, realpath, rm, writeFile } from 'node:fs/promis
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import type {
-  Agent,
-  AgentWorkspaceConfiguration,
-  AISDKInferenceProvider,
-  Configuration,
-  ProviderConnectionStatus,
-} from '@openkaiden/api';
+import type { Agent, AgentWorkspaceConfiguration } from '@openkaiden/api';
 import type { IpcMainInvokeEvent, WebContents } from 'electron';
 import type { IPty } from 'node-pty';
 import { spawn } from 'node-pty';
@@ -41,7 +35,6 @@ import type { Directories } from '/@/plugin/directories.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
-import type { ProviderImpl } from '/@/plugin/provider-impl.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import type { TaskManager } from '/@/plugin/tasks/task-manager.js';
@@ -49,7 +42,7 @@ import type { Task } from '/@/plugin/tasks/tasks.js';
 import type { Exec } from '/@/plugin/util/exec.js';
 import type { AgentWorkspaceCreateOptions } from '/@api/agent-workspace-info.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
-import type { IConfigurationPropertyRecordedSchema, IConfigurationRegistry } from '/@api/configuration/models.js';
+import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { GatewayInfo, GatewaySandboxes } from '/@api/openshell-gateway-info.js';
 import { AGENT_LABEL, decodeWorkspaceLabels } from '/@api/openshell-gateway-info.js';
 import type { TaskState, TaskStatus } from '/@api/taskInfo.js';
@@ -438,20 +431,6 @@ describe('create – OpenShell mode', () => {
     const result = await manager.create(defaultOptions);
 
     expect(result).toEqual({ id: 'my-sandbox' });
-  });
-
-  test('calls openshellCli.enableV2Provider when not globally enabled', async () => {
-    vi.mocked(openshellCli.isV2ProviderEnabled).mockResolvedValue(false);
-    await manager.create(defaultOptions);
-
-    expect(openshellCli.enableV2Provider).toHaveBeenCalledWith();
-  });
-
-  test('skips openshellCli.enableV2Provider when globally enabled', async () => {
-    vi.mocked(openshellCli.isV2ProviderEnabled).mockResolvedValue(true);
-    await manager.create(defaultOptions);
-
-    expect(openshellCli.enableV2Provider).not.toHaveBeenCalled();
   });
 
   test('derives sandbox name from sourcePath basename when name is omitted', async () => {
@@ -914,43 +893,6 @@ describe('create – OpenShell mode', () => {
     );
     const call = vi.mocked(openshellCli.createSandbox).mock.calls[0]![0];
     expect(call!.env).not.toHaveProperty('EMPTY_VAR');
-  });
-
-  test('calls setInference during create when secret type requires it', async () => {
-    vi.mocked(secretManager.ensureSecretForModel).mockResolvedValue({ name: 'vertex-ai-conn-1', type: 'vertex-ai' });
-    vi.mocked(secretManager.getConnectionProperties).mockReturnValue({
-      config: {} as Configuration,
-      connectionProperties: [['kaiden.vertexai._flags', {} as IConfigurationPropertyRecordedSchema]],
-    });
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
-      connection: {
-        name: 'vertexai',
-        id: 'vertexai',
-        type: 'cloud',
-        sdk: {} as AISDKInferenceProvider,
-        credentials: (): Record<string, string> => {
-          return {};
-        },
-        status: (): ProviderConnectionStatus => 'started',
-        models: [
-          {
-            label: 'claude-sonnet-4',
-          },
-        ],
-      },
-      providerId: 'kaiden.vertexai',
-    });
-    vi.mocked(providerRegistry.getProvider).mockReturnValue({
-      extensionId: 'kaiden.vertexai',
-    } as ProviderImpl);
-
-    const options = { ...defaultOptions, model: 'vertexai::claude-sonnet-4::' };
-    await manager.create(options);
-
-    expect(openshellCli.setInference).toHaveBeenCalledWith({
-      provider: 'vertex-ai-conn-1',
-      model: 'claude-sonnet-4',
-    });
   });
 
   test('does not pass env when all environment values are filtered out', async () => {

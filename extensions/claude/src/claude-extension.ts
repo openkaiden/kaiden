@@ -131,11 +131,7 @@ export class ClaudeExtension {
         // Handle Vertex AI model configuration
         if (context.model.llmMetadata?.name === 'vertexai') {
           // Add Claude Code-specific environment variables for Vertex AI
-          const claudeEnvVars = [
-            { name: 'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS', value: '1' },
-            { name: 'ANTHROPIC_BASE_URL', value: 'https://inference.local' },
-            { name: 'ANTHROPIC_API_KEY', value: 'unused' },
-          ];
+          const claudeEnvVars = [{ name: 'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS', value: '1' }];
 
           context.workspace.environment ??= [];
           for (const envVar of claudeEnvVars) {
