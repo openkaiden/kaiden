@@ -135,18 +135,24 @@ test('Expect NotificationsBox to be visible when there are highlighted notificat
   expect(notificationsBox).toBeInTheDocument();
 });
 
-test('Expect gateway filter dropdown is not shown when there is only one gateway', async () => {
+test('Expect gateway filter dropdown is not shown when there is only one connected gateway', async () => {
   render(AgentWorkspaceList);
-  openshellGateways.set([{ name: 'local', endpoint: 'http://localhost:18080' }]);
+  openshellGateways.set([
+    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
+  ]);
   await tick();
 
   expect(screen.queryByLabelText('Filter by gateway')).not.toBeInTheDocument();
 });
 
-test('Expect gateway filter dropdown is shown when there are multiple gateways', async () => {
+test('Expect gateway filter dropdown is shown when there are multiple connected gateways', async () => {
   const gateways: GatewayInfo[] = [
-    { name: 'local', endpoint: 'http://localhost:18080' },
-    { name: 'remote', endpoint: 'https://remote.example.com:18080' },
+    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
+    {
+      name: 'remote',
+      endpoint: 'https://remote.example.com:18080',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
   ];
 
   render(AgentWorkspaceList);
@@ -171,8 +177,12 @@ test('Expect selecting a gateway filters the workspace list', async () => {
 
   render(AgentWorkspaceList);
   openshellGateways.set([
-    { name: 'local', endpoint: 'http://localhost:18080' },
-    { name: 'remote', endpoint: 'https://remote.example.com:18080' },
+    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
+    {
+      name: 'remote',
+      endpoint: 'https://remote.example.com:18080',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
   ]);
   openshellSandboxes.set(workspaces);
   await tick();
@@ -203,8 +213,12 @@ test('Expect "All" option shows all workspaces', async () => {
 
   render(AgentWorkspaceList);
   openshellGateways.set([
-    { name: 'local', endpoint: 'http://localhost:18080' },
-    { name: 'remote', endpoint: 'https://remote.example.com:18080' },
+    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
+    {
+      name: 'remote',
+      endpoint: 'https://remote.example.com:18080',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
   ]);
   openshellSandboxes.set(workspaces);
   await tick();
