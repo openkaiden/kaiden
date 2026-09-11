@@ -77,6 +77,13 @@ export function resolveAgentModelConnectionFor(
 }
 
 export function resolveAgentModelConnection(): ResolvedAgentModelSetup | undefined {
+  if (isLocalRuntimeAvailable()) {
+    const localSetup = AGENT_MODEL_SETUPS.find(s => s.localRuntimeFallback && s.providerIds.length === 0);
+    if (localSetup) {
+      return { agent: localSetup.agent, providerName: '', fields: [] };
+    }
+  }
+
   for (const setup of AGENT_MODEL_SETUPS) {
     const connection = resolveAgentModelConnectionFor(setup.agent);
     if (connection) {
@@ -88,11 +95,13 @@ export function resolveAgentModelConnection(): ResolvedAgentModelSetup | undefin
 
 export function agentModelSetupSkipMessage(): string {
   const envVars = Array.from(
-    new Set(
-      AGENT_MODEL_SETUPS.flatMap(setup =>
+    new Set([
+      PROVIDERS.ollama.envVarName,
+      PROVIDERS.ramalama.envVarName,
+      ...AGENT_MODEL_SETUPS.flatMap(setup =>
         setup.providerIds.map(providerId => getWorkspaceInferenceProvider(providerId).envVarName),
       ),
-    ),
+    ]),
   ).join(', ');
   return `One of ${envVars} is required for workspace wizard model step`;
 }

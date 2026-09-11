@@ -220,7 +220,7 @@
     "@expo/sudo-prompt": "^9.3.2",
     "@kubernetes/client-node": "^1.4.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@nvidia/openshell-sdk": "0.0.106",
+    "@nvidia/openshell-sdk": "npm:@openkaiden/opnshll-sdk@0.0.116",
     "@oslojs/crypto": "^1.0.1",
     "@oslojs/encoding": "^1.1.0",
     "@segment/analytics-node": "^2.3.0",
