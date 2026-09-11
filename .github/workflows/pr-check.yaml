@@ -27,7 +27,6 @@ concurrency:
 
 permissions:
   contents: read
-  packages: read
 
 jobs:
   windows:
@@ -276,7 +275,6 @@ jobs:
     permissions:
       contents: read
       checks: write
-      packages: read
     strategy:
       fail-fast: false
       matrix:

@@ -134,7 +134,6 @@ jobs:
     permissions:
       contents: read
       checks: write
-      packages: read
     env:
       WINDOWS_VERSION: '11'
       WINDOWS_FEATUREPACK: '25h2-ent'
