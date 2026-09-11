@@ -83,7 +83,7 @@ async function handleOption(optionId: string): Promise<void> {
   {#if event.command}
     <div class="group/command relative border-t border-[var(--pd-content-divider)] px-4 py-2 text-xs font-mono text-[var(--pd-content-text)] whitespace-pre-wrap bg-[var(--pd-invert-content-card-bg)] overflow-auto max-h-32">
       {event.command}
-      <div class="absolute top-1 right-1 opacity-0 group-hover/command:opacity-100 transition-opacity">
+      <div class="absolute top-1 right-1 opacity-0 group-hover/command:opacity-100 group-focus-within/command:opacity-100 transition-opacity">
         <AcpCopyButton text={event.command} />
       </div>
     </div>
@@ -121,7 +121,7 @@ async function handleOption(optionId: string): Promise<void> {
   <!-- Output section -->
   {#if showOutput && event.content}
     <div class="group/output relative border-t border-[var(--pd-content-divider)]" use:codeCopyButtons>
-      <div class="absolute top-1 right-1 opacity-0 group-hover/output:opacity-100 transition-opacity z-10">
+      <div class="absolute top-1 right-1 opacity-0 group-hover/output:opacity-100 group-focus-within/output:opacity-100 transition-opacity z-10">
         <AcpCopyButton text={event.content} />
       </div>
       {#if isShortOutput}
