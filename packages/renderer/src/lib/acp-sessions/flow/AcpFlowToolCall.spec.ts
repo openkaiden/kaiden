@@ -26,8 +26,6 @@ import AcpFlowToolCall from './AcpFlowToolCall.svelte';
 
 beforeEach(() => {
   vi.resetAllMocks();
-  (window as unknown as Record<string, unknown>).clipboardWriteText = vi.fn().mockResolvedValue(undefined);
-  (window as unknown as Record<string, unknown>).respondToAcpRequest = vi.fn().mockResolvedValue(undefined);
 });
 
 const BASE_TOOL_CALL: AcpFlowToolCallEvent = {

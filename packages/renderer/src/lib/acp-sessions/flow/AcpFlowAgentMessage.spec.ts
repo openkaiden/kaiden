@@ -26,7 +26,6 @@ import AcpFlowAgentMessage from './AcpFlowAgentMessage.svelte';
 
 beforeEach(() => {
   vi.resetAllMocks();
-  (window as unknown as Record<string, unknown>).clipboardWriteText = vi.fn().mockResolvedValue(undefined);
 });
 
 const AGENT_MESSAGE_EVENT: AcpFlowAgentMessageEvent = {
