@@ -19,7 +19,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createWriteStream, existsSync, type WriteStream } from 'node:fs';
-import { type FileHandle, mkdir, open, readFile, rm, writeFile } from 'node:fs/promises';
+import { type FileHandle, mkdir, open, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { RunResult } from '@openkaiden/api';
@@ -117,7 +117,7 @@ beforeEach(() => {
   vi.mocked(openshellCli.removeGateway).mockResolvedValue();
   vi.mocked(openshellCli.listGateways).mockResolvedValue([]);
   vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
-  vi.mocked(rm).mockResolvedValue(undefined);
+  vi.mocked(rename).mockResolvedValue(undefined);
   vi.mocked(readFile).mockResolvedValue('');
   gateway = new OpenshellGateway(cliToolRegistry, openshellCli, directories, exec, notificationRegistry);
 });
@@ -158,33 +158,53 @@ describe('init', () => {
     );
   });
 
-  test('deletes database and retries when created gateway fails with migration error', async () => {
+  test('backs up database and notifies when created gateway fails with migration error', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const failProc = createMockChildProcess();
-    const successProc = createMockChildProcess();
-    vi.mocked(spawn).mockReturnValueOnce(failProc).mockReturnValueOnce(successProc);
+    vi.mocked(spawn).mockReturnValueOnce(failProc);
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(openshellCli.listGateways).mockResolvedValue([
       { name: 'local-dev', endpoint: 'http://127.0.0.1:17675', active: true, type: 'local' },
     ]);
+    // First: startCreatedGateway health check (false → triggers spawn)
+    // After: init's health loop finds gateway healthy so it returns early
     vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValueOnce(false).mockResolvedValue(true);
 
-    // First spawn exits immediately (migration error in log file)
+    // Spawn exits immediately (migration error in log file)
     Object.defineProperty(failProc, 'exitCode', { value: 1, configurable: true });
     vi.mocked(readFile).mockResolvedValueOnce(
       'migration error: migration 7 was previously applied but is missing in the resolved migrations',
     );
 
+    // init() catches startCreatedGateway errors and warns instead of throwing
     await gateway.init();
 
-    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(spawn).toHaveBeenCalledTimes(1);
     const storageDirectory = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev');
-    expect(rm).toHaveBeenCalledWith(join(storageDirectory, 'gateway.db'), { force: true });
+    expect(rename).toHaveBeenCalledWith(
+      join(storageDirectory, 'gateway.db'),
+      join(storageDirectory, 'gateway.db.backup'),
+    );
+    expect(rename).toHaveBeenCalledWith(
+      join(storageDirectory, 'gateway.db-wal'),
+      join(storageDirectory, 'gateway.db-wal.backup'),
+    );
+    expect(rename).toHaveBeenCalledWith(
+      join(storageDirectory, 'gateway.db-shm'),
+      join(storageDirectory, 'gateway.db-shm.backup'),
+    );
+    expect(notificationRegistry.addNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'OpenShell Gateway database migration error',
+        type: 'warn',
+        extensionId: 'core',
+      }),
+    );
   });
 
-  test('does not retry created gateway on non-migration errors', async () => {
+  test('does not back up database on non-migration errors for created gateway', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -196,14 +216,16 @@ describe('init', () => {
     vi.mocked(openshellCli.listGateways).mockResolvedValue([
       { name: 'local-dev', endpoint: 'http://127.0.0.1:17675', active: true, type: 'local' },
     ]);
-    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(false);
+    // First: startCreatedGateway health check (false → triggers spawn which fails)
+    // After: init's health loop finds gateway healthy so it returns early
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValueOnce(false).mockResolvedValue(true);
     vi.mocked(readFile).mockResolvedValueOnce('some other error');
 
     // init() catches startCreatedGateway errors and warns instead of throwing
     await gateway.init();
 
-    // rm should not have been called since the error is not a migration error
-    expect(rm).not.toHaveBeenCalled();
+    // rename should not have been called since the error is not a migration error
+    expect(rename).not.toHaveBeenCalled();
   });
 
   test('skips auto-start when existing gateway is healthy and already active', async () => {
@@ -942,42 +964,52 @@ describe('start', () => {
     );
   });
 
-  test('deletes database and retries when migration error occurs', async () => {
+  test('backs up database and notifies when migration error occurs', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     const failProc = createMockChildProcess();
-    const successProc = createMockChildProcess();
 
-    vi.mocked(spawn)
-      .mockImplementationOnce(() => {
-        setTimeout(() => {
-          failProc._stderr.emit(
-            'data',
-            Buffer.from(
-              'migration error: migration 7 was previously applied but is missing in the resolved migrations',
-            ),
-          );
-          Object.defineProperty(failProc, 'exitCode', { value: 1, configurable: true });
-          failProc.emit('exit', 1, undefined);
-        }, 0);
-        return failProc;
-      })
-      .mockReturnValueOnce(successProc);
+    vi.mocked(spawn).mockImplementationOnce(() => {
+      setTimeout(() => {
+        failProc._stderr.emit(
+          'data',
+          Buffer.from('migration error: migration 7 was previously applied but is missing in the resolved migrations'),
+        );
+        Object.defineProperty(failProc, 'exitCode', { value: 1, configurable: true });
+        failProc.emit('exit', 1, undefined);
+      }, 0);
+      return failProc;
+    });
     vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
-    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValueOnce(false).mockResolvedValue(true);
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(false);
 
-    await gateway.start();
+    await expect(gateway.start()).rejects.toThrow('Gateway process exited before becoming ready');
 
-    expect(spawn).toHaveBeenCalledTimes(2);
-    expect(rm).toHaveBeenCalledWith(join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db'), { force: true });
-    expect(rm).toHaveBeenCalledWith(join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db-wal'), { force: true });
-    expect(rm).toHaveBeenCalledWith(join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db-shm'), { force: true });
-    expect(gateway.isRunning()).toBe(true);
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(rename).toHaveBeenCalledWith(
+      join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db'),
+      join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db.backup'),
+    );
+    expect(rename).toHaveBeenCalledWith(
+      join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db-wal'),
+      join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db-wal.backup'),
+    );
+    expect(rename).toHaveBeenCalledWith(
+      join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db-shm'),
+      join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db-shm.backup'),
+    );
+    expect(notificationRegistry.addNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'OpenShell Gateway database migration error',
+        type: 'warn',
+        extensionId: 'core',
+      }),
+    );
   });
 
-  test('does not retry on non-migration errors', async () => {
+  test('does not back up database on non-migration errors', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -997,7 +1029,8 @@ describe('start', () => {
     await expect(gateway.start()).rejects.toThrow('Gateway process exited before becoming ready');
 
     expect(spawn).toHaveBeenCalledTimes(1);
-    expect(rm).not.toHaveBeenCalled();
+    expect(rename).not.toHaveBeenCalled();
+    expect(notificationRegistry.addNotification).not.toHaveBeenCalled();
   });
 
   test('stops the spawned process when waitForReady fails', async () => {
