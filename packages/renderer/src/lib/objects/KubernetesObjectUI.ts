@@ -20,6 +20,7 @@ export interface KubernetesObjectUI {
   kind?: string;
   name: string;
   status: string;
+  actionError?: string;
 }
 
 export interface KubernetesNamespacedObjectUI extends KubernetesObjectUI {

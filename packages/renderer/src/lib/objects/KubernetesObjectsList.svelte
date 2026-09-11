@@ -113,6 +113,8 @@ async function deleteSelectedObjects(): Promise<void> {
         await kinds.find(kind => kind.isResource(object))?.delete(object.name);
       } catch (e) {
         console.error(`error while deleting ${singular}`, e);
+        object.actionError = String(e);
+        object.status = 'ERROR';
       }
     }),
   );
