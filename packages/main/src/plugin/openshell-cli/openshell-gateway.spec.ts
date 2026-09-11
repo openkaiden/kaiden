@@ -431,6 +431,25 @@ describe('createLocalGateway', () => {
     expect(closeLogFile).toHaveBeenCalled();
   });
 
+  test('sets NO_COLOR in created gateway spawn environment to suppress ANSI codes in logs', async () => {
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+
+    await gateway.createLocalGateway({
+      name: 'local-dev',
+      bindAddress: '127.0.0.1',
+      port: 17675,
+      driver: 'podman',
+    });
+
+    const spawnOptions = vi.mocked(spawn).mock.calls[0]?.[2];
+    expect(spawnOptions?.env).toBeDefined();
+    expect(spawnOptions?.env?.['NO_COLOR']).toBe('1');
+    expect(spawnOptions?.env?.['PATH']).toBe(process.env['PATH']);
+  });
+
   test('infers the Docker driver from the active gateway when no override is supplied', async () => {
     const proc = createMockChildProcess();
     vi.mocked(spawn).mockReturnValue(proc);
@@ -684,6 +703,21 @@ describe('start', () => {
       expect.arrayContaining(['--db-url', GATEWAY_DB_URL]),
       expect.objectContaining({ detached: false }),
     );
+  });
+
+  test('sets NO_COLOR in gateway spawn environment to suppress ANSI codes in logs', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+
+    await gateway.start();
+
+    const spawnOptions = vi.mocked(spawn).mock.calls[0]?.[2];
+    expect(spawnOptions?.env).toBeDefined();
+    expect(spawnOptions?.env?.['NO_COLOR']).toBe('1');
+    expect(spawnOptions?.env?.['PATH']).toBe(process.env['PATH']);
   });
 
   test('skips if already running', async () => {
