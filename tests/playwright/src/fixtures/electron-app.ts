@@ -32,7 +32,7 @@ import { ExtensionsPage } from '/@/model/pages/extensions-page';
 import { KnowledgePage } from '/@/model/pages/knowledge-page';
 import { SettingsMcpPage } from '/@/model/pages/settings-mcp-tab-page';
 import { SettingsPage } from '/@/model/pages/settings-page';
-import { SkillsPage } from '/@/model/pages/skills-page';
+import { SettingsSkillsPage } from '/@/model/pages/settings-skills-tab-page';
 import { type AppReadyOptions, waitForAppReady } from '/@/utils/app-ready';
 import { savePendingVideos, saveTestArtifacts } from '/@/utils/test-artifacts';
 
@@ -52,7 +52,7 @@ export interface ElectronFixtures {
   settingsPage: SettingsPage;
   knowledgePage: KnowledgePage;
   mcpPage: SettingsMcpPage;
-  skillsPage: SkillsPage;
+  skillsPage: SettingsSkillsPage;
   extensionsPage: ExtensionsPage;
   chatPage: ChatPage;
   agentWorkspacesPage: AgentWorkspacesPage;
@@ -127,7 +127,7 @@ export const test = base.extend<ElectronFixtures>({
   },
 
   skillsPage: async ({ page }, use): Promise<void> => {
-    const skillsPage = new SkillsPage(page);
+    const skillsPage = new SettingsSkillsPage(page);
     await use(skillsPage);
   },
 

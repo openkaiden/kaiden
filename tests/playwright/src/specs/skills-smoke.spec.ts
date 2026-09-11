@@ -21,7 +21,9 @@ import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { expect, workerTest as test } from '/@/fixtures/electron-app';
+import { NavigationBar } from '/@/model/navigation/navigation';
 import type { SkillsCreatePage } from '/@/model/pages/skills-create-page';
+import type { SettingsSkillsPage } from '/@/model/pages/settings-skills-tab-page';
 import { waitForNavigationReady } from '/@/utils/app-ready';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -30,10 +32,15 @@ const TEST_SKILL = SKILL_FILES.find(f => f.includes('/playwright-testing/')) ?? 
 const TEST_SKILL_NAME = TEST_SKILL ? basename(dirname(TEST_SKILL)) : '';
 const MANUAL_SKILL_CONTENT = TEST_SKILL ? readFileSync(TEST_SKILL, 'utf-8') : '';
 
+async function navigateToSkillsPage(navigationBar: NavigationBar): Promise<SettingsSkillsPage> {
+  const settingsPage = await navigationBar.navigateToSettingsPage();
+  return settingsPage.openSkills();
+}
+
 test.describe('Skills page - initial state', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page, navigationBar }) => {
     await waitForNavigationReady(page);
-    await navigationBar.navigateToSkillsPage();
+    await navigateToSkillsPage(navigationBar);
   });
 
   test('[SKL-INIT-01] Skills page renders correctly with all expected elements in empty state', async ({
@@ -95,7 +102,7 @@ test.describe
       navigationBar,
       skillsPage,
     }) => {
-      await navigationBar.navigateToSkillsPage();
+      await navigateToSkillsPage(navigationBar);
       await skillsPage.createSkill(MANUAL_SKILL_NAME, MANUAL_SKILL_DESCRIPTION, MANUAL_SKILL_CONTENT);
 
       await skillsPage.waitForLoad();
@@ -107,7 +114,7 @@ test.describe
       navigationBar,
       skillsPage,
     }) => {
-      await navigationBar.navigateToSkillsPage();
+      await navigateToSkillsPage(navigationBar);
       const row = await skillsPage.getRowLocatorByName(MANUAL_SKILL_NAME);
       await expect(row).toContainText(MANUAL_SKILL_NAME);
       await expect(row).toContainText(MANUAL_SKILL_DESCRIPTION);
@@ -117,7 +124,7 @@ test.describe
       navigationBar,
       skillsPage,
     }) => {
-      await navigationBar.navigateToSkillsPage();
+      await navigateToSkillsPage(navigationBar);
       await skillsPage.search(MANUAL_SKILL_NAME);
       await expect.poll(async () => await skillsPage.countRowsFromTable()).toBe(1);
     });
@@ -126,7 +133,7 @@ test.describe
       navigationBar,
       skillsPage,
     }) => {
-      await navigationBar.navigateToSkillsPage();
+      await navigateToSkillsPage(navigationBar);
       await skillsPage.search('non-existent-skill');
       await expect(skillsPage.filteredEmptyMessage).toBeVisible();
       await expect(skillsPage.clearFilterButton).toBeVisible();
@@ -138,7 +145,7 @@ test.describe
       navigationBar,
       skillsPage,
     }) => {
-      await navigationBar.navigateToSkillsPage();
+      await navigateToSkillsPage(navigationBar);
       const row = await skillsPage.getRowLocatorByName(MANUAL_SKILL_NAME);
 
       await test.step('skill is enabled by default', async () => {
@@ -157,7 +164,7 @@ test.describe
     });
 
     test('[SKL-CRUD-06] Deleting the last skill restores the empty state', async ({ navigationBar, skillsPage }) => {
-      await navigationBar.navigateToSkillsPage();
+      await navigateToSkillsPage(navigationBar);
       await skillsPage.deleteSkillByName(MANUAL_SKILL_NAME);
       await skillsPage.ensureRowDoesNotExist(MANUAL_SKILL_NAME);
       await expect(skillsPage.noSkillsMessage).toBeVisible();
@@ -178,7 +185,7 @@ test.describe
       skillsPage,
     }) => {
       for (const filePath of SKILL_FILES) {
-        await navigationBar.navigateToSkillsPage();
+        await navigateToSkillsPage(navigationBar);
         const countBefore = await skillsPage.countRowsFromTable().catch(() => 0);
 
         await skillsPage.importSkill(filePath, electronApp);
@@ -190,7 +197,7 @@ test.describe
     });
 
     test(`[SKL-IMPORT-02] Table shows ${SKILL_FILES.length} imported skills`, async ({ navigationBar, skillsPage }) => {
-      await navigationBar.navigateToSkillsPage();
+      await navigateToSkillsPage(navigationBar);
       await expect.poll(async () => await skillsPage.countRowsFromTable()).toBe(SKILL_FILES.length);
     });
 
@@ -198,7 +205,7 @@ test.describe
       navigationBar,
       skillsPage,
     }) => {
-      await navigationBar.navigateToSkillsPage();
+      await navigateToSkillsPage(navigationBar);
       for (const name of await skillsPage.getSkillNames()) {
         await skillsPage.deleteSkillByName(name);
       }
@@ -212,14 +219,14 @@ test.describe
 
     test.beforeAll(async ({ page, electronApp, navigationBar, skillsPage }) => {
       await waitForNavigationReady(page);
-      await navigationBar.navigateToSkillsPage();
+      await navigateToSkillsPage(navigationBar);
       await skillsPage.importSkill(TEST_SKILL, electronApp);
       await skillsPage.waitForLoad();
       await skillsPage.ensureRowExists(TEST_SKILL_NAME);
     });
 
     test.afterAll(async ({ navigationBar, skillsPage }) => {
-      await navigationBar.navigateToSkillsPage();
+      await navigateToSkillsPage(navigationBar);
       await skillsPage.waitForLoad();
       if (await skillsPage.checkIfSkillsPageIsEmpty()) return;
       await skillsPage.deleteSkillByName(TEST_SKILL_NAME);
@@ -227,7 +234,7 @@ test.describe
 
     test.beforeEach(async ({ page, navigationBar }) => {
       await waitForNavigationReady(page);
-      await navigationBar.navigateToSkillsPage();
+      await navigateToSkillsPage(navigationBar);
     });
 
     test('[SKL-DETAIL-01] Summary tab shows skill information', async ({ skillsPage }) => {

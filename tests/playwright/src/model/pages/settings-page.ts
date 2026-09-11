@@ -23,6 +23,7 @@ import { PROVIDERS, TIMEOUTS } from '/@/model/core/types';
 import { SettingsCodingAgentsPage } from '/@/model/pages/settings-coding-agents-tab-page';
 import { SettingsMcpPage } from '/@/model/pages/settings-mcp-tab-page';
 import { SettingsModelsPage } from '/@/model/pages/settings-models-tab-page';
+import { SettingsSkillsPage } from '/@/model/pages/settings-skills-tab-page';
 
 import { BasePage } from './base-page';
 import { SettingsCliPage } from './settings-cli-tab-page';
@@ -35,6 +36,7 @@ export class SettingsPage extends BasePage {
   readonly cliTab: Locator;
   readonly proxyTab: Locator;
   readonly codingAgentsTab: Locator;
+  readonly skillsTab: Locator;
   readonly mcpTab: Locator;
   readonly modelsTab: Locator;
   readonly preferencesTab: Locator;
@@ -46,6 +48,7 @@ export class SettingsPage extends BasePage {
     this.cliTab = page.getByRole('link', { name: 'CLI' });
     this.proxyTab = page.getByRole('link', { name: 'Proxy' });
     this.codingAgentsTab = page.getByRole('link', { name: 'Coding agents' });
+    this.skillsTab = page.getByRole('link', { name: 'Skills' });
     this.mcpTab = page.getByRole('link', { name: 'MCP' });
     this.modelsTab = page.getByRole('link', { name: 'Models' });
     this.preferencesTab = page.getByRole('link', { name: 'Preferences' });
@@ -54,6 +57,7 @@ export class SettingsPage extends BasePage {
       this.cliTab,
       this.proxyTab,
       this.codingAgentsTab,
+      this.skillsTab,
       this.mcpTab,
       this.modelsTab,
       this.preferencesTab,
@@ -69,6 +73,7 @@ export class SettingsPage extends BasePage {
     await expect(this.cliTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.proxyTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.codingAgentsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
+    await expect(this.skillsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.mcpTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.modelsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.preferencesTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
@@ -92,6 +97,10 @@ export class SettingsPage extends BasePage {
 
   async openCodingAgents(): Promise<SettingsCodingAgentsPage> {
     return this.openTab(this.codingAgentsTab, SettingsCodingAgentsPage);
+  }
+
+  async openSkills(): Promise<SettingsSkillsPage> {
+    return this.openTab(this.skillsTab, SettingsSkillsPage);
   }
 
   async openMcp(): Promise<SettingsMcpPage> {
