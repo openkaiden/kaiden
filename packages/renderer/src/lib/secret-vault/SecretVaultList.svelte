@@ -1,5 +1,6 @@
 <script lang="ts">
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
+import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash';
 import {
   Button,
   EmptyScreen,
@@ -11,6 +12,7 @@ import {
   TableRow,
 } from '@podman-desktop/ui-svelte';
 
+import { withBulkConfirmation } from '/@/lib/actions/BulkActions';
 import GatewayFilterDropdown from '/@/lib/gateways/GatewayFilterDropdown.svelte';
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
 import { handleNavigation } from '/@/navigation';
@@ -41,7 +43,9 @@ $effect(() => {
   secretVaultSelectedGateway.set(gatewayFilter);
 });
 
-const row = new TableRow<SecretVaultSelectable>({});
+const row = new TableRow<SecretVaultSelectable>({
+  selectable: (): boolean => true,
+});
 
 const integrationColumn = new TableColumn<SecretVaultSelectable>('Integration', {
   width: '3fr',
@@ -73,6 +77,38 @@ const secrets: SecretVaultSelectable[] = $derived(
   $filteredSecretVaultInfos.map(secret => ({ ...secret, selected: false })),
 );
 
+let selectedItemsNumber: number = $state(0);
+let bulkDeleteInProgress = $state(false);
+
+async function deleteSelectedSecrets(): Promise<void> {
+  const selectedSecrets = secrets.filter(secret => secret.selected);
+
+  if (selectedSecrets.length === 0) {
+    return;
+  }
+
+  bulkDeleteInProgress = true;
+
+  try {
+    const results = await Promise.allSettled(
+      selectedSecrets.map(secret => window.removeSecret(secret.name, secret.gateway)),
+    );
+
+    const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failures.length > 0) {
+      await window.showMessageBox({
+        title: 'Error',
+        type: 'error',
+        message: `Failed to delete ${failures.length} secret${failures.length > 1 ? 's' : ''}`,
+        detail: failures.map(f => String(f.reason)).join('\n'),
+        buttons: ['OK'],
+      });
+    }
+  } finally {
+    bulkDeleteInProgress = false;
+  }
+}
+
 function addSecret(): void {
   handleNavigation({ page: NavigationPage.SECRET_VAULT_CREATE });
 }
@@ -97,6 +133,19 @@ function clearGatewayFilter(): void {
             <SearchInput bind:searchTerm={searchTerm} title="Secret Vault" />
           </div>
           <GatewayFilterDropdown bind:value={gatewayFilter} />
+          {#if selectedItemsNumber > 0}
+            <Button
+              onclick={(): void =>
+                withBulkConfirmation(
+                  deleteSelectedSecrets,
+                  `delete ${selectedItemsNumber} secret${selectedItemsNumber > 1 ? 's' : ''}`,
+                )}
+              title="Delete {selectedItemsNumber} selected items"
+              aria-label="Delete selected secrets"
+              inProgress={bulkDeleteInProgress}
+              icon={faTrash} />
+            <span class="text-[var(--pd-content-text)]">On {selectedItemsNumber} selected items.</span>
+          {/if}
         </div>
       </div>
 
@@ -117,6 +166,7 @@ function clearGatewayFilter(): void {
         {:else}
           <Table
             kind="secret-vault"
+            bind:selectedItemsNumber={selectedItemsNumber}
             data={secrets}
             columns={columns}
             row={row}
