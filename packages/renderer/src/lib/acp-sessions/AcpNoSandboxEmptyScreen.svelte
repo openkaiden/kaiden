@@ -1,6 +1,6 @@
 <script lang="ts">
-import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
 import { faRobot } from '@fortawesome/free-solid-svg-icons';
+import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
 import { Button, EmptyScreen } from '@podman-desktop/ui-svelte';
 
 import { handleNavigation } from '/@/navigation';
