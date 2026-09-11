@@ -33,8 +33,10 @@ beforeEach(() => {
   openshellGateways.set([]);
 });
 
-test('should not render when there is only one gateway', async () => {
-  openshellGateways.set([{ name: 'local', endpoint: 'http://localhost:18080' }]);
+test('should not render when there is only one connected gateway', async () => {
+  openshellGateways.set([
+    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
+  ]);
 
   render(GatewayFilterDropdown);
   await tick();
@@ -48,10 +50,14 @@ test('should not render when there are no gateways', () => {
   expect(screen.queryByLabelText('Filter by gateway')).not.toBeInTheDocument();
 });
 
-test('should render when there are multiple gateways', async () => {
+test('should render when there are multiple connected gateways', async () => {
   const gateways: GatewayInfo[] = [
-    { name: 'local', endpoint: 'http://localhost:18080' },
-    { name: 'remote', endpoint: 'https://remote.example.com:18080' },
+    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
+    {
+      name: 'remote',
+      endpoint: 'https://remote.example.com:18080',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
   ];
   openshellGateways.set(gateways);
 
@@ -61,10 +67,14 @@ test('should render when there are multiple gateways', async () => {
   expect(screen.getByLabelText('Filter by gateway')).toBeInTheDocument();
 });
 
-test('should include All option and each gateway name', async () => {
+test('should include All option and each connected gateway name', async () => {
   const gateways: GatewayInfo[] = [
-    { name: 'local', endpoint: 'http://localhost:18080' },
-    { name: 'remote', endpoint: 'https://remote.example.com:18080' },
+    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
+    {
+      name: 'remote',
+      endpoint: 'https://remote.example.com:18080',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
   ];
   openshellGateways.set(gateways);
 
@@ -77,4 +87,54 @@ test('should include All option and each gateway name', async () => {
   expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'local' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'remote' })).toBeInTheDocument();
+});
+
+test('should not render when multiple gateways exist but only one is connected', async () => {
+  const gateways: GatewayInfo[] = [
+    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
+    {
+      name: 'remote',
+      endpoint: 'https://remote.example.com:18080',
+      gatewayState: { reachable: false, health: 'unhealthy' },
+    },
+  ];
+  openshellGateways.set(gateways);
+
+  render(GatewayFilterDropdown);
+  await tick();
+
+  expect(screen.queryByLabelText('Filter by gateway')).not.toBeInTheDocument();
+});
+
+test('should exclude disconnected gateways from dropdown options', async () => {
+  const gateways: GatewayInfo[] = [
+    { name: 'gw-a', endpoint: 'http://a:18080', gatewayState: { reachable: true, health: 'healthy' } },
+    { name: 'gw-b', endpoint: 'http://b:18080', gatewayState: { reachable: false, health: 'unhealthy' } },
+    { name: 'gw-c', endpoint: 'http://c:18080', gatewayState: { reachable: true, health: 'healthy' } },
+  ];
+  openshellGateways.set(gateways);
+
+  render(GatewayFilterDropdown);
+  await tick();
+
+  const dropdownTrigger = within(screen.getByLabelText('Filter by gateway')).getByRole('button');
+  await fireEvent.click(dropdownTrigger);
+
+  expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'gw-a' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'gw-b' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'gw-c' })).toBeInTheDocument();
+});
+
+test('should not render when all gateways lack gatewayState', async () => {
+  const gateways: GatewayInfo[] = [
+    { name: 'local', endpoint: 'http://localhost:18080' },
+    { name: 'remote', endpoint: 'https://remote.example.com:18080' },
+  ];
+  openshellGateways.set(gateways);
+
+  render(GatewayFilterDropdown);
+  await tick();
+
+  expect(screen.queryByLabelText('Filter by gateway')).not.toBeInTheDocument();
 });
