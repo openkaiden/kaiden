@@ -27,7 +27,6 @@ import { EventStore } from '/@/stores/event-store';
 import { createNavigationAcpSessionsEntry } from './navigation-registry-acp-sessions.svelte';
 import { createNavigationAgentWorkspacesEntry } from './navigation-registry-agent-workspaces.svelte';
 import { createNavigationExtensionEntry, createNavigationExtensionGroup } from './navigation-registry-extension.svelte';
-import { createNavigationMcpEntry } from './navigation-registry-mcp.svelte';
 import { createNavigationProjectsEntry } from './navigation-registry-projects.svelte';
 import { createNavigationRagEntry } from './navigation-registry-rag.svelte';
 import { createNavigationSecretVaultEntry } from './navigation-registry-secret-vault.svelte';
@@ -67,7 +66,6 @@ const init = (): void => {
   values.push(createNavigationAcpSessionsEntry());
   values.push(createNavigationAgentWorkspacesEntry());
   values.push(createNavigationProjectsEntry());
-  values.push(createNavigationMcpEntry());
   values.push(createNavigationSecretVaultEntry());
   values.push(createNavigationSkillsEntry());
   values.push(createNavigationRagEntry());

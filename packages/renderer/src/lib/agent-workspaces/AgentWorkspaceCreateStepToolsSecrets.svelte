@@ -91,7 +91,7 @@ function navigateToSkills(): void {
 }
 
 function navigateToMcp(): void {
-  router.goto('/mcps');
+  router.goto('/preferences/mcps');
 }
 
 function navigateToSecretVault(): void {

@@ -17,7 +17,6 @@ import FlowCreate from '/@/lib/flows/FlowCreate.svelte';
 import FlowDetails from '/@/lib/flows/FlowDetails.svelte';
 import FlowList from '/@/lib/flows/FlowList.svelte';
 import KubernetesRoot from '/@/lib/kube/KubernetesRoot.svelte';
-import MCPDetails from '/@/lib/mcp/MCPDetails.svelte';
 import ProjectCreate from '/@/lib/projects/ProjectCreate.svelte';
 import ProjectDetails from '/@/lib/projects/ProjectDetails.svelte';
 import ProjectList from '/@/lib/projects/ProjectList.svelte';
@@ -75,7 +74,6 @@ import KubePodsList from './lib/kube/pods/PodsList.svelte';
 import PortForwardingList from './lib/kubernetes-port-forward/PortForwardingList.svelte';
 import ManifestDetails from './lib/manifest/ManifestDetails.svelte';
 import McpRegistryCreateFromRegistryForm from './lib/mcp/MCPRegistryCreateFromRegistryForm.svelte';
-import McpServerList from './lib/mcp/MCPServerList.svelte';
 import CreateNetwork from './lib/network/CreateNetwork.svelte';
 import NetworkDetails from './lib/network/NetworkDetails.svelte';
 import NetworksList from './lib/network/NetworksList.svelte';
@@ -319,15 +317,7 @@ tablePersistence.storage = new PodmanDesktopStoragePersist();
           </Route>
         </Route>
 
-        <!-- MCP -->
-        <Route path="/mcps/*" breadcrumb="MCPs" navigationHint="root" firstmatch>
-          <Route path="/" breadcrumb="MCPs" navigationHint="root" let:meta>
-            <McpServerList tab="{meta.query.tab}"/>
-          </Route>
-          <Route path="/:id/*" breadcrumb="MCP Details" let:meta>
-            <MCPDetails id={decodeURIComponent(meta.params.id)} />
-          </Route>
-        </Route>
+        <!-- MCP install from registry (top-level route for deep-link compatibility) -->
         <Route path="/mcp-install-from-registry/:serverId/*" breadcrumb="Install MCP Server from Registry" let:meta>
           <McpRegistryCreateFromRegistryForm serverId={decodeURIComponent(meta.params.serverId)} />
         </Route>

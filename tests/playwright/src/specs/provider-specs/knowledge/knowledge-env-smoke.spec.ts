@@ -233,7 +233,8 @@ test.describe('Knowledge Database provider tests', () => {
           })
           .toBe('RUNNING');
 
-        const mcpPage = await workerNavigationBar.navigateToMCPPage();
+        const settingsPage = await workerNavigationBar.navigateToSettingsPage();
+        const mcpPage = await settingsPage.openMcp();
         const readyTab = await mcpPage.openReadyTab();
         await expect
           .poll(async () => await readyTab.isServerConnected(MCP_SERVER_NAME), { timeout: TIMEOUTS.DEFAULT })

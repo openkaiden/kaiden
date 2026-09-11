@@ -498,7 +498,7 @@ $effect((): (() => void) | void => {
           <Button
             variant="link"
             class="h-auto p-0 text-xs hover:underline text-muted-foreground"
-            onclick={(): void => router.goto('/mcps')}
+            onclick={(): void => router.goto('/preferences/mcps')}
           >
             Configure MCP servers
           </Button>

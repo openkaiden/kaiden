@@ -30,7 +30,7 @@ import { AgentWorkspacesPage } from '/@/model/pages/agent-workspaces-page';
 import { ChatPage } from '/@/model/pages/chat-page';
 import { ExtensionsPage } from '/@/model/pages/extensions-page';
 import { KnowledgePage } from '/@/model/pages/knowledge-page';
-import { McpPage } from '/@/model/pages/mcp-page';
+import { SettingsMcpPage } from '/@/model/pages/settings-mcp-tab-page';
 import { SettingsPage } from '/@/model/pages/settings-page';
 import { SkillsPage } from '/@/model/pages/skills-page';
 import { type AppReadyOptions, waitForAppReady } from '/@/utils/app-ready';
@@ -51,7 +51,7 @@ export interface ElectronFixtures {
   navigationBar: NavigationBar;
   settingsPage: SettingsPage;
   knowledgePage: KnowledgePage;
-  mcpPage: McpPage;
+  mcpPage: SettingsMcpPage;
   skillsPage: SkillsPage;
   extensionsPage: ExtensionsPage;
   chatPage: ChatPage;
@@ -122,7 +122,7 @@ export const test = base.extend<ElectronFixtures>({
   },
 
   mcpPage: async ({ page }, use): Promise<void> => {
-    const mcpPage = new McpPage(page);
+    const mcpPage = new SettingsMcpPage(page);
     await use(mcpPage);
   },
 

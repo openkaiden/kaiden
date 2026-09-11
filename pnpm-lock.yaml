@@ -55,8 +55,8 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@4.3.6)
       '@nvidia/openshell-sdk':
-        specifier: 0.0.106
-        version: 0.0.106
+        specifier: npm:@openkaiden/opnshll-sdk@0.0.116
+        version: '@openkaiden/opnshll-sdk@0.0.116'
       '@oslojs/crypto':
         specifier: ^1.0.1
         version: 1.0.1
@@ -2071,10 +2071,6 @@ packages:
     engines: {node: ^12.13.0 || ^14.15.0 || >=16.0.0}
     deprecated: This functionality has been moved to @npmcli/fs
 
-  '@nvidia/openshell-sdk@0.0.106':
-    resolution: {integrity: sha512-dB4mLex23Pnw61caGMR2CMHQihy9bj7IK2elJJd718k3yevm+fOt/vG6dJg8/5us4la2BwcOdRwLvOia3tdwFw==, tarball: https://npm.pkg.github.com/download/@nvidia/openshell-sdk/0.0.106/dc32180ba1d658fc4ec309bdf89d2b162196928d}
-    engines: {node: '>=20.3'}
-
   '@open-draft/deferred-promise@2.2.0':
     resolution: {integrity: sha512-CecwLWx3rhxVQF6V4bAgPS5t+So2sTbPgAzafKkVizyi7tlwpcFpdFqq+wqF2OwNBmqFuu6tOyouTuxgpMfzmA==}
 
@@ -2089,6 +2085,10 @@ packages:
 
   '@openkaiden/mcp-registry-types@1.3.10':
     resolution: {integrity: sha512-3DJ7Pi+FtnkBC5ynYPDqK0jP9l9KkUS4GLgC/+uv0vTYRXXn/NrjOnqXqPqCmlyLTTYtwEegIR4X5vKUU2dDaw==}
+
+  '@openkaiden/opnshll-sdk@0.0.116':
+    resolution: {integrity: sha512-w5l6fdxrZhp7CS3gnGeQtUjFR2Gy58c063KQrmU3c5fxKa/qxPqmxfCU9JHScJ2PlphxJsLKdLh0aR7fpWOwtg==}
+    engines: {node: '>=20.3'}
 
   '@openkaiden/workspace-configuration@0.15.0':
     resolution: {integrity: sha512-8spy6ghhGi36s1a15RRiSigd8+WSQ6lkuspXH00KbftZjWVaMfk6UyzEpu1GJGoY3+a9/osN+JyojIXGOhg3eg==}
@@ -4521,6 +4521,7 @@ packages:
   eslint@9.39.5:
     resolution: {integrity: sha512-DgZS62aPLXKlnxILS/AYCoRvHaZeXceIzlXPkkGGzJWSow1aEk0lbTlxUSlyjC8jcaKxAdOnTDz+o1JFSBsyjw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -9176,12 +9177,6 @@ snapshots:
       mkdirp: 1.0.4
       rimraf: 3.0.2
 
-  '@nvidia/openshell-sdk@0.0.106':
-    dependencies:
-      '@bufbuild/protobuf': 2.14.0
-      '@connectrpc/connect': 2.1.2(@bufbuild/protobuf@2.14.0)
-      '@connectrpc/connect-node': 2.1.2(@bufbuild/protobuf@2.14.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.14.0))
-
   '@open-draft/deferred-promise@2.2.0': {}
 
   '@open-draft/logger@0.3.0':
@@ -9196,6 +9191,12 @@ snapshots:
   '@openkaiden/mcp-registry-types@1.3.10':
     dependencies:
       ajv: 8.18.0
+
+  '@openkaiden/opnshll-sdk@0.0.116':
+    dependencies:
+      '@bufbuild/protobuf': 2.14.0
+      '@connectrpc/connect': 2.1.2(@bufbuild/protobuf@2.14.0)
+      '@connectrpc/connect-node': 2.1.2(@bufbuild/protobuf@2.14.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.14.0))
 
   '@openkaiden/workspace-configuration@0.15.0': {}
 

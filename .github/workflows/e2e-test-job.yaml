@@ -71,7 +71,6 @@ jobs:
     permissions:
       contents: read
       checks: write
-      packages: read
     env:
       PODMAN_ENABLED: ${{ startsWith(inputs.instance, 'ubuntu') && 'true' || '' }}
     steps:

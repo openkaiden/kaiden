@@ -65,14 +65,9 @@ git clone https://github.com/openkaiden/kaiden && cd kaiden
 
 ### Step 2. Install dependencies
 
-Kaiden depends on `@nvidia/openshell-sdk` which is published to GitHub Packages. A GitHub token with `read:packages` scope is required for `pnpm install` to succeed:
-
 ```sh
-export GITHUB_TOKEN=$(gh auth token)
 pnpm install
 ```
-
-If `gh auth token` does not include `read:packages`, run `gh auth refresh -s read:packages` first.
 
 ### Step 3. Start in watch mode
 

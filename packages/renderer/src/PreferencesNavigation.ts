@@ -21,6 +21,7 @@ import { faBrain, faCubes, faLink, faServer, faShield, faTerminal } from '@forta
 import type { Component } from 'svelte';
 
 import CLIToolsIcon from '/@/lib/images/CLIToolsIcon.svelte';
+import MCPIcon from '/@/lib/images/MCPIcon.svelte';
 import ProxyIcon from '/@/lib/images/ProxyIcon.svelte';
 import ResourcesIcon from '/@/lib/images/ResourcesIcon.svelte';
 
@@ -48,6 +49,7 @@ export const settingsNavigationEntries: SettingsNavItemConfig[] = [
     icon: faBrain,
     children: [
       { title: 'Coding agents', href: '/preferences/coding-agents', visible: true, icon: faTerminal },
+      { title: 'MCP', href: '/preferences/mcps', visible: true, icon: MCPIcon },
       { title: 'Models', href: '/preferences/models', visible: true, icon: faCubes },
     ],
   },

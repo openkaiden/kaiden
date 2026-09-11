@@ -25,7 +25,7 @@ import { McpEditRegistriesTabPage } from './mcp-edit-registries-tab-page';
 import { McpInstallTabPage } from './mcp-install-tab-page';
 import { McpReadyTabPage } from './mcp-ready-tab-page';
 
-export class McpPage extends BasePage {
+export class SettingsMcpPage extends BasePage {
   readonly searchMcpServersField: Locator;
   readonly editRegistriesTabButton: Locator;
   readonly installTabButton: Locator;

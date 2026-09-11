@@ -2,6 +2,8 @@
 import { onMount } from 'svelte';
 
 import CodingAgentsPage from '/@/lib/coding-agents/CodingAgentsPage.svelte';
+import MCPDetails from '/@/lib/mcp/MCPDetails.svelte';
+import McpServerList from '/@/lib/mcp/MCPServerList.svelte';
 import ModelsCatalog from '/@/lib/models/ModelsCatalog.svelte';
 import SemanticRouterCreate from '/@/lib/models/SemanticRouterCreate.svelte';
 import Onboarding from '/@/lib/onboarding/Onboarding.svelte';
@@ -88,6 +90,14 @@ onMount(async () => {
   </Route>
   <Route path="/coding-agents" breadcrumb="Coding Agents">
     <CodingAgentsPage />
+  </Route>
+  <Route path="/mcps/*" breadcrumb="MCPs" firstmatch>
+    <Route path="/" breadcrumb="MCPs" let:meta>
+      <McpServerList tab="{meta.query.tab}"/>
+    </Route>
+    <Route path="/:id/*" breadcrumb="MCP Details" let:meta>
+      <MCPDetails id={decodeURIComponent(meta.params.id)} />
+    </Route>
   </Route>
   <Route path="/models/*" breadcrumb="Models" firstmatch>
     <Route path="/" breadcrumb="Models">

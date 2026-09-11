@@ -159,7 +159,8 @@ test.describe('MCP Registry Management', { tag: '@smoke' }, () => {
 
   test.beforeEach(async ({ page, navigationBar }) => {
     await waitForNavigationReady(page);
-    await navigationBar.navigateToMCPPage();
+    const settingsPage = await navigationBar.navigateToSettingsPage();
+    await settingsPage.openMcp();
   });
 
   test('[MCP-01] Add and remove MCP registry: verify server list updates accordingly', async ({ mcpPage }) => {
@@ -189,7 +190,8 @@ test.describe('MCP Registry Management', { tag: '@smoke' }, () => {
 test.describe('MCP Server Management', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page, navigationBar }) => {
     await waitForNavigationReady(page);
-    await navigationBar.navigateToMCPPage();
+    const settingsPage = await navigationBar.navigateToSettingsPage();
+    await settingsPage.openMcp();
   });
 
   test('[MCP-02] Add and remove MCP server: verify server list updates accordingly', async ({ mcpPage }) => {
@@ -213,7 +215,8 @@ test.describe('MCP Server Management', { tag: '@smoke' }, () => {
 test.describe('MCP UI Interactions', { tag: '@smoke' }, () => {
   test.beforeEach(async ({ page, navigationBar }) => {
     await waitForNavigationReady(page);
-    await navigationBar.navigateToMCPPage();
+    const settingsPage = await navigationBar.navigateToSettingsPage();
+    await settingsPage.openMcp();
   });
 
   test('[MCP-03] Search filters MCP servers in install tab', async ({ mcpPage }) => {
@@ -276,7 +279,8 @@ test.describe('MCP Functional', { tag: '@smoke' }, () => {
 
   test.beforeEach(async ({ page, navigationBar }) => {
     await waitForNavigationReady(page);
-    await navigationBar.navigateToMCPPage();
+    const settingsPage = await navigationBar.navigateToSettingsPage();
+    await settingsPage.openMcp();
   });
 
   test('[MCP-07] Install remote MCP server via mock, verify connection, then delete', async ({ mcpPage }) => {

@@ -21,6 +21,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import type { ResourceId } from '/@/model/core/types';
 import { PROVIDERS, TIMEOUTS } from '/@/model/core/types';
 import { SettingsCodingAgentsPage } from '/@/model/pages/settings-coding-agents-tab-page';
+import { SettingsMcpPage } from '/@/model/pages/settings-mcp-tab-page';
 import { SettingsModelsPage } from '/@/model/pages/settings-models-tab-page';
 
 import { BasePage } from './base-page';
@@ -34,6 +35,7 @@ export class SettingsPage extends BasePage {
   readonly cliTab: Locator;
   readonly proxyTab: Locator;
   readonly codingAgentsTab: Locator;
+  readonly mcpTab: Locator;
   readonly modelsTab: Locator;
   readonly preferencesTab: Locator;
   private readonly tabs: Locator[];
@@ -44,6 +46,7 @@ export class SettingsPage extends BasePage {
     this.cliTab = page.getByRole('link', { name: 'CLI' });
     this.proxyTab = page.getByRole('link', { name: 'Proxy' });
     this.codingAgentsTab = page.getByRole('link', { name: 'Coding agents' });
+    this.mcpTab = page.getByRole('link', { name: 'MCP' });
     this.modelsTab = page.getByRole('link', { name: 'Models' });
     this.preferencesTab = page.getByRole('link', { name: 'Preferences' });
     this.tabs = [
@@ -51,6 +54,7 @@ export class SettingsPage extends BasePage {
       this.cliTab,
       this.proxyTab,
       this.codingAgentsTab,
+      this.mcpTab,
       this.modelsTab,
       this.preferencesTab,
     ];
@@ -65,6 +69,7 @@ export class SettingsPage extends BasePage {
     await expect(this.cliTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.proxyTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.codingAgentsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
+    await expect(this.mcpTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.modelsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.preferencesTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
   }
@@ -87,6 +92,10 @@ export class SettingsPage extends BasePage {
 
   async openCodingAgents(): Promise<SettingsCodingAgentsPage> {
     return this.openTab(this.codingAgentsTab, SettingsCodingAgentsPage);
+  }
+
+  async openMcp(): Promise<SettingsMcpPage> {
+    return this.openTab(this.mcpTab, SettingsMcpPage);
   }
 
   async openModels(): Promise<SettingsModelsPage> {

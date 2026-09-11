@@ -28,6 +28,18 @@ network_policies:
   nodegyp_releases:
     name: nodegyp-releases
     endpoints:
+      - host: github.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: POST, path: /electron/node-gyp.git/git-upload-pack }
+      - host: release-assets.githubusercontent.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: GET, path: /** }
       - host: codeload.github.com
         port: 443
         protocol: rest
@@ -54,19 +66,6 @@ network_policies:
           - allow: { method: GET, path: /dist/** }
           # node-gyp >=10 fetches headers from /download/release/ by default
           - allow: { method: GET, path: /download/release/** }
-    binaries:
-      - path: "**/node"
-
-  # @nvidia scoped packages are hosted on GitHub Packages
-  github_packages:
-    name: github-packages
-    endpoints:
-      - host: npm.pkg.github.com
-        port: 443
-        protocol: rest
-        enforcement: enforce
-        rules:
-          - allow: { method: GET, path: /** }
     binaries:
       - path: "**/node"
 

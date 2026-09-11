@@ -311,12 +311,14 @@ test.describe('Workspaces page - MCP integration', { tag: '@smoke' }, () => {
 
   test.beforeAll(async ({ page, navigationBar, mcpPage }) => {
     await waitForNavigationReady(page);
-    await navigationBar.navigateToMCPPage();
+    const settingsPage = await navigationBar.navigateToSettingsPage();
+    await settingsPage.openMcp();
     await mcpPage.createServer(githubServer.serverName, process.env[githubServer.envVarName]!);
   });
 
   test.afterAll(async ({ navigationBar, mcpPage }) => {
-    await navigationBar.navigateToMCPPage();
+    const settingsPage = await navigationBar.navigateToSettingsPage();
+    await settingsPage.openMcp();
     await mcpPage.deleteServer(githubServer.serverName);
   });
 

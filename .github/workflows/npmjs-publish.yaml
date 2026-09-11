@@ -27,7 +27,6 @@ on:
 
 permissions:
   contents: read
-  packages: read
 
 jobs:
   prepare-version:
@@ -83,7 +82,6 @@ jobs:
     environment: ${{ needs.prepare-version.outputs.is-tag == 'true' && 'npmjs-publication' || '' }}
     permissions:
       contents: read
-      packages: read
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
