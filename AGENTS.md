@@ -144,13 +144,12 @@ pnpm run svelte:check        # Svelte component type checking
 
 #### Mandatory pre-commit checks
 
-Before committing, always run the following commands and fix any failures:
+Before committing, stage files with `git add` so that `lint-staged` can operate on them, then run:
 
-1. `pnpm run format:fix` — auto-fix formatting
-2. `pnpm run lint:fix` — auto-fix linting
-3. `pnpm run typecheck` — type-check all packages
-4. `pnpm run svelte:check` — check Svelte components
-5. Run unit tests for affected packages (e.g., `pnpm run test:main` or `pnpm run test:renderer`)
+1. `pnpm lint-staged` — auto-fix formatting, linting
+2. `pnpm run typecheck` — type-check all packages
+3. `pnpm run svelte:check` — check Svelte components
+4. Run unit tests for affected packages (e.g., `pnpm run test:main` or `pnpm run test:renderer`)
 
 Re-stage any files modified by the fix commands before committing. Do not skip these checks — commit hooks are not always available.
 
