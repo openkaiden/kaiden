@@ -30,6 +30,34 @@ export const CLAUDE_SETTINGS_PATH = '.claude/settings.json';
 export const CLAUDE_JSON_PATH = '.claude.json';
 const WORKSPACE_SOURCES_PATH = '/sandbox';
 
+/**
+ * One-time setup command executed inside the sandbox after creation via
+ * `openshell sandbox exec`.  It reads the ANTHROPIC_API_KEY environment
+ * variable (resolved at runtime by the openshell provider system) and
+ * writes its last-20-character suffix into ~/.claude.json so Claude Code
+ * does not prompt the user for API key confirmation.
+ */
+const SETUP_COMMAND = `\
+if [ -n "\${ANTHROPIC_API_KEY:-}" ]; then
+  CLAUDE_JSON="$HOME/.claude.json"
+  [ -f "$CLAUDE_JSON" ] || echo "{}" > "$CLAUDE_JSON"
+  CLAUDE_JSON="$CLAUDE_JSON" node -e '
+    const fs = require("fs");
+    const p = process.env.CLAUDE_JSON;
+    try {
+      const config = JSON.parse(fs.readFileSync(p, "utf8"));
+      const suffix = process.env.ANTHROPIC_API_KEY.slice(-20);
+      config.customApiKeyResponses = config.customApiKeyResponses || {};
+      const approved = new Set(config.customApiKeyResponses.approved || []);
+      approved.add(suffix);
+      config.customApiKeyResponses.approved = [...approved];
+      config.customApiKeyResponses.rejected =
+        (config.customApiKeyResponses.rejected || []).filter(r => r !== suffix);
+      fs.writeFileSync(p, JSON.stringify(config, null, 2));
+    } catch {}
+  ' 2>/dev/null || true
+fi`;
+
 function jsonCodec<T extends z.ZodType>(schema: T): z.ZodCodec<z.ZodString, T> {
   return z.codec(z.string(), schema, {
     decode: (jsonString, ctx) => {
@@ -111,6 +139,7 @@ export class ClaudeExtension {
       baseImage: 'ghcr.io/openkaiden/openshell-image-claude:fd194d5bde14bf758c82bb2aace23fea596dfbde',
       acp: { command: 'claude-agent-acp', args: [] },
       tags: ['Cloud'],
+      setupCommand: SETUP_COMMAND,
       configurationFiles: [
         {
           path: CLAUDE_SETTINGS_PATH,
@@ -169,10 +198,8 @@ export class ClaudeExtension {
           projects[WORKSPACE_SOURCES_PATH] = project;
           config.projects = projects;
 
-          config.customApiKeyResponses = {
-            approved: Array.from(new Set([...(config.customApiKeyResponses?.approved ?? []), 'unused'])),
-            rejected: config.customApiKeyResponses?.rejected?.filter(response => response !== 'unused') ?? [],
-          };
+          // customApiKeyResponses.approved is written by setupCommand at sandbox
+          // runtime, where the real ANTHROPIC_API_KEY value is available.
 
           const mcpServers = context.workspace.mcp?.servers;
           const mcpCommands = context.workspace.mcp?.commands;

@@ -160,6 +160,7 @@ export class Exec {
       let stderr = '';
 
       const childProcess: ChildProcessWithoutNullStreams = spawn(command, args, { env, cwd });
+      childProcess.stdin.end();
 
       options?.token?.onCancellationRequested(() => {
         if (!childProcess.killed) {
