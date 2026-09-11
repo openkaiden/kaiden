@@ -211,3 +211,33 @@ export interface SetInferenceOptions {
   provider: string;
   model: string;
 }
+
+// ── Gateway metadata (on-disk config folder schema) ───────────────────
+
+export const GatewayMetadataSourceSchema = z.enum(['user', 'system']);
+
+export type GatewayMetadataSource = z.output<typeof GatewayMetadataSourceSchema>;
+
+export const GatewayMetadataSchema = z.object({
+  name: z.string(),
+  gateway_endpoint: z.string(),
+  is_remote: z.boolean().default(false),
+  gateway_port: z.number().default(0),
+  remote_host: z.string().nullish(),
+  resolved_host: z.string().nullish(),
+  auth_mode: z.string().optional(),
+  edge_team_domain: z.string().optional(),
+  edge_auth_url: z.string().optional(),
+  oidc_issuer: z.string().optional(),
+  oidc_client_id: z.string().optional(),
+  oidc_audience: z.string().optional(),
+  oidc_scopes: z.string().optional(),
+  vm_driver_state_dir: z.string().optional(),
+});
+
+export type GatewayMetadata = z.output<typeof GatewayMetadataSchema>;
+
+export interface ListedGateway {
+  metadata: GatewayMetadata;
+  source: GatewayMetadataSource;
+}
