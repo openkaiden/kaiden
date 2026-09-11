@@ -20,12 +20,16 @@ import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-import type { SemanticRouterFactory } from '@openkaiden/api';
+import type { Configuration, InferenceProviderConnection, SemanticRouterFactory } from '@openkaiden/api';
 import { beforeEach, expect, test, vi } from 'vitest';
+import { parse } from 'yaml';
 
 import type { IPCHandle } from '/@/plugin/api.js';
 import type { Directories } from '/@/plugin/directories.js';
+import type { ProviderImpl } from '/@/plugin/provider-impl.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
+import type { SafeStorageRegistry } from '/@/plugin/safe-storage/safe-storage-registry.js';
+import type { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { SemanticRouterConfigInfo } from '/@api/semantic-router-info.js';
 
@@ -47,13 +51,42 @@ const directories = {
   getSemanticRoutersDirectory: vi.fn().mockReturnValue(ROUTERS_DIR),
 } as unknown as Directories;
 
+let onDidSetSemanticRouterConnectionFactoryListener: (() => void) | undefined;
+
 const providerRegistry = {
   getSemanticRouterFactory: vi.fn().mockReturnValue(undefined),
+  getInferenceConnection: vi.fn().mockReturnValue({
+    endpoint: 'http://localhost:8000',
+    llmMetadata: { name: 'openai' },
+  }),
+  getProvider: vi.fn().mockReturnValue({ extensionId: 'test-ext' }),
   deleteInferenceConnectionBySemanticRouter: vi.fn().mockResolvedValue(undefined),
+  onDidSetSemanticRouterConnectionFactory: vi.fn().mockImplementation((listener: () => void) => {
+    onDidSetSemanticRouterConnectionFactoryListener = listener;
+    return { dispose: vi.fn() };
+  }),
 } as unknown as ProviderRegistry;
 
+const secretManager = {
+  getConnectionProperties: vi.fn().mockReturnValue({
+    config: { get: vi.fn().mockReturnValue(undefined) },
+    connectionProperties: [],
+  }),
+} as unknown as SecretManager;
+
+const safeStorageRegistry = {
+  getExtensionStorage: vi.fn().mockReturnValue({ get: vi.fn().mockReturnValue(undefined) }),
+} as unknown as SafeStorageRegistry;
+
 function createManager(): SemanticRouterManager {
-  return new SemanticRouterManager(apiSender, ipcHandle, directories, providerRegistry);
+  return new SemanticRouterManager(
+    apiSender,
+    ipcHandle,
+    directories,
+    providerRegistry,
+    secretManager,
+    safeStorageRegistry,
+  );
 }
 
 const sampleConfig: SemanticRouterConfigInfo = {
@@ -112,7 +145,28 @@ function mockDirWithConfigs(...configs: SemanticRouterConfigInfo[]): void {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  onDidSetSemanticRouterConnectionFactoryListener = undefined;
   vi.mocked(directories.getSemanticRoutersDirectory).mockReturnValue(ROUTERS_DIR);
+  vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
+    id: 'conn-123',
+    name: 'conn-123,',
+    type: 'cloud',
+    sdk: {} as InferenceProviderConnection['sdk'],
+    endpoint: 'http://localhost:8000',
+    llmMetadata: { name: 'openai' },
+    status: () => 'started',
+    models: [{ label: 'model-1' }],
+    credentials: () => ({ token: 'secret-token' }),
+  });
+  vi.mocked(providerRegistry.getProvider).mockReturnValue({ extensionId: 'test-ext' } as ProviderImpl);
+  vi.mocked(secretManager.getConnectionProperties).mockReturnValue({
+    config: {} as Configuration,
+    connectionProperties: [],
+  });
+  vi.mocked(providerRegistry.onDidSetSemanticRouterConnectionFactory).mockImplementation((listener: () => void) => {
+    onDidSetSemanticRouterConnectionFactoryListener = listener;
+    return { dispose: vi.fn() };
+  });
 });
 
 test('init creates directory if it does not exist', async () => {
@@ -312,32 +366,6 @@ test('remove calls deleteInferenceConnectionBySemanticRouter with the router nam
   expect(providerRegistry.deleteInferenceConnectionBySemanticRouter).toHaveBeenCalledWith('my-router');
 });
 
-test('create calls semantic router factory when a provider has one', async () => {
-  mockEmptyDir();
-  const factory: SemanticRouterFactory = {
-    type: 'semantic-router',
-    create: vi.fn().mockResolvedValue({ connectionId: 'test-connection-id' }),
-  };
-  vi.mocked(providerRegistry.getSemanticRouterFactory).mockReturnValue({ internalId: 'provider-1', factory });
-
-  const manager = createManager();
-  await manager.init();
-
-  const result = await manager.create(sampleConfig);
-
-  expect(factory.create).toHaveBeenCalledWith({
-    name: 'my-router',
-    config: expect.any(String),
-  });
-  const callArgs = vi.mocked(factory.create).mock.calls[0]!;
-  expect(JSON.parse(callArgs[0].config)).toMatchObject({ name: 'my-router' });
-  expect(result.connection).toEqual({ providerId: 'provider-1', connectionId: 'test-connection-id' });
-  expect(manager.findByName('my-router')?.connection).toEqual({
-    providerId: 'provider-1',
-    connectionId: 'test-connection-id',
-  });
-});
-
 test('create sends update event after factory.create succeeds', async () => {
   mockEmptyDir();
   const factory: SemanticRouterFactory = {
@@ -372,6 +400,62 @@ test('create rolls back on factory.create failure', async () => {
   expect(manager.findByName('my-router')).toBeUndefined();
   expect(rm).toHaveBeenCalledWith(join(ROUTERS_DIR, 'my-router.json'));
   expect(apiSender.send).not.toHaveBeenCalled();
+});
+
+test('create calls semantic router factory with YAML config', async () => {
+  mockEmptyDir();
+  const factory: SemanticRouterFactory = {
+    type: 'semantic-router',
+    create: vi.fn().mockResolvedValue({ connectionId: 'connId' }),
+  };
+  vi.mocked(providerRegistry.getSemanticRouterFactory).mockReturnValue({ internalId: 'provider-1', factory });
+
+  const manager = createManager();
+  await manager.init();
+
+  await manager.create(sampleConfig);
+
+  expect(factory.create).toHaveBeenCalledWith({
+    name: 'my-router',
+    config: expect.any(String),
+  });
+  const callArgs = vi.mocked(factory.create).mock.calls[0]!;
+  const yamlConfig = parse(callArgs[0].config) as Record<string, unknown>;
+  expect(yamlConfig).toMatchObject({
+    version: 'v0.3',
+    listeners: [{ name: 'http-8080', address: '0.0.0.0', port: 8080 }],
+    providers: {
+      models: [
+        {
+          name: 'openai::conn-1::GPT-4',
+          provider_model_id: 'GPT-4',
+          backend_refs: [{ name: 'primary', endpoint: 'localhost:8000', protocol: 'http', weight: 100 }],
+        },
+      ],
+      defaults: {},
+    },
+    routing: {
+      signals: {
+        keywords: [
+          { name: 'code-keywords', operator: 'OR', keywords: ['function', 'class', 'import'], case_sensitive: false },
+        ],
+      },
+      modelCards: [{ name: 'openai::conn-1::GPT-4' }],
+      decisions: [
+        {
+          name: 'code-decision',
+          description: 'Route code queries',
+          priority: 1,
+          rules: { operator: 'AND', conditions: [{ type: 'keyword', name: 'code-keywords' }] },
+          modelRefs: [{ model: 'openai::conn-1::GPT-4', use_reasoning: true }],
+        },
+      ],
+    },
+    global: {
+      services: { router_replay: { enabled: true, store_backend: 'memory' } },
+    },
+  });
+  expect(providerRegistry.getInferenceConnection).toHaveBeenCalledWith('openai', 'conn-1');
 });
 
 test('create succeeds when no provider has a semantic router factory', async () => {
@@ -442,4 +526,98 @@ test('loadFromDisk loads configs with defaultModelRef', async () => {
     label: 'GPT-4',
     useReasoning: false,
   });
+});
+
+test('init subscribes to semantic router factory events', async () => {
+  mockEmptyDir();
+  const manager = createManager();
+
+  await manager.init();
+
+  expect(providerRegistry.onDidSetSemanticRouterConnectionFactory).toHaveBeenCalledWith(expect.any(Function));
+});
+
+test('processUninstantiatedConfigs creates instances for configs without factory at creation time', async () => {
+  mockEmptyDir();
+  vi.mocked(providerRegistry.getSemanticRouterFactory).mockReturnValue(undefined);
+
+  const manager = createManager();
+  await manager.init();
+
+  await manager.create(sampleConfig);
+
+  const factory: SemanticRouterFactory = {
+    type: 'semantic-router',
+    create: vi.fn().mockResolvedValue({ connectionId: 'con-1' }),
+  };
+  vi.mocked(providerRegistry.getSemanticRouterFactory).mockReturnValue({ internalId: 'provider-1', factory });
+
+  await manager.processUninstantiatedConfigs();
+
+  expect(factory.create).toHaveBeenCalledWith({
+    name: 'my-router',
+    config: expect.any(String),
+  });
+});
+
+test('processUninstantiatedConfigs skips already instantiated configs', async () => {
+  mockEmptyDir();
+  const factory: SemanticRouterFactory = {
+    type: 'semantic-router',
+    create: vi.fn().mockResolvedValue({ connectionId: 'con-1' }),
+  };
+  vi.mocked(providerRegistry.getSemanticRouterFactory).mockReturnValue({ internalId: 'provider-1', factory });
+
+  const manager = createManager();
+  await manager.init();
+
+  await manager.create(sampleConfig);
+  expect(factory.create).toHaveBeenCalledTimes(1);
+
+  await manager.processUninstantiatedConfigs();
+
+  expect(factory.create).toHaveBeenCalledTimes(1);
+});
+
+test('factory event triggers processUninstantiatedConfigs for disk-loaded configs', async () => {
+  mockDirWithConfigs(sampleConfig);
+  vi.mocked(providerRegistry.getSemanticRouterFactory).mockReturnValue(undefined);
+
+  const manager = createManager();
+  await manager.init();
+
+  const factory: SemanticRouterFactory = {
+    type: 'semantic-router',
+    create: vi.fn().mockResolvedValue(undefined),
+  };
+  vi.mocked(providerRegistry.getSemanticRouterFactory).mockReturnValue({ internalId: 'provider-1', factory });
+
+  onDidSetSemanticRouterConnectionFactoryListener!();
+  await vi.waitFor(() => {
+    expect(factory.create).toHaveBeenCalledWith({
+      name: 'my-router',
+      config: expect.any(String),
+    });
+  });
+});
+
+test('remove clears config from instantiated tracking', async () => {
+  mockEmptyDir();
+  const factory: SemanticRouterFactory = {
+    type: 'semantic-router',
+    create: vi.fn().mockResolvedValue({ connectionId: 'con-1' }),
+  };
+  vi.mocked(providerRegistry.getSemanticRouterFactory).mockReturnValue({ internalId: 'provider-1', factory });
+
+  const manager = createManager();
+  await manager.init();
+
+  await manager.create(sampleConfig);
+  expect(factory.create).toHaveBeenCalledTimes(1);
+
+  await manager.remove('my-router');
+
+  mockEmptyDir();
+  await manager.create(sampleConfig);
+  expect(factory.create).toHaveBeenCalledTimes(2);
 });

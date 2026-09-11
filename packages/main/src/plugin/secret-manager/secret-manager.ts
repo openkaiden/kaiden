@@ -106,7 +106,7 @@ export class SecretManager {
   }
 
   async getSecretForModel(modelId: string, gateway?: string): Promise<SecretInfo | undefined> {
-    const info = this.providerRegistry.getInferenceConnection(modelId);
+    const info = this.providerRegistry.getInferenceConnectionLegacy(modelId);
     if (!info) return undefined;
 
     const expectedName = `${info.providerId}-${info.connection.id}`;
@@ -122,7 +122,7 @@ export class SecretManager {
     const existing = await this.getSecretForModel(modelId, gateway);
     if (existing) return existing;
 
-    const info = this.providerRegistry.getInferenceConnection(modelId);
+    const info = this.providerRegistry.getInferenceConnectionLegacy(modelId);
     if (!info) return undefined;
 
     return this.createSecretForConnection(info.providerId, info.connection, gateway);

@@ -372,6 +372,7 @@ export class ProviderImpl implements Provider, IDisposable {
   ): Disposable {
     this._semanticRouterConnectionFactory = semanticRouterConnectionFactory;
     this._connectionAuditor = connectionAuditor;
+    this.providerRegistry.onDidSetSemanticRouterConnectionFactoryCallback();
     return Disposable.create(() => {
       this._semanticRouterConnectionFactory = undefined;
       this._connectionAuditor = undefined;
