@@ -12,10 +12,17 @@ let { text }: Props = $props();
 
 let copied = $state(false);
 let copiedResetTimer: ReturnType<typeof setTimeout> | undefined;
+let destroyed = false;
 
 async function copyToClipboard(): Promise<void> {
   if (copiedResetTimer) clearTimeout(copiedResetTimer);
-  await window.clipboardWriteText(text);
+  try {
+    await window.clipboardWriteText(text);
+  } catch (err: unknown) {
+    console.error('Failed to copy to clipboard', err);
+    return;
+  }
+  if (destroyed) return;
   copied = true;
   copiedResetTimer = setTimeout(() => {
     copied = false;
@@ -24,6 +31,7 @@ async function copyToClipboard(): Promise<void> {
 }
 
 onDestroy(() => {
+  destroyed = true;
   if (copiedResetTimer) clearTimeout(copiedResetTimer);
 });
 </script>
