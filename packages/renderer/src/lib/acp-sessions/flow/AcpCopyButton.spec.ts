@@ -24,7 +24,6 @@ import AcpCopyButton from './AcpCopyButton.svelte';
 
 beforeEach(() => {
   vi.resetAllMocks();
-  (window as unknown as Record<string, unknown>).clipboardWriteText = vi.fn().mockResolvedValue(undefined);
 });
 
 test('should render copy button with aria-label', () => {

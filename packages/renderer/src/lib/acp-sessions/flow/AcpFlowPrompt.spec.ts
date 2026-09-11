@@ -26,7 +26,6 @@ import AcpFlowPrompt from './AcpFlowPrompt.svelte';
 
 beforeEach(() => {
   vi.resetAllMocks();
-  (window as unknown as Record<string, unknown>).clipboardWriteText = vi.fn().mockResolvedValue(undefined);
 });
 
 const PROMPT_EVENT: AcpFlowPromptEvent = {
