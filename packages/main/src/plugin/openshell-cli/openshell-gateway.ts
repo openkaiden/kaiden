@@ -323,6 +323,7 @@ export class OpenshellGateway implements Disposable {
       gatewayProcess = spawn(binaryPath, this.buildArgs(true, configPath, storageDirectory, port, bindAddress), {
         stdio: ['ignore', logFile.fd, logFile.fd],
         detached: false,
+        env: { ...process.env, NO_COLOR: '1' },
       });
       gatewayProcess.once('error', err => (processState.spawnError = err));
       this.trackGatewayProcess(name, gatewayProcess);
@@ -361,6 +362,7 @@ export class OpenshellGateway implements Disposable {
     const gatewayProcess = spawn(binaryPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
+      env: { ...process.env, NO_COLOR: '1' },
     });
     this.trackGatewayProcess(DEFAULT_GATEWAY_NAME, gatewayProcess);
 
