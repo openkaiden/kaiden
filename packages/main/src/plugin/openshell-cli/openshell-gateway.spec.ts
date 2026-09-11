@@ -249,8 +249,14 @@ describe('init', () => {
     expect(notificationRegistry.addNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'OpenShell Gateway database migration error',
+        body: expect.stringContaining('local-dev'),
         type: 'warn',
         extensionId: 'core',
+      }),
+    );
+    expect(notificationRegistry.addNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining(join(storageDirectory, 'gateway.db.backup')),
       }),
     );
   });
@@ -1055,8 +1061,14 @@ describe('start', () => {
     expect(notificationRegistry.addNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'OpenShell Gateway database migration error',
+        body: expect.stringContaining('kaiden-local'),
         type: 'warn',
         extensionId: 'core',
+      }),
+    );
+    expect(notificationRegistry.addNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining(join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db.backup')),
       }),
     );
   });
