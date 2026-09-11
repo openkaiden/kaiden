@@ -15,13 +15,13 @@ let copiedResetTimer: ReturnType<typeof setTimeout> | undefined;
 let destroyed = false;
 
 async function copyToClipboard(): Promise<void> {
-  if (copiedResetTimer) clearTimeout(copiedResetTimer);
   try {
     await window.clipboardWriteText(text);
   } catch (err: unknown) {
     console.error('Failed to copy to clipboard', err);
     return;
   }
+  if (copiedResetTimer) clearTimeout(copiedResetTimer);
   if (destroyed) return;
   copied = true;
   copiedResetTimer = setTimeout(() => {

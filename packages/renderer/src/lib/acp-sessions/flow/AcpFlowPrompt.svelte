@@ -27,7 +27,7 @@ let { event }: Props = $props();
     {/if}
     <span class="whitespace-pre-wrap">{event.text}</span>
   </div>
-  <div class="flex justify-end mt-1 opacity-0 group-hover/message:opacity-100 transition-opacity">
+  <div class="flex justify-end mt-1 opacity-0 group-hover/message:opacity-100 group-focus-within/message:opacity-100 transition-opacity">
     <AcpCopyButton text={event.text} />
   </div>
 </div>
