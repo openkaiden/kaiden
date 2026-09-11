@@ -1,10 +1,15 @@
 <script lang="ts">
+import '/@/lib/chat/components/messages/code-copy.css';
+
 import { faBan, faCheck, faCircleNotch, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 import { Button } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
+import { codeCopyButtons } from '/@/lib/chat/components/messages/code-copy-action';
 import Markdown from '/@/lib/markdown/Markdown.svelte';
 import type { AcpFlowToolCallEvent } from '/@api/acp-session-info';
+
+import AcpCopyButton from './AcpCopyButton.svelte';
 
 interface Props {
   event: AcpFlowToolCallEvent;
@@ -60,7 +65,7 @@ async function handleOption(optionId: string): Promise<void> {
 }
 </script>
 
-<div class="rounded-lg border bg-[var(--pd-content-card-bg)] overflow-hidden {pendingPermission ? 'tool-call-pending-permission border-[var(--pd-status-waiting)] animate-pulse' : 'border-[var(--pd-content-divider)]'}">
+<div class="group/toolcall rounded-lg border bg-[var(--pd-content-card-bg)] overflow-hidden {pendingPermission ? 'tool-call-pending-permission border-[var(--pd-status-waiting)] animate-pulse' : 'border-[var(--pd-content-divider)]'}">
   <!-- Header: status icon + tool name badge + description -->
   <div class="flex items-center gap-2 px-4 py-2.5">
     <Icon icon={statusIcon} class="{statusColor} text-xs" />
@@ -76,8 +81,11 @@ async function handleOption(optionId: string): Promise<void> {
 
   <!-- Command block -->
   {#if event.command}
-    <div class="border-t border-[var(--pd-content-divider)] px-4 py-2 text-xs font-mono text-[var(--pd-content-text)] whitespace-pre-wrap bg-[var(--pd-invert-content-card-bg)] overflow-auto max-h-32">
+    <div class="group/command relative border-t border-[var(--pd-content-divider)] px-4 py-2 text-xs font-mono text-[var(--pd-content-text)] whitespace-pre-wrap bg-[var(--pd-invert-content-card-bg)] overflow-auto max-h-32">
       {event.command}
+      <div class="absolute top-1 right-1 opacity-0 group-hover/command:opacity-100 group-focus-within/command:opacity-100 transition-opacity">
+        <AcpCopyButton text={event.command} />
+      </div>
     </div>
   {/if}
 
@@ -112,7 +120,10 @@ async function handleOption(optionId: string): Promise<void> {
 
   <!-- Output section -->
   {#if showOutput && event.content}
-    <div class="border-t border-[var(--pd-content-divider)]">
+    <div class="group/output relative border-t border-[var(--pd-content-divider)]" use:codeCopyButtons>
+      <div class="absolute top-1 right-1 opacity-0 group-hover/output:opacity-100 group-focus-within/output:opacity-100 transition-opacity z-10">
+        <AcpCopyButton text={event.content} />
+      </div>
       {#if isShortOutput}
         <div class="px-4 py-2.5 text-sm text-[var(--pd-content-text)]">
           <Markdown markdown={event.content} />

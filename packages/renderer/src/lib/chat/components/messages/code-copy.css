@@ -19,7 +19,7 @@
 .code-copy-btn {
   position: absolute;
   top: 8px;
-  right: 8px;
+  right: 0px;
   padding: 4px 12px;
   border: none;
   border-radius: 9999px;
