@@ -18,11 +18,12 @@
 
 import * as path from 'node:path';
 
-import type { Tray } from 'electron';
-import { app, nativeTheme } from 'electron';
+import type { NativeImage, Tray } from 'electron';
+import { app, nativeImage, nativeTheme } from 'electron';
 
 import product from '/@product.json' with { type: 'json' };
 
+import { stampTrayDevBadge } from './tray-dev-badge.js';
 import { isLinux, isMac } from './util.js';
 
 export type TrayIconStatus = 'initialized' | 'updating' | 'error' | 'ready';
@@ -57,9 +58,9 @@ export class AnimatedTray {
     if (this.trayIconLoopId === 4) {
       this.trayIconLoopId = 0;
     }
-    const imagePath = this.getIconPath(`step${this.trayIconLoopId}`);
+    const image = this.getTrayImage(`step${this.trayIconLoopId}`);
     this.trayIconLoopId++;
-    this.tray?.setImage(imagePath);
+    this.tray?.setImage(image);
   }
 
   public setTray(tray: Tray): void {
@@ -108,6 +109,29 @@ export class AnimatedTray {
     return path.resolve(this.getAssetsFolder(), `tray-icon${name}${suffix}.png`);
   }
 
+  protected getTrayImage(iconName: string): string | NativeImage {
+    const iconPath = this.getIconPath(iconName);
+    if (!import.meta.env.DEV || !isMac()) {
+      return iconPath;
+    }
+    try {
+      const base = nativeImage.createFromPath(iconPath);
+      const stamped = stampTrayDevBadge(base);
+      if (base.getScaleFactors().includes(2)) {
+        const retinaStamped = stampTrayDevBadge(base, 2);
+        stamped.addRepresentation({
+          scaleFactor: 2,
+          dataURL: retinaStamped.toDataURL(),
+        });
+      }
+      stamped.setTemplateImage(true);
+      return stamped;
+    } catch (error) {
+      console.warn('[tray] dev badge could not be stamped; using plain icon', error);
+      return iconPath;
+    }
+  }
+
   protected updateIcon(): void {
     // do nothing until we have a tray
     if (!this.tray) {
@@ -120,15 +144,15 @@ export class AnimatedTray {
     }
     switch (this.status) {
       case 'initialized':
-        this.tray.setImage(this.getIconPath('empty'));
+        this.tray.setImage(this.getTrayImage('empty'));
         this.tray.setToolTip(`${product.name} is initialized`);
         break;
       case 'error':
-        this.tray.setImage(this.getIconPath('error'));
+        this.tray.setImage(this.getTrayImage('error'));
         this.tray.setToolTip(`${product.name} has an error`);
         break;
       case 'ready':
-        this.tray.setImage(this.getIconPath('default'));
+        this.tray.setImage(this.getTrayImage('default'));
         this.tray.setToolTip(`${product.name} is ready`);
         break;
       case 'updating':
@@ -138,8 +162,8 @@ export class AnimatedTray {
     }
   }
 
-  getDefaultImage(): string {
-    return this.getIconPath('empty');
+  getDefaultImage(): string | NativeImage {
+    return this.getTrayImage('empty');
   }
 
   setStatus(status: TrayIconStatus): void {
