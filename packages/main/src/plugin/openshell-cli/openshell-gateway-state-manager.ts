@@ -28,7 +28,12 @@ import { Emitter } from '/@/plugin/events/emitter.js';
 import { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { IDisposable } from '/@api/disposable.js';
 import type { Event } from '/@api/event.js';
-import { GATEWAY_NAME_PATTERN, type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME, type LocalGatewayDriver } from '/@api/openshell-gateway-info.js';
+import {
+  GATEWAY_NAME_PATTERN,
+  type GatewayInfo,
+  KAIDEN_LOCAL_GATEWAY_NAME,
+  type LocalGatewayDriver,
+} from '/@api/openshell-gateway-info.js';
 
 import { OpenshellCli } from './openshell-cli.js';
 
