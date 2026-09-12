@@ -16,16 +16,19 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 
 import type { Disposable } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
 
+import { Directories } from '/@/plugin/directories.js';
 import { Emitter } from '/@/plugin/events/emitter.js';
 import { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { IDisposable } from '/@api/disposable.js';
 import type { Event } from '/@api/event.js';
-import type { GatewayInfo, LocalGatewayDriver } from '/@api/openshell-gateway-info.js';
+import { GATEWAY_NAME_PATTERN, type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME, type LocalGatewayDriver } from '/@api/openshell-gateway-info.js';
 
 import { OpenshellCli } from './openshell-cli.js';
 
@@ -54,6 +57,8 @@ export class OpenshellGatewayStateManager implements Disposable {
     private readonly openshellCli: OpenshellCli,
     @inject(IConfigurationRegistry)
     private readonly configurationRegistry: IConfigurationRegistry,
+    @inject(Directories)
+    private readonly directories: Directories,
   ) {}
 
   init(): void {
@@ -128,10 +133,21 @@ export class OpenshellGatewayStateManager implements Disposable {
     }
   }
 
+  private isKaidenManagedGateway(name: string): boolean {
+    if (name === KAIDEN_LOCAL_GATEWAY_NAME) {
+      return true;
+    }
+    return (
+      GATEWAY_NAME_PATTERN.test(name) &&
+      existsSync(join(this.directories.getDataDirectory(), 'openshell-gateways', name, 'gateway.toml'))
+    );
+  }
+
   private async doRefresh(): Promise<void> {
     const registrations = await this.openshellCli.listGateways();
     const gateways = await Promise.all(
       registrations.map(async gateway => {
+        const managed = this.isKaidenManagedGateway(gateway.name);
         try {
           const runtimeInfo = await this.openshellCli.getGatewayInfo(gateway.name);
           const reportedDriver = runtimeInfo.compute_drivers[0]?.capabilities.driver_name;
@@ -142,6 +158,7 @@ export class OpenshellGatewayStateManager implements Disposable {
           return {
             ...gateway,
             ...(driver ? { driver } : {}),
+            ...(managed ? { source: 'kaiden' } : {}),
             gatewayState: {
               reachable: true,
               health: runtimeInfo.status,
@@ -150,6 +167,7 @@ export class OpenshellGatewayStateManager implements Disposable {
         } catch {
           return {
             ...gateway,
+            ...(managed ? { source: 'kaiden' } : {}),
             gatewayState: {
               reachable: false,
               health: 'unknown' as const,
