@@ -29,7 +29,7 @@ export const GatewayStateSchema = z.object({
 
 export type GatewayState = z.output<typeof GatewayStateSchema>;
 
-export type LocalGatewayDriver = 'vm' | 'podman' | 'docker';
+export type LocalGatewayDriver = 'vm' | 'podman' | 'docker' | 'mxc';
 
 export const KAIDEN_LOCAL_GATEWAY_NAME = 'kaiden-local';
 
@@ -44,7 +44,7 @@ export const GatewayInfoSchema = z.object({
   remote_host: z.string().nullable().optional(),
   resolved_host: z.string().nullable().optional(),
   gatewayState: GatewayStateSchema.optional(),
-  driver: z.enum(['vm', 'podman', 'docker']).optional(),
+  driver: z.enum(['vm', 'podman', 'docker', 'mxc']).optional(),
 });
 
 export type GatewayInfo = z.output<typeof GatewayInfoSchema>;

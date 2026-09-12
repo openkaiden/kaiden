@@ -34,6 +34,7 @@ import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { NotificationRegistry } from '/@/plugin/tasks/notification-registry.js';
 import { Exec } from '/@/plugin/util/exec.js';
 import { isFreePort } from '/@/plugin/util/port.js';
+import { isWindows } from '/@/util.js';
 import type { Event } from '/@api/event.js';
 import {
   type CreateLocalGatewayOptions,
@@ -214,8 +215,13 @@ export class OpenshellGateway implements Disposable {
     return tool?.path;
   }
 
+  getMxcBinaryPath(): string | undefined {
+    const tool = this.cliToolRegistry.getCliToolInfos().find(t => t.name === 'wxc-exec');
+    return tool?.path;
+  }
+
   async createLocalGateway(options: CreateLocalGatewayOptions): Promise<void> {
-    const driver = options.driver ?? (await this.detectLocalComputeDriver()) ?? 'podman';
+    const driver = options.driver ?? (await this.detectLocalComputeDriver()) ?? (isWindows() ? 'mxc' : 'podman');
     await this.createContainerGateway(options, driver);
   }
 
@@ -526,18 +532,25 @@ export class OpenshellGateway implements Disposable {
 
   private async createGatewayConfig(binaryPath: string, supervisorImage?: string): Promise<string | undefined> {
     try {
-      let image = supervisorImage;
-      if (!image) {
-        try {
-          const version = await this.getGatewayVersion(binaryPath);
-          image = `${SUPERVISOR_IMAGE_BASE}:${version}`;
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.warn(`[openshell-gateway] unable to detect version for supervisor pinning: ${message}`);
+      const detectedDriver = await this.detectLocalComputeDriver();
+      const driver = detectedDriver ?? (isWindows() ? 'mxc' : undefined);
+      const isContainerDriver = driver !== 'mxc';
+
+      let image: string | undefined;
+      if (isContainerDriver) {
+        image = supervisorImage;
+        if (!image) {
+          try {
+            const version = await this.getGatewayVersion(binaryPath);
+            image = `${SUPERVISOR_IMAGE_BASE}:${version}`;
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(`[openshell-gateway] unable to detect version for supervisor pinning: ${message}`);
+          }
         }
       }
 
-      const driver = await this.detectLocalComputeDriver();
+      const mxcExecPath = driver === 'mxc' ? this.getMxcBinaryPath() : undefined;
       const storageDirectory = this.getGatewayStorageDirectory(DEFAULT_GATEWAY_NAME);
       const configPath = join(storageDirectory, 'gateway.toml');
       await mkdir(storageDirectory, { recursive: true });
@@ -547,6 +560,8 @@ export class OpenshellGateway implements Disposable {
         gatewayDir: storageDirectory,
         q: '"',
         driver,
+        enableBindMounts: isContainerDriver,
+        mxcExecPath,
       });
 
       await writeFile(configPath, config, 'utf-8');
@@ -563,7 +578,7 @@ export class OpenshellGateway implements Disposable {
     try {
       const info = await this.openshellCli.getGatewayInfo();
       const driver = info.compute_drivers[0]?.capabilities.driver_name;
-      return driver === 'podman' || driver === 'docker' || driver === 'vm' ? driver : undefined;
+      return driver === 'podman' || driver === 'docker' || driver === 'vm' || driver === 'mxc' ? driver : undefined;
     } catch {
       return undefined;
     }
@@ -654,13 +669,17 @@ export class OpenshellGateway implements Disposable {
     const configPath = join(storageDirectory, 'gateway.toml');
     await mkdir(storageDirectory, { recursive: true });
     await this.generateCerts(binaryPath, storageDirectory, true);
+    const isContainerDriver = driver !== 'mxc';
     let supervisorImage: string | undefined;
-    try {
-      supervisorImage = `${SUPERVISOR_IMAGE_BASE}:${await this.getGatewayVersion(binaryPath)}`;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn(`[openshell-gateway] unable to detect version for supervisor pinning: ${message}`);
+    if (isContainerDriver) {
+      try {
+        supervisorImage = `${SUPERVISOR_IMAGE_BASE}:${await this.getGatewayVersion(binaryPath)}`;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`[openshell-gateway] unable to detect version for supervisor pinning: ${message}`);
+      }
     }
+    const mxcExecPath = driver === 'mxc' ? this.getMxcBinaryPath() : undefined;
     await writeFile(
       configPath,
       Mustache.render(gatewayConfigTemplate, {
@@ -668,6 +687,8 @@ export class OpenshellGateway implements Disposable {
         gatewayDir: storageDirectory,
         q: '"',
         driver,
+        enableBindMounts: isContainerDriver,
+        mxcExecPath,
       }),
       'utf-8',
     );

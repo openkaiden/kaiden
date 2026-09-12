@@ -136,7 +136,10 @@ export class OpenshellGatewayStateManager implements Disposable {
           const runtimeInfo = await this.openshellCli.getGatewayInfo(gateway.name);
           const reportedDriver = runtimeInfo.compute_drivers[0]?.capabilities.driver_name;
           const driver: LocalGatewayDriver | undefined =
-            reportedDriver === 'vm' || reportedDriver === 'podman' || reportedDriver === 'docker'
+            reportedDriver === 'vm' ||
+            reportedDriver === 'podman' ||
+            reportedDriver === 'docker' ||
+            reportedDriver === 'mxc'
               ? reportedDriver
               : undefined;
           return {

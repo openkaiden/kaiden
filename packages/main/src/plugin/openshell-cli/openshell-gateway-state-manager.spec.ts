@@ -270,3 +270,25 @@ test('clamps polling intervals above one hour', async () => {
   await vi.advanceTimersByTimeAsync(1);
   expect(openshellCli.listGateways).toHaveBeenCalledTimes(2);
 });
+
+test('recognizes mxc driver from gateway runtime info', async () => {
+  vi.mocked(openshellCli.listGateways).mockResolvedValue([
+    { name: 'mxc-gw', endpoint: 'http://127.0.0.1:17670', active: true },
+  ]);
+  vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({
+    status: 'healthy',
+    compute_drivers: [{ name: 'mxc', capabilities: { driver_name: 'mxc' } }],
+  });
+
+  await manager.refresh();
+
+  expect(manager.listGateways()).toEqual([
+    {
+      name: 'mxc-gw',
+      endpoint: 'http://127.0.0.1:17670',
+      active: true,
+      driver: 'mxc',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+  ]);
+});

@@ -31,6 +31,7 @@ import type { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { NotificationRegistry } from '/@/plugin/tasks/notification-registry.js';
 import type { Exec } from '/@/plugin/util/exec.js';
 import { isFreePort } from '/@/plugin/util/port.js';
+import { isWindows } from '/@/util.js';
 import type { CliToolInfo } from '/@api/cli-tool-info.js';
 import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
 
@@ -41,8 +42,10 @@ vi.mock(import('node:fs'));
 vi.mock(import('node:fs/promises'));
 vi.mock(import('/@/plugin/util/exec.js'));
 vi.mock(import('/@/plugin/util/port.js'));
+vi.mock(import('/@/util.js'));
 
 const GATEWAY_BINARY = '/usr/local/bin/openshell-gateway';
+const MXC_BINARY = 'C:\\Program Files\\mxc\\wxc-exec.exe';
 const KAIDEN_DATA_DIRECTORY = '/home/user/.local/share/kaiden';
 const GATEWAY_STORAGE_DIRECTORY = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'kaiden-local');
 const GATEWAY_CONFIG_PATH = join(GATEWAY_STORAGE_DIRECTORY, 'gateway.toml');
@@ -1361,5 +1364,126 @@ describe('gateway config generation', () => {
     expect(writtenContent).toContain('[openshell.drivers.podman]');
     expect(writtenContent).toContain('enable_bind_mounts');
     expect(writtenContent).not.toContain('compute_drivers');
+  });
+
+  test('generates MXC driver config on Windows when no driver is detected', async () => {
+    vi.mocked(isWindows).mockReturnValue(true);
+    vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+    vi.mocked(cliToolRegistry.getCliToolInfos).mockReturnValue([
+      { name: 'openshell-gateway', path: GATEWAY_BINARY },
+      { name: 'wxc-exec', path: MXC_BINARY },
+    ] as unknown as CliToolInfo[]);
+
+    await gateway.start();
+
+    const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
+    expect(writtenContent).toContain('compute_drivers = ["mxc"]');
+    expect(writtenContent).toContain('[openshell.drivers.mxc]');
+    expect(writtenContent).toContain(`wxc_exec_path = "${MXC_BINARY}"`);
+    expect(writtenContent).not.toContain('enable_bind_mounts');
+    expect(writtenContent).not.toContain('supervisor_image');
+  });
+
+  test('generates MXC driver config for named gateways', async () => {
+    vi.mocked(isWindows).mockReturnValue(true);
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(cliToolRegistry.getCliToolInfos).mockReturnValue([
+      { name: 'openshell-gateway', path: GATEWAY_BINARY },
+      { name: 'wxc-exec', path: MXC_BINARY },
+    ] as unknown as CliToolInfo[]);
+
+    await gateway.createLocalGateway({
+      name: 'mxc-dev',
+      bindAddress: '127.0.0.1',
+      port: 17675,
+      driver: 'mxc',
+    });
+
+    const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
+    expect(writtenContent).toContain('compute_drivers = ["mxc"]');
+    expect(writtenContent).toContain('[openshell.drivers.mxc]');
+    expect(writtenContent).toContain(`wxc_exec_path = "${MXC_BINARY}"`);
+    expect(writtenContent).not.toContain('enable_bind_mounts');
+    expect(writtenContent).not.toContain('supervisor_image');
+    expect(exec.exec).not.toHaveBeenCalledWith(GATEWAY_BINARY, ['--version']);
+  });
+});
+
+describe('getMxcBinaryPath', () => {
+  test('returns path from CLI tool registry when wxc-exec is registered', () => {
+    vi.mocked(cliToolRegistry.getCliToolInfos).mockReturnValue([
+      { name: 'openshell-gateway', path: GATEWAY_BINARY },
+      { name: 'wxc-exec', path: MXC_BINARY },
+    ] as unknown as CliToolInfo[]);
+    expect(gateway.getMxcBinaryPath()).toBe(MXC_BINARY);
+  });
+
+  test('returns undefined when wxc-exec is not registered', () => {
+    expect(gateway.getMxcBinaryPath()).toBeUndefined();
+  });
+});
+
+describe('detectLocalComputeDriver', () => {
+  test('recognizes mxc driver', async () => {
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({
+      status: 'healthy',
+      compute_drivers: [{ name: 'mxc', capabilities: { driver_name: 'mxc' } }],
+    });
+    vi.mocked(isWindows).mockReturnValue(true);
+    vi.mocked(cliToolRegistry.getCliToolInfos).mockReturnValue([
+      { name: 'openshell-gateway', path: GATEWAY_BINARY },
+      { name: 'wxc-exec', path: MXC_BINARY },
+    ] as unknown as CliToolInfo[]);
+
+    await gateway.createLocalGateway({
+      name: 'mxc-auto',
+      bindAddress: '127.0.0.1',
+      port: 17675,
+    });
+
+    const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
+    expect(writtenContent).toContain('compute_drivers = ["mxc"]');
+  });
+});
+
+describe('Windows default driver', () => {
+  test('createLocalGateway defaults to mxc on Windows when no driver is detected', async () => {
+    vi.mocked(isWindows).mockReturnValue(true);
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+    vi.mocked(cliToolRegistry.getCliToolInfos).mockReturnValue([
+      { name: 'openshell-gateway', path: GATEWAY_BINARY },
+      { name: 'wxc-exec', path: MXC_BINARY },
+    ] as unknown as CliToolInfo[]);
+
+    await gateway.createLocalGateway({
+      name: 'win-dev',
+      bindAddress: '127.0.0.1',
+      port: 17675,
+    });
+
+    const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
+    expect(writtenContent).toContain('compute_drivers = ["mxc"]');
+  });
+
+  test('createLocalGateway defaults to podman on non-Windows when no driver is detected', async () => {
+    vi.mocked(isWindows).mockReturnValue(false);
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+
+    await gateway.createLocalGateway({
+      name: 'linux-dev',
+      bindAddress: '127.0.0.1',
+      port: 17675,
+    });
+
+    const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
+    expect(writtenContent).toContain('compute_drivers = ["podman"]');
   });
 });

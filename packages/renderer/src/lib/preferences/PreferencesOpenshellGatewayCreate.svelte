@@ -1,6 +1,6 @@
 <script lang="ts">
 import { Button, Dropdown, ErrorMessage, Input, NumberInput } from '@podman-desktop/ui-svelte';
-import { untrack } from 'svelte';
+import { onMount, untrack } from 'svelte';
 
 import Dialog from '/@/lib/dialogs/Dialog.svelte';
 import { openshellGateways } from '/@/stores/openshell-gateways';
@@ -14,11 +14,17 @@ interface Props {
 
 let { existingNames, initialDriver, closeCallback }: Props = $props();
 
+let isWindows = $state(false);
+onMount(async () => {
+  const platform = await window.getOsPlatform();
+  isWindows = platform === 'win32';
+});
+
 let name = $state('local-gateway');
 const bindAddress = '127.0.0.1';
 let port = $state(17675);
 let driver = $state<Exclude<LocalGatewayDriver, 'vm'>>(
-  untrack(() => (initialDriver === 'vm' ? 'podman' : initialDriver)),
+  untrack(() => (initialDriver === 'vm' ? (isWindows ? 'mxc' : 'podman') : initialDriver)),
 );
 let creating = $state(false);
 let error = $state('');
@@ -92,6 +98,9 @@ async function createGateway(): Promise<void> {
         <Dropdown name="gateway-driver" class="w-full" bind:value={driver}>
           <option value="podman">Podman</option>
           <option value="docker">Docker</option>
+          {#if isWindows}
+            <option value="mxc">MXC</option>
+          {/if}
         </Dropdown>
       </label>
 
