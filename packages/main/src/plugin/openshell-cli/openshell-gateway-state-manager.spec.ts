@@ -16,17 +16,26 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { existsSync } from 'node:fs';
+
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
+import type { Directories } from '/@/plugin/directories.js';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 
 import type { OpenshellCli } from './openshell-cli.js';
 import { OpenshellGatewayStateManager } from './openshell-gateway-state-manager.js';
 
+vi.mock(import('node:fs'));
+
 const openshellCli = {
   listGateways: vi.fn(),
   getGatewayInfo: vi.fn(),
 } as unknown as OpenshellCli;
+
+const directories = {
+  getDataDirectory: vi.fn(() => '/mock-data-dir'),
+} as unknown as Directories;
 let pollInterval = 5;
 let configurationChangeCallback: ((event: { key: string }) => void) | undefined;
 const configurationRegistry = {
@@ -50,7 +59,8 @@ beforeEach(() => {
     configurationChangeCallback = callback as (event: { key: string }) => void;
     return { dispose: vi.fn() };
   });
-  manager = new OpenshellGatewayStateManager(openshellCli, configurationRegistry);
+  vi.mocked(existsSync).mockReturnValue(false);
+  manager = new OpenshellGatewayStateManager(openshellCli, configurationRegistry, directories);
 });
 
 afterEach(() => {
@@ -257,6 +267,62 @@ test('clamps polling intervals below one second', async () => {
   expect(openshellCli.listGateways).toHaveBeenCalledOnce();
   await vi.advanceTimersByTimeAsync(1);
   expect(openshellCli.listGateways).toHaveBeenCalledTimes(2);
+});
+
+test('sets source to kaiden for the default kaiden-local gateway', async () => {
+  vi.mocked(openshellCli.listGateways).mockResolvedValue([
+    { name: 'kaiden-local', endpoint: 'http://127.0.0.1:17670', active: true },
+  ]);
+  vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+
+  await manager.refresh();
+
+  expect(manager.listGateways()[0]).toEqual(expect.objectContaining({ name: 'kaiden-local', source: 'kaiden' }));
+});
+
+test('sets source to kaiden for a created gateway with gateway.toml', async () => {
+  vi.mocked(existsSync).mockImplementation(
+    p => String(p) === '/mock-data-dir/openshell-gateways/my-gateway/gateway.toml',
+  );
+  vi.mocked(openshellCli.listGateways).mockResolvedValue([
+    { name: 'my-gateway', endpoint: 'http://127.0.0.1:17675', active: true },
+  ]);
+  vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+
+  await manager.refresh();
+
+  expect(manager.listGateways()[0]).toEqual(expect.objectContaining({ name: 'my-gateway', source: 'kaiden' }));
+});
+
+test('does not set source for a gateway without gateway.toml', async () => {
+  vi.mocked(openshellCli.listGateways).mockResolvedValue([
+    { name: 'external-gw', endpoint: 'https://gateway.example.com', active: false },
+  ]);
+  vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+
+  await manager.refresh();
+
+  expect(manager.listGateways()[0]).not.toHaveProperty('source');
+});
+
+test('sets source to kaiden for unreachable kaiden-managed gateway', async () => {
+  vi.mocked(existsSync).mockImplementation(
+    p => String(p) === '/mock-data-dir/openshell-gateways/my-gateway/gateway.toml',
+  );
+  vi.mocked(openshellCli.listGateways).mockResolvedValue([
+    { name: 'my-gateway', endpoint: 'http://127.0.0.1:17675', active: true },
+  ]);
+  vi.mocked(openshellCli.getGatewayInfo).mockRejectedValue(new Error('connection refused'));
+
+  await manager.refresh();
+
+  expect(manager.listGateways()[0]).toEqual(
+    expect.objectContaining({
+      name: 'my-gateway',
+      source: 'kaiden',
+      gatewayState: { reachable: false, health: 'unknown' },
+    }),
+  );
 });
 
 test('clamps polling intervals above one hour', async () => {
