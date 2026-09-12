@@ -45,6 +45,7 @@ export const GatewayInfoSchema = z.object({
   resolved_host: z.string().nullable().optional(),
   gatewayState: GatewayStateSchema.optional(),
   driver: z.enum(['vm', 'podman', 'docker']).optional(),
+  version: z.string().optional(),
 });
 
 export type GatewayInfo = z.output<typeof GatewayInfoSchema>;
@@ -156,6 +157,7 @@ export const GATEWAY_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 
 export const GatewayRuntimeInfoSchema = z.looseObject({
   status: GatewayHealthSchema,
+  version: z.string().optional(),
   compute_drivers: z.array(
     z.looseObject({
       capabilities: z.looseObject({
@@ -167,6 +169,48 @@ export const GatewayRuntimeInfoSchema = z.looseObject({
 });
 
 export type GatewayRuntimeInfo = z.output<typeof GatewayRuntimeInfoSchema>;
+
+/**
+ * Minimum gateway version required for compatibility with this Kaiden release.
+ * Gateways reporting a version below this are treated as unusable.
+ *
+ * Note: `extensions/openshell/package.json` declares `openshellVersion` for the
+ * bundled CLI binary version. Keep these in sync when bumping either value.
+ */
+export const MIN_GATEWAY_VERSION = '0.4.0';
+
+/**
+ * Lightweight semver comparison: returns true when the gateway version
+ * is greater-than-or-equal-to {@link MIN_GATEWAY_VERSION}.
+ *
+ * Handles `major.minor.patch` (with optional leading `v`).
+ * Returns `true` when the version string is missing or unparseable so that
+ * gateways that predate version reporting are not silently blocked.
+ *
+ * Note: `semver` is already a root dependency used in `packages/main`, but
+ * `packages/api` ships to the renderer bundle where the extra dependency
+ * weight is undesirable. This inline comparison is intentional.
+ */
+export function isGatewayVersionCompatible(version: string | undefined): boolean {
+  if (!version) {
+    return true;
+  }
+  const parse = (v: string): [number, number, number] | undefined => {
+    const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(v);
+    if (!match) return undefined;
+    return [Number(match[1]), Number(match[2]), Number(match[3])];
+  };
+  const gw = parse(version);
+  const min = parse(MIN_GATEWAY_VERSION);
+  if (!gw || !min) {
+    return true;
+  }
+  const [gwMajor, gwMinor, gwPatch] = gw;
+  const [minMajor, minMinor, minPatch] = min;
+  if (gwMajor !== minMajor) return gwMajor > minMajor;
+  if (gwMinor !== minMinor) return gwMinor > minMinor;
+  return gwPatch >= minPatch;
+}
 
 export interface GatewaySandboxes {
   gateway: GatewayInfo;

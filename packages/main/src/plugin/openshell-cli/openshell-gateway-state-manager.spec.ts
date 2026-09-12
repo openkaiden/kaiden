@@ -87,6 +87,44 @@ test('builds a cached snapshot from registrations and runtime information', asyn
   ]);
 });
 
+test('extracts version from runtime info when present', async () => {
+  vi.mocked(openshellCli.listGateways).mockResolvedValue([
+    { name: 'local', endpoint: 'http://127.0.0.1:17670', active: true },
+  ]);
+  vi.mocked(openshellCli.getGatewayInfo).mockResolvedValueOnce({
+    status: 'healthy',
+    version: '1.2.0',
+    compute_drivers: [],
+  });
+
+  await manager.refresh();
+
+  expect(manager.listGateways()).toEqual([
+    {
+      name: 'local',
+      endpoint: 'http://127.0.0.1:17670',
+      active: true,
+      version: '1.2.0',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+  ]);
+});
+
+test('omits version from gateway when runtime info does not include it', async () => {
+  vi.mocked(openshellCli.listGateways).mockResolvedValue([
+    { name: 'local', endpoint: 'http://127.0.0.1:17670', active: true },
+  ]);
+  vi.mocked(openshellCli.getGatewayInfo).mockResolvedValueOnce({
+    status: 'healthy',
+    compute_drivers: [],
+  });
+
+  await manager.refresh();
+
+  const gateways = manager.listGateways();
+  expect(gateways[0]).not.toHaveProperty('version');
+});
+
 test('marks a gateway unreachable when runtime information cannot be retrieved', async () => {
   vi.mocked(openshellCli.listGateways).mockResolvedValue([{ name: 'stopped', endpoint: 'http://127.0.0.1:17671' }]);
   vi.mocked(openshellCli.getGatewayInfo).mockRejectedValue(new Error('connection refused'));
