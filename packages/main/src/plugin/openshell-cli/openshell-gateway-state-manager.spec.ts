@@ -277,9 +277,7 @@ test('sets source to kaiden for the default kaiden-local gateway', async () => {
 
   await manager.refresh();
 
-  expect(manager.listGateways()[0]).toEqual(
-    expect.objectContaining({ name: 'kaiden-local', source: 'kaiden' }),
-  );
+  expect(manager.listGateways()[0]).toEqual(expect.objectContaining({ name: 'kaiden-local', source: 'kaiden' }));
 });
 
 test('sets source to kaiden for a created gateway with gateway.toml', async () => {
@@ -293,9 +291,7 @@ test('sets source to kaiden for a created gateway with gateway.toml', async () =
 
   await manager.refresh();
 
-  expect(manager.listGateways()[0]).toEqual(
-    expect.objectContaining({ name: 'my-gateway', source: 'kaiden' }),
-  );
+  expect(manager.listGateways()[0]).toEqual(expect.objectContaining({ name: 'my-gateway', source: 'kaiden' }));
 });
 
 test('does not set source for a gateway without gateway.toml', async () => {
