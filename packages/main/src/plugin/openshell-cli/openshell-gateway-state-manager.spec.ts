@@ -17,6 +17,7 @@
  ***********************************************************************/
 
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
@@ -282,7 +283,7 @@ test('sets source to kaiden for the default kaiden-local gateway', async () => {
 
 test('sets source to kaiden for a created gateway with gateway.toml', async () => {
   vi.mocked(existsSync).mockImplementation(
-    p => String(p) === '/mock-data-dir/openshell-gateways/my-gateway/gateway.toml',
+    p => String(p) === join('/mock-data-dir', 'openshell-gateways', 'my-gateway', 'gateway.toml'),
   );
   vi.mocked(openshellCli.listGateways).mockResolvedValue([
     { name: 'my-gateway', endpoint: 'http://127.0.0.1:17675', active: true },
@@ -307,7 +308,7 @@ test('does not set source for a gateway without gateway.toml', async () => {
 
 test('sets source to kaiden for unreachable kaiden-managed gateway', async () => {
   vi.mocked(existsSync).mockImplementation(
-    p => String(p) === '/mock-data-dir/openshell-gateways/my-gateway/gateway.toml',
+    p => String(p) === join('/mock-data-dir', 'openshell-gateways', 'my-gateway', 'gateway.toml'),
   );
   vi.mocked(openshellCli.listGateways).mockResolvedValue([
     { name: 'my-gateway', endpoint: 'http://127.0.0.1:17675', active: true },
