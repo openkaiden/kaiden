@@ -342,7 +342,10 @@ $effect(() => {
     requestAnimationFrame(() => {
       const pending = flowContainer?.querySelectorAll('.tool-call-pending-permission');
       if (pending?.length) {
-        pending[pending.length - 1]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const lastPending = pending[pending.length - 1];
+        lastPending?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const firstButton = lastPending?.querySelector<HTMLButtonElement>('button');
+        firstButton?.focus();
       }
     });
   }
