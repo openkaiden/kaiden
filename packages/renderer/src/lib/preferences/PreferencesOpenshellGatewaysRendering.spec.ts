@@ -327,13 +327,13 @@ test('shows incompatible status and terminated color for version-incompatible ga
       name: 'old-gw',
       endpoint: 'http://localhost:17670',
       active: true,
-      version: '0.1.0',
+      version: '0.0.100',
       gatewayState: { reachable: true, health: 'healthy' },
     },
   ]);
   render(PreferencesOpenshellGatewaysRendering);
 
-  expect(screen.getByText('http://localhost:17670 · v0.1.0 · Incompatible')).toBeInTheDocument();
+  expect(screen.getByText('http://localhost:17670 · v0.0.100 · Incompatible')).toBeInTheDocument();
   const statusDot = screen.getByLabelText('Gateway state');
   expect(statusDot).toHaveClass('bg-(--pd-status-terminated)');
 });
