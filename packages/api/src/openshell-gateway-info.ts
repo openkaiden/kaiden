@@ -180,7 +180,7 @@ export type GatewayRuntimeInfo = z.output<typeof GatewayRuntimeInfoSchema>;
  * Note: `extensions/openshell/package.json` declares `openshellVersion` for the
  * bundled CLI binary version. Keep these in sync when bumping either value.
  */
-export const MIN_GATEWAY_VERSION = '0.4.0';
+export const MIN_GATEWAY_VERSION = '0.0.116';
 
 /**
  * Lightweight semver comparison: returns true when the gateway version
