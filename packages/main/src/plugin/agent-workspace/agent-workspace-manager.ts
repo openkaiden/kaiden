@@ -441,9 +441,9 @@ export class AgentWorkspaceManager implements Disposable {
   }
 
   /**
-   * Return the secret related to the inference connection linked to the
-   * model. Return undefined if there is no secret associated with this connection
-·   */
+   * No-op stub — kept as a placeholder for post-0.0.116 per-workspace secrets.
+   * Always returns undefined.
+   */
   async ensureModelSecret(_options: AgentWorkspaceCreateOptions): Promise<string | undefined> {
     return undefined;
   }
