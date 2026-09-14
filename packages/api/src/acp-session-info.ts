@@ -154,6 +154,7 @@ export interface AcpFlowToolCallEvent {
     options: AcpPermissionOption[];
     resolved: boolean;
     selectedOptionId?: string;
+    expired?: boolean;
   };
 }
 

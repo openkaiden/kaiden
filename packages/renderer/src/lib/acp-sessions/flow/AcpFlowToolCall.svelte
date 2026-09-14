@@ -84,7 +84,12 @@ async function handleOption(optionId: string): Promise<void> {
   <!-- Permission section -->
   {#if event.permissionRequest}
     <div class="border-t border-[var(--pd-content-divider)] px-4 py-2.5">
-      {#if event.permissionRequest.resolved && selectedOption}
+      {#if event.permissionRequest.expired}
+        <div class="flex items-center gap-1.5 text-xs">
+          <Icon icon={faBan} class="text-[var(--pd-content-text)] opacity-50 text-xs" />
+          <span class="text-[var(--pd-content-text)] opacity-50">Request expired</span>
+        </div>
+      {:else if event.permissionRequest.resolved && selectedOption}
         <div class="flex items-center gap-1.5 text-xs">
           {#if selectedOption.kind === 'deny'}
             <Icon icon={faBan} class="text-[var(--pd-status-dead)] text-xs" />

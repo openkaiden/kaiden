@@ -1246,6 +1246,16 @@ export class AcpSessionManager {
         }
 
         const events = data.events ?? [];
+
+        // Mark any unresolved permission requests as expired so the UI
+        // shows them as inactive instead of rendering dead buttons.
+        for (const event of events) {
+          if (event.kind === 'tool_call' && event.permissionRequest && !event.permissionRequest.resolved) {
+            event.permissionRequest.resolved = true;
+            event.permissionRequest.expired = true;
+          }
+        }
+
         const maxTurn = events.reduce(
           (max, e) => ('turn' in e && typeof e.turn === 'number' && e.turn > max ? e.turn : max),
           -1,

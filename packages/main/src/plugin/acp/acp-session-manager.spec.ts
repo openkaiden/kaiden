@@ -402,6 +402,109 @@ describe('AcpSessionManager', () => {
       expect(await manager.listSessions()).toHaveLength(0);
     });
 
+    test('marks unresolved permission requests as resolved and expired on load', async () => {
+      const { existsSync } = await import('node:fs');
+      const { readdir, readFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readdir).mockResolvedValue(['session-perm.json' as never]);
+
+      const storedSession = {
+        info: {
+          id: 'session-perm',
+          sandboxName: 'sb',
+          sandboxId: 'sb-id',
+          prompt: 'hello',
+          status: 'waiting_input',
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+        events: [
+          { kind: 'prompt', text: 'hello', timestamp: 1000 },
+          {
+            kind: 'tool_call',
+            toolCallId: 'tc-1',
+            title: 'Run command',
+            status: 'running',
+            timestamp: 2000,
+            permissionRequest: {
+              requestId: 'req-1',
+              options: [
+                { name: 'Allow', kind: 'allow', optionId: 'opt-allow' },
+                { name: 'Reject', kind: 'deny', optionId: 'opt-deny' },
+              ],
+              resolved: false,
+            },
+          },
+        ],
+      };
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify(storedSession));
+
+      await manager.init();
+
+      const events = manager.getSessionEvents('session-perm');
+      const toolCallEvent = events.find(e => e.kind === 'tool_call');
+      expect(toolCallEvent).toBeDefined();
+      expect(toolCallEvent!.kind).toBe('tool_call');
+      if (toolCallEvent!.kind === 'tool_call') {
+        expect(toolCallEvent!.permissionRequest?.resolved).toBe(true);
+        expect(toolCallEvent!.permissionRequest?.expired).toBe(true);
+      }
+
+      const sessions = await manager.listSessions();
+      expect(sessions[0]!.status).toBe('completed');
+    });
+
+    test('preserves already-resolved permission requests on load', async () => {
+      const { existsSync } = await import('node:fs');
+      const { readdir, readFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readdir).mockResolvedValue(['session-resolved.json' as never]);
+
+      const storedSession = {
+        info: {
+          id: 'session-resolved',
+          sandboxName: 'sb',
+          sandboxId: 'sb-id',
+          prompt: 'hello',
+          status: 'completed',
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+        events: [
+          {
+            kind: 'tool_call',
+            toolCallId: 'tc-1',
+            title: 'Run command',
+            status: 'completed',
+            timestamp: 2000,
+            permissionRequest: {
+              requestId: 'req-1',
+              options: [
+                { name: 'Allow', kind: 'allow', optionId: 'opt-allow' },
+                { name: 'Reject', kind: 'deny', optionId: 'opt-deny' },
+              ],
+              resolved: true,
+              selectedOptionId: 'opt-allow',
+            },
+          },
+        ],
+      };
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify(storedSession));
+
+      await manager.init();
+
+      const events = manager.getSessionEvents('session-resolved');
+      const toolCallEvent = events.find(e => e.kind === 'tool_call');
+      expect(toolCallEvent).toBeDefined();
+      if (toolCallEvent!.kind === 'tool_call') {
+        expect(toolCallEvent!.permissionRequest?.resolved).toBe(true);
+        expect(toolCallEvent!.permissionRequest?.expired).toBeUndefined();
+        expect(toolCallEvent!.permissionRequest?.selectedOptionId).toBe('opt-allow');
+      }
+    });
+
     test('handles corrupt session files gracefully', async () => {
       const { existsSync } = await import('node:fs');
       const { readdir, readFile } = await import('node:fs/promises');
