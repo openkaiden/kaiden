@@ -156,6 +156,123 @@ describe('createSession error display', () => {
   });
 });
 
+describe('scroll lock', () => {
+  function getFlowContainer(): HTMLElement {
+    return document.querySelector('.overflow-auto')!;
+  }
+
+  function mockScrollGeometry(el: HTMLElement, scrollTop: number, scrollHeight: number, clientHeight: number): void {
+    Object.defineProperty(el, 'scrollTop', { value: scrollTop, writable: true, configurable: true });
+    Object.defineProperty(el, 'scrollHeight', { value: scrollHeight, configurable: true });
+    Object.defineProperty(el, 'clientHeight', { value: clientHeight, configurable: true });
+  }
+
+  test('does not auto-scroll when user has scrolled away from bottom', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([{ kind: 'prompt', text: 'initial', timestamp: 1 }]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+    await vi.waitFor(() => expect(screen.getByText('initial')).toBeInTheDocument());
+
+    const container = getFlowContainer();
+    mockScrollGeometry(container, 100, 500, 200);
+    container.dispatchEvent(new Event('scroll'));
+
+    const scrollTopSetter = vi.fn();
+    Object.defineProperty(container, 'scrollTop', { set: scrollTopSetter, get: () => 100, configurable: true });
+
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([
+      { kind: 'prompt', text: 'initial', timestamp: 1 },
+      { kind: 'prompt', text: 'new prompt', timestamp: 2 },
+    ]);
+
+    const store = vi.mocked(acpSessionsStore).acpSessions as ReturnType<typeof writable<AcpSessionInfo[]>>;
+    store.set([{ ...COMPLETED_SESSION, updatedAt: 3000 }]);
+
+    await vi.waitFor(() => expect(screen.getByText('new prompt')).toBeInTheDocument());
+    expect(scrollTopSetter).not.toHaveBeenCalled();
+  });
+
+  test('auto-scrolls when user is near bottom', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([{ kind: 'prompt', text: 'initial', timestamp: 1 }]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+    await vi.waitFor(() => expect(screen.getByText('initial')).toBeInTheDocument());
+
+    const container = getFlowContainer();
+    mockScrollGeometry(container, 295, 500, 200);
+    container.dispatchEvent(new Event('scroll'));
+
+    const scrollTopSetter = vi.fn();
+    Object.defineProperty(container, 'scrollTop', { set: scrollTopSetter, get: () => 295, configurable: true });
+
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([
+      { kind: 'prompt', text: 'initial', timestamp: 1 },
+      { kind: 'prompt', text: 'second prompt', timestamp: 2 },
+    ]);
+
+    const store = vi.mocked(acpSessionsStore).acpSessions as ReturnType<typeof writable<AcpSessionInfo[]>>;
+    store.set([{ ...COMPLETED_SESSION, updatedAt: 3000 }]);
+
+    await vi.waitFor(() => expect(screen.getByText('second prompt')).toBeInTheDocument());
+    await vi.waitFor(() => expect(scrollTopSetter).toHaveBeenCalled());
+  });
+
+  test('resets scroll lock on successful send', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.sendAcpFollowUp).mockResolvedValue(undefined);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const container = getFlowContainer();
+    mockScrollGeometry(container, 100, 500, 200);
+    container.dispatchEvent(new Event('scroll'));
+
+    const scrollTopSetter = vi.fn();
+    Object.defineProperty(container, 'scrollTop', { set: scrollTopSetter, get: () => 100, configurable: true });
+
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([
+      { kind: 'prompt', text: 'response after send', timestamp: 2 },
+    ]);
+
+    const textarea = screen.getByRole('textbox');
+    await userEvent.type(textarea, 'follow up');
+    await userEvent.click(screen.getByTitle('Send'));
+
+    await vi.waitFor(() => expect(screen.getByText('response after send')).toBeInTheDocument());
+    await vi.waitFor(() => expect(scrollTopSetter).toHaveBeenCalled());
+  });
+
+  test('does not reset scroll lock on failed send', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.sendAcpFollowUp).mockRejectedValue(new Error('send failed'));
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const container = getFlowContainer();
+    mockScrollGeometry(container, 100, 500, 200);
+    container.dispatchEvent(new Event('scroll'));
+
+    const textarea = screen.getByRole('textbox');
+    await userEvent.type(textarea, 'will fail');
+    await userEvent.click(screen.getByTitle('Send'));
+
+    await vi.waitFor(() => expect(screen.getByText('send failed')).toBeInTheDocument());
+
+    const scrollTopSetter = vi.fn();
+    Object.defineProperty(container, 'scrollTop', { set: scrollTopSetter, get: () => 100, configurable: true });
+
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([{ kind: 'prompt', text: 'new event', timestamp: 3 }]);
+
+    const store = vi.mocked(acpSessionsStore).acpSessions as ReturnType<typeof writable<AcpSessionInfo[]>>;
+    store.set([{ ...COMPLETED_SESSION, updatedAt: 4000 }]);
+
+    await vi.waitFor(() => expect(screen.getByText('new event')).toBeInTheDocument());
+    expect(scrollTopSetter).not.toHaveBeenCalled();
+  });
+});
+
 describe('state reset on session change', () => {
   test('clears error and input when sessionId changes', async () => {
     vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
