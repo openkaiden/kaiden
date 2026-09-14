@@ -108,7 +108,7 @@ test('shows a warning with minimum version when all gateways are below the minim
     {
       name: 'gw1',
       endpoint: 'http://127.0.0.1:17670',
-      version: '0.1.0',
+      version: '0.0.100',
       gatewayState: { reachable: true, health: 'healthy' },
     },
   ]);
@@ -117,7 +117,7 @@ test('shows a warning with minimum version when all gateways are below the minim
   render(NoUsableGatewayWarning);
 
   expect(screen.getByRole('alert')).toHaveTextContent(
-    'No usable OpenShell gateways available. Minimum required version: 0.4.0.',
+    'No usable OpenShell gateways available. Minimum required version: 0.0.116.',
   );
 });
 
@@ -126,7 +126,7 @@ test('hides the warning when a compatible gateway exists', () => {
     {
       name: 'gw1',
       endpoint: 'http://127.0.0.1:17670',
-      version: '0.4.0',
+      version: '0.0.116',
       gatewayState: { reachable: true, health: 'healthy' },
     },
   ]);
