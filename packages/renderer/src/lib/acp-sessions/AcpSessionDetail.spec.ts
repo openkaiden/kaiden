@@ -182,7 +182,7 @@ describe('state reset on session change', () => {
 });
 
 describe('permission request focus management', () => {
-  test('should move focus to permission button when waiting for input', async () => {
+  test('should move focus to permission button when events load after initial effect', async () => {
     Element.prototype.scrollIntoView = vi.fn();
 
     const waitingSession: AcpSessionInfo = {
@@ -215,10 +215,18 @@ describe('permission request focus management', () => {
       },
     };
 
+    // Use a deferred promise so events load after the initial effect fires
+    let resolveEvents!: (value: AcpFlowToolCallEvent[]) => void;
+    vi.mocked(window.getAcpSessionEvents).mockImplementation(
+      () => new Promise(resolve => { resolveEvents = resolve; }),
+    );
+
     vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([waitingSession]);
-    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([toolCallEvent]);
 
     render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    // Resolve events after initial render so the focus effect must rerun
+    resolveEvents([toolCallEvent]);
 
     await vi.waitFor(() => {
       expect(document.activeElement).toBeInstanceOf(HTMLButtonElement);
