@@ -970,6 +970,58 @@ describe('AcpSessionManager', () => {
     });
   });
 
+  describe('setSessionModel', () => {
+    test('resets contextSize and contextUsed after model switch', async () => {
+      const { existsSync } = await import('node:fs');
+      const { readdir, readFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readdir).mockResolvedValue(['session-model.json' as never]);
+
+      const storedSession = {
+        info: {
+          id: 'session-model',
+          sandboxName: 'sb',
+          sandboxId: 'sb-id',
+          prompt: 'hello',
+          status: 'completed' as const,
+          createdAt: 1000,
+          updatedAt: 2000,
+          currentModelId: 'old-200k-model',
+          contextSize: 200_000,
+          contextUsed: 50_000,
+        },
+        events: [],
+        acpSessionId: 'acp-model-test',
+        agentCommand: ['openclaw', 'acp'],
+      };
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify(storedSession));
+
+      await manager.init();
+
+      // Inject a mock connection into the session
+      const mockSendRequest = vi.fn().mockResolvedValue({});
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sessions = (manager as any).sessions as Map<string, any>;
+      const session = sessions.get('session-model');
+      session.connection = { connection: { sendRequest: mockSendRequest } };
+
+      await manager.setSessionModel('session-model', 'new-1m-model');
+
+      const listed = await manager.listSessions();
+      const updated = listed.find(s => s.id === 'session-model');
+
+      expect(updated?.currentModelId).toBe('new-1m-model');
+      expect(updated?.contextSize).toBeUndefined();
+      expect(updated?.contextUsed).toBeUndefined();
+      expect(mockSendRequest).toHaveBeenCalledWith('session/set_model', {
+        sessionId: 'acp-model-test',
+        modelId: 'new-1m-model',
+      });
+      expect(apiSender.send).toHaveBeenCalledWith('acp-session-update');
+    });
+  });
+
   async function setupPtySession(): Promise<{
     sessionId: string;
     emitStderr: (data: string) => void;
