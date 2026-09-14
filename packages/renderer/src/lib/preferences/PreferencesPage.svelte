@@ -113,14 +113,14 @@ onMount(async () => {
       <SemanticRouterCreate />
     </Route>
   </Route>
-  <Route path="/skills/*" breadcrumb="Skills" firstmatch>
-    <Route path="/" breadcrumb="Skills">
+  <Route path="/skills/*" breadcrumb="Skills" navigationHint="root" firstmatch>
+    <Route path="/" breadcrumb="Skills" navigationHint="root">
       <SkillsList />
     </Route>
-    <Route path="/create" breadcrumb="Create Skill">
+    <Route path="/create" breadcrumb="Create Skill" navigationHint="details">
       <SkillCreate />
     </Route>
-    <Route path="/:name/*" let:meta breadcrumb="Skill Details">
+    <Route path="/:name/*" let:meta breadcrumb="Skill Details" navigationHint="details">
       <SkillDetails name={decodeURIComponent(meta.params.name)} />
     </Route>
   </Route>
