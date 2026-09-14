@@ -444,21 +444,8 @@ export class AgentWorkspaceManager implements Disposable {
    * Return the secret related to the inference connection linked to the
    * model. Return undefined if there is no secret associated with this connection
 ·   */
-  async ensureModelSecret(options: AgentWorkspaceCreateOptions): Promise<string | undefined> {
-    if (options.workspaceConfiguration?.secrets?.length) {
-      return undefined;
-    }
-
-    return this.ensureModelSecretFromConfig(options);
-  }
-
-  private async ensureModelSecretFromConfig(options: AgentWorkspaceCreateOptions): Promise<string | undefined> {
-    const secret = await this.secretManager.ensureSecretForModel(options.model, options.gateway);
-    if (!secret) return undefined;
-
-    options.secrets = [...new Set([...(options.secrets ?? []), secret.name])];
-
-    return secret.name;
+  async ensureModelSecret(_options: AgentWorkspaceCreateOptions): Promise<string | undefined> {
+    return undefined;
   }
 
   async remove(id: string, gateway: string): Promise<AgentWorkspaceId> {
