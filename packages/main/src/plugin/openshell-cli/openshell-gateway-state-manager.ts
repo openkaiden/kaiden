@@ -144,6 +144,7 @@ export class OpenshellGatewayStateManager implements Disposable {
     }
     return (
       GATEWAY_NAME_PATTERN.test(name) &&
+      !(process.platform === 'win32' && name.endsWith('.')) &&
       existsSync(join(this.directories.getDataDirectory(), 'openshell-gateways', name, 'gateway.toml'))
     );
   }
