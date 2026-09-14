@@ -5,7 +5,7 @@ import { Button, EmptyScreen } from '@podman-desktop/ui-svelte';
 import EngineIcon from '/@/lib/ui/EngineIcon.svelte';
 import { extensionInfos } from '/@/stores/extensions';
 import { openshellGateways } from '/@/stores/openshell-gateways';
-import { isGatewayVersionCompatible, type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME } from '/@api/openshell-gateway-info';
+import { type GatewayInfo, isGatewayVersionCompatible, KAIDEN_LOCAL_GATEWAY_NAME } from '/@api/openshell-gateway-info';
 
 import PreferencesOpenshellGatewayCreate from './PreferencesOpenshellGatewayCreate.svelte';
 import SettingsPage from './SettingsPage.svelte';
