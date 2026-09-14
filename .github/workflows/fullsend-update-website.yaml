@@ -82,7 +82,7 @@ jobs:
         run: bash .fullsend/scripts/prepare-sandbox-credentials.sh
 
       - name: Install fullsend CLI
-        uses: fullsend-ai/fullsend@4665685a1d9d471a7a044908a68f00bed78caba7 # v0.42.0
+        uses: fullsend-ai/fullsend@d5f36921ac754705619f38c637ef692873809fbc # v0.43.0
         with:
           agent: __install_only__
 
