@@ -218,7 +218,10 @@ describe('permission request focus management', () => {
     // Use a deferred promise so events load after the initial effect fires
     let resolveEvents!: (value: AcpFlowToolCallEvent[]) => void;
     vi.mocked(window.getAcpSessionEvents).mockImplementation(
-      () => new Promise(resolve => { resolveEvents = resolve; }),
+      () =>
+        new Promise(resolve => {
+          resolveEvents = resolve;
+        }),
     );
 
     vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([waitingSession]);
