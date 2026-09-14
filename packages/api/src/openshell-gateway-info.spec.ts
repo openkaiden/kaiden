@@ -73,20 +73,20 @@ describe('isGatewayVersionCompatible', () => {
   });
 
   test('returns false when version is below minimum', () => {
-    expect(isGatewayVersionCompatible('0.1.0')).toBe(false);
+    expect(isGatewayVersionCompatible('0.0.100')).toBe(false);
   });
 
   test('returns false when only patch is below minimum', () => {
-    expect(isGatewayVersionCompatible('0.3.9')).toBe(false);
+    expect(isGatewayVersionCompatible('0.0.115')).toBe(false);
   });
 
   test('returns true when patch is above minimum', () => {
-    expect(isGatewayVersionCompatible('0.4.1')).toBe(true);
+    expect(isGatewayVersionCompatible('0.0.117')).toBe(true);
   });
 
   test('handles v-prefixed versions', () => {
-    expect(isGatewayVersionCompatible('v0.4.0')).toBe(true);
-    expect(isGatewayVersionCompatible('v0.1.0')).toBe(false);
+    expect(isGatewayVersionCompatible('v0.0.116')).toBe(true);
+    expect(isGatewayVersionCompatible('v0.0.100')).toBe(false);
   });
 
   test('returns true for unparseable version strings', () => {
