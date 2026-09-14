@@ -326,6 +326,24 @@ test('sets source to kaiden for unreachable kaiden-managed gateway', async () =>
   );
 });
 
+test('rejects trailing-dot name on Windows to prevent path aliasing', async () => {
+  const originalPlatform = process.platform;
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  try {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(openshellCli.listGateways).mockResolvedValue([
+      { name: 'kaiden-local.', endpoint: 'http://127.0.0.1:17670', active: true },
+    ]);
+    vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+
+    await manager.refresh();
+
+    expect(manager.listGateways()[0]).not.toHaveProperty('source');
+  } finally {
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+  }
+});
+
 test('clamps polling intervals above one hour', async () => {
   vi.useFakeTimers();
   pollInterval = 3601;
