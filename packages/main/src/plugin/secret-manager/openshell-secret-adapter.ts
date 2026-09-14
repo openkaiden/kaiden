@@ -16,30 +16,18 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-
-import { ProviderCredentialRefreshStrategy } from '@nvidia/openshell-sdk/raw';
 import { inject, injectable } from 'inversify';
 
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import type { OpenshellProfile } from '/@api/openshell-gateway-info.js';
 import type { SecretCliBackend, SecretCreateOptions, SecretInfo, SecretName } from '/@api/secret-info.js';
 
+import { DefaultProviderFactory } from './default-provider-factory.js';
+import { GcloudAdcProviderFactory } from './gcloud-adc-provider-factory.js';
+import type { ProviderFactory } from './provider-factory.js';
+
 const FROM_GCLOUD_ADC = '--from-gcloud-adc';
 
-/**
- * Adapts {@link OpenshellSdkClientManager} gateway-level provider RPCs to the
- * {@link SecretCliBackend} interface used by {@link SecretManager}.
- *
- * OpenShell manages credentials as "providers" rather than "secrets".
- * This adapter maps:
- *   - `createSecret`  → `client.raw.createProvider`
- *   - `listSecrets`   → `client.raw.listProviders`
- *   - `removeSecret`  → `client.raw.deleteProvider`
- *   - `listServices`  → `client.raw.listProviderProfiles`
- */
 @injectable()
 export class OpenshellSecretAdapter implements SecretCliBackend {
   constructor(
@@ -52,29 +40,8 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
       throw new Error('options.value must be a record for Openshell');
     }
     const client = await this.sdkClientManager.getClient(gateway);
-    const flags = options.value.flags;
-
-    if (flags?.some(f => f !== FROM_GCLOUD_ADC)) {
-      const unsupported = flags.filter(f => f !== FROM_GCLOUD_ADC);
-      throw new Error(`Unsupported CLI flags for SDK path: ${unsupported.join(', ')}`);
-    }
-
-    if (flags?.includes(FROM_GCLOUD_ADC)) {
-      await this.#createProviderWithGcloudAdc(client, options);
-    } else {
-      if (Object.keys(options.value.credentials).length === 0) {
-        throw new Error('credentials must not be empty');
-      }
-      await client.raw.createProvider({
-        provider: {
-          metadata: { name: options.name },
-          type: options.type,
-          credentials: options.value.credentials,
-          config: options.value.config ?? {},
-        },
-        workspace: '',
-      });
-    }
+    const factory = this.#resolveFactory(options);
+    await factory.createProvider(client, options);
     return { name: options.name };
   }
 
@@ -109,104 +76,15 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
     }));
   }
 
-  async #createProviderWithGcloudAdc(
-    client: Awaited<ReturnType<OpenshellSdkClientManager['getClient']>>,
-    options: SecretCreateOptions,
-  ): Promise<void> {
-    const { clientId, clientSecret, refreshToken } = await readGcloudAdc();
-
-    const profileResponse = await client.raw.getProviderProfile({ id: options.type, workspace: '' });
-    const adcCredential = profileResponse.profile?.credentials.find(
-      c => c.refresh?.strategy === ProviderCredentialRefreshStrategy.OAUTH2_REFRESH_TOKEN,
-    );
-    if (!adcCredential) {
-      throw new Error(`--from-gcloud-adc is not supported for '${options.type}' providers`);
+  #resolveFactory(options: SecretCreateOptions): ProviderFactory {
+    const flags = typeof options.value !== 'string' ? options.value.flags : undefined;
+    if (flags?.some(f => f !== FROM_GCLOUD_ADC)) {
+      const unsupported = flags.filter(f => f !== FROM_GCLOUD_ADC);
+      throw new Error(`Unsupported provider factory flag: ${unsupported.join(', ')}`);
     }
-    const credentialKey = adcCredential.envVars[0];
-    if (!credentialKey) {
-      throw new Error(`ADC credential in '${options.type}' profile has no env_vars declared`);
+    if (flags?.includes(FROM_GCLOUD_ADC)) {
+      return new GcloudAdcProviderFactory();
     }
-
-    const value = options.value;
-    await client.raw.createProvider({
-      provider: {
-        metadata: { name: options.name },
-        type: options.type,
-        config: typeof value !== 'string' ? (value.config ?? {}) : {},
-      },
-      workspace: '',
-    });
-
-    try {
-      await client.raw.configureProviderRefresh({
-        provider: options.name,
-        credentialKey,
-        strategy: ProviderCredentialRefreshStrategy.OAUTH2_REFRESH_TOKEN,
-        material: {
-          client_id: clientId,
-          client_secret: clientSecret,
-          refresh_token: refreshToken,
-        },
-        secretMaterialKeys: ['client_secret', 'refresh_token'],
-        workspace: '',
-      });
-
-      await client.raw.rotateProviderCredential({
-        provider: options.name,
-        credentialKey,
-        workspace: '',
-      });
-    } catch (error: unknown) {
-      await client.raw.deleteProvider({ name: options.name, workspace: '' }).catch(() => {});
-      throw error;
-    }
+    return new DefaultProviderFactory();
   }
-}
-
-interface GcloudAdcCredentials {
-  clientId: string;
-  clientSecret: string;
-  refreshToken: string;
-}
-
-export async function readGcloudAdc(): Promise<GcloudAdcCredentials> {
-  const path = resolveGcloudAdcPath();
-  let raw: string;
-  try {
-    raw = await readFile(path, 'utf-8');
-  } catch {
-    throw new Error(`Could not read gcloud ADC file at ${path}`);
-  }
-
-  const parsed = JSON.parse(raw) as Record<string, unknown>;
-  if (parsed['type'] !== 'authorized_user') {
-    throw new Error(
-      `Unsupported gcloud ADC credential type '${String(parsed['type'])}'; ` +
-        'only "authorized_user" is supported. For service accounts, use the appropriate credential mechanism.',
-    );
-  }
-
-  const clientId = parsed['client_id'];
-  const clientSecret = parsed['client_secret'];
-  const refreshToken = parsed['refresh_token'];
-  if (typeof clientId !== 'string' || !clientId) {
-    throw new Error('gcloud ADC file is missing or has an empty "client_id"');
-  }
-  if (typeof clientSecret !== 'string' || !clientSecret) {
-    throw new Error('gcloud ADC file is missing or has an empty "client_secret"');
-  }
-  if (typeof refreshToken !== 'string' || !refreshToken) {
-    throw new Error('gcloud ADC file is missing or has an empty "refresh_token"');
-  }
-  return { clientId, clientSecret, refreshToken };
-}
-
-function resolveGcloudAdcPath(): string {
-  const envPath = process.env['GOOGLE_APPLICATION_CREDENTIALS'];
-  if (envPath) return envPath;
-
-  const configDir = process.env['CLOUDSDK_CONFIG'];
-  if (configDir) return join(configDir, 'application_default_credentials.json');
-
-  return join(homedir(), '.config', 'gcloud', 'application_default_credentials.json');
 }

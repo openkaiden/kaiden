@@ -22,13 +22,13 @@ import { beforeEach, describe, expect, type Mock, test, vi } from 'vitest';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
-import { OpenshellSecretAdapter, readGcloudAdc } from './openshell-secret-adapter.js';
+import { DefaultProviderFactory } from './default-provider-factory.js';
+import { GcloudAdcProviderFactory } from './gcloud-adc-provider-factory.js';
+import { OpenshellSecretAdapter } from './openshell-secret-adapter.js';
 
 vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-client-manager.js'));
-
-vi.mock(import('node:fs/promises'), () => ({
-  readFile: vi.fn(),
-}));
+vi.mock(import('./default-provider-factory.js'));
+vi.mock(import('./gcloud-adc-provider-factory.js'));
 
 let adapter: OpenshellSecretAdapter;
 let mockRaw: {
@@ -36,9 +36,6 @@ let mockRaw: {
   listProviders: Mock;
   deleteProvider: Mock;
   listProviderProfiles: Mock;
-  getProviderProfile: Mock;
-  configureProviderRefresh: Mock;
-  rotateProviderCredential: Mock;
 };
 let sdkClientManager: OpenshellSdkClientManager;
 
@@ -49,82 +46,54 @@ beforeEach(() => {
     listProviders: vi.fn(),
     deleteProvider: vi.fn(),
     listProviderProfiles: vi.fn(),
-    getProviderProfile: vi.fn(),
-    configureProviderRefresh: vi.fn(),
-    rotateProviderCredential: vi.fn(),
   };
   const mockClient = { raw: mockRaw } as unknown as OpenShellClient;
   sdkClientManager = new OpenshellSdkClientManager(undefined!, undefined!);
   vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
   adapter = new OpenshellSecretAdapter(sdkClientManager);
+
+  vi.mocked(DefaultProviderFactory.prototype.createProvider).mockResolvedValue(undefined);
+  vi.mocked(GcloudAdcProviderFactory.prototype.createProvider).mockResolvedValue(undefined);
 });
 
 describe('createSecret', () => {
-  const defaultOptions: SecretCreateOptions = {
-    name: 'my-secret',
-    type: 'github',
-    value: {
-      credentials: {
-        GH_TOKEN: 'ghp_abc123',
-      },
-    },
-  };
-
-  test('delegates to client.raw.createProvider and returns the secret name', async () => {
-    mockRaw.createProvider.mockResolvedValue({});
-
-    const result = await adapter.createSecret(defaultOptions);
-
-    expect(mockRaw.createProvider).toHaveBeenCalledWith({
-      provider: {
-        metadata: { name: 'my-secret' },
-        type: 'github',
-        credentials: { GH_TOKEN: 'ghp_abc123' },
-        config: {},
-      },
-      workspace: '',
-    });
-    expect(result).toEqual({ name: 'my-secret' });
-  });
-
-  test('rejects when client.raw.createProvider fails', async () => {
-    mockRaw.createProvider.mockRejectedValue(new Error('provider type not supported'));
-
-    await expect(adapter.createSecret(defaultOptions)).rejects.toThrow('provider type not supported');
-  });
-
-  test('creates secret on the selected gateway', async () => {
-    mockRaw.createProvider.mockResolvedValue({});
-
-    await adapter.createSecret(defaultOptions, 'remote');
-
-    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
-  });
-
-  test('passes config through to createProvider', async () => {
-    mockRaw.createProvider.mockResolvedValue({});
-
+  test('delegates to DefaultProviderFactory and returns the secret name', async () => {
     const options: SecretCreateOptions = {
-      name: 'my-vertex',
-      type: 'google-vertex-ai',
-      value: {
-        credentials: { GOOGLE_APPLICATION_CREDENTIALS: '/path/to/creds.json' },
-        config: { GOOGLE_VERTEX_PROJECT: 'my-project', GOOGLE_VERTEX_LOCATION: 'us-east5' },
-      },
+      name: 'my-secret',
+      type: 'github',
+      value: { credentials: { GH_TOKEN: 'ghp_abc123' } },
     };
 
     const result = await adapter.createSecret(options);
 
-    expect(mockRaw.createProvider).toHaveBeenCalledWith({
-      provider: {
-        metadata: { name: 'my-vertex' },
-        type: 'google-vertex-ai',
-        credentials: { GOOGLE_APPLICATION_CREDENTIALS: '/path/to/creds.json' },
-        config: { GOOGLE_VERTEX_PROJECT: 'my-project', GOOGLE_VERTEX_LOCATION: 'us-east5' },
-      },
-      workspace: '',
-    });
-    expect(result).toEqual({ name: 'my-vertex' });
+    expect(DefaultProviderFactory.prototype.createProvider).toHaveBeenCalledWith(expect.anything(), options);
+    expect(result).toEqual({ name: 'my-secret' });
+  });
+
+  test('delegates to GcloudAdcProviderFactory when --from-gcloud-adc flag is set', async () => {
+    const options: SecretCreateOptions = {
+      name: 'my-gcp',
+      type: 'google-vertex-ai',
+      value: { credentials: {}, flags: ['--from-gcloud-adc'] },
+    };
+
+    const result = await adapter.createSecret(options);
+
+    expect(GcloudAdcProviderFactory.prototype.createProvider).toHaveBeenCalledWith(expect.anything(), options);
+    expect(DefaultProviderFactory.prototype.createProvider).not.toHaveBeenCalled();
+    expect(result).toEqual({ name: 'my-gcp' });
+  });
+
+  test('creates secret on the selected gateway', async () => {
+    const options: SecretCreateOptions = {
+      name: 'my-secret',
+      type: 'github',
+      value: { credentials: { GH_TOKEN: 'ghp_abc123' } },
+    };
+
+    await adapter.createSecret(options, 'remote');
+
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
   });
 
   test('rejects when options.value is a string', async () => {
@@ -137,118 +106,14 @@ describe('createSecret', () => {
     await expect(adapter.createSecret(options)).rejects.toThrow('options.value must be a record for Openshell');
   });
 
-  test('rejects when credentials are empty and no flags', async () => {
-    const options: SecretCreateOptions = {
-      name: 'my-secret',
-      type: 'github',
-      value: { credentials: {} },
-    };
-
-    await expect(adapter.createSecret(options)).rejects.toThrow('credentials must not be empty');
-  });
-
-  test('rejects unsupported CLI flags', async () => {
+  test('rejects unsupported flags', async () => {
     const options: SecretCreateOptions = {
       name: 'my-secret',
       type: 'github',
       value: { credentials: {}, flags: ['--from-existing'] },
     };
 
-    await expect(adapter.createSecret(options)).rejects.toThrow('Unsupported CLI flags');
-  });
-});
-
-describe('createSecret with --from-gcloud-adc', () => {
-  const adcOptions: SecretCreateOptions = {
-    name: 'my-gcp',
-    type: 'google-vertex-ai',
-    value: {
-      credentials: {},
-      flags: ['--from-gcloud-adc'],
-    },
-  };
-
-  beforeEach(async () => {
-    const { readFile } = await import('node:fs/promises');
-    vi.mocked(readFile).mockResolvedValue(
-      JSON.stringify({
-        type: 'authorized_user',
-        client_id: 'test-client-id',
-        client_secret: 'test-client-secret',
-        refresh_token: 'test-refresh-token',
-      }),
-    );
-
-    mockRaw.getProviderProfile.mockResolvedValue({
-      profile: {
-        credentials: [
-          {
-            name: 'api_key',
-            envVars: ['GOOGLE_API_KEY'],
-            refresh: { strategy: 3 },
-          },
-        ],
-      },
-    });
-    mockRaw.createProvider.mockResolvedValue({});
-    mockRaw.configureProviderRefresh.mockResolvedValue({});
-    mockRaw.rotateProviderCredential.mockResolvedValue({});
-  });
-
-  test('performs the 3-step gcloud ADC flow', async () => {
-    const result = await adapter.createSecret(adcOptions);
-
-    expect(mockRaw.getProviderProfile).toHaveBeenCalledWith({ id: 'google-vertex-ai', workspace: '' });
-    expect(mockRaw.createProvider).toHaveBeenCalledWith({
-      provider: {
-        metadata: { name: 'my-gcp' },
-        type: 'google-vertex-ai',
-        config: {},
-      },
-      workspace: '',
-    });
-    expect(mockRaw.configureProviderRefresh).toHaveBeenCalledWith({
-      provider: 'my-gcp',
-      credentialKey: 'GOOGLE_API_KEY',
-      strategy: 3,
-      material: {
-        client_id: 'test-client-id',
-        client_secret: 'test-client-secret',
-        refresh_token: 'test-refresh-token',
-      },
-      secretMaterialKeys: ['client_secret', 'refresh_token'],
-      workspace: '',
-    });
-    expect(mockRaw.rotateProviderCredential).toHaveBeenCalledWith({
-      provider: 'my-gcp',
-      credentialKey: 'GOOGLE_API_KEY',
-      workspace: '',
-    });
-    expect(result).toEqual({ name: 'my-gcp' });
-  });
-
-  test('rolls back provider on configureProviderRefresh failure', async () => {
-    mockRaw.configureProviderRefresh.mockRejectedValue(new Error('configure failed'));
-    mockRaw.deleteProvider.mockResolvedValue({});
-
-    await expect(adapter.createSecret(adcOptions)).rejects.toThrow('configure failed');
-    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({ name: 'my-gcp', workspace: '' });
-  });
-
-  test('rolls back provider on rotateProviderCredential failure', async () => {
-    mockRaw.rotateProviderCredential.mockRejectedValue(new Error('rotate failed'));
-    mockRaw.deleteProvider.mockResolvedValue({});
-
-    await expect(adapter.createSecret(adcOptions)).rejects.toThrow('rotate failed');
-    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({ name: 'my-gcp', workspace: '' });
-  });
-
-  test('rejects when provider profile has no ADC credential', async () => {
-    mockRaw.getProviderProfile.mockResolvedValue({
-      profile: { credentials: [{ name: 'api_key', envVars: ['KEY'], refresh: { strategy: 1 } }] },
-    });
-
-    await expect(adapter.createSecret(adcOptions)).rejects.toThrow('not supported');
+    await expect(adapter.createSecret(options)).rejects.toThrow('Unsupported provider factory flag');
   });
 });
 
@@ -368,41 +233,5 @@ describe('listServices', () => {
     mockRaw.listProviderProfiles.mockRejectedValue(new Error('no gateway configured'));
 
     await expect(adapter.listServices()).rejects.toThrow('no gateway configured');
-  });
-});
-
-describe('readGcloudAdc', () => {
-  test('rejects for service account type', async () => {
-    const { readFile } = await import('node:fs/promises');
-    vi.mocked(readFile).mockResolvedValue(
-      JSON.stringify({
-        type: 'service_account',
-        client_id: 'id',
-        client_secret: 'secret',
-        refresh_token: 'token',
-      }),
-    );
-
-    await expect(readGcloudAdc()).rejects.toThrow('only "authorized_user" is supported');
-  });
-
-  test('rejects when file cannot be read', async () => {
-    const { readFile } = await import('node:fs/promises');
-    vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
-
-    await expect(readGcloudAdc()).rejects.toThrow('Could not read gcloud ADC file');
-  });
-
-  test('rejects when client_id is missing', async () => {
-    const { readFile } = await import('node:fs/promises');
-    vi.mocked(readFile).mockResolvedValue(
-      JSON.stringify({
-        type: 'authorized_user',
-        client_secret: 'secret',
-        refresh_token: 'token',
-      }),
-    );
-
-    await expect(readGcloudAdc()).rejects.toThrow('missing or has an empty "client_id"');
   });
 });
