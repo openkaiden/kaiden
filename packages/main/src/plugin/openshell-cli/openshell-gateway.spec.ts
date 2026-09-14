@@ -18,8 +18,8 @@
 
 import { type ChildProcess, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { createWriteStream, existsSync, type WriteStream } from 'node:fs';
-import { type FileHandle, mkdir, open, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { type FileHandle, mkdir, open, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { RunResult } from '@openkaiden/api';
@@ -49,25 +49,12 @@ const GATEWAY_CONFIG_PATH = join(GATEWAY_STORAGE_DIRECTORY, 'gateway.toml');
 const GATEWAY_DB_URL = `sqlite:${join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db')}?mode=rwc`;
 const GATEWAY_LOG_PATH = join(GATEWAY_STORAGE_DIRECTORY, 'gateway.log');
 
-type MockWriteStream = WriteStream & {
-  write: ReturnType<typeof vi.fn>;
-  end: ReturnType<typeof vi.fn>;
-};
-
-const gatewayLogStream = Object.assign(new EventEmitter(), {
-  write: vi.fn(),
-  end: vi.fn(),
-}) as unknown as MockWriteStream;
-
 const closeLogFile = vi.fn();
 
-function createMockChildProcess(): ChildProcess & { _stdout: EventEmitter; _stderr: EventEmitter } {
-  const proc = new EventEmitter() as ChildProcess & { _stdout: EventEmitter; _stderr: EventEmitter };
-  proc._stdout = new EventEmitter();
-  proc._stderr = new EventEmitter();
-  Object.defineProperty(proc, 'stdout', { get: (): EventEmitter => proc._stdout });
-  Object.defineProperty(proc, 'stderr', { get: (): EventEmitter => proc._stderr });
+function createMockChildProcess(): ChildProcess {
+  const proc = new EventEmitter() as ChildProcess;
   proc.kill = vi.fn().mockReturnValue(true);
+  proc.unref = vi.fn();
   return proc;
 }
 
@@ -104,12 +91,10 @@ const notificationRegistry = {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  gatewayLogStream.removeAllListeners();
   vi.mocked(directories.getDataDirectory).mockReturnValue(KAIDEN_DATA_DIRECTORY);
   vi.mocked(cliToolRegistry.getCliToolInfos).mockReturnValue([
     { name: 'openshell-gateway', path: GATEWAY_BINARY },
   ] as unknown as CliToolInfo[]);
-  vi.mocked(createWriteStream).mockReturnValue(gatewayLogStream);
   vi.mocked(existsSync).mockReturnValue(false);
   vi.mocked(open).mockResolvedValue({ fd: 42, close: closeLogFile } as unknown as FileHandle);
   vi.mocked(exec.exec).mockResolvedValue({ command: '', stdout: '', stderr: '' });
@@ -152,7 +137,7 @@ describe('init', () => {
         '--port',
         '17675',
       ]),
-      expect.objectContaining({ detached: false }),
+      expect.objectContaining({ detached: true }),
     );
   });
 
@@ -169,7 +154,6 @@ describe('init', () => {
     expect(openshellCli.listGateways).toHaveBeenCalled();
     expect(openshellCli.checkEndpointStatus).toHaveBeenCalledWith('https://127.0.0.1:8443');
     expect(spawn).not.toHaveBeenCalled();
-    expect(createWriteStream).not.toHaveBeenCalled();
     expect(openshellCli.selectGateway).not.toHaveBeenCalled();
   });
 
@@ -259,7 +243,7 @@ describe('init', () => {
     expect(spawn).toHaveBeenCalledWith(
       GATEWAY_BINARY,
       expect.arrayContaining(['--port', '17670']),
-      expect.objectContaining({ detached: false }),
+      expect.objectContaining({ detached: true }),
     );
   });
 
@@ -305,7 +289,7 @@ describe('init', () => {
     expect(spawn).toHaveBeenCalledWith(
       GATEWAY_BINARY,
       expect.arrayContaining(['--port', '17670']),
-      expect.objectContaining({ detached: false }),
+      expect.objectContaining({ detached: true }),
     );
   });
 
@@ -341,7 +325,7 @@ describe('init', () => {
     expect(spawn).toHaveBeenCalledWith(
       GATEWAY_BINARY,
       expect.arrayContaining(['--port', '17670']),
-      expect.objectContaining({ detached: false }),
+      expect.objectContaining({ detached: true }),
     );
   });
 
@@ -410,7 +394,7 @@ describe('createLocalGateway', () => {
         '--disable-tls',
       ]),
       expect.objectContaining({
-        detached: false,
+        detached: true,
         stdio: ['ignore', 42, 42],
       }),
     );
@@ -607,15 +591,16 @@ describe('start', () => {
     expect(gateway.isRunning()).toBe(true);
   });
 
-  test('spawns the gateway process and writes its output only to the log', async () => {
-    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  test('spawns the gateway process with file-descriptor stdio for logging', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const proc = createMockChildProcess();
     vi.mocked(spawn).mockReturnValue(proc);
     vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
     vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
 
     await gateway.start();
+
+    expect(open).toHaveBeenCalledWith(GATEWAY_LOG_PATH, 'w');
     expect(spawn).toHaveBeenCalledWith(
       GATEWAY_BINARY,
       [
@@ -629,22 +614,12 @@ describe('start', () => {
         '--db-url',
         GATEWAY_DB_URL,
       ],
-      expect.objectContaining({ detached: false }),
+      expect.objectContaining({
+        detached: true,
+        stdio: ['ignore', 42, 42],
+      }),
     );
-    expect(createWriteStream).toHaveBeenCalledWith(GATEWAY_LOG_PATH, { flags: 'w' });
-    expect(gatewayLogStream.write).not.toHaveBeenCalled();
-
-    consoleLog.mockClear();
-    consoleError.mockClear();
-    const stdout = Buffer.from('routine gateway output\n');
-    const stderr = Buffer.from('routine gateway diagnostic\n');
-    proc._stdout.emit('data', stdout);
-    proc._stderr.emit('data', stderr);
-
-    expect(gatewayLogStream.write).toHaveBeenNthCalledWith(1, stdout);
-    expect(gatewayLogStream.write).toHaveBeenNthCalledWith(2, stderr);
-    expect(consoleLog).not.toHaveBeenCalled();
-    expect(consoleError).not.toHaveBeenCalled();
+    expect(closeLogFile).toHaveBeenCalled();
   });
 
   test('spawns with custom port and address', async () => {
@@ -669,7 +644,7 @@ describe('start', () => {
         '--db-url',
         GATEWAY_DB_URL,
       ],
-      expect.objectContaining({ detached: false }),
+      expect.objectContaining({ detached: true }),
     );
   });
 
@@ -685,7 +660,7 @@ describe('start', () => {
     expect(spawn).toHaveBeenCalledWith(
       GATEWAY_BINARY,
       ['--config', GATEWAY_CONFIG_PATH, '--port', '17670', '--bind-address', '127.0.0.1', '--db-url', GATEWAY_DB_URL],
-      expect.objectContaining({ detached: false }),
+      expect.objectContaining({ detached: true }),
     );
   });
 
@@ -701,7 +676,7 @@ describe('start', () => {
     expect(spawn).toHaveBeenCalledWith(
       GATEWAY_BINARY,
       expect.arrayContaining(['--db-url', GATEWAY_DB_URL]),
-      expect.objectContaining({ detached: false }),
+      expect.objectContaining({ detached: true }),
     );
   });
 
@@ -922,7 +897,7 @@ describe('start', () => {
     expect(spawn).toHaveBeenCalledWith(
       GATEWAY_BINARY,
       ['--port', '17670', '--bind-address', '127.0.0.1', '--disable-tls', '--db-url', GATEWAY_DB_URL],
-      expect.objectContaining({ detached: false }),
+      expect.objectContaining({ detached: true }),
     );
   });
 
@@ -1016,24 +991,7 @@ describe('isRunning', () => {
 });
 
 describe('dispose', () => {
-  test('stops gateways created from the settings UI', async () => {
-    const proc = createMockChildProcess();
-    vi.mocked(spawn).mockReturnValue(proc);
-
-    await gateway.createLocalGateway({
-      name: 'local-dev',
-      bindAddress: '127.0.0.1',
-      port: 17675,
-      driver: 'podman',
-    });
-
-    gateway.dispose();
-
-    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
-    proc.emit('exit', 0, undefined);
-  });
-
-  test('stops the gateway process and closes its log', async () => {
+  test('does not kill gateway processes (they survive app restarts)', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const proc = createMockChildProcess();
     vi.mocked(spawn).mockReturnValue(proc);
@@ -1044,9 +1002,22 @@ describe('dispose', () => {
 
     gateway.dispose();
 
-    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
-    proc.emit('exit', 0, undefined);
-    await vi.waitFor(() => expect(gatewayLogStream.end).toHaveBeenCalledOnce());
+    expect(proc.kill).not.toHaveBeenCalled();
+  });
+
+  test('clears gateway process tracking so isRunning returns false', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+
+    await gateway.start();
+    expect(gateway.isRunning()).toBe(true);
+
+    gateway.dispose();
+
+    expect(gateway.isRunning()).toBe(false);
   });
 });
 
@@ -1179,7 +1150,7 @@ describe('onDidGatewayInitFailed', () => {
     );
   });
 
-  test('includes stderr output in notification body', async () => {
+  test('includes log file output in notification body', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -1189,13 +1160,13 @@ describe('onDidGatewayInitFailed', () => {
     const proc = createMockChildProcess();
     vi.mocked(spawn).mockImplementation(() => {
       setTimeout(() => {
-        proc._stderr.emit('data', Buffer.from('Socket not found: /var/run/docker.sock'));
         Object.defineProperty(proc, 'exitCode', { value: 1, configurable: true });
         proc.emit('exit', 1, undefined);
       }, 0);
       return proc;
     });
     vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    vi.mocked(readFile).mockResolvedValue('Socket not found: /var/run/docker.sock');
 
     await gateway.init();
 
@@ -1278,7 +1249,7 @@ describe('gateway config generation', () => {
     expect(spawn).toHaveBeenCalledWith(
       GATEWAY_BINARY,
       expect.arrayContaining(['--config', GATEWAY_CONFIG_PATH]),
-      expect.objectContaining({ detached: false }),
+      expect.objectContaining({ detached: true }),
     );
   });
 
@@ -1307,7 +1278,7 @@ describe('gateway config generation', () => {
     expect(spawn).toHaveBeenCalledWith(
       GATEWAY_BINARY,
       expect.arrayContaining(['--config', GATEWAY_CONFIG_PATH]),
-      expect.objectContaining({ detached: false }),
+      expect.objectContaining({ detached: true }),
     );
   });
 
@@ -1334,7 +1305,7 @@ describe('gateway config generation', () => {
     expect(spawn).toHaveBeenCalledWith(
       GATEWAY_BINARY,
       ['--port', '17670', '--bind-address', '127.0.0.1', '--disable-tls', '--db-url', GATEWAY_DB_URL],
-      expect.objectContaining({ detached: false }),
+      expect.objectContaining({ detached: true }),
     );
   });
 
