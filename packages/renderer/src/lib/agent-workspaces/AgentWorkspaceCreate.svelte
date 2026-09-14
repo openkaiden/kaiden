@@ -17,7 +17,6 @@ import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
 import { disabledModels, isModelEnabled, modelKey } from '/@/stores/model-catalog';
 import { catalogModels } from '/@/stores/models';
 import { openshellGateways } from '/@/stores/openshell-gateways';
-import { isGatewayVersionCompatible } from '/@api/openshell-gateway-info';
 import { allOpenshellSandboxes } from '/@/stores/openshell-sandboxes';
 import { providerInfos } from '/@/stores/providers';
 import { ragEnvironments } from '/@/stores/rag-environments';
@@ -32,6 +31,7 @@ import type {
 import { getSandboxNameValidationError, sanitizeDns1123Label } from '/@api/agent-workspace-info';
 import { NavigationPage } from '/@api/navigation-page';
 import type { DefaultWorkspaceSettings } from '/@api/onboarding-settings-info';
+import { isGatewayVersionCompatible } from '/@api/openshell-gateway-info';
 import type { FilesystemConfiguration, WorkspaceProjectInfo } from '/@api/workspace-project-info';
 
 import AgentWorkspaceCreateStepAgentModel from './AgentWorkspaceCreateStepAgentModel.svelte';

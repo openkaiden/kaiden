@@ -4,7 +4,7 @@ import { router } from 'tinro';
 
 import WarningMessage from '/@/lib/ui/WarningMessage.svelte';
 import { openshellGateways, openshellGatewaysReady } from '/@/stores/openshell-gateways';
-import { isGatewayVersionCompatible, MIN_GATEWAY_VERSION, type GatewayInfo } from '/@api/openshell-gateway-info';
+import { type GatewayInfo, isGatewayVersionCompatible, MIN_GATEWAY_VERSION } from '/@api/openshell-gateway-info';
 
 const GATEWAY_SETTINGS_PATH = '/preferences/openshell/gateways';
 
