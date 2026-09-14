@@ -56,12 +56,16 @@ const filteredSessions: SessionSelectable[] = $derived.by(() => {
 
 const needsInputSessions = $derived(filteredSessions.filter(s => s.status === 'waiting_input'));
 const runningSessions = $derived(filteredSessions.filter(s => s.status === 'running' || s.status === 'idle'));
-const completedSessions = $derived(
-  filteredSessions.filter(s => s.status === 'completed' || s.status === 'cancelled' || s.status === 'error'),
-);
+const failedSessions = $derived(filteredSessions.filter(s => s.status === 'error'));
+const completedSessions = $derived(filteredSessions.filter(s => s.status === 'completed' || s.status === 'cancelled'));
 
 const hasMultipleGroups: boolean = $derived(
-  [needsInputSessions.length > 0, runningSessions.length > 0, completedSessions.length > 0].filter(Boolean).length > 1,
+  [
+    needsInputSessions.length > 0,
+    runningSessions.length > 0,
+    failedSessions.length > 0,
+    completedSessions.length > 0,
+  ].filter(Boolean).length > 1,
 );
 
 const row = new TableRow<SessionSelectable>({});
@@ -134,6 +138,12 @@ const columns = [nameColumn, statusColumn, sandboxColumn, timeColumn];
               <div class="mx-5 pt-2 text-sm font-semibold uppercase tracking-wider text-[var(--pd-status-running)]">Running</div>
               <div class="flex min-w-full">
                 <Table kind="acp-sessions-running" data={runningSessions} columns={columns} row={row} defaultSortColumn="Time" />
+              </div>
+            {/if}
+            {#if failedSessions.length > 0}
+              <div class="mx-5 pt-2 text-sm font-semibold uppercase tracking-wider text-[var(--pd-status-dead)]">Failed</div>
+              <div class="flex min-w-full">
+                <Table kind="acp-sessions-failed" data={failedSessions} columns={columns} row={row} defaultSortColumn="Time" />
               </div>
             {/if}
             {#if completedSessions.length > 0}
