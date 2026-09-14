@@ -89,7 +89,21 @@ describe('isGatewayVersionCompatible', () => {
     expect(isGatewayVersionCompatible('v0.0.100')).toBe(false);
   });
 
+  test('rejects prerelease of the minimum version', () => {
+    expect(isGatewayVersionCompatible('0.0.116-rc.1')).toBe(false);
+    expect(isGatewayVersionCompatible('0.0.116-beta.2')).toBe(false);
+  });
+
+  test('accepts prerelease of a version above the minimum', () => {
+    expect(isGatewayVersionCompatible('0.0.117-rc.1')).toBe(true);
+  });
+
   test('returns true for unparseable version strings', () => {
     expect(isGatewayVersionCompatible('not-a-version')).toBe(true);
+  });
+
+  test('returns true for trailing garbage after valid version', () => {
+    expect(isGatewayVersionCompatible('0.0.100garbage')).toBe(false);
+    expect(isGatewayVersionCompatible('0.0.116garbage')).toBe(true);
   });
 });

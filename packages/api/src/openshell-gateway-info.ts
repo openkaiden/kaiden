@@ -198,21 +198,23 @@ export function isGatewayVersionCompatible(version: string | undefined): boolean
   if (!version) {
     return true;
   }
-  const parse = (v: string): [number, number, number] | undefined => {
-    const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(v);
+  const parse = (v: string): [number, number, number, boolean] | undefined => {
+    const match = /^v?(\d+)\.(\d+)\.(\d+)(-[a-zA-Z0-9.]+)?/.exec(v);
     if (!match) return undefined;
-    return [Number(match[1]), Number(match[2]), Number(match[3])];
+    return [Number(match[1]), Number(match[2]), Number(match[3]), !!match[4]];
   };
   const gw = parse(version);
   const min = parse(MIN_GATEWAY_VERSION);
   if (!gw || !min) {
     return true;
   }
-  const [gwMajor, gwMinor, gwPatch] = gw;
+  const [gwMajor, gwMinor, gwPatch, gwPrerelease] = gw;
   const [minMajor, minMinor, minPatch] = min;
   if (gwMajor !== minMajor) return gwMajor > minMajor;
   if (gwMinor !== minMinor) return gwMinor > minMinor;
-  return gwPatch >= minPatch;
+  if (gwPatch !== minPatch) return gwPatch > minPatch;
+  // semver: a prerelease version has lower precedence than its release
+  return !gwPrerelease;
 }
 
 export interface GatewaySandboxes {
