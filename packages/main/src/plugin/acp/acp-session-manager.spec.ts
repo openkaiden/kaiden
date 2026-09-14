@@ -971,7 +971,7 @@ describe('AcpSessionManager', () => {
   });
 
   describe('setSessionModel', () => {
-    test('resets contextSize and contextUsed after model switch', async () => {
+    test('resets contextUsed to zero and preserves contextSize after model switch', async () => {
       const { existsSync } = await import('node:fs');
       const { readdir, readFile } = await import('node:fs/promises');
 
@@ -1012,8 +1012,8 @@ describe('AcpSessionManager', () => {
       const updated = listed.find(s => s.id === 'session-model');
 
       expect(updated?.currentModelId).toBe('new-1m-model');
-      expect(updated?.contextSize).toBeUndefined();
-      expect(updated?.contextUsed).toBeUndefined();
+      expect(updated?.contextSize).toBe(200_000);
+      expect(updated?.contextUsed).toBe(0);
       expect(mockSendRequest).toHaveBeenCalledWith('session/set_model', {
         sessionId: 'acp-model-test',
         modelId: 'new-1m-model',
