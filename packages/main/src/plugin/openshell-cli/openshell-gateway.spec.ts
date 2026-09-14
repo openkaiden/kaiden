@@ -395,7 +395,7 @@ describe('createLocalGateway', () => {
       ]),
       expect.objectContaining({
         detached: true,
-        stdio: ['ignore', 42, 42],
+        stdio: ['ignore', 42, 42, 'ignore', 'ignore'],
       }),
     );
     const spawnArgs = vi.mocked(spawn).mock.calls[0]?.[1] ?? [];
@@ -616,7 +616,7 @@ describe('start', () => {
       ],
       expect.objectContaining({
         detached: true,
-        stdio: ['ignore', 42, 42],
+        stdio: ['ignore', 42, 42, 'ignore', 'ignore'],
       }),
     );
     expect(closeLogFile).toHaveBeenCalled();
