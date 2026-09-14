@@ -983,6 +983,8 @@ export class AcpSessionManager {
     });
 
     session.info.currentModelId = modelId;
+    session.info.contextSize = undefined;
+    session.info.contextUsed = undefined;
     session.info.updatedAt = Date.now();
     this.apiSender.send('acp-session-update');
   }
