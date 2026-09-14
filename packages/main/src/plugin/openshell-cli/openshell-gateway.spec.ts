@@ -62,6 +62,14 @@ function mockExecResult(stdout = ''): RunResult {
   return { command: GATEWAY_BINARY, stdout, stderr: '' };
 }
 
+function expectDetachedLogStdio(stdio: unknown[] | undefined, logFd: number): void {
+  expect(stdio?.[0]).toBe('ignore');
+  expect(stdio?.[1]).toBe(logFd);
+  expect(stdio?.[2]).toBe(logFd);
+  expect(stdio?.length).toBeGreaterThan(3);
+  expect(stdio?.slice(3).every(fd => fd === 'ignore')).toBe(true);
+}
+
 let gateway: OpenshellGateway;
 
 const cliToolRegistry = {
@@ -395,9 +403,10 @@ describe('createLocalGateway', () => {
       ]),
       expect.objectContaining({
         detached: true,
-        stdio: ['ignore', 42, 42, 'ignore', 'ignore'],
       }),
     );
+    const spawnOpts = vi.mocked(spawn).mock.calls[0]?.[2] as { stdio: unknown[] };
+    expectDetachedLogStdio(spawnOpts.stdio, 42);
     const spawnArgs = vi.mocked(spawn).mock.calls[0]?.[1] ?? [];
     expect(spawnArgs).not.toContain('--tls-cert');
     expect(spawnArgs).not.toContain('--tls-key');
@@ -616,9 +625,10 @@ describe('start', () => {
       ],
       expect.objectContaining({
         detached: true,
-        stdio: ['ignore', 42, 42, 'ignore', 'ignore'],
       }),
     );
+    const startOpts = vi.mocked(spawn).mock.calls[0]?.[2] as { stdio: unknown[] };
+    expectDetachedLogStdio(startOpts.stdio, 42);
     expect(closeLogFile).toHaveBeenCalled();
   });
 

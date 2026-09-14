@@ -52,6 +52,16 @@ const STOP_TIMEOUT_MS = 5000;
 const SUPERVISOR_IMAGE_BASE = 'ghcr.io/nvidia/openshell/supervisor';
 const GATEWAY_LOG_FILENAME = 'gateway.log';
 const DEFAULT_GATEWAY_NAME = KAIDEN_LOCAL_GATEWAY_NAME;
+// Node spawn only configures listed stdio slots; unspecified parent fds are inherited.
+// Playwright/Electron keep extra IPC pipes whose write-ends block process 'close' if
+// a detached gateway holds them. Pad a fixed range so this works without /dev/fd.
+const DETACHED_STDIO_EXTRA_IGNORE_COUNT = 256;
+
+type StdioOption = 'ignore' | 'pipe' | 'inherit' | number;
+
+function buildDetachedStdio(fd0: StdioOption, fd1: StdioOption, fd2: StdioOption): StdioOption[] {
+  return [fd0, fd1, fd2, ...Array<StdioOption>(DETACHED_STDIO_EXTRA_IGNORE_COUNT).fill('ignore')];
+}
 
 /**
  * Manages the `openshell-gateway` server binary lifecycle.
@@ -319,7 +329,7 @@ export class OpenshellGateway implements Disposable {
     let gatewayProcess: ChildProcess;
     try {
       gatewayProcess = spawn(binaryPath, this.buildArgs(true, configPath, storageDirectory, port, bindAddress), {
-        stdio: ['ignore', logFile.fd, logFile.fd, 'ignore', 'ignore'],
+        stdio: buildDetachedStdio('ignore', logFile.fd, logFile.fd),
         detached: true,
         env: { ...process.env, NO_COLOR: '1' },
       });
@@ -365,7 +375,7 @@ export class OpenshellGateway implements Disposable {
     let gatewayProcess: ChildProcess;
     try {
       gatewayProcess = spawn(binaryPath, args, {
-        stdio: ['ignore', logFile.fd, logFile.fd, 'ignore', 'ignore'],
+        stdio: buildDetachedStdio('ignore', logFile.fd, logFile.fd),
         detached: true,
         env: { ...process.env, NO_COLOR: '1' },
       });
