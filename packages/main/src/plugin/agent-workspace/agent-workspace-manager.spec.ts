@@ -428,13 +428,13 @@ describe('create – OpenShell mode', () => {
       {
         name: 'kaiden',
         endpoint: 'http://127.0.0.1:17670',
-        version: '0.1.0',
+        version: '0.0.100',
         gatewayState: { reachable: true, health: 'healthy' },
       },
     ]);
 
     await expect(manager.create(defaultOptions)).rejects.toThrow(
-      'gateway "kaiden" version 0.1.0 is below the minimum required version 0.4.0',
+      'gateway "kaiden" version 0.0.100 is below the minimum required version 0.0.116',
     );
 
     expect(openshellCli.createSandbox).not.toHaveBeenCalled();
