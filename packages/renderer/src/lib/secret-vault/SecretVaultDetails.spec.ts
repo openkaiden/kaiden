@@ -32,8 +32,8 @@ vi.mock(import('tinro'));
 vi.mock(import('/@/stores/secret-vault'));
 
 const routerStore = writable({
-  path: '/secret-vault/github-pat/summary',
-  url: '/secret-vault/github-pat/summary',
+  path: '/preferences/secret-vault/github-pat/summary',
+  url: '/preferences/secret-vault/github-pat/summary',
   from: '/',
   query: {} as Record<string, string>,
   hash: '',
@@ -114,7 +114,7 @@ test('should remove secret and navigate to list when user confirms removal', asy
     expect(window.removeSecret).toHaveBeenCalledWith('GitHub', 'kaiden');
   });
 
-  expect(router.goto).toHaveBeenCalledWith('/secret-vault');
+  expect(router.goto).toHaveBeenCalledWith('/preferences/secret-vault');
 });
 
 test('should not remove secret when user cancels removal', async () => {

@@ -23,6 +23,7 @@ import { PROVIDERS, TIMEOUTS } from '/@/model/core/types';
 import { SettingsCodingAgentsPage } from '/@/model/pages/settings-coding-agents-tab-page';
 import { SettingsMcpPage } from '/@/model/pages/settings-mcp-tab-page';
 import { SettingsModelsPage } from '/@/model/pages/settings-models-tab-page';
+import { SettingsSecretVaultPage } from '/@/model/pages/settings-secret-vault-tab-page';
 import { SettingsSkillsPage } from '/@/model/pages/settings-skills-tab-page';
 
 import { BasePage } from './base-page';
@@ -39,6 +40,7 @@ export class SettingsPage extends BasePage {
   readonly mcpTab: Locator;
   readonly modelsTab: Locator;
   readonly skillsTab: Locator;
+  readonly secretVaultTab: Locator;
   readonly preferencesTab: Locator;
   private readonly tabs: Locator[];
 
@@ -52,6 +54,7 @@ export class SettingsPage extends BasePage {
     this.mcpTab = sidebar.getByRole('link', { name: 'MCP' });
     this.modelsTab = sidebar.getByRole('link', { name: 'Models' });
     this.skillsTab = sidebar.getByRole('link', { name: 'Skills' });
+    this.secretVaultTab = sidebar.getByRole('link', { name: 'Secret Vault' });
     this.preferencesTab = sidebar.getByRole('link', { name: 'Preferences' });
     this.tabs = [
       this.resourcesTab,
@@ -61,6 +64,7 @@ export class SettingsPage extends BasePage {
       this.mcpTab,
       this.modelsTab,
       this.skillsTab,
+      this.secretVaultTab,
       this.preferencesTab,
     ];
   }
@@ -77,6 +81,7 @@ export class SettingsPage extends BasePage {
     await expect(this.mcpTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.modelsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.skillsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
+    await expect(this.secretVaultTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.preferencesTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
   }
 
@@ -110,6 +115,10 @@ export class SettingsPage extends BasePage {
 
   async openSkills(): Promise<SettingsSkillsPage> {
     return this.openTab(this.skillsTab, SettingsSkillsPage);
+  }
+
+  async openSecretVault(): Promise<SettingsSecretVaultPage> {
+    return this.openTab(this.secretVaultTab, SettingsSecretVaultPage);
   }
 
   getAllTabs(): Locator[] {

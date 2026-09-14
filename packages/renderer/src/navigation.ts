@@ -201,13 +201,13 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
       router.goto('/preferences/skills/create');
       break;
     case NavigationPage.SECRET_VAULT:
-      router.goto('/secret-vault');
+      router.goto('/preferences/secret-vault');
       break;
     case NavigationPage.SECRET_VAULT_CREATE:
-      router.goto('/secret-vault/create');
+      router.goto('/preferences/secret-vault/create');
       break;
     case NavigationPage.SECRET_VAULT_DETAILS:
-      router.goto(`/secret-vault/${encodeURIComponent(request.parameters.id)}/summary`);
+      router.goto(`/preferences/secret-vault/${encodeURIComponent(request.parameters.id)}/summary`);
       break;
     case NavigationPage.PROJECTS:
       router.goto('/projects');

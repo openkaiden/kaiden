@@ -16,28 +16,21 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { faKey } from '@fortawesome/free-solid-svg-icons/faKey';
+import { expect, type Locator, type Page } from '@playwright/test';
 
-import { secretVaultInfos } from '/@/stores/secret-vault';
+import { TIMEOUTS } from '/@/model/core/types';
 
-import type { NavigationRegistryEntry } from './navigation-registry';
+import { BasePage } from './base-page';
 
-let count = $state(0);
+export class SettingsSecretVaultPage extends BasePage {
+  readonly heading: Locator;
 
-secretVaultInfos.subscribe(infos => {
-  count = infos.length;
-});
+  constructor(page: Page) {
+    super(page);
+    this.heading = page.getByRole('heading', { name: 'Secret Vault' });
+  }
 
-export function createNavigationSecretVaultEntry(): NavigationRegistryEntry {
-  const registry: NavigationRegistryEntry = {
-    name: 'Secret Vault',
-    icon: { faIcon: { definition: faKey, size: 'lg' } },
-    link: '/secret-vault',
-    tooltip: 'Secret Vault',
-    type: 'entry',
-    get counter() {
-      return count;
-    },
-  };
-  return registry;
+  async waitForLoad(): Promise<void> {
+    await expect(this.heading).toBeVisible({ timeout: TIMEOUTS.SHORT });
+  }
 }

@@ -29,7 +29,6 @@ import { createNavigationAgentWorkspacesEntry } from './navigation-registry-agen
 import { createNavigationExtensionEntry, createNavigationExtensionGroup } from './navigation-registry-extension.svelte';
 import { createNavigationProjectsEntry } from './navigation-registry-projects.svelte';
 import { createNavigationRagEntry } from './navigation-registry-rag.svelte';
-import { createNavigationSecretVaultEntry } from './navigation-registry-secret-vault.svelte';
 
 export interface NavigationRegistryEntry {
   name: string;
@@ -65,7 +64,6 @@ const init = (): void => {
   values.push(createNavigationAcpSessionsEntry());
   values.push(createNavigationAgentWorkspacesEntry());
   values.push(createNavigationProjectsEntry());
-  values.push(createNavigationSecretVaultEntry());
   values.push(createNavigationRagEntry());
   values.push(createNavigationExtensionEntry());
   values.push(createNavigationExtensionGroup());
