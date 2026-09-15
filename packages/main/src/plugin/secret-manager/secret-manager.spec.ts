@@ -53,6 +53,7 @@ let gatewayStartCallback: (() => void) | undefined;
 const providerRegistry = {
   getInferenceConnection: vi.fn(),
   getProvider: vi.fn(),
+  getInferenceConnectionLegacy: vi.fn(),
 } as unknown as ProviderRegistry;
 
 const extensionStorageMock = {
