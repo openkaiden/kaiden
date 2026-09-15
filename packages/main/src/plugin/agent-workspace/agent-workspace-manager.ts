@@ -247,7 +247,7 @@ export class AgentWorkspaceManager implements Disposable {
     const t0 = performance.now();
 
     const v2Globally = await this.openshellCli.isV2ProviderEnabled();
-    if (!v2Globally) {
+    if (v2Globally !== undefined && !v2Globally) {
       await this.openshellCli.enableV2Provider();
     }
 

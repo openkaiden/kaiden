@@ -1,11 +1,12 @@
 <script lang="ts">
 import { faPlus } from '@fortawesome/free-solid-svg-icons';
 import { Button, EmptyScreen } from '@podman-desktop/ui-svelte';
+import { onMount } from 'svelte';
 
 import EngineIcon from '/@/lib/ui/EngineIcon.svelte';
 import { extensionInfos } from '/@/stores/extensions';
 import { openshellGateways } from '/@/stores/openshell-gateways';
-import { type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME } from '/@api/openshell-gateway-info';
+import { type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME, type LocalGatewayDriver } from '/@api/openshell-gateway-info';
 
 import PreferencesOpenshellGatewayCreate from './PreferencesOpenshellGatewayCreate.svelte';
 import SettingsPage from './SettingsPage.svelte';
@@ -15,6 +16,13 @@ let openshellStarted: boolean = $derived(
   $extensionInfos.some(ext => ext.id === OPENSHELL_EXTENSION_ID && ext.state === 'started'),
 );
 
+let isWindows = $state(false);
+onMount(async () => {
+  const platform = await window.getOsPlatform();
+  isWindows = platform === 'win32';
+});
+
+let defaultDriver: LocalGatewayDriver = $derived(isWindows ? 'mxc' : 'podman');
 let activeGateway: GatewayInfo | undefined = $derived($openshellGateways.find(g => g.active));
 let otherGateways: GatewayInfo[] = $derived($openshellGateways.filter(g => !g.active));
 let showCreateGateway = $state(false);
@@ -176,6 +184,6 @@ function getDetails(gateway: GatewayInfo): string {
 {#if showCreateGateway}
   <PreferencesOpenshellGatewayCreate
     existingNames={$openshellGateways.map(gateway => gateway.name)}
-    initialDriver={activeGateway?.driver ?? 'podman'}
+    initialDriver={activeGateway?.driver ?? defaultDriver}
     closeCallback={closeCreateGateway} />
 {/if}
