@@ -63,11 +63,7 @@ function mockExecResult(stdout = ''): RunResult {
 }
 
 function expectDetachedLogStdio(stdio: unknown[] | undefined, logFd: number): void {
-  expect(stdio?.[0]).toBe('ignore');
-  expect(stdio?.[1]).toBe(logFd);
-  expect(stdio?.[2]).toBe(logFd);
-  expect(stdio?.length).toBeGreaterThan(3);
-  expect(stdio?.slice(3).every(fd => fd === 'ignore')).toBe(true);
+  expect(stdio).toEqual(['ignore', logFd, logFd, logFd, logFd]);
 }
 
 let gateway: OpenshellGateway;
