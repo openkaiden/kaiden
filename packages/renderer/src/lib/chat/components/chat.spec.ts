@@ -20,7 +20,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type { ModelInfo } from '/@/lib/chat/components/model-info';
+import type { ModelInfo } from '/@api/model-registry-info';
 
 import { findModel } from './chat.svelte';
 

@@ -49,17 +49,8 @@ const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry);
 const openshellAdapter = new OpenshellSecretAdapter(openshellCli);
 
 let gatewayStartCallback: (() => void) | undefined;
-let unregisterInferenceCallback:
-  | ((event: { providerId: string; connection: InferenceProviderConnection }) => void)
-  | undefined;
 
 const providerRegistry = {
-  onDidRegisterInferenceConnection: vi.fn(),
-  onDidUnregisterInferenceConnection: vi.fn(
-    (cb: (event: { providerId: string; connection: InferenceProviderConnection }) => void) => {
-      unregisterInferenceCallback = cb;
-    },
-  ),
   getInferenceConnection: vi.fn(),
   getProvider: vi.fn(),
 } as unknown as ProviderRegistry;
@@ -102,7 +93,6 @@ const filesystemMonitoring = {
 beforeEach(() => {
   vi.resetAllMocks();
   gatewayStartCallback = undefined;
-  unregisterInferenceCallback = undefined;
   vi.mocked(filesystemMonitoring.createFileSystemWatcher).mockReturnValue(mockWatcher);
   vi.mocked(safeStorageRegistry.getExtensionStorage).mockReturnValue(extensionStorageMock);
   vi.mocked(openshellGatewayStateManager.whenReady).mockResolvedValue(undefined);
@@ -135,11 +125,6 @@ describe('init', () => {
     expect(ipcHandle).toHaveBeenCalledWith('secret-manager:remove', expect.any(Function));
   });
 
-  test('subscribes only to inference connection unregister events', () => {
-    expect(providerRegistry.onDidRegisterInferenceConnection).not.toHaveBeenCalled();
-    expect(providerRegistry.onDidUnregisterInferenceConnection).toHaveBeenCalled();
-  });
-
   test('subscribes to gateway start event', () => {
     expect(openshellGateway.onDidGatewayStart).toHaveBeenCalled();
   });
@@ -164,7 +149,6 @@ describe('openshellAdapter', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     gatewayStartCallback = undefined;
-    unregisterInferenceCallback = undefined;
     vi.mocked(filesystemMonitoring.createFileSystemWatcher).mockReturnValue(mockWatcher);
     vi.mocked(safeStorageRegistry.getExtensionStorage).mockReturnValue(extensionStorageMock);
     vi.mocked(openshellGatewayStateManager.whenReady).mockResolvedValue(undefined);
@@ -312,20 +296,6 @@ describe('inference connection lifecycle', () => {
     models: [{ label: 'model-1' }],
     credentials: () => ({ token: 'secret-token' }),
   };
-
-  test('deletes openshell provider on inference connection unregister', async () => {
-    vi.mocked(openshellCli.listProviders).mockResolvedValue([{ name: 'kaiden.cursor-conn-123', type: 'cursor' }]);
-    vi.mocked(openshellCli.deleteProvider).mockResolvedValue(undefined);
-
-    unregisterInferenceCallback!({
-      providerId: 'kaiden.cursor',
-      connection: mockConnection,
-    });
-
-    await vi.waitFor(() => {
-      expect(openshellCli.deleteProvider).toHaveBeenCalledWith('kaiden.cursor-conn-123', 'kaiden');
-    });
-  });
 
   test('getSecretForModel returns SecretInfo matching by name', async () => {
     vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({

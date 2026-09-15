@@ -19,11 +19,11 @@
 import { get } from 'svelte/store';
 
 import type { CustomMount } from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepFileSystem.svelte';
-import type { ModelInfo } from '/@/lib/chat/components/model-info';
 import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
 import { ragEnvironments } from '/@/stores/rag-environments';
 import { secretVaultInfos } from '/@/stores/secret-vault';
 import { skillInfos } from '/@/stores/skills';
+import type { ModelInfo } from '/@api/model-registry-info';
 
 const REGISTRY_HOSTS = ['registry.npmjs.org', 'pypi.python.org'];
 

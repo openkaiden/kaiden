@@ -1,6 +1,6 @@
 import type { ChatRequestOptions, ChatTransport, UIMessage, UIMessageChunk } from 'ai';
 
-import type { ModelInfo } from '/@/lib/chat/components/model-info';
+import type { ModelInfo } from '/@api/model-registry-info';
 
 interface Dependencies {
   getModel: () => ModelInfo;

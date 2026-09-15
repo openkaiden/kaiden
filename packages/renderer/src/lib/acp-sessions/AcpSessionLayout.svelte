@@ -40,8 +40,9 @@ const needsInputSessions: AcpSessionInfo[] = $derived(sortedSessions.filter(s =>
 const runningSessions: AcpSessionInfo[] = $derived(
   sortedSessions.filter(s => s.status === 'running' || s.status === 'idle'),
 );
+const failedSessions: AcpSessionInfo[] = $derived(sortedSessions.filter(s => s.status === 'error'));
 const completedSessions: AcpSessionInfo[] = $derived(
-  sortedSessions.filter(s => s.status === 'completed' || s.status === 'cancelled' || s.status === 'error'),
+  sortedSessions.filter(s => s.status === 'completed' || s.status === 'cancelled'),
 );
 
 function navigateToSession(id: string): void {
@@ -185,6 +186,16 @@ async function handleDeleteSession(e: MouseEvent, id: string): Promise<void> {
           Running <span class="opacity-70">{runningSessions.length}</span>
         </div>
         {#each runningSessions as s (s.id)}
+          <!-- eslint-disable-next-line sonarjs/no-use-of-empty-return-value -->
+          {@render sessionRow(s)}
+        {/each}
+      {/if}
+
+      {#if failedSessions.length > 0}
+        <div class="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-[var(--pd-status-dead)]">
+          Failed <span class="opacity-70">{failedSessions.length}</span>
+        </div>
+        {#each failedSessions as s (s.id)}
           <!-- eslint-disable-next-line sonarjs/no-use-of-empty-return-value -->
           {@render sessionRow(s)}
         {/each}

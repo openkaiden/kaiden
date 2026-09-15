@@ -60,9 +60,6 @@ import type {
 } from '/@api/agent-workspace-info';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type';
 import type { AuthenticationProviderInfo } from '/@api/authentication/authentication';
-import type { DetectFlowFieldsParams, DetectFlowFieldsResult } from '/@api/chat/detect-flow-fields-schema.ts';
-import type { FlowGenerationParameters } from '/@api/chat/flow-generation-parameters-schema';
-import type { InferenceParameters } from '/@api/chat/InferenceParameters.js';
 import type { Chat, Message } from '/@api/chat/schema.js';
 import type { CliToolInfo } from '/@api/cli-tool-info';
 import type { ColorInfo } from '/@api/color-info';
@@ -107,6 +104,9 @@ import type { ImageFilesystemLayersUI } from '/@api/image-filesystem-layers';
 import type { ImageInfo, PodmanListImagesOptions } from '/@api/image-info';
 import type { ImageInspectInfo } from '/@api/image-inspect-info';
 import type { ImageSearchOptions, ImageSearchResult, ImageTagsListOptions } from '/@api/image-registry';
+import type { DetectFlowFieldsParams, DetectFlowFieldsResult } from '/@api/inference/detect-flow-fields-schema.ts';
+import type { FlowGenerationParameters } from '/@api/inference/flow-generation-parameters-schema';
+import type { InferenceParameters } from '/@api/inference/InferenceParameters.js';
 import type {
   GenerateKubeResult,
   KubernetesGeneratorArgument,

@@ -34,12 +34,8 @@ import { Directories } from '/@/plugin/directories.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
-import {
-  buildPolicyObject,
-  collectBinaryFlags,
-  collectEndpointFlags,
-  rewriteLocalhostUrl,
-} from '/@/plugin/openshell-cli/openshell-network-policy.js';
+import { buildPolicyObject, rewriteLocalhostUrl } from '/@/plugin/openshell-cli/openshell-network-policy.js';
+import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import { TaskManager } from '/@/plugin/tasks/task-manager.js';
@@ -118,6 +114,8 @@ export class AgentWorkspaceManager implements Disposable {
     private readonly openshellGatewayStateManager: OpenshellGatewayStateManager,
     @inject(Directories)
     private readonly directories: Directories,
+    @inject(OpenshellPolicyManager)
+    private readonly openshellPolicyManager: OpenshellPolicyManager,
   ) {}
 
   private getGlobalConfigDir(gateway: string, sandboxName: string): string {
@@ -276,14 +274,11 @@ export class AgentWorkspaceManager implements Disposable {
 
     const networkPolicy = buildPolicyObject(workspace.network, endpoint);
     if (networkPolicy) {
-      const endpointFlags = collectEndpointFlags(networkPolicy);
-      if (endpointFlags.length > 0) {
-        try {
-          await this.openshellCli.updatePolicy(sandboxName, endpointFlags, collectBinaryFlags(networkPolicy));
-        } catch (err) {
-          await this.openshellCli.deleteSandbox(sandboxName, options.gateway).catch(() => {});
-          throw err;
-        }
+      try {
+        await this.openshellPolicyManager.updatePolicy(sandboxName, networkPolicy, options.gateway);
+      } catch (err) {
+        await this.openshellCli.deleteSandbox(sandboxName, options.gateway).catch(() => {});
+        throw err;
       }
     }
 

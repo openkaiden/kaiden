@@ -9,16 +9,17 @@ interface Props {
 
 let { value = $bindable('') }: Props = $props();
 
+const connectedGateways = $derived($openshellGateways.filter(g => g.gatewayState?.reachable === true));
+
 $effect(() => {
-  const gateways = $openshellGateways;
-  if (gateways.length < 2 || (value && !gateways.some(g => g.name === value))) {
+  if (connectedGateways.length < 2 || (value && !connectedGateways.some(g => g.name === value))) {
     value = '';
   }
 });
 
 const gatewayOptions = $derived.by(() => {
   const options: { label: string; value: string }[] = [{ label: 'All', value: '' }];
-  for (const gateway of $openshellGateways) {
+  for (const gateway of connectedGateways) {
     options.push({ label: gateway.name, value: gateway.name });
   }
   return options;
@@ -29,7 +30,7 @@ const longestGatewayLabel = $derived(
 );
 </script>
 
-{#if $openshellGateways.length > 1}
+{#if connectedGateways.length > 1}
   <div class="inline-grid max-w-64">
     <div class="invisible col-start-1 row-start-1 flex items-center px-1 py-1 whitespace-nowrap" aria-hidden="true">
       <span class="mr-1">Gateway:</span>

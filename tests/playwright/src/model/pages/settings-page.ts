@@ -23,6 +23,8 @@ import { PROVIDERS, TIMEOUTS } from '/@/model/core/types';
 import { SettingsCodingAgentsPage } from '/@/model/pages/settings-coding-agents-tab-page';
 import { SettingsMcpPage } from '/@/model/pages/settings-mcp-tab-page';
 import { SettingsModelsPage } from '/@/model/pages/settings-models-tab-page';
+import { SettingsSecretVaultPage } from '/@/model/pages/settings-secret-vault-tab-page';
+import { SettingsSkillsPage } from '/@/model/pages/settings-skills-tab-page';
 
 import { BasePage } from './base-page';
 import { SettingsCliPage } from './settings-cli-tab-page';
@@ -37,18 +39,23 @@ export class SettingsPage extends BasePage {
   readonly codingAgentsTab: Locator;
   readonly mcpTab: Locator;
   readonly modelsTab: Locator;
+  readonly skillsTab: Locator;
+  readonly secretVaultTab: Locator;
   readonly preferencesTab: Locator;
   private readonly tabs: Locator[];
 
   constructor(page: Page) {
     super(page);
-    this.resourcesTab = page.getByRole('link', { name: 'Resources' });
-    this.cliTab = page.getByRole('link', { name: 'CLI' });
-    this.proxyTab = page.getByRole('link', { name: 'Proxy' });
-    this.codingAgentsTab = page.getByRole('link', { name: 'Coding agents' });
-    this.mcpTab = page.getByRole('link', { name: 'MCP' });
-    this.modelsTab = page.getByRole('link', { name: 'Models' });
-    this.preferencesTab = page.getByRole('link', { name: 'Preferences' });
+    const sidebar = page.getByRole('navigation', { name: 'PreferencesNavigation' });
+    this.resourcesTab = sidebar.getByRole('link', { name: 'Resources' });
+    this.cliTab = sidebar.getByRole('link', { name: 'CLI' });
+    this.proxyTab = sidebar.getByRole('link', { name: 'Proxy' });
+    this.codingAgentsTab = sidebar.getByRole('link', { name: 'Coding agents' });
+    this.mcpTab = sidebar.getByRole('link', { name: 'MCP' });
+    this.modelsTab = sidebar.getByRole('link', { name: 'Models' });
+    this.skillsTab = sidebar.getByRole('link', { name: 'Skills' });
+    this.secretVaultTab = sidebar.getByRole('link', { name: 'Secret Vault' });
+    this.preferencesTab = sidebar.getByRole('link', { name: 'Preferences' });
     this.tabs = [
       this.resourcesTab,
       this.cliTab,
@@ -56,6 +63,8 @@ export class SettingsPage extends BasePage {
       this.codingAgentsTab,
       this.mcpTab,
       this.modelsTab,
+      this.skillsTab,
+      this.secretVaultTab,
       this.preferencesTab,
     ];
   }
@@ -71,6 +80,8 @@ export class SettingsPage extends BasePage {
     await expect(this.codingAgentsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.mcpTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.modelsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
+    await expect(this.skillsTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
+    await expect(this.secretVaultTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
     await expect(this.preferencesTab).toBeVisible({ timeout: TIMEOUTS.SHORT });
   }
 
@@ -100,6 +111,14 @@ export class SettingsPage extends BasePage {
 
   async openModels(): Promise<SettingsModelsPage> {
     return this.openTab(this.modelsTab, SettingsModelsPage);
+  }
+
+  async openSkills(): Promise<SettingsSkillsPage> {
+    return this.openTab(this.skillsTab, SettingsSkillsPage);
+  }
+
+  async openSecretVault(): Promise<SettingsSecretVaultPage> {
+    return this.openTab(this.secretVaultTab, SettingsSecretVaultPage);
   }
 
   getAllTabs(): Locator[] {

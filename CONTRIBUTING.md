@@ -201,12 +201,13 @@ pnpm format:check        # Check formatting
 pnpm format:fix          # Fix formatting issues
 ```
 
-Run linting:
+Run linting on staged files (stage with `git add` first):
 
 ```sh
-pnpm lint:check          # Check for linting issues
-pnpm lint:fix            # Fix linting issues
+pnpm lint-staged             # Lint staged files only (fast)
 ```
+
+> **Note:** Only run `pnpm lint:check` or `pnpm lint:fix` if you modified linting rules — they scan the entire repo and are very slow.
 
 Run type checking:
 

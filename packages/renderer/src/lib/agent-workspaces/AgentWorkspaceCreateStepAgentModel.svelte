@@ -5,13 +5,13 @@ import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { untrack } from 'svelte';
 
 import IconImage from '/@/lib/appearance/IconImage.svelte';
-import type { ModelInfo } from '/@/lib/chat/components/model-info';
 import { getCompatibleModels } from '/@/lib/models/compatible-connections';
 import CompatibleConnectionGate from '/@/lib/models/CompatibleConnectionGate.svelte';
 import type { CatalogModelInfo } from '/@/lib/models/models-utils';
 import { agentInfos } from '/@/stores/agents';
 import { disabledModels, isModelEnabled, modelKey, modelSelectionKey } from '/@/stores/model-catalog';
 import { catalogModels } from '/@/stores/models';
+import type { ModelInfo } from '/@api/model-registry-info';
 
 interface Props {
   selectedAgent?: string;

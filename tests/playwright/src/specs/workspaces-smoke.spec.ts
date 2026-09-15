@@ -273,13 +273,15 @@ test.describe('Workspaces page - create wizard without project folder', { tag: '
 test.describe('Workspaces page - skills integration', { tag: '@smoke' }, () => {
   test.beforeAll(async ({ page, electronApp, navigationBar, skillsPage }) => {
     await waitForNavigationReady(page);
-    await navigationBar.navigateToSkillsPage();
+    const settingsPage = await navigationBar.navigateToSettingsPage();
+    await settingsPage.openSkills();
     await skillsPage.importSkill(TEST_SKILL.file, electronApp);
     await skillsPage.ensureRowExists(TEST_SKILL.name);
   });
 
   test.afterAll(async ({ navigationBar, skillsPage }) => {
-    await navigationBar.navigateToSkillsPage();
+    const settingsPage = await navigationBar.navigateToSettingsPage();
+    await settingsPage.openSkills();
     await skillsPage.deleteSkillByName(TEST_SKILL.name);
     await skillsPage.ensureRowDoesNotExist(TEST_SKILL.name);
   });

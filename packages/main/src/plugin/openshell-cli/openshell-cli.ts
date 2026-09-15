@@ -528,19 +528,6 @@ export class OpenshellCli {
     return this.runCli(['settings', 'set', '--global', '--key', 'providers_v2_enabled', '--value', 'true', '--yes']);
   }
 
-  // ── policy commands ──────────────────────────────────────────────
-
-  async updatePolicy(sandboxName: string, endpoints: string[], binaries?: string[]): Promise<void> {
-    const args = ['policy', 'update', sandboxName];
-    for (const ep of endpoints) {
-      args.push('--add-endpoint', ep);
-    }
-    for (const bin of binaries ?? []) {
-      args.push('--binary', bin);
-    }
-    await this.runCli(args);
-  }
-
   // ── helpers ───────────────────────────────────────────────────────
 
   private async runCli(

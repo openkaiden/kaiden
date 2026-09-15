@@ -404,42 +404,6 @@ describe('createSandbox', () => {
   });
 });
 
-describe('updatePolicy', () => {
-  test('executes policy update with --add-endpoint flags', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(''));
-
-    await openshellCli.updatePolicy('my-sandbox', ['api.example.com:443:full:rest', 'host.local:11434']);
-
-    expect(exec.exec).toHaveBeenCalledWith(
-      OPENSHELL_CLI_PATH,
-      [
-        'policy',
-        'update',
-        'my-sandbox',
-        '--add-endpoint',
-        'api.example.com:443:full:rest',
-        '--add-endpoint',
-        'host.local:11434',
-      ],
-      undefined,
-    );
-  });
-
-  test('includes --binary flags when provided', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(''));
-
-    await openshellCli.updatePolicy('my-sandbox', ['api.example.com:443'], ['/**']);
-
-    expect(exec.exec).toHaveBeenCalledWith(
-      OPENSHELL_CLI_PATH,
-      ['policy', 'update', 'my-sandbox', '--add-endpoint', 'api.example.com:443', '--binary', '/**'],
-      undefined,
-    );
-  });
-});
-
 describe('listSandboxes', () => {
   test('executes openshell sandbox list with json output', async () => {
     const payload = [{ id: 'sb-1', name: 'sb-1', phase: 'Ready' }];

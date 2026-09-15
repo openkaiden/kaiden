@@ -24,6 +24,8 @@ updates:
       # check at 3am UTC
       time: "03:00"
     open-pull-requests-limit: 20
+    ignore:
+      - dependency-name: "fullsend-ai/*"
 
   - package-ecosystem: "npm"
     directory: "/" # adjust if your package.json is in a subfolder

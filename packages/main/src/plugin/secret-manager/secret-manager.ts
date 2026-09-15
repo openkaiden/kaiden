@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { Configuration, InferenceProviderConnection, UnregisterInferenceConnectionEvent } from '@openkaiden/api';
+import type { Configuration, InferenceProviderConnection } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
 
 import { IPCHandle } from '/@/plugin/api.js';
@@ -214,26 +214,7 @@ export class SecretManager {
     return { config, connectionProperties };
   }
 
-  private async onInferenceConnectionUnregistered(event: UnregisterInferenceConnectionEvent): Promise<void> {
-    const expectedName = `${event.providerId}-${event.connection.id}`;
-    const secrets = await this.list();
-    const matchingSecrets = secrets.filter(s => s.name === expectedName);
-    for (const secret of matchingSecrets) {
-      try {
-        await this.remove(secret.name, secret.gateway);
-      } catch (err: unknown) {
-        console.warn(`Failed to delete openshell provider ${secret.name}:`, err);
-      }
-    }
-  }
-
   init(): void {
-    this.providerRegistry.onDidUnregisterInferenceConnection(event => {
-      this.onInferenceConnectionUnregistered(event).catch((err: unknown) => {
-        console.error('Failed to delete openshell provider for inference connection:', err);
-      });
-    });
-
     this.openshellGateway.onDidGatewayStart(() => {
       this.apiSender.send('secret-manager-update');
     });

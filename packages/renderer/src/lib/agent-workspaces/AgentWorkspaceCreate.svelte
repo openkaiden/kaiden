@@ -5,7 +5,6 @@ import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { onMount, untrack } from 'svelte';
 import { toast } from 'svelte-sonner';
 
-import type { ModelInfo } from '/@/lib/chat/components/model-info';
 import { getModelId } from '/@/lib/models/models-utils';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
@@ -29,6 +28,7 @@ import type {
   NetworkConfiguration,
 } from '/@api/agent-workspace-info';
 import { getSandboxNameValidationError, sanitizeDns1123Label } from '/@api/agent-workspace-info';
+import type { ModelInfo } from '/@api/model-registry-info';
 import { NavigationPage } from '/@api/navigation-page';
 import type { DefaultWorkspaceSettings } from '/@api/onboarding-settings-info';
 import type { FilesystemConfiguration, WorkspaceProjectInfo } from '/@api/workspace-project-info';

@@ -16,21 +16,21 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { beforeEach, expect, test, vi } from 'vitest';
+import { expect, type Locator, type Page } from '@playwright/test';
 
-import { createNavigationSkillsEntry } from './navigation-registry-skills.svelte';
+import { TIMEOUTS } from '/@/model/core/types';
 
-beforeEach(() => {
-  vi.resetAllMocks();
-});
+import { BasePage } from './base-page';
 
-test('createNavigationSkillsEntry should return a valid navigation entry', () => {
-  const entry = createNavigationSkillsEntry();
+export class SettingsSecretVaultPage extends BasePage {
+  readonly heading: Locator;
 
-  expect(entry).toBeDefined();
-  expect(entry.name).toBe('Skills');
-  expect(entry.link).toBe('/skills');
-  expect(entry.tooltip).toBe('Skills');
-  expect(entry.type).toBe('entry');
-  expect(entry.counter).toBe(0);
-});
+  constructor(page: Page) {
+    super(page);
+    this.heading = page.getByRole('heading', { name: 'Secret Vault' });
+  }
+
+  async waitForLoad(): Promise<void> {
+    await expect(this.heading).toBeVisible({ timeout: TIMEOUTS.SHORT });
+  }
+}

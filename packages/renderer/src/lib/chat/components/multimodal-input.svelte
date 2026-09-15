@@ -15,11 +15,11 @@ import { fileUIPart2Attachment } from '/@/lib/chat/utils/chat';
 import { cn } from '/@/lib/chat/utils/shadcn';
 import { mcpRemoteServerInfos, mcpRemoteServerInfosStatus } from '/@/stores/mcp-remote-servers';
 import { ChatSettings } from '/@api/chat/chat-settings';
+import type { ModelInfo } from '/@api/model-registry-info';
 
 import ArrowUpIcon from './icons/arrow-up.svelte';
 import PaperclipIcon from './icons/paperclip.svelte';
 import StopIcon from './icons/stop.svelte';
-import type { ModelInfo } from './model-info';
 import ModelSelector from './model-selector.svelte';
 import PreviewAttachment from './preview-attachment.svelte';
 import SuggestedActions from './suggested-actions.svelte';

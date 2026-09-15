@@ -1,5 +1,5 @@
 <script lang="ts" module>
-import type { ModelInfo } from '/@/lib/chat/components/model-info';
+import type { ModelInfo } from '/@api/model-registry-info';
 
 export function findModel(models: ModelInfo[], model: ModelInfo | undefined): ModelInfo | undefined {
   if (!model) return undefined;

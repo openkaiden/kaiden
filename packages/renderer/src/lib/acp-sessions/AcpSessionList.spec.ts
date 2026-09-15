@@ -99,3 +99,36 @@ test('sessions within a status group are sorted most recent first', () => {
   expect(buttons[1]!.textContent).toContain('middle completed');
   expect(buttons[2]!.textContent).toContain('oldest completed');
 });
+
+test('error sessions are grouped under Failed, not Completed', () => {
+  const sessions = [
+    makeSession({ createdAt: 1000, prompt: 'good session', status: 'completed' }),
+    makeSession({ createdAt: 2000, prompt: 'bad session', status: 'error' }),
+    makeSession({ createdAt: 3000, prompt: 'active session', status: 'running' }),
+  ];
+
+  vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>(sessions);
+
+  render(AcpSessionList);
+
+  // "Failed" only appears as the group header (the status badge shows "Error")
+  expect(screen.getByText('Failed')).toBeInTheDocument();
+  // "Completed" appears as group header AND as a status badge label
+  expect(screen.getAllByText('Completed').length).toBeGreaterThanOrEqual(1);
+});
+
+test('cancelled sessions remain in the Completed group', () => {
+  const sessions = [
+    makeSession({ createdAt: 1000, prompt: 'done session', status: 'completed' }),
+    makeSession({ createdAt: 2000, prompt: 'stopped session', status: 'cancelled' }),
+    makeSession({ createdAt: 3000, prompt: 'active session', status: 'running' }),
+  ];
+
+  vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>(sessions);
+
+  render(AcpSessionList);
+
+  // "Completed" appears as group header AND as a status badge label
+  expect(screen.getAllByText('Completed').length).toBeGreaterThanOrEqual(1);
+  expect(screen.queryByText('Failed')).not.toBeInTheDocument();
+});

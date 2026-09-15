@@ -1,5 +1,5 @@
 <script lang="ts">
-import './code-copy.css';
+import '/@/lib/ui/code-copy.css';
 
 import type { UIMessage } from '@ai-sdk/svelte';
 import type { DynamicToolUIPart } from 'ai';
@@ -9,12 +9,12 @@ import { EditState } from '/@/lib/chat/hooks/edit-state.svelte';
 import { fileUIPart2Attachment } from '/@/lib/chat/utils/chat';
 import { cn } from '/@/lib/chat/utils/shadcn';
 import Markdown from '/@/lib/markdown/Markdown.svelte';
+import { codeCopyButtons } from '/@/lib/ui/code-copy-action';
 
 import LoaderIcon from '../icons/loader.svelte';
 import SparklesIcon from '../icons/sparkles.svelte';
 import MessageReasoning from '../message-reasoning.svelte';
 import PreviewAttachment from '../preview-attachment.svelte';
-import { codeCopyButtons } from './code-copy-action';
 import MessageActions from './message-actions.svelte';
 import ToolParts from './tool-parts.svelte';
 

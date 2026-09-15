@@ -41,6 +41,8 @@ import type { Directories } from '/@/plugin/directories.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
+import { buildPolicyObject } from '/@/plugin/openshell-cli/openshell-network-policy.js';
+import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import type { ProviderImpl } from '/@/plugin/provider-impl.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
@@ -63,6 +65,9 @@ vi.mock(import('yaml'));
 vi.mock(import('node-pty'));
 
 vi.mock(import('/@/plugin/openshell-cli/openshell-cli.js'));
+vi.mock(import('/@/plugin/openshell-cli/openshell-policy-manager.js'));
+
+const openshellPolicyManager = new OpenshellPolicyManager({} as never);
 
 const TEST_SUMMARIES: GatewaySandboxes[] = [
   {
@@ -248,6 +253,7 @@ beforeEach(() => {
     openshellGateway,
     openshellGatewayStateManager,
     directories,
+    openshellPolicyManager,
   );
   manager.init();
 });
@@ -783,7 +789,7 @@ describe('create – OpenShell mode', () => {
     expect(openshellCli.createSandbox).not.toHaveBeenCalled();
   });
 
-  test('updates policy with endpoint flags after sandbox creation for deny mode with hosts', async () => {
+  test('updates policy with structured endpoints after sandbox creation for deny mode with hosts', async () => {
     const options = {
       ...defaultOptions,
       network: { mode: 'deny' as const, hosts: ['registry.npmjs.org', 'pypi.python.org'] },
@@ -792,15 +798,10 @@ describe('create – OpenShell mode', () => {
     await manager.create(options);
 
     expect(openshellCli.createSandbox).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
-    expect(openshellCli.updatePolicy).toHaveBeenCalledWith(
+    expect(openshellPolicyManager.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
-      expect.arrayContaining([
-        'registry.npmjs.org:443:full:rest',
-        'registry.npmjs.org:80:full:rest',
-        'pypi.python.org:443:full:rest',
-        'pypi.python.org:80:full:rest',
-      ]),
-      ['/**'],
+      buildPolicyObject(options.network),
+      'kaiden',
     );
   });
 
@@ -810,7 +811,7 @@ describe('create – OpenShell mode', () => {
     await manager.create(options);
 
     expect(openshellCli.createSandbox).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
-    expect(openshellCli.updatePolicy).not.toHaveBeenCalled();
+    expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
   test('does not set policy for deny mode with empty hosts and no model endpoint', async () => {
@@ -819,7 +820,7 @@ describe('create – OpenShell mode', () => {
     await manager.create(options);
 
     expect(openshellCli.createSandbox).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
-    expect(openshellCli.updatePolicy).not.toHaveBeenCalled();
+    expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
   test('does not set policy for allow mode with no model endpoint', async () => {
@@ -831,14 +832,14 @@ describe('create – OpenShell mode', () => {
     await manager.create(options);
 
     expect(openshellCli.createSandbox).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
-    expect(openshellCli.updatePolicy).not.toHaveBeenCalled();
+    expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
   test('does not set policy when network is undefined and no model endpoint', async () => {
     await manager.create(defaultOptions);
 
     expect(openshellCli.createSandbox).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
-    expect(openshellCli.updatePolicy).not.toHaveBeenCalled();
+    expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
   test('deletes sandbox and rethrows when updatePolicy fails', async () => {
@@ -846,7 +847,7 @@ describe('create – OpenShell mode', () => {
       ...defaultOptions,
       network: { mode: 'deny' as const, hosts: ['registry.npmjs.org'] },
     };
-    vi.mocked(openshellCli.updatePolicy).mockRejectedValue(new Error('policy update failed'));
+    vi.mocked(openshellPolicyManager.updatePolicy).mockRejectedValue(new Error('policy update failed'));
     vi.mocked(openshellCli.deleteSandbox).mockResolvedValue(undefined);
 
     await expect(manager.create(options)).rejects.toThrow('policy update failed');
@@ -859,7 +860,7 @@ describe('create – OpenShell mode', () => {
       ...defaultOptions,
       network: { mode: 'deny' as const, hosts: ['registry.npmjs.org'] },
     };
-    vi.mocked(openshellCli.updatePolicy).mockRejectedValue(new Error('policy update failed'));
+    vi.mocked(openshellPolicyManager.updatePolicy).mockRejectedValue(new Error('policy update failed'));
     vi.mocked(openshellCli.deleteSandbox).mockResolvedValue(undefined);
 
     await expect(manager.create(options)).rejects.toThrow('policy update failed');
@@ -979,10 +980,10 @@ describe('create – OpenShell mode', () => {
     const options = { ...defaultOptions, model: 'openai::gpt-4o::https://api.example.com/v1' };
     await manager.create(options);
 
-    expect(openshellCli.updatePolicy).toHaveBeenCalledWith(
+    expect(openshellPolicyManager.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
-      expect.arrayContaining(['api.example.com:443']),
-      ['/**'],
+      buildPolicyObject(undefined, 'https://api.example.com/v1'),
+      'kaiden',
     );
   });
 
@@ -1005,10 +1006,10 @@ describe('create – OpenShell mode', () => {
         }),
       }),
     );
-    expect(openshellCli.updatePolicy).toHaveBeenCalledWith(
+    expect(openshellPolicyManager.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
-      expect.arrayContaining(['host.openshell.internal:11434']),
-      ['/**'],
+      buildPolicyObject(undefined, 'http://localhost:11434/v1'),
+      'kaiden',
     );
   });
 
@@ -1022,7 +1023,7 @@ describe('create – OpenShell mode', () => {
     const options = { ...defaultOptions, model: 'anthropic::claude-sonnet-4-20250514' };
     await manager.create(options);
 
-    expect(openshellCli.updatePolicy).not.toHaveBeenCalled();
+    expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
   test('updates policy for endpoint extracted from model ID when connectionInfo is unavailable', async () => {
@@ -1031,10 +1032,10 @@ describe('create – OpenShell mode', () => {
     const options = { ...defaultOptions, model: 'ollama::qwen3:0.6b::http://localhost:11434/v1' };
     await manager.create(options);
 
-    expect(openshellCli.updatePolicy).toHaveBeenCalledWith(
+    expect(openshellPolicyManager.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
-      expect.arrayContaining(['host.openshell.internal:11434']),
-      ['/**'],
+      buildPolicyObject(undefined, 'http://localhost:11434/v1'),
+      'kaiden',
     );
   });
 
@@ -1054,10 +1055,10 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(options);
 
-    expect(openshellCli.updatePolicy).toHaveBeenCalledWith(
+    expect(openshellPolicyManager.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
-      expect.arrayContaining(['registry.npmjs.org:443:full:rest', 'api.openai.com:443']),
-      ['/**'],
+      buildPolicyObject(options.network, 'https://api.openai.com/v1'),
+      'kaiden',
     );
   });
 });

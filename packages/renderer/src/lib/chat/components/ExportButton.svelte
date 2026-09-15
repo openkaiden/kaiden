@@ -3,13 +3,13 @@ import { type Chat } from '@ai-sdk/svelte';
 import type { UIMessage } from 'ai';
 import { toast } from 'svelte-sonner';
 
-import { flowCreationData } from '/@/lib/chat/state/flow-creation-data.svelte';
+import { flowCreationData } from '/@/lib/flows/state/flow-creation-data.svelte';
 import { handleNavigation } from '/@/navigation';
 import { isFlowConnectionAvailable } from '/@/stores/flow-provider';
+import type { ModelInfo } from '/@api/model-registry-info';
 import { NavigationPage } from '/@api/navigation-page';
 
 import FlowIcon from '../../images/FlowIcon.svelte';
-import type { ModelInfo } from './model-info';
 import { Button } from './ui/button';
 
 let {

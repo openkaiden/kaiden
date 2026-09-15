@@ -1,5 +1,5 @@
-import type { ModelInfo } from '/@/lib/chat/components/model-info';
-import type { FlowGenerationParameters } from '/@api/chat/flow-generation-parameters-schema';
+import type { FlowGenerationParameters } from '/@api/inference/flow-generation-parameters-schema';
+import type { ModelInfo } from '/@api/model-registry-info';
 
 export interface FlowCreationData extends FlowGenerationParameters {
   model: ModelInfo;

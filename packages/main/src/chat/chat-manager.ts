@@ -39,18 +39,18 @@ import { inject } from 'inversify';
 
 import { IPCHandle, WebContentsType } from '/@/plugin/api.js';
 import { Directories } from '/@/plugin/directories.js';
+import type { MessageConfig } from '/@api/chat/message-config.js';
+import type { Chat, Message } from '/@api/chat/schema.js';
 import type {
   DetectFlowFieldsParams,
   DetectFlowFieldsResult,
   FlowParameter,
   FlowParameterAIGenerated,
-} from '/@api/chat/detect-flow-fields-schema.js';
-import { DetectFlowFieldsResultSchema } from '/@api/chat/detect-flow-fields-schema.js';
-import type { FlowGenerationParameters } from '/@api/chat/flow-generation-parameters-schema.js';
-import { FlowGenerationParametersSchema } from '/@api/chat/flow-generation-parameters-schema.js';
-import type { InferenceParameters } from '/@api/chat/InferenceParameters.js';
-import type { MessageConfig } from '/@api/chat/message-config.js';
-import type { Chat, Message } from '/@api/chat/schema.js';
+} from '/@api/inference/detect-flow-fields-schema.js';
+import { DetectFlowFieldsResultSchema } from '/@api/inference/detect-flow-fields-schema.js';
+import type { FlowGenerationParameters } from '/@api/inference/flow-generation-parameters-schema.js';
+import { FlowGenerationParametersSchema } from '/@api/inference/flow-generation-parameters-schema.js';
+import type { InferenceParameters } from '/@api/inference/InferenceParameters.js';
 
 import { MCPManager } from '../plugin/mcp/mcp-manager.js';
 import { ProviderRegistry } from '../plugin/provider-registry.js';
