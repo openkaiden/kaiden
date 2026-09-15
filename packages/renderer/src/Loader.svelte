@@ -6,12 +6,20 @@ import App from './App.svelte';
 import LoaderAnimation from './lib/images/LoaderAnimation.svelte';
 import ColorsStyle from './lib/style/ColorsStyle.svelte';
 import { lastPage } from './stores/breadcrumb';
+import { colorsInfos } from './stores/colors';
 
 let systemReady = $state(false);
+let colorsLoaded = $state(false);
 let showTitle = $state(false);
 
 let titleTimer: NodeJS.Timeout;
 let extensionsStarterChecker: NodeJS.Timeout;
+
+const unsubscribeColors = colorsInfos.subscribe(colors => {
+  if (colors && colors.length > 0) {
+    colorsLoaded = true;
+  }
+});
 
 onMount(async () => {
   titleTimer = setTimeout(() => {
@@ -47,6 +55,7 @@ onMount(async () => {
 
 onDestroy(() => {
   clearTimeout(titleTimer);
+  unsubscribeColors();
 
   if (extensionsStarterChecker) {
     clearInterval(extensionsStarterChecker);
@@ -64,7 +73,7 @@ window.events?.receive('install-extension:from-id', (extensionId: unknown) => {
     lastPage.set({ name: 'Extensions', path: '/extensions' });
   };
 
-  if (!systemReady) {
+  if (!systemReady || !colorsLoaded) {
     // need to wait for the system to be ready, so we delay the install
     window.addEventListener('system-ready', () => {
       action().catch((err: unknown) => console.log('Error while redirecting to extensions', err));
@@ -86,7 +95,7 @@ window.events.receive('starting-extensions', (value: unknown) => {
 
 <ColorsStyle />
 
-{#if !systemReady}
+{#if !systemReady || !colorsLoaded}
   <main class="flex flex-row w-screen h-screen justify-center" style="-webkit-app-region: drag;">
     <div class="flex flex-col justify-center">
       <LoaderAnimation />

@@ -24,7 +24,7 @@ interface Props {
 }
 let { exitSettingsCallback, meta = $bindable() }: Props = $props();
 
-let iconWithTitle = $state(false);
+let iconWithTitle = $state<boolean | undefined>(undefined);
 
 const iconSize = '22';
 const NAV_BAR_LAYOUT = `${AppearanceSettings.SectionName}.${AppearanceSettings.NavigationAppearance}`;
@@ -62,6 +62,7 @@ function onDidChangeConfigurationCallback(e: Event): void {
 </script>
 
 <svelte:window />
+{#if iconWithTitle !== undefined}
 <nav
   class="group w-leftnavbar {minNavbarWidth} flex flex-col hover:overflow-y-none bg-[var(--pd-global-nav-bg)] border-[var(--pd-global-nav-bg-border)] border-r-[1px]"
   aria-label="AppNavigation">
@@ -104,3 +105,4 @@ function onDidChangeConfigurationCallback(e: Event): void {
     {/if}
   </NavItem>
 </nav>
+{/if}

@@ -75,6 +75,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   callbacks.clear();
   vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.mocked(window.getConfigurationValue).mockResolvedValue(AppearanceSettings.IconAndTitle);
   onDidChangeConfiguration.addEventListener = vi.fn().mockImplementation((message: string, callback: () => void) => {
     callbacks.set(message, callback);
   });
@@ -99,6 +100,7 @@ test('Test rendering of the navigation bar with empty items', async (_arg: unkno
     meta,
     exitSettingsCallback: () => {},
   });
+  await tick();
 
   const navigationBar = screen.getByRole('navigation', { name: 'AppNavigation' });
   expect(navigationBar).toBeInTheDocument();
