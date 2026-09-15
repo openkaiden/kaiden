@@ -17,6 +17,7 @@
  ***********************************************************************/
 
 /** biome-ignore-all lint/correctness/noEmptyPattern: Playwright fixture pattern requires empty object when no dependencies are needed */
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -75,6 +76,7 @@ export const test = base.extend<ElectronFixtures>({
       await use(electronApp);
     } finally {
       if (electronApp) {
+        killDetachedGateway(electronApp);
         try {
           await closeAllWindows(electronApp);
           await electronApp.close();
@@ -153,6 +155,7 @@ export const workerTest = test.extend<ElectronFixtures, WorkerElectronFixtures>(
     async ({}, use): Promise<void> => {
       const app = await launchElectronApp();
       await use(app);
+      killDetachedGateway(app);
       await app.close().catch(() => {});
       await savePendingVideos();
     },
@@ -477,6 +480,20 @@ function getElectronDiagnosticsSummary(electronApp: ElectronApplication): string
 export async function closeAllWindows(electronApp: ElectronApplication): Promise<void> {
   const windows = electronApp.windows();
   await Promise.allSettled(windows.map(window => window.close()));
+}
+
+// On Linux the detached openshell-gateway inherits Playwright's CDP pipe FDs
+// via fork(). Kill it before app.close() so those pipes close and Playwright
+// can detect the Electron exit without hitting the 180s teardown timeout.
+export function killDetachedGateway(electronApp: ElectronApplication): void {
+  if (process.platform !== 'linux') return;
+  const pid = electronApp.process().pid;
+  if (!pid) return;
+  try {
+    execFileSync('/usr/bin/pkill', ['-TERM', '-f', '-P', String(pid), 'openshell-gateway'], { stdio: 'ignore' });
+  } catch {
+    // no matching child processes — expected when gateway never started
+  }
 }
 
 export { expect } from '@playwright/test';
