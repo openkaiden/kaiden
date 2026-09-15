@@ -20,7 +20,7 @@ import { isAbsolute } from 'node:path';
 
 import type { Configuration, InferenceProviderConnection } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
-import minimatch from 'minimatch';
+import { minimatch } from 'minimatch';
 
 import { IPCHandle } from '/@/plugin/api.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
