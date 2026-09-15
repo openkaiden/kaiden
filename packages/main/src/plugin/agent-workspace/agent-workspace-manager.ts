@@ -52,7 +52,7 @@ import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationNode } from '/@api/configuration/models.js';
 import { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { CreateLocalGatewayOptions, GatewayInfo, GatewaySandboxes } from '/@api/openshell-gateway-info.js';
-import { AGENT_LABEL, decodeWorkspaceLabels, WORKSPACE_LABEL } from '/@api/openshell-gateway-info.js';
+import { AGENT_LABEL, decodeWorkspaceLabels, SECRET_LABEL, WORKSPACE_LABEL } from '/@api/openshell-gateway-info.js';
 
 const HOME_VARIABLE = '${HOME}';
 const LABEL_MAX_LENGTH = 63;
@@ -154,7 +154,16 @@ export class AgentWorkspaceManager implements Disposable {
         }
       }
 
-      const secretName = await this.ensureModelSecret(options);
+      const sandboxName = options.name ?? (options.sourcePath ? basename(options.sourcePath) : undefined);
+      if (!sandboxName) {
+        throw new Error('workspace name is required when no project folder is specified');
+      }
+      const agent = this.agentRegistry.getAgentRegistration(options.agent);
+      if (!agent) {
+        throw new Error(`Unable to create workspace: agent ${options.agent} not registered`);
+      }
+
+      const secretName = await this.ensureModelSecret(options, sandboxName, agent.command);
       const workspaceId = await this.createOpenshell(options, secretName);
       task.status = 'success';
       return workspaceId;
@@ -263,6 +272,7 @@ export class AgentWorkspaceManager implements Disposable {
       labels: {
         ...(options.sourcePath ? encodeWorkspaceLabels(options.sourcePath) : {}),
         [AGENT_LABEL]: options.agent,
+        ...(secretName ? { [SECRET_LABEL]: secretName } : {}),
       },
       uploads: dedupedUploads.length > 0 ? dedupedUploads : undefined,
       detach: true,
@@ -441,19 +451,33 @@ export class AgentWorkspaceManager implements Disposable {
   }
 
   /**
-   * Return the secret related to the inference connection linked to the
-   * model. Return undefined if there is no secret associated with this connection
-·   */
-  async ensureModelSecret(options: AgentWorkspaceCreateOptions): Promise<string | undefined> {
+   * Ensure a secret exists for the sandbox. The secret is named
+   * `$sandboxName-secret` and linked to the sandbox rather than
+   * the inference connection.
+   */
+  async ensureModelSecret(
+    options: AgentWorkspaceCreateOptions,
+    sandboxName: string,
+    agentCommand: string,
+  ): Promise<string | undefined> {
     if (options.workspaceConfiguration?.secrets?.length) {
       return undefined;
     }
 
-    return this.ensureModelSecretFromConfig(options);
+    return this.ensureModelSecretFromConfig(options, sandboxName, agentCommand);
   }
 
-  private async ensureModelSecretFromConfig(options: AgentWorkspaceCreateOptions): Promise<string | undefined> {
-    const secret = await this.secretManager.ensureSecretForModel(options.model, options.gateway);
+  private async ensureModelSecretFromConfig(
+    options: AgentWorkspaceCreateOptions,
+    sandboxName: string,
+    agentCommand: string,
+  ): Promise<string | undefined> {
+    const secret = await this.secretManager.ensureSecretForSandbox(
+      sandboxName,
+      options.model,
+      agentCommand,
+      options.gateway,
+    );
     if (!secret) return undefined;
 
     options.secrets = [...new Set([...(options.secrets ?? []), secret.name])];
@@ -475,6 +499,7 @@ export class AgentWorkspaceManager implements Disposable {
       await this.openshellCli.deleteSandbox(workspaceName, gateway);
       this.closeWorkspaceTerminal(id);
       await rm(this.getGlobalConfigDir(gateway, workspaceName), { recursive: true, force: true });
+      await this.deleteAssociatedSecret(workspace?.labels, gateway);
       this.apiSender.send('agent-workspace-update');
       task.status = 'success';
       return { id };
@@ -485,6 +510,23 @@ export class AgentWorkspaceManager implements Disposable {
       throw new Error(detail);
     } finally {
       task.state = 'completed';
+    }
+  }
+
+  /**
+   * Delete the secret associated with a sandbox via its SECRET_LABEL.
+   * Failures are logged but not rethrown so sandbox deletion itself
+   * is not blocked.
+   */
+  private async deleteAssociatedSecret(labels: Record<string, string> | undefined, gateway: string): Promise<void> {
+    const secretName = labels?.[SECRET_LABEL];
+    if (!secretName) return;
+    try {
+      await this.secretManager.remove(secretName, gateway);
+    } catch (err: unknown) {
+      console.warn(
+        `[AgentWorkspaceManager] failed to delete secret "${secretName}": ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -592,8 +634,14 @@ export class AgentWorkspaceManager implements Disposable {
     task.state = 'running';
     task.status = 'in-progress';
     try {
+      const workspaces = await this.listOpenshellSandboxes();
+      const workspace = workspaces
+        .filter(entry => entry.gateway.name === gateway)
+        .flatMap(entry => entry.sandboxes)
+        .find(ws => ws.name === name);
       await this.openshellCli.deleteSandbox(name, gateway);
       await rm(this.getGlobalConfigDir(gateway, name), { recursive: true, force: true });
+      await this.deleteAssociatedSecret(workspace?.labels, gateway);
       this.apiSender.send('agent-workspace-update');
       task.status = 'success';
     } catch (err: unknown) {
