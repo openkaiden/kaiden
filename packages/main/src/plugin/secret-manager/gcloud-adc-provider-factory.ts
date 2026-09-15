@@ -30,7 +30,6 @@ import type { ProviderFactory } from './provider-factory.js';
 export class GcloudAdcProviderFactory implements ProviderFactory {
   async createProvider(client: OpenShellClient, options: SecretCreateOptions): Promise<void> {
     const env = typeof options.value !== 'string' ? options.value.env : undefined;
-    const { clientId, clientSecret, refreshToken } = await readGcloudAdc(env);
 
     const profileResponse = await client.raw.getProviderProfile({ id: options.type, workspace: '' });
     const adcCredential = profileResponse.profile?.credentials.find(
@@ -54,6 +53,7 @@ export class GcloudAdcProviderFactory implements ProviderFactory {
       workspace: '',
     });
 
+    const { clientId, clientSecret, refreshToken } = await readGcloudAdc(env);
     try {
       await client.raw.configureProviderRefresh({
         provider: options.name,
