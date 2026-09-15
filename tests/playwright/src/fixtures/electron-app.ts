@@ -490,7 +490,7 @@ export function killDetachedGateway(electronApp: ElectronApplication): void {
   const pid = electronApp.process().pid;
   if (!pid) return;
   try {
-    execFileSync('/usr/bin/pkill', ['-TERM', '-P', String(pid), 'openshell-gateway'], { stdio: 'ignore' });
+    execFileSync('/usr/bin/pkill', ['-TERM', '-f', '-P', String(pid), 'openshell-gateway'], { stdio: 'ignore' });
   } catch {
     // no matching child processes — expected when gateway never started
   }
