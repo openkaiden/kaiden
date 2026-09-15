@@ -6,7 +6,7 @@ Kaiden is a desktop application for working with AI model providers, MCP (Model 
 
 ## What you can do with Kaiden
 
-- **Chat with multiple model providers** — Anthropic Claude, Google Gemini, Mistral, any OpenAI-compatible endpoint, OpenShift AI, and local models served through Ollama or RamaLama.
+- **Chat with multiple model providers** — Anthropic Claude, Google Gemini, Mistral, any OpenAI-compatible endpoint, OpenShift AI, and local models served through Ollama, RamaLama or llmman.
 - **Connect MCP servers** — install servers from registries and expose their tools to chats and agents.
 - **Run agent flows** — Goose is integrated as a flow runtime; flows can also be exported as Kubernetes manifests.
 - **Manage containers** — list, start, stop, build, and inspect containers, images, pods, volumes, and networks against Podman or Docker engines.
@@ -32,7 +32,7 @@ Kaiden is an Electron application written in TypeScript with a Svelte renderer. 
 - `packages/renderer` — Svelte UI.
 - `packages/preload`, `packages/preload-webview` — IPC bridge between main and renderer.
 - `packages/extension-api` — TypeScript API surface for extensions.
-- `extensions/` — built-in extensions: `claude`, `gemini`, `mistral`, `openai-compatible`, `openshift-ai`, `ollama`, `ramalama`, `goose`, `mcp-registries`, `milvus`, `docling`, `container`, `kdn`.
+- `extensions/` — built-in extensions: `claude`, `gemini`, `mistral`, `openai-compatible`, `openshift-ai`, `ollama`, `ramalama`, `llmman`, `goose`, `mcp-registries`, `milvus`, `docling`, `container`, `kdn`.
 
 See [`AGENTS.md`](./AGENTS.md) for a deeper walkthrough of the plugin system, IPC patterns, and extension lifecycle.
 

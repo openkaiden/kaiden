@@ -25,6 +25,7 @@ export const builtInExtensions = [
   { name: 'Gemini', locator: 'kaiden.gemini' },
   { name: 'GitHub Copilot', locator: 'kaiden.copilot' },
   { name: 'Goose', locator: 'kaiden.goose' },
+  { name: 'llmman', locator: 'kaiden.llmman' },
   { name: 'Milvus Knowledges Provider', locator: 'kaiden.milvus' },
   { name: 'Mistral', locator: 'kaiden.mistral' },
   { name: 'Ollama', locator: 'kaiden.ollama' },
@@ -97,6 +98,7 @@ export const resources = {
   claude: { displayName: 'Claude', hasCreateButton: true },
   ollama: { displayName: 'Ollama', hasCreateButton: false },
   ramalama: { displayName: 'RamaLama', hasCreateButton: false },
+  llmman: { displayName: 'llmman', hasCreateButton: false },
   mistral: { displayName: 'Mistral', hasCreateButton: true },
   cursor: { displayName: 'Cursor', hasCreateButton: true },
   milvus: { displayName: 'Milvus Vector Database', hasCreateButton: true },
@@ -167,6 +169,11 @@ export const PROVIDERS = {
   ramalama: {
     envVarName: 'RAMALAMA_ENABLED',
     resourceId: 'ramalama',
+    autoDetected: true,
+  },
+  llmman: {
+    envVarName: 'LLMMAN_ENABLED',
+    resourceId: 'llmman',
     autoDetected: true,
   },
   claude: {
