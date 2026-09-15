@@ -53,14 +53,20 @@ export function extractBinaryFromCommand(command: string): string {
 /**
  * Check whether an agent binary is allowed by a profile's binaries list.
  *
- * - Absolute agent command: match by exact equality.
- * - Relative agent command: match if any binary ends with `/$command`.
+ * - Binary entry without `*`: match by exact equality.
+ * - Binary entry with `*`: match as a regular expression.
  */
 export function isAgentCommandAllowed(agentBinary: string, binaries: string[]): boolean {
-  if (isAbsolute(agentBinary)) {
-    return binaries.includes(agentBinary);
-  }
-  return binaries.some(b => b === agentBinary || b.endsWith(`/${agentBinary}`));
+  return binaries.some(b => {
+    if (!b.includes('*')) {
+      return b === agentBinary;
+    }
+    try {
+      return new RegExp(b).test(agentBinary);
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
@@ -243,7 +249,7 @@ export class SecretManager {
       return clonedProfileName;
     }
 
-    const binaryPattern = isAbsolute(agentBinary) ? agentBinary : `/**/${agentBinary}`;
+    const binaryPattern = isAbsolute(agentBinary) ? agentBinary : `.*/${agentBinary}`;
     await this.openshellAdapter.createProfile(
       { name: clonedProfileName, from: profileId, binaries: [binaryPattern] },
       gateway,
