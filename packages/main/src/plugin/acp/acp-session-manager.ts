@@ -983,6 +983,7 @@ export class AcpSessionManager {
     });
 
     session.info.currentModelId = modelId;
+    this.resetContextUsageData(session);
     session.info.updatedAt = Date.now();
     this.apiSender.send('acp-session-update');
   }
@@ -1009,6 +1010,8 @@ export class AcpSessionManager {
       throw new Error(`Session "${sessionId}" not found or not initialized`);
     }
 
+    const isModelOption = session.info.configOptions?.some(opt => opt.id === configId && opt.category === 'model');
+
     const params =
       typeof value === 'boolean'
         ? { sessionId: session.acpSessionId, configId, type: 'boolean' as const, value }
@@ -1016,8 +1019,18 @@ export class AcpSessionManager {
 
     const response = await session.connection.setSessionConfigOption(params);
     session.info.configOptions = this.mapConfigOptions(response.configOptions);
+
+    if (isModelOption) {
+      this.resetContextUsageData(session);
+    }
+
     session.info.updatedAt = Date.now();
     this.apiSender.send('acp-session-update');
+  }
+
+  private resetContextUsageData(session: AcpSession): void {
+    session.info.contextUsed = undefined;
+    session.info.contextSize = undefined;
   }
 
   private mapConfigOptions(sdkOptions: acp.SessionConfigOption[]): AcpSessionConfigOption[] {
