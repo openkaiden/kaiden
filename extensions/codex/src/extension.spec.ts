@@ -126,11 +126,30 @@ describe('activate', () => {
       const agent = getRegisteredAgent();
 
       const configFile = createConfigFile();
-      await agent.preWorkspaceStart(createContext([configFile]));
+      const context = createContext([configFile]);
+      await agent.preWorkspaceStart(context);
 
       expect(configFile.updateMock).toHaveBeenCalledOnce();
+      expect(context.workspace.environment).toContainEqual({ name: 'OPENAI_API_KEY', value: 'unused' });
       const written = parseWrittenToml(configFile.updateMock);
-      expect(written).toEqual({ model: 'gpt-4o' });
+      expect(written).toEqual({
+        model: 'gpt-4o',
+        model_provider: 'openshell',
+        model_providers: {
+          openshell: {
+            name: 'OpenShell',
+            base_url: 'https://inference.local/v1',
+            env_key: 'OPENAI_API_KEY',
+            wire_api: 'responses',
+            supports_websockets: false,
+          },
+        },
+        projects: {
+          '/sandbox': {
+            trust_level: 'trusted',
+          },
+        },
+      });
     });
 
     test('preserves existing configuration fields', async () => {
