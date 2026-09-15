@@ -28,7 +28,6 @@ import { Emitter } from '/@/plugin/events/emitter.js';
 import { Exec } from '/@/plugin/util/exec.js';
 import type { Event } from '/@api/event.js';
 import {
-  type CreateProviderOptions,
   type CreateSandboxOptions,
   type GatewayAddOptions,
   type GatewayInfo,
@@ -36,10 +35,6 @@ import {
   type GatewayRuntimeInfo,
   GatewayRuntimeInfoSchema,
   type GatewaySandboxes,
-  type OpenshellProfile,
-  OpenshellProfileSchema,
-  type OpenshellProviderInfo,
-  OpenshellProviderInfoSchema,
   type SandboxInfo,
   SandboxInfoSchema,
   type SetInferenceOptions,
@@ -459,56 +454,6 @@ export class OpenshellCli {
       console.error(`openshell failed: ${cliPath} status — ${detail}`);
       throw new Error(detail);
     }
-  }
-
-  // ── provider commands ──────────────────────────────────────────────
-
-  async listProviders(gateway?: string): Promise<OpenshellProviderInfo[]> {
-    const args = ['provider', 'list'];
-    if (gateway) {
-      args.push('-g', gateway);
-    }
-    const data = await this.execCLI<unknown>(args);
-    return z.array(OpenshellProviderInfoSchema).parse(data);
-  }
-
-  async listProfiles(): Promise<OpenshellProfile[]> {
-    const data = await this.execCLI<unknown>(['provider', 'list-profiles']);
-    return z.array(OpenshellProfileSchema).parse(data);
-  }
-
-  async deleteProvider(name: string, gateway?: string): Promise<void> {
-    const args = ['provider', 'delete', name];
-    if (gateway) {
-      args.push('-g', gateway);
-    }
-    await this.runCli(args);
-  }
-
-  async createProvider(options: CreateProviderOptions, gateway?: string): Promise<void> {
-    if (Object.keys(options.credentials).length === 0 && !options.flags?.length) {
-      throw new Error('credentials must not be empty');
-    }
-    const args = ['provider', 'create', '--name', options.name, '--type', options.type];
-    if (gateway) {
-      args.push('-g', gateway);
-    }
-    const env: Record<string, string> = options.env ?? {};
-    for (const [key, value] of Object.entries(options.credentials)) {
-      env[key] = value;
-      args.push('--credential', key);
-    }
-    if (options.flags) {
-      for (const flag of options.flags) {
-        args.push(flag);
-      }
-    }
-    if (options.config) {
-      for (const [key, value] of Object.entries(options.config)) {
-        args.push('--config', `${key}=${value}`);
-      }
-    }
-    await this.runCli(args, { env, redact: true });
   }
 
   async setInference(options: SetInferenceOptions): Promise<void> {
