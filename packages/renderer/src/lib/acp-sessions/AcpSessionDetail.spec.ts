@@ -24,7 +24,7 @@ import { writable } from 'svelte/store';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import * as acpSessionsStore from '/@/stores/acp-sessions.svelte';
-import type { AcpSessionInfo } from '/@api/acp-session-info';
+import type { AcpFlowToolCallEvent, AcpSessionInfo } from '/@api/acp-session-info';
 
 import AcpSessionDetail from './AcpSessionDetail.svelte';
 
@@ -178,5 +178,62 @@ describe('state reset on session change', () => {
       expect(screen.queryByText('something broke')).not.toBeInTheDocument();
     });
     expect(screen.getByRole('textbox')).toHaveValue('');
+  });
+});
+
+describe('permission request focus management', () => {
+  test('should move focus to permission button when events load after initial effect', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+
+    const waitingSession: AcpSessionInfo = {
+      id: 'session-1',
+      sandboxName: 'test-sandbox',
+      sandboxId: 'sb-1',
+      prompt: 'hello',
+      status: 'waiting_input',
+      createdAt: 1000,
+      updatedAt: 2000,
+      agentId: 'openclaw',
+      agentName: 'OpenClaw',
+    };
+
+    const toolCallEvent: AcpFlowToolCallEvent = {
+      kind: 'tool_call',
+      toolCallId: 'tc-1',
+      title: 'Run shell command',
+      toolName: 'bash',
+      command: 'ls -la',
+      status: 'running',
+      timestamp: 1500,
+      permissionRequest: {
+        requestId: 'req-1',
+        options: [
+          { name: 'Allow', kind: 'allow', optionId: 'allow' },
+          { name: 'Deny', kind: 'deny', optionId: 'deny' },
+        ],
+        resolved: false,
+      },
+    };
+
+    // Use a deferred promise so events load after the initial effect fires
+    let resolveEvents!: (value: AcpFlowToolCallEvent[]) => void;
+    vi.mocked(window.getAcpSessionEvents).mockImplementation(
+      () =>
+        new Promise(resolve => {
+          resolveEvents = resolve;
+        }),
+    );
+
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([waitingSession]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    // Resolve events after initial render so the focus effect must rerun
+    resolveEvents([toolCallEvent]);
+
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBeInstanceOf(HTMLButtonElement);
+      expect(document.activeElement?.closest('.tool-call-pending-permission')).toBeTruthy();
+    });
   });
 });
