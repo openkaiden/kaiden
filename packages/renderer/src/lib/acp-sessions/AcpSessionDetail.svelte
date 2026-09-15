@@ -39,6 +39,7 @@ let pendingAttachments: AcpAttachment[] = $state([]);
 let sendError: string | undefined = $state(undefined);
 let fetchSeq = 0;
 let flowContainer: HTMLElement | undefined = $state(undefined);
+let userScrolledAway = $state(false);
 
 const session: AcpSessionInfo | undefined = $derived($acpSessions.find(s => s.id === sessionId));
 const sessionDisplayName: string = $derived.by(() => {
@@ -302,10 +303,19 @@ const STATUS_COLORS: Record<AcpSessionStatus, string> = {
   cancelled: 'bg-[var(--pd-status-not-running)]',
 };
 
+const SCROLL_BOTTOM_THRESHOLD = 10;
+
 function scrollToBottom(): void {
   if (flowContainer) {
     flowContainer.scrollTop = flowContainer.scrollHeight;
   }
+}
+
+function updateScrollLock(): void {
+  if (!flowContainer) return;
+  const { scrollTop, scrollHeight, clientHeight } = flowContainer;
+  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+  userScrolledAway = distanceFromBottom > SCROLL_BOTTOM_THRESHOLD;
 }
 
 function refreshEvents(): void {
@@ -316,7 +326,6 @@ function refreshEvents(): void {
     .then((loadedEvents: AcpFlowEvent[]) => {
       if (seq === fetchSeq) {
         events = loadedEvents;
-        requestAnimationFrame(scrollToBottom);
       }
     })
     .catch((err: unknown) => console.error('Failed to load events', err));
@@ -329,11 +338,31 @@ $effect(() => {
 });
 
 $effect(() => {
+  const el = flowContainer;
+  if (!el) return;
+  el.addEventListener('scroll', updateScrollLock, { passive: true });
+  return (): void => {
+    el.removeEventListener('scroll', updateScrollLock);
+  };
+});
+
+$effect(() => {
+  const el = flowContainer;
+  if (!el) return;
+  const observer = new MutationObserver(() => {
+    if (!userScrolledAway) scrollToBottom();
+  });
+  observer.observe(el, { childList: true, subtree: true, characterData: true });
+  return (): void => observer.disconnect();
+});
+
+$effect(() => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars, sonarjs/no-unused-vars
   const _id = sessionId;
   followUpText = '';
   pendingAttachments = [];
   sendError = undefined;
+  userScrolledAway = false;
   acpSessionsEventStoreInfo?.fetch()?.catch(() => {});
 });
 
@@ -422,10 +451,12 @@ async function handleSendFollowUp(): Promise<void> {
 
   const savedText = followUpText;
   const savedAttachments = pendingAttachments;
+  const savedScrollLock = userScrolledAway;
   try {
     sendError = undefined;
     followUpText = '';
     pendingAttachments = [];
+    userScrolledAway = false;
     await window.sendAcpFollowUp(sessionId, textToSend, attachmentsToSend);
     refreshEvents();
   } catch (err: unknown) {
@@ -433,6 +464,7 @@ async function handleSendFollowUp(): Promise<void> {
     sendError = err instanceof Error ? err.message : String(err);
     followUpText = savedText;
     pendingAttachments = savedAttachments;
+    userScrolledAway = savedScrollLock;
   }
 }
 
