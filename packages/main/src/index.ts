@@ -22,6 +22,7 @@ import type { ExtensionLoader } from '/@/plugin/extension/extension-loader.js';
 import type { Event } from '/@api/event.js';
 
 import { ApplicationMenuBuilder } from './application-menu-builder.js';
+import { applyDevDockIcon } from './dev-instance.js';
 import { type AdditionalData, Main } from './main.js';
 import type { ConfigurationRegistry } from './plugin/configuration-registry.js';
 import { Emitter } from './plugin/events/emitter.js';
@@ -93,6 +94,8 @@ app.on('will-finish-launching', () => {
 
 app.whenReady().then(
   async () => {
+    applyDevDockIcon(app);
+
     // Setup the default tray icon + menu items
     const animatedTray = new AnimatedTray();
     tray = new Tray(animatedTray.getDefaultImage());
