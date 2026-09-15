@@ -279,6 +279,15 @@ export class OpenshellCli {
     await this.runCli(args);
   }
 
+  async execInSandbox(name: string, command: string[], gatewayName?: string): Promise<void> {
+    const args = ['sandbox', 'exec', '-n', name];
+    if (gatewayName) {
+      args.push('-g', gatewayName);
+    }
+    args.push('--', ...command);
+    await this.runCli(args);
+  }
+
   async listSandboxesForGateway(gatewayName: string): Promise<GatewaySandboxes> {
     const gateways = await this.listGateways();
     const targetGateway = gateways.find(g => g.name === gatewayName);
