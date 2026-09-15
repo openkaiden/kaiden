@@ -53,21 +53,20 @@ const SUPERVISOR_IMAGE_BASE = 'ghcr.io/nvidia/openshell/supervisor';
 const GATEWAY_LOG_FILENAME = 'gateway.log';
 const DEFAULT_GATEWAY_NAME = KAIDEN_LOCAL_GATEWAY_NAME;
 
-type StdioOption = 'ignore' | 'pipe' | 'inherit' | number;
+// On Linux, fork() inherits every open FD and libuv only manages those in the
+// stdio array. A shell wrapper closes FDs > 2 before exec so the gateway
+// binary never holds parent pipe handles (e.g. Playwright's CDP pipes).
+const CLOSE_INHERITED_FDS =
+  'if [ -d /proc/self/fd ]; then for fd in /proc/self/fd/*; do n=${fd##*/}; [ "$n" -gt 2 ] 2>/dev/null && eval "exec $n>&-" 2>/dev/null; done; fi';
 
-// Playwright opens pipes at stdio positions 3-4 on the Electron process.
-// A detached child inherits those write-ends after fork(); if they stay open
-// the parent's 'close' event never fires. Using 'pipe' at positions 3-4
-// creates fresh pipes via dup2, replacing the inherited Playwright fds.
-// The parent-side ends must be destroyed immediately so they don't keep refs.
-function buildDetachedStdio(fd0: StdioOption, fd1: StdioOption, fd2: StdioOption): StdioOption[] {
-  return [fd0, fd1, fd2, 'pipe', 'pipe'];
-}
-
-function closeExtraStdioPipes(child: ChildProcess): void {
-  for (let i = 3; i < (child.stdio?.length ?? 0); i++) {
-    child.stdio[i]?.destroy();
-  }
+function spawnGatewayDetached(binaryPath: string, args: string[], logFd: number): ChildProcess {
+  const child = spawn('/bin/sh', ['-c', `${CLOSE_INHERITED_FDS}; exec "$@"`, '--', binaryPath, ...args], {
+    stdio: ['ignore', logFd, logFd],
+    detached: true,
+    env: { ...process.env, NO_COLOR: '1' },
+  });
+  child.unref();
+  return child;
 }
 
 /**
@@ -335,13 +334,11 @@ export class OpenshellGateway implements Disposable {
     const processState: { spawnError?: Error } = {};
     let gatewayProcess: ChildProcess;
     try {
-      gatewayProcess = spawn(binaryPath, this.buildArgs(true, configPath, storageDirectory, port, bindAddress), {
-        stdio: buildDetachedStdio('ignore', logFile.fd, logFile.fd),
-        detached: true,
-        env: { ...process.env, NO_COLOR: '1' },
-      });
-      gatewayProcess.unref();
-      closeExtraStdioPipes(gatewayProcess);
+      gatewayProcess = spawnGatewayDetached(
+        binaryPath,
+        this.buildArgs(true, configPath, storageDirectory, port, bindAddress),
+        logFile.fd,
+      );
       gatewayProcess.once('error', err => (processState.spawnError = err));
       this.trackGatewayProcess(name, gatewayProcess);
     } finally {
@@ -382,13 +379,7 @@ export class OpenshellGateway implements Disposable {
 
     let gatewayProcess: ChildProcess;
     try {
-      gatewayProcess = spawn(binaryPath, args, {
-        stdio: buildDetachedStdio('ignore', logFile.fd, logFile.fd),
-        detached: true,
-        env: { ...process.env, NO_COLOR: '1' },
-      });
-      gatewayProcess.unref();
-      closeExtraStdioPipes(gatewayProcess);
+      gatewayProcess = spawnGatewayDetached(binaryPath, args, logFile.fd);
       this.trackGatewayProcess(DEFAULT_GATEWAY_NAME, gatewayProcess);
     } finally {
       await logFile.close();

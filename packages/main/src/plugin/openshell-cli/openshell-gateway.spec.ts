@@ -62,12 +62,16 @@ function mockExecResult(stdout = ''): RunResult {
   return { command: GATEWAY_BINARY, stdout, stderr: '' };
 }
 
-function expectDetachedLogStdio(stdio: unknown[] | undefined, logFd: number): void {
-  expect(stdio?.[0]).toBe('ignore');
-  expect(stdio?.[1]).toBe(logFd);
-  expect(stdio?.[2]).toBe(logFd);
-  expect(stdio?.[3]).toBe('pipe');
-  expect(stdio?.[4]).toBe('pipe');
+function getGatewaySpawnCall(callIndex = 0): { binary: string; args: string[]; opts: Record<string, unknown> } {
+  const call = vi.mocked(spawn).mock.calls[callIndex];
+  expect(call?.[0]).toBe('/bin/sh');
+  const shellArgs = call?.[1] as string[];
+  const idx = shellArgs.indexOf('--');
+  return {
+    binary: shellArgs[idx + 1] ?? '',
+    args: idx >= 0 ? shellArgs.slice(idx + 2) : [],
+    opts: (call?.[2] ?? {}) as Record<string, unknown>,
+  };
 }
 
 let gateway: OpenshellGateway;
@@ -137,15 +141,15 @@ describe('init', () => {
 
     await gateway.init();
 
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
+    const { binary, args } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual(
       expect.arrayContaining([
         '--config',
         join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev', 'gateway.toml'),
         '--port',
         '17675',
       ]),
-      expect.objectContaining({ detached: true }),
     );
   });
 
@@ -248,11 +252,9 @@ describe('init', () => {
 
     await gateway.init();
 
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
-      expect.arrayContaining(['--port', '17670']),
-      expect.objectContaining({ detached: true }),
-    );
+    const { binary, args } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual(expect.arrayContaining(['--port', '17670']));
   });
 
   test('reuses orphan gateway when port is already healthy', async () => {
@@ -294,11 +296,9 @@ describe('init', () => {
 
     await gateway.init();
 
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
-      expect.arrayContaining(['--port', '17670']),
-      expect.objectContaining({ detached: true }),
-    );
+    const { binary, args } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual(expect.arrayContaining(['--port', '17670']));
   });
 
   test('returns without spawning when at least one gateway is healthy among multiple', async () => {
@@ -330,11 +330,9 @@ describe('init', () => {
 
     await gateway.init();
 
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
-      expect.arrayContaining(['--port', '17670']),
-      expect.objectContaining({ detached: true }),
-    );
+    const { binary, args } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual(expect.arrayContaining(['--port', '17670']));
   });
 
   test('delegates health check to openshellCli for https endpoints', async () => {
@@ -388,8 +386,9 @@ describe('createLocalGateway', () => {
       expect.stringContaining('enable_bind_mounts = true'),
       'utf-8',
     );
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
+    const { binary, args, opts } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual(
       expect.arrayContaining([
         '--port',
         '17675',
@@ -401,16 +400,11 @@ describe('createLocalGateway', () => {
         `sqlite:${join(storageDirectory, 'gateway.db')}?mode=rwc`,
         '--disable-tls',
       ]),
-      expect.objectContaining({
-        detached: true,
-      }),
     );
-    const spawnOpts = vi.mocked(spawn).mock.calls[0]?.[2] as { stdio: unknown[] };
-    expectDetachedLogStdio(spawnOpts.stdio, 42);
-    const spawnArgs = vi.mocked(spawn).mock.calls[0]?.[1] ?? [];
-    expect(spawnArgs).not.toContain('--tls-cert');
-    expect(spawnArgs).not.toContain('--tls-key');
-    expect(spawnArgs).not.toContain('--tls-client-ca');
+    expect(opts['stdio']).toEqual(['ignore', 42, 42]);
+    expect(args).not.toContain('--tls-cert');
+    expect(args).not.toContain('--tls-key');
+    expect(args).not.toContain('--tls-client-ca');
     expect(openshellCli.addGateway).toHaveBeenCalledWith({
       endpoint: 'http://127.0.0.1:17675',
       local: true,
@@ -437,10 +431,10 @@ describe('createLocalGateway', () => {
       driver: 'podman',
     });
 
-    const spawnOptions = vi.mocked(spawn).mock.calls[0]?.[2];
-    expect(spawnOptions?.env).toBeDefined();
-    expect(spawnOptions?.env?.['NO_COLOR']).toBe('1');
-    expect(spawnOptions?.env?.['PATH']).toBe(process.env['PATH']);
+    const { opts } = getGatewaySpawnCall();
+    expect(opts['env']).toBeDefined();
+    expect((opts['env'] as Record<string, string>)['NO_COLOR']).toBe('1');
+    expect((opts['env'] as Record<string, string>)['PATH']).toBe(process.env['PATH']);
   });
 
   test('infers the Docker driver from the active gateway when no override is supplied', async () => {
@@ -610,25 +604,21 @@ describe('start', () => {
     await gateway.start();
 
     expect(open).toHaveBeenCalledWith(GATEWAY_LOG_PATH, 'w');
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
-      [
-        '--config',
-        GATEWAY_CONFIG_PATH,
-        '--port',
-        '17670',
-        '--bind-address',
-        '127.0.0.1',
-        '--disable-tls',
-        '--db-url',
-        GATEWAY_DB_URL,
-      ],
-      expect.objectContaining({
-        detached: true,
-      }),
-    );
-    const startOpts = vi.mocked(spawn).mock.calls[0]?.[2] as { stdio: unknown[] };
-    expectDetachedLogStdio(startOpts.stdio, 42);
+    const { binary, args, opts } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual([
+      '--config',
+      GATEWAY_CONFIG_PATH,
+      '--port',
+      '17670',
+      '--bind-address',
+      '127.0.0.1',
+      '--disable-tls',
+      '--db-url',
+      GATEWAY_DB_URL,
+    ]);
+    expect(opts['detached']).toBe(true);
+    expect(opts['stdio']).toEqual(['ignore', 42, 42]);
     expect(closeLogFile).toHaveBeenCalled();
   });
 
@@ -641,21 +631,19 @@ describe('start', () => {
 
     await gateway.start({ port: 9999, bindAddress: '0.0.0.0' });
 
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
-      [
-        '--config',
-        GATEWAY_CONFIG_PATH,
-        '--port',
-        '9999',
-        '--bind-address',
-        '0.0.0.0',
-        '--disable-tls',
-        '--db-url',
-        GATEWAY_DB_URL,
-      ],
-      expect.objectContaining({ detached: true }),
-    );
+    const { binary, args } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual([
+      '--config',
+      GATEWAY_CONFIG_PATH,
+      '--port',
+      '9999',
+      '--bind-address',
+      '0.0.0.0',
+      '--disable-tls',
+      '--db-url',
+      GATEWAY_DB_URL,
+    ]);
   });
 
   test('skips --disable-tls when disableTls is false', async () => {
@@ -667,11 +655,18 @@ describe('start', () => {
 
     await gateway.start({ disableTls: false });
 
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
-      ['--config', GATEWAY_CONFIG_PATH, '--port', '17670', '--bind-address', '127.0.0.1', '--db-url', GATEWAY_DB_URL],
-      expect.objectContaining({ detached: true }),
-    );
+    const { binary, args } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual([
+      '--config',
+      GATEWAY_CONFIG_PATH,
+      '--port',
+      '17670',
+      '--bind-address',
+      '127.0.0.1',
+      '--db-url',
+      GATEWAY_DB_URL,
+    ]);
   });
 
   test('passes --db-url pointing to the kaiden data directory', async () => {
@@ -683,11 +678,9 @@ describe('start', () => {
 
     await gateway.start();
 
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
-      expect.arrayContaining(['--db-url', GATEWAY_DB_URL]),
-      expect.objectContaining({ detached: true }),
-    );
+    const { binary, args } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual(expect.arrayContaining(['--db-url', GATEWAY_DB_URL]));
   });
 
   test('sets NO_COLOR in gateway spawn environment to suppress ANSI codes in logs', async () => {
@@ -699,10 +692,10 @@ describe('start', () => {
 
     await gateway.start();
 
-    const spawnOptions = vi.mocked(spawn).mock.calls[0]?.[2];
-    expect(spawnOptions?.env).toBeDefined();
-    expect(spawnOptions?.env?.['NO_COLOR']).toBe('1');
-    expect(spawnOptions?.env?.['PATH']).toBe(process.env['PATH']);
+    const { opts } = getGatewaySpawnCall();
+    expect(opts['env']).toBeDefined();
+    expect((opts['env'] as Record<string, string>)['NO_COLOR']).toBe('1');
+    expect((opts['env'] as Record<string, string>)['PATH']).toBe(process.env['PATH']);
   });
 
   test('skips if already running', async () => {
@@ -904,11 +897,17 @@ describe('start', () => {
 
     await gateway.start();
 
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
-      ['--port', '17670', '--bind-address', '127.0.0.1', '--disable-tls', '--db-url', GATEWAY_DB_URL],
-      expect.objectContaining({ detached: true }),
-    );
+    const { binary, args } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual([
+      '--port',
+      '17670',
+      '--bind-address',
+      '127.0.0.1',
+      '--disable-tls',
+      '--db-url',
+      GATEWAY_DB_URL,
+    ]);
   });
 
   test('stops the spawned process when waitForReady fails', async () => {
@@ -1256,11 +1255,9 @@ describe('gateway config generation', () => {
 
     await gateway.start();
 
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
-      expect.arrayContaining(['--config', GATEWAY_CONFIG_PATH]),
-      expect.objectContaining({ detached: true }),
-    );
+    const { binary, args } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual(expect.arrayContaining(['--config', GATEWAY_CONFIG_PATH]));
   });
 
   test('uses custom supervisorImage without version detection', async () => {
@@ -1285,11 +1282,9 @@ describe('gateway config generation', () => {
       expect.not.stringContaining('supervisor_image'),
       'utf-8',
     );
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
-      expect.arrayContaining(['--config', GATEWAY_CONFIG_PATH]),
-      expect.objectContaining({ detached: true }),
-    );
+    const { binary, args } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual(expect.arrayContaining(['--config', GATEWAY_CONFIG_PATH]));
   });
 
   test('still generates config when version output is unparseable', async () => {
@@ -1312,11 +1307,17 @@ describe('gateway config generation', () => {
 
     await gateway.start();
 
-    expect(spawn).toHaveBeenCalledWith(
-      GATEWAY_BINARY,
-      ['--port', '17670', '--bind-address', '127.0.0.1', '--disable-tls', '--db-url', GATEWAY_DB_URL],
-      expect.objectContaining({ detached: true }),
-    );
+    const { binary, args } = getGatewaySpawnCall();
+    expect(binary).toBe(GATEWAY_BINARY);
+    expect(args).toEqual([
+      '--port',
+      '17670',
+      '--bind-address',
+      '127.0.0.1',
+      '--disable-tls',
+      '--db-url',
+      GATEWAY_DB_URL,
+    ]);
   });
 
   test('enables bind mounts when a local compute driver is detected', async () => {
