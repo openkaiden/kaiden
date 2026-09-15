@@ -43,6 +43,8 @@ export const ModelRefSchema = z.object({
   useReasoning: z.boolean(),
 });
 
+export type ModelRef = z.infer<typeof ModelRefSchema>;
+
 export const DecisionRuleSchema = z.object({
   operator: z.enum(['AND', 'OR']),
   conditions: z.array(RuleConditionSchema),
@@ -72,7 +74,7 @@ export const SemanticRouterConfigSchema = z.object({
 export type SemanticRouterConfigInfo = z.output<typeof SemanticRouterConfigSchema>;
 
 export interface SemanticRouterConnectionInfo {
-  providerId: string;
+  providerInternalId: string;
   connectionId: string;
 }
 
