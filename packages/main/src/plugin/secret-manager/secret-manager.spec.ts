@@ -535,16 +535,16 @@ describe('isAgentCommandAllowed', () => {
     expect(isAgentCommandAllowed('claude', ['/usr/local/bin/claude', '/usr/bin/node'])).toBe(false);
   });
 
-  test('matches via regex when binary contains wildcard', () => {
-    expect(isAgentCommandAllowed('/usr/local/bin/claude', ['.*/claude'])).toBe(true);
+  test('matches via minimatch glob when binary contains wildcard', () => {
+    expect(isAgentCommandAllowed('/usr/local/bin/claude', ['**/claude'])).toBe(true);
   });
 
-  test('rejects via regex when pattern does not match', () => {
-    expect(isAgentCommandAllowed('/usr/bin/node', ['.*/claude'])).toBe(false);
+  test('rejects via minimatch glob when pattern does not match', () => {
+    expect(isAgentCommandAllowed('/usr/bin/node', ['**/claude'])).toBe(false);
   });
 
-  test('handles invalid regex gracefully', () => {
-    expect(isAgentCommandAllowed('claude', ['*invalid['])).toBe(false);
+  test('matches bare command via glob pattern', () => {
+    expect(isAgentCommandAllowed('claude', ['**/claude'])).toBe(true);
   });
 });
 
@@ -634,7 +634,7 @@ describe('resolveProfileForAgent', () => {
 
     expect(result).toBe('openai-claude');
     expect(openshellCli.createProfile).toHaveBeenCalledWith(
-      { name: 'openai-claude', from: 'openai', binaries: ['.*/claude'] },
+      { name: 'openai-claude', from: 'openai', binaries: ['**/claude'] },
       undefined,
     );
   });
@@ -647,14 +647,14 @@ describe('resolveProfileForAgent', () => {
 
     expect(result).toBe('openai-claude');
     expect(openshellCli.createProfile).toHaveBeenCalledWith(
-      { name: 'openai-claude', from: 'openai', binaries: ['.*/claude'] },
+      { name: 'openai-claude', from: 'openai', binaries: ['**/claude'] },
       undefined,
     );
   });
 
-  test('returns original profile when agent command matches regex in binaries', async () => {
+  test('returns original profile when agent command matches glob in binaries', async () => {
     vi.mocked(openshellCli.listProfiles).mockResolvedValue([
-      { id: 'openai', display_name: 'OpenAI', binaries: ['.*/claude', '/usr/bin/node'] },
+      { id: 'openai', display_name: 'OpenAI', binaries: ['**/claude', '/usr/bin/node'] },
     ]);
 
     const result = await manager.resolveProfileForAgent('openai', '/usr/local/bin/claude');
@@ -673,7 +673,7 @@ describe('resolveProfileForAgent', () => {
 
     expect(result).toBe('openai-claude');
     expect(openshellCli.createProfile).toHaveBeenCalledWith(
-      { name: 'openai-claude', from: 'openai', binaries: ['.*/claude'] },
+      { name: 'openai-claude', from: 'openai', binaries: ['**/claude'] },
       undefined,
     );
   });
@@ -714,7 +714,7 @@ describe('resolveProfileForAgent', () => {
     await manager.resolveProfileForAgent('openai', 'claude', 'remote-gw');
 
     expect(openshellCli.createProfile).toHaveBeenCalledWith(
-      { name: 'openai-claude', from: 'openai', binaries: ['.*/claude'] },
+      { name: 'openai-claude', from: 'openai', binaries: ['**/claude'] },
       'remote-gw',
     );
   });

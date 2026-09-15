@@ -20,6 +20,7 @@ import { isAbsolute } from 'node:path';
 
 import type { Configuration, InferenceProviderConnection } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
+import minimatch from 'minimatch';
 
 import { IPCHandle } from '/@/plugin/api.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
@@ -54,18 +55,14 @@ export function extractBinaryFromCommand(command: string): string {
  * Check whether an agent binary is allowed by a profile's binaries list.
  *
  * - Binary entry without `*`: match by exact equality.
- * - Binary entry with `*`: match as a regular expression.
+ * - Binary entry with `*`: match using minimatch glob pattern.
  */
 export function isAgentCommandAllowed(agentBinary: string, binaries: string[]): boolean {
   return binaries.some(b => {
     if (!b.includes('*')) {
       return b === agentBinary;
     }
-    try {
-      return new RegExp(b).test(agentBinary);
-    } catch {
-      return false;
-    }
+    return minimatch(agentBinary, b);
   });
 }
 
@@ -249,7 +246,7 @@ export class SecretManager {
       return clonedProfileName;
     }
 
-    const binaryPattern = isAbsolute(agentBinary) ? agentBinary : `.*/${agentBinary}`;
+    const binaryPattern = isAbsolute(agentBinary) ? agentBinary : `**/${agentBinary}`;
     await this.openshellAdapter.createProfile(
       { name: clonedProfileName, from: profileId, binaries: [binaryPattern] },
       gateway,
