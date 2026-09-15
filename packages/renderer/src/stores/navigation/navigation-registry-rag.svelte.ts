@@ -17,9 +17,20 @@
  ***********************************************************************/
 import { faFileLines } from '@fortawesome/free-solid-svg-icons';
 
+import { providerInfos } from '/@/stores/providers';
+
 import type { NavigationRegistryEntry } from './navigation-registry';
 
+let noProviders = $state(true);
+let configHidden = $state(false);
+
 export function createNavigationRagEntry(): NavigationRegistryEntry {
+  providerInfos.subscribe(providers => {
+    const hasRagConnections = providers.some(provider => provider.ragConnections.length > 0);
+    const hasChunkConnections = providers.some(provider => provider.chunkConnections.length > 0);
+    noProviders = !hasRagConnections || !hasChunkConnections;
+  });
+
   const registry: NavigationRegistryEntry = {
     name: 'Knowledges',
     icon: {
@@ -33,6 +44,12 @@ export function createNavigationRagEntry(): NavigationRegistryEntry {
     type: 'entry',
     get counter() {
       return 0;
+    },
+    get hidden() {
+      return noProviders || configHidden;
+    },
+    set hidden(value: boolean) {
+      configHidden = value;
     },
   };
   return registry;
