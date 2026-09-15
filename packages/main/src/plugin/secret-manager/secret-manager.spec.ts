@@ -16,6 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import type { OpenShellClient } from '@nvidia/openshell-sdk';
 import type { FileSystemWatcher, InferenceProviderConnection } from '@openkaiden/api';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -50,6 +51,7 @@ const mockRaw = {
   deleteProvider: vi.fn(),
   listProviderProfiles: vi.fn(),
 };
+const mockClient = { raw: mockRaw } as unknown as OpenShellClient;
 const sdkClientManager = new OpenshellSdkClientManager(undefined!, undefined!);
 const openshellAdapter = new OpenshellSecretAdapter(sdkClientManager);
 
@@ -104,6 +106,7 @@ beforeEach(() => {
   vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
     { name: 'kaiden', endpoint: 'http://localhost' },
   ]);
+  vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
   manager = new SecretManager(
     apiSender,
     ipcHandle,
@@ -160,6 +163,7 @@ describe('openshellAdapter', () => {
     vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
       { name: 'kaiden', endpoint: 'http://localhost' },
     ]);
+    vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
     manager = new SecretManager(
       apiSender,
       ipcHandle,
