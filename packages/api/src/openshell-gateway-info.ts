@@ -106,25 +106,6 @@ export function decodeWorkspaceLabels(labels: Record<string, string>): string | 
   }
 }
 
-export interface CreateSandboxOptions {
-  name?: string;
-  gateway?: string;
-  from?: string;
-  gpu?: boolean;
-  gpuDevice?: string;
-  cpu?: string;
-  memory?: string;
-  providers?: string[];
-  env?: Record<string, string>;
-  labels?: Record<string, string>;
-  uploads?: Array<{ local: string; remote: string }>;
-  command?: string[];
-  noTty?: boolean;
-  tty?: boolean;
-  detach?: boolean;
-  policy?: string;
-}
-
 export interface GatewayAddOptions {
   endpoint: string;
   name?: string;
