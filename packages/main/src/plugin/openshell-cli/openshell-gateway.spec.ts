@@ -48,6 +48,7 @@ const GATEWAY_STORAGE_DIRECTORY = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateway
 const GATEWAY_CONFIG_PATH = join(GATEWAY_STORAGE_DIRECTORY, 'gateway.toml');
 const GATEWAY_DB_URL = `sqlite:${join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db')}?mode=rwc`;
 const GATEWAY_LOG_PATH = join(GATEWAY_STORAGE_DIRECTORY, 'gateway.log');
+const EXPECTED_STDIO = ['ignore', 42, 42, ...Array.from<number>({ length: 28 }).fill(42)];
 
 const closeLogFile = vi.fn();
 
@@ -64,12 +65,9 @@ function mockExecResult(stdout = ''): RunResult {
 
 function getGatewaySpawnCall(callIndex = 0): { binary: string; args: string[]; opts: Record<string, unknown> } {
   const call = vi.mocked(spawn).mock.calls[callIndex];
-  expect(call?.[0]).toBe('/bin/sh');
-  const shellArgs = call?.[1] as string[];
-  const idx = shellArgs.indexOf('--');
   return {
-    binary: shellArgs[idx + 1] ?? '',
-    args: idx >= 0 ? shellArgs.slice(idx + 2) : [],
+    binary: call?.[0] as string,
+    args: (call?.[1] ?? []) as string[],
     opts: (call?.[2] ?? {}) as Record<string, unknown>,
   };
 }
@@ -401,7 +399,7 @@ describe('createLocalGateway', () => {
         '--disable-tls',
       ]),
     );
-    expect(opts['stdio']).toEqual(['ignore', 42, 42]);
+    expect(opts['stdio']).toEqual(EXPECTED_STDIO);
     expect(args).not.toContain('--tls-cert');
     expect(args).not.toContain('--tls-key');
     expect(args).not.toContain('--tls-client-ca');
@@ -618,7 +616,7 @@ describe('start', () => {
       GATEWAY_DB_URL,
     ]);
     expect(opts['detached']).toBe(true);
-    expect(opts['stdio']).toEqual(['ignore', 42, 42]);
+    expect(opts['stdio']).toEqual(EXPECTED_STDIO);
     expect(closeLogFile).toHaveBeenCalled();
   });
 

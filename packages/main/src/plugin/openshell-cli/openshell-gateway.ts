@@ -53,15 +53,18 @@ const SUPERVISOR_IMAGE_BASE = 'ghcr.io/nvidia/openshell/supervisor';
 const GATEWAY_LOG_FILENAME = 'gateway.log';
 const DEFAULT_GATEWAY_NAME = KAIDEN_LOCAL_GATEWAY_NAME;
 
-// On Linux, fork() inherits every open FD and libuv only manages those in the
-// stdio array. A shell wrapper closes FDs > 2 before exec so the gateway
-// binary never holds parent pipe handles (e.g. Playwright's CDP pipes).
-const CLOSE_INHERITED_FDS =
-  'if [ -d /proc/self/fd ]; then for fd in /proc/self/fd/*; do n=${fd##*/}; [ "$n" -gt 2 ] 2>/dev/null && eval "exec $n>&-" 2>/dev/null; done; fi';
+// On Linux, fork() inherits every open FD. Placing logFd at stdio positions
+// 3–30 makes libuv dup2 it over those slots, replacing any inherited pipe
+// handles (e.g. Playwright CDP pipes) so they don't keep the parent alive.
+const STDIO_OVERWRITE_SLOTS = 28;
 
 function spawnGatewayDetached(binaryPath: string, args: string[], logFd: number): ChildProcess {
-  const child = spawn('/bin/sh', ['-c', `${CLOSE_INHERITED_FDS}; exec "$@"`, '--', binaryPath, ...args], {
-    stdio: ['ignore', logFd, logFd],
+  const stdio: (number | 'ignore')[] = ['ignore', logFd, logFd];
+  for (let i = 0; i < STDIO_OVERWRITE_SLOTS; i++) {
+    stdio.push(logFd);
+  }
+  const child = spawn(binaryPath, args, {
+    stdio,
     detached: true,
     env: { ...process.env, NO_COLOR: '1' },
   });
