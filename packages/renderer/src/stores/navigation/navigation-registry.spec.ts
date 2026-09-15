@@ -50,10 +50,16 @@ test('check navigation registry items', async () => {
 });
 
 test('check update properties', async () => {
-  // first, check that all items are visible
+  // Items that are hidden based on provider state rather than config
+  // (e.g. Knowledges is hidden when no RAG/chunk providers exist)
+  const providerHiddenItems = ['Knowledges'];
+
+  // first, check that all items (except provider-hidden ones) are visible
   const items = get(navigationRegistry);
   items.forEach(item => {
-    expect(item.hidden).toBeFalsy();
+    if (!providerHiddenItems.includes(item.name)) {
+      expect(item.hidden).toBeFalsy();
+    }
   });
 
   // Say that Containers and Pods are hidden by the configuration
@@ -70,7 +76,9 @@ test('check update properties', async () => {
 
   const allItemsExceptContainersAndPods = hidden.filter(item => item.name !== 'Containers' && item.name !== 'Pods');
   allItemsExceptContainersAndPods.forEach(item => {
-    expect(item.hidden).toBeFalsy();
+    if (!providerHiddenItems.includes(item.name)) {
+      expect(item.hidden).toBeFalsy();
+    }
   });
 
   const containersAndPods = hidden.filter(item => item.name === 'Containers' || item.name === 'Pods');
