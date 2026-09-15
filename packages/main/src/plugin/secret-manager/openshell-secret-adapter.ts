@@ -19,7 +19,7 @@
 import { inject, injectable } from 'inversify';
 
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
-import type { OpenshellProfile } from '/@api/openshell-gateway-info.js';
+import type { CreateProfileOptions, OpenshellProfile } from '/@api/openshell-gateway-info.js';
 import type { SecretCliBackend, SecretCreateOptions, SecretInfo, SecretName } from '/@api/secret-info.js';
 
 /**
@@ -69,5 +69,9 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
 
   async listServices(): Promise<OpenshellProfile[]> {
     return this.openshellCli.listProfiles();
+  }
+
+  async createProfile(options: CreateProfileOptions, gateway?: string): Promise<void> {
+    await this.openshellCli.createProfile(options, gateway);
   }
 }

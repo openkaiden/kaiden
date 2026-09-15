@@ -34,7 +34,7 @@ import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
 import { OpenshellSecretAdapter } from './openshell-secret-adapter.js';
-import { SecretManager } from './secret-manager.js';
+import { extractBinaryFromCommand, isAgentCommandAllowed, SecretManager } from './secret-manager.js';
 
 vi.mock(import('/@/plugin/openshell-cli/openshell-cli.js'));
 
@@ -501,5 +501,208 @@ describe('ensureSecretForModel', () => {
 
     expect(result).toBeUndefined();
     expect(openshellCli.createProvider).not.toHaveBeenCalled();
+  });
+});
+
+describe('extractBinaryFromCommand', () => {
+  test('extracts single-word command', () => {
+    expect(extractBinaryFromCommand('claude')).toBe('claude');
+  });
+
+  test('extracts first word from multi-word command', () => {
+    expect(extractBinaryFromCommand('/usr/bin/agent start')).toBe('/usr/bin/agent');
+  });
+
+  test('trims whitespace', () => {
+    expect(extractBinaryFromCommand('  claude  ')).toBe('claude');
+  });
+});
+
+describe('isAgentCommandAllowed', () => {
+  test('matches absolute path exactly', () => {
+    expect(isAgentCommandAllowed('/usr/bin/claude', ['/usr/bin/claude', '/usr/bin/node'])).toBe(true);
+  });
+
+  test('rejects absolute path not in list', () => {
+    expect(isAgentCommandAllowed('/usr/bin/claude', ['/usr/local/bin/claude'])).toBe(false);
+  });
+
+  test('matches relative command by suffix', () => {
+    expect(isAgentCommandAllowed('claude', ['/usr/local/bin/claude', '/usr/bin/node'])).toBe(true);
+  });
+
+  test('matches relative command exactly', () => {
+    expect(isAgentCommandAllowed('claude', ['claude'])).toBe(true);
+  });
+
+  test('rejects relative command not in list', () => {
+    expect(isAgentCommandAllowed('claude', ['/usr/bin/node', '/usr/bin/python'])).toBe(false);
+  });
+
+  test('does not match partial filename', () => {
+    expect(isAgentCommandAllowed('claude', ['/usr/bin/notclaude'])).toBe(false);
+  });
+});
+
+describe('ensureSecretForSandbox', () => {
+  const mockConnection: InferenceProviderConnection = {
+    id: 'conn-sandbox',
+    name: 'test-connection',
+    type: 'cloud',
+    sdk: {} as InferenceProviderConnection['sdk'],
+    status: () => 'started',
+    models: [{ label: 'model-1' }],
+    credentials: () => ({ token: 'secret-token' }),
+  };
+
+  test('returns existing secret by sandbox name', async () => {
+    vi.mocked(openshellCli.listProviders).mockResolvedValue([{ name: 'my-sandbox-secret', type: 'openai' }]);
+
+    const result = await manager.ensureSecretForSandbox('my-sandbox', 'openai::gpt-4::', 'claude', 'kaiden');
+
+    expect(result).toEqual({ name: 'my-sandbox-secret', type: 'openai' });
+    expect(openshellCli.createProvider).not.toHaveBeenCalled();
+  });
+
+  test('creates sandbox-named secret when none exists', async () => {
+    vi.mocked(openshellCli.listProviders).mockResolvedValue([]);
+    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
+      connection: mockConnection,
+      providerId: 'kaiden.openai',
+    });
+    vi.mocked(providerRegistry.getProvider).mockReturnValue({
+      extensionId: 'kaiden.openai',
+    } as unknown as ProviderImpl);
+    vi.mocked(openshellCli.listProfiles).mockResolvedValue([{ id: 'openai', display_name: 'OpenAI' }]);
+
+    const properties = {
+      'openai.connection._type': {
+        scope: 'InferenceProviderConnection',
+        extension: { id: 'kaiden.openai' },
+      },
+      'openai.connection.token': {
+        scope: 'InferenceProviderConnection',
+        extension: { id: 'kaiden.openai' },
+        format: 'password',
+      },
+    } as Record<string, Record<string, unknown>>;
+    vi.mocked(configurationRegistry.getConfigurationProperties).mockReturnValue(
+      properties as unknown as ReturnType<typeof configurationRegistry.getConfigurationProperties>,
+    );
+    vi.mocked(configurationRegistry.getConfiguration).mockReturnValue({
+      get: vi.fn((key: string) => {
+        if (key === 'openai.connection._type') return 'openai';
+        if (key === 'openai.connection.token') return 'openai:conn-sandbox:token';
+        return undefined;
+      }),
+      has: vi.fn(),
+      update: vi.fn(),
+    } as unknown as ReturnType<typeof configurationRegistry.getConfiguration>);
+    vi.mocked(extensionStorageMock.get).mockResolvedValue('actual-api-key');
+    vi.mocked(openshellCli.createProvider).mockResolvedValue(undefined);
+
+    const result = await manager.ensureSecretForSandbox('my-sandbox', 'openai::gpt-4::', 'claude', 'kaiden');
+
+    expect(result).toEqual({ name: 'my-sandbox-secret', type: 'openai' });
+    expect(openshellCli.createProvider).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'my-sandbox-secret', type: 'openai' }),
+      'kaiden',
+    );
+  });
+
+  test('returns undefined when no inference connection exists', async () => {
+    vi.mocked(openshellCli.listProviders).mockResolvedValue([]);
+    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue(undefined);
+
+    const result = await manager.ensureSecretForSandbox('my-sandbox', 'unknown::model::', 'claude');
+
+    expect(result).toBeUndefined();
+  });
+});
+
+describe('resolveProfileForAgent', () => {
+  test('returns original profile when no binaries field', async () => {
+    vi.mocked(openshellCli.listProfiles).mockResolvedValue([{ id: 'openai', display_name: 'OpenAI' }]);
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude');
+
+    expect(result).toBe('openai');
+    expect(openshellCli.createProfile).not.toHaveBeenCalled();
+  });
+
+  test('returns original profile when binaries is empty', async () => {
+    vi.mocked(openshellCli.listProfiles).mockResolvedValue([{ id: 'openai', display_name: 'OpenAI', binaries: [] }]);
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude');
+
+    expect(result).toBe('openai');
+    expect(openshellCli.createProfile).not.toHaveBeenCalled();
+  });
+
+  test('returns original profile when agent command is in binaries', async () => {
+    vi.mocked(openshellCli.listProfiles).mockResolvedValue([
+      { id: 'openai', display_name: 'OpenAI', binaries: ['/usr/local/bin/claude', '/usr/bin/node'] },
+    ]);
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude');
+
+    expect(result).toBe('openai');
+    expect(openshellCli.createProfile).not.toHaveBeenCalled();
+  });
+
+  test('clones profile when agent command is not in binaries', async () => {
+    vi.mocked(openshellCli.listProfiles).mockResolvedValue([
+      { id: 'openai', display_name: 'OpenAI', binaries: ['/usr/bin/node'] },
+    ]);
+    vi.mocked(openshellCli.createProfile).mockResolvedValue(undefined);
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude');
+
+    expect(result).toBe('openai-claude');
+    expect(openshellCli.createProfile).toHaveBeenCalledWith(
+      { name: 'openai-claude', from: 'openai', binaries: ['/**/claude'] },
+      undefined,
+    );
+  });
+
+  test('clones profile with absolute agent command', async () => {
+    vi.mocked(openshellCli.listProfiles).mockResolvedValue([
+      { id: 'openai', display_name: 'OpenAI', binaries: ['/usr/bin/node'] },
+    ]);
+    vi.mocked(openshellCli.createProfile).mockResolvedValue(undefined);
+
+    const result = await manager.resolveProfileForAgent('openai', '/usr/local/bin/claude');
+
+    expect(result).toBe('openai-claude');
+    expect(openshellCli.createProfile).toHaveBeenCalledWith(
+      { name: 'openai-claude', from: 'openai', binaries: ['/usr/local/bin/claude'] },
+      undefined,
+    );
+  });
+
+  test('returns existing clone when already created', async () => {
+    vi.mocked(openshellCli.listProfiles).mockResolvedValue([
+      { id: 'openai', display_name: 'OpenAI', binaries: ['/usr/bin/node'] },
+      { id: 'openai-claude', display_name: 'OpenAI (claude)' },
+    ]);
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude');
+
+    expect(result).toBe('openai-claude');
+    expect(openshellCli.createProfile).not.toHaveBeenCalled();
+  });
+
+  test('passes gateway when cloning profile', async () => {
+    vi.mocked(openshellCli.listProfiles).mockResolvedValue([
+      { id: 'openai', display_name: 'OpenAI', binaries: ['/usr/bin/node'] },
+    ]);
+    vi.mocked(openshellCli.createProfile).mockResolvedValue(undefined);
+
+    await manager.resolveProfileForAgent('openai', 'claude', 'remote-gw');
+
+    expect(openshellCli.createProfile).toHaveBeenCalledWith(
+      { name: 'openai-claude', from: 'openai', binaries: ['/**/claude'] },
+      'remote-gw',
+    );
   });
 });

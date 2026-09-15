@@ -28,6 +28,7 @@ import { Emitter } from '/@/plugin/events/emitter.js';
 import { Exec } from '/@/plugin/util/exec.js';
 import type { Event } from '/@api/event.js';
 import {
+  type CreateProfileOptions,
   type CreateProviderOptions,
   type CreateSandboxOptions,
   type GatewayAddOptions,
@@ -472,6 +473,17 @@ export class OpenshellCli {
   async listProfiles(): Promise<OpenshellProfile[]> {
     const data = await this.execCLI<unknown>(['provider', 'list-profiles']);
     return z.array(OpenshellProfileSchema).parse(data);
+  }
+
+  async createProfile(options: CreateProfileOptions, gateway?: string): Promise<void> {
+    const args = ['provider', 'create-profile', '--from', options.from, '--name', options.name];
+    for (const binary of options.binaries) {
+      args.push('--binary', binary);
+    }
+    if (gateway) {
+      args.push('-g', gateway);
+    }
+    await this.runCli(args);
   }
 
   async deleteProvider(name: string, gateway?: string): Promise<void> {
