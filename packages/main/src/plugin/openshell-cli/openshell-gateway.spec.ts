@@ -48,7 +48,6 @@ const GATEWAY_STORAGE_DIRECTORY = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateway
 const GATEWAY_CONFIG_PATH = join(GATEWAY_STORAGE_DIRECTORY, 'gateway.toml');
 const GATEWAY_DB_URL = `sqlite:${join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db')}?mode=rwc`;
 const GATEWAY_LOG_PATH = join(GATEWAY_STORAGE_DIRECTORY, 'gateway.log');
-const EXPECTED_STDIO = ['ignore', 42, 42, ...Array.from<number>({ length: 28 }).fill(42)];
 
 const closeLogFile = vi.fn();
 
@@ -399,7 +398,7 @@ describe('createLocalGateway', () => {
         '--disable-tls',
       ]),
     );
-    expect(opts['stdio']).toEqual(EXPECTED_STDIO);
+    expect(opts['stdio']).toEqual(['ignore', 42, 42]);
     expect(args).not.toContain('--tls-cert');
     expect(args).not.toContain('--tls-key');
     expect(args).not.toContain('--tls-client-ca');
@@ -616,7 +615,7 @@ describe('start', () => {
       GATEWAY_DB_URL,
     ]);
     expect(opts['detached']).toBe(true);
-    expect(opts['stdio']).toEqual(EXPECTED_STDIO);
+    expect(opts['stdio']).toEqual(['ignore', 42, 42]);
     expect(closeLogFile).toHaveBeenCalled();
   });
 

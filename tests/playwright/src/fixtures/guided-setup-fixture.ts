@@ -18,7 +18,7 @@
 
 import { type ElectronApplication, expect, type Page, test } from '@playwright/test';
 
-import { getFirstPage, launchElectronApp } from '/@/fixtures/electron-app';
+import { getFirstPage, killDetachedGateway, launchElectronApp } from '/@/fixtures/electron-app';
 
 export interface GuidedSetupSession {
   electronApp: ElectronApplication;
@@ -36,6 +36,7 @@ export async function launchGuidedSetupSession(): Promise<GuidedSetupSession> {
 }
 
 export async function closeGuidedSetupSession(electronApp: ElectronApplication): Promise<void> {
+  killDetachedGateway(electronApp);
   await electronApp.close().catch(() => {});
 }
 
