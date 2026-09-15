@@ -574,6 +574,7 @@ describe('ensureSecretForSandbox', () => {
       extensionId: 'kaiden.openai',
     } as unknown as ProviderImpl);
     vi.mocked(openshellCli.listProfiles).mockResolvedValue([{ id: 'openai', display_name: 'OpenAI' }]);
+    vi.mocked(openshellCli.createProfile).mockResolvedValue(undefined);
 
     const properties = {
       'openai.connection._type': {
@@ -603,9 +604,9 @@ describe('ensureSecretForSandbox', () => {
 
     const result = await manager.ensureSecretForSandbox('my-sandbox', 'openai::gpt-4::', 'claude', 'kaiden');
 
-    expect(result).toEqual({ name: 'my-sandbox-secret', type: 'openai' });
+    expect(result).toEqual({ name: 'my-sandbox-secret', type: 'openai-claude' });
     expect(openshellCli.createProvider).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'my-sandbox-secret', type: 'openai' }),
+      expect.objectContaining({ name: 'my-sandbox-secret', type: 'openai-claude' }),
       'kaiden',
     );
   });
@@ -621,22 +622,30 @@ describe('ensureSecretForSandbox', () => {
 });
 
 describe('resolveProfileForAgent', () => {
-  test('returns original profile when no binaries field', async () => {
+  test('clones profile when no binaries field (absence means no binary authorised)', async () => {
     vi.mocked(openshellCli.listProfiles).mockResolvedValue([{ id: 'openai', display_name: 'OpenAI' }]);
+    vi.mocked(openshellCli.createProfile).mockResolvedValue(undefined);
 
     const result = await manager.resolveProfileForAgent('openai', 'claude');
 
-    expect(result).toBe('openai');
-    expect(openshellCli.createProfile).not.toHaveBeenCalled();
+    expect(result).toBe('openai-claude');
+    expect(openshellCli.createProfile).toHaveBeenCalledWith(
+      { name: 'openai-claude', from: 'openai', binaries: ['/**/claude'] },
+      undefined,
+    );
   });
 
-  test('returns original profile when binaries is empty', async () => {
+  test('clones profile when binaries is empty (no binary authorised)', async () => {
     vi.mocked(openshellCli.listProfiles).mockResolvedValue([{ id: 'openai', display_name: 'OpenAI', binaries: [] }]);
+    vi.mocked(openshellCli.createProfile).mockResolvedValue(undefined);
 
     const result = await manager.resolveProfileForAgent('openai', 'claude');
 
-    expect(result).toBe('openai');
-    expect(openshellCli.createProfile).not.toHaveBeenCalled();
+    expect(result).toBe('openai-claude');
+    expect(openshellCli.createProfile).toHaveBeenCalledWith(
+      { name: 'openai-claude', from: 'openai', binaries: ['/**/claude'] },
+      undefined,
+    );
   });
 
   test('returns original profile when agent command is in binaries', async () => {

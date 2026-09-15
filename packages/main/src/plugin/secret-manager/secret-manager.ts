@@ -218,16 +218,20 @@ export class SecretManager {
    * Check whether the agent command is allowed by the profile's
    * binaries list. If not, clone the profile with the agent command
    * added and return the cloned profile's ID.
+   *
+   * A missing `binaries` field is treated as an empty list, meaning
+   * no binary is authorised and the profile must be cloned.
    */
   async resolveProfileForAgent(profileId: string, agentCommand: string, gateway?: string): Promise<string> {
     const profiles = await this.listServices();
     const profile = profiles.find(p => p.id === profileId);
-    if (!profile?.binaries?.length) {
+    if (!profile) {
       return profileId;
     }
 
+    const binaries = profile.binaries ?? [];
     const agentBinary = extractBinaryFromCommand(agentCommand);
-    if (isAgentCommandAllowed(agentBinary, profile.binaries)) {
+    if (isAgentCommandAllowed(agentBinary, binaries)) {
       return profileId;
     }
 
