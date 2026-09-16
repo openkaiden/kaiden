@@ -377,22 +377,21 @@ describe('activate', () => {
       });
     });
 
-    test('sets OPENAI_BASE_URL when model has a custom endpoint', async () => {
+    test('writes openai_base_url when model has a custom endpoint', async () => {
       await activate(extensionContextMock);
       const agent = getRegisteredAgent();
 
       const configFile = createConfigFile();
       const ctx = createContext([configFile], { endpoint: 'https://my-custom-host.local/v1' });
-      ctx.workspace.environment = [];
       await agent.preWorkspaceStart(ctx);
 
-      expect(ctx.workspace.environment).toContainEqual({
-        name: 'OPENAI_BASE_URL',
-        value: 'https://my-custom-host.local/v1',
+      expect(parseWrittenToml(configFile.updateMock)).toEqual({
+        model: 'gpt-4o',
+        openai_base_url: 'https://my-custom-host.local/v1',
       });
     });
 
-    test('does not set OPENAI_BASE_URL when no endpoint is provided', async () => {
+    test('does not write openai_base_url when no endpoint is provided', async () => {
       await activate(extensionContextMock);
       const agent = getRegisteredAgent();
 
@@ -400,44 +399,38 @@ describe('activate', () => {
       const ctx = createContext([configFile]);
       await agent.preWorkspaceStart(ctx);
 
-      expect(ctx.workspace.environment).toBeUndefined();
+      expect(parseWrittenToml(configFile.updateMock)).toEqual({ model: 'gpt-4o' });
     });
 
-    test('initializes environment array when setting OPENAI_BASE_URL and none exists', async () => {
+    test('replaces existing openai_base_url with the model endpoint', async () => {
       await activate(extensionContextMock);
       const agent = getRegisteredAgent();
 
-      const configFile = createConfigFile();
+      const configFile = createConfigFile(
+        stringify({ model: 'old-model', openai_base_url: 'https://old-endpoint.local/v1' }),
+      );
       const ctx = createContext([configFile], { endpoint: 'https://custom.example.com/v1' });
       await agent.preWorkspaceStart(ctx);
 
-      expect(ctx.workspace.environment).toContainEqual({
-        name: 'OPENAI_BASE_URL',
-        value: 'https://custom.example.com/v1',
+      expect(parseWrittenToml(configFile.updateMock)).toEqual({
+        model: 'gpt-4o',
+        openai_base_url: 'https://custom.example.com/v1',
       });
     });
 
-    test('replaces existing OPENAI_BASE_URL in environment', async () => {
+    test('preserves other configuration when writing openai_base_url', async () => {
       await activate(extensionContextMock);
       const agent = getRegisteredAgent();
 
-      const configFile = createConfigFile();
+      const configFile = createConfigFile(stringify({ approval_policy: 'on-request' }));
       const ctx = createContext([configFile], { endpoint: 'https://new-endpoint.local/v1' });
-      ctx.workspace.environment = [
-        { name: 'OTHER_VAR', value: 'keep-me' },
-        { name: 'OPENAI_BASE_URL', value: 'https://old-endpoint.local/v1' },
-      ];
       await agent.preWorkspaceStart(ctx);
 
-      expect(ctx.workspace.environment).toContainEqual({
-        name: 'OPENAI_BASE_URL',
-        value: 'https://new-endpoint.local/v1',
+      expect(parseWrittenToml(configFile.updateMock)).toEqual({
+        model: 'gpt-4o',
+        openai_base_url: 'https://new-endpoint.local/v1',
+        approval_policy: 'on-request',
       });
-      expect(ctx.workspace.environment).toContainEqual({
-        name: 'OTHER_VAR',
-        value: 'keep-me',
-      });
-      expect(ctx.workspace.environment.filter(e => e.name === 'OPENAI_BASE_URL')).toHaveLength(1);
     });
   });
 });
