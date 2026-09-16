@@ -68,12 +68,13 @@ export class NavigationBar {
 
   async navigateToKnowledgePage(): Promise<KnowledgePage> {
     // Knowledges link may be hidden when no RAG/chunk providers are registered.
-    // Fall back to direct hash navigation when the link is not visible.
+    // Fall back to the application's navigation event when the link is not visible.
     if (await this.knowledgesLink.isVisible().catch(() => false)) {
       return this.navigateTo(this.knowledgesLink, KnowledgePage);
     }
     await this.page.evaluate(() => {
-      window.location.hash = '/rag-environments/';
+      const events = (window as unknown as { events: { send(channel: string, data: unknown): void } }).events;
+      events.send('navigate', { page: 'rag-environments' });
     });
     const pageInstance = new KnowledgePage(this.page);
     await pageInstance.waitForLoad();
