@@ -20,7 +20,7 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import type { WriteStream } from 'node:fs';
 import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, open, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 
 import type { Disposable } from '@openkaiden/api';
@@ -56,6 +56,7 @@ const MAX_HEALTH_CHECK_ATTEMPTS = 30;
 const STOP_TIMEOUT_MS = 5000;
 const SUPERVISOR_IMAGE_BASE = 'ghcr.io/nvidia/openshell/supervisor';
 const GATEWAY_LOG_FILENAME = 'gateway.log';
+const GATEWAY_PID_FILENAME = 'gateway.pid';
 const DEFAULT_GATEWAY_NAME = KAIDEN_LOCAL_GATEWAY_NAME;
 
 const GatewayConfigSchema = z.object({
@@ -105,12 +106,18 @@ export class OpenshellGateway implements Disposable {
       const localGateways = gateways.filter(gw => gw.type === 'local' || this.isLocalEndpoint(gw.endpoint));
       await Promise.all(
         localGateways.map(async gateway => {
-          if (this.isCreatedGateway(gateway.name) && !(await this.isEndpointHealthy(gateway.endpoint))) {
-            try {
-              await this.startCreatedGateway(gateway.name, gateway.endpoint);
-            } catch (err: unknown) {
-              const message = err instanceof Error ? err.message : String(err);
-              console.warn(`[openshell-gateway] failed to start created gateway "${gateway.name}": ${message}`);
+          if (this.isCreatedGateway(gateway.name)) {
+            const pid = await this.readAndValidatePid(gateway.name);
+            if (pid !== undefined) {
+              gateway.pid = pid;
+            }
+            if (!(await this.isEndpointHealthy(gateway.endpoint))) {
+              try {
+                await this.startCreatedGateway(gateway.name, gateway.endpoint);
+              } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : String(err);
+                console.warn(`[openshell-gateway] failed to start created gateway "${gateway.name}": ${message}`);
+              }
             }
           }
         }),
@@ -532,14 +539,45 @@ export class OpenshellGateway implements Disposable {
   }
 
   private trackGatewayProcess(name: string, gatewayProcess: ChildProcess): void {
+    const pidPath = join(this.getGatewayStorageDirectory(name), GATEWAY_PID_FILENAME);
+
+    if (gatewayProcess.pid !== undefined) {
+      writeFile(pidPath, String(gatewayProcess.pid), 'utf-8').catch(() => {});
+    }
+
     const cleanup = (): void => {
       if (this.#gatewayProcesses.get(name) === gatewayProcess) {
         this.#gatewayProcesses.delete(name);
       }
+      unlink(pidPath).catch(() => {});
     };
     gatewayProcess.once('exit', cleanup);
     gatewayProcess.once('error', cleanup);
     this.#gatewayProcesses.set(name, gatewayProcess);
+  }
+
+  private async readAndValidatePid(name: string): Promise<number | undefined> {
+    const pidPath = join(this.getGatewayStorageDirectory(name), GATEWAY_PID_FILENAME);
+    try {
+      const content = await readFile(pidPath, 'utf-8');
+      const pid = Number(content.trim());
+      if (!Number.isInteger(pid) || pid <= 0) {
+        await unlink(pidPath).catch(() => {});
+        return undefined;
+      }
+      try {
+        process.kill(pid, 0);
+        return pid;
+      } catch (err: unknown) {
+        if ((err as NodeJS.ErrnoException).code === 'EPERM') {
+          return pid;
+        }
+        await unlink(pidPath).catch(() => {});
+        return undefined;
+      }
+    } catch {
+      return undefined;
+    }
   }
 
   private async stopGateway(name: string): Promise<void> {

@@ -45,6 +45,7 @@ export const GatewayInfoSchema = z.object({
   resolved_host: z.string().nullable().optional(),
   gatewayState: GatewayStateSchema.optional(),
   driver: z.enum(['vm', 'podman', 'docker']).optional(),
+  pid: z.number().optional(),
 });
 
 export type GatewayInfo = z.output<typeof GatewayInfoSchema>;
