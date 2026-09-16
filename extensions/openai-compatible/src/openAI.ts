@@ -171,6 +171,7 @@ export class OpenAI implements Disposable {
     try {
       models = await this.listModels(baseURL, token);
     } catch (err: unknown) {
+      console.warn(`openai: failed to list models for ${baseURL}`, err);
       status = 'stopped';
     }
 

@@ -378,6 +378,28 @@ describe('restoreConnections', () => {
     });
   });
 
+  test('should log a warning when listModels fails during restore', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const stored: StoredConnection[] = [{ id: 'id-1', apiKey: 'key1', baseURL: 'http://a/v1' }];
+    vi.mocked(SECRET_STORAGE_MOCK.get).mockResolvedValue(JSON.stringify(stored));
+    fetchMock.mockResolvedValueOnce({ status: 403, json: async () => ({}) });
+
+    const openai = new OpenAI(PROVIDER_API_MOCK, SECRET_STORAGE_MOCK, CONFIGURATION_API_MOCK);
+    await openai.init();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('openai: failed to list models for http://a/v1'),
+      expect.any(Error),
+    );
+
+    // Connection should still be registered with stopped status and empty models
+    const call = vi.mocked(PROVIDER_MOCK.registerInferenceProviderConnection).mock.calls[0][0];
+    expect(call.models).toEqual([]);
+    expect(call.status()).toBe('stopped');
+
+    warnSpy.mockRestore();
+  });
+
   test('should migrate legacy pipe+comma-separated format to JSON', async () => {
     vi.mocked(randomUUID)
       .mockReturnValueOnce('migrated-id-1' as ReturnType<typeof randomUUID>)

@@ -49,7 +49,8 @@ test.describe('Guided setup smoke', { tag: '@smoke' }, () => {
         for (const agent of ENABLED_CODING_AGENTS) {
           await expect(guidedSetup.getAgentCard(agent)).toBeVisible();
         }
-        await guidedSetup.waitForModelCatalog();
+        const modelCount = await guidedSetup.waitForModelCatalogReady();
+        test.skip(modelCount === 0, 'No compatible models available');
       });
 
       test('[OGS-FLOW-04] Guided setup model step updates on agent switch and shows Claude providers', async () => {
@@ -58,7 +59,8 @@ test.describe('Guided setup smoke', { tag: '@smoke' }, () => {
         await guidedSetup.expectBackDisabled();
         await guidedSetup.selectAgent(CODING_AGENT.OPENCODE);
         await guidedSetup.expectDefaultModelHeading(CODING_AGENT.OPENCODE);
-        await guidedSetup.waitForModelCatalog();
+        const modelCount = await guidedSetup.waitForModelCatalogReady();
+        test.skip(modelCount === 0, 'No compatible models available');
 
         await guidedSetup.selectAgent(CODING_AGENT.CLAUDE);
         await guidedSetup.expectDefaultModelHeading(CODING_AGENT.CLAUDE);
@@ -96,9 +98,9 @@ test.describe('Guided setup smoke', { tag: '@smoke' }, () => {
         const guidedSetup = new GuidedSetupPage(session.page!);
         await guidedSetup.startFromWelcome();
         await guidedSetup.selectAgent(CODING_AGENT.OPENCODE);
-        await guidedSetup.waitForModelCatalog();
+        const modelCount = await guidedSetup.waitForModelCatalogReady();
+        test.skip(modelCount === 0, 'No compatible models for OpenCode');
         const modelLabels = await guidedSetup.getModelLabels();
-        test.skip(modelLabels.length === 0, 'No compatible models for OpenCode');
 
         await guidedSetup.selectModelByLabel(modelLabels.at(-1)!);
         await guidedSetup.selectAgent(CODING_AGENT.CLAUDE);

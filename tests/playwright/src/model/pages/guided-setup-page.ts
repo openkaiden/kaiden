@@ -110,6 +110,22 @@ export class GuidedSetupPage extends BasePage {
       .toBeGreaterThan(0);
   }
 
+  /**
+   * Waits for the model catalog area to finish loading without requiring
+   * models to be present. Returns the number of model rows found.
+   *
+   * Use this in tests that can gracefully skip when no models are available
+   * (e.g. on CI without local inference).
+   */
+  async waitForModelCatalogReady(timeout: number = TIMEOUTS.DEFAULT): Promise<number> {
+    const modelRows = this.dialog.locator('[data-testid^="model-row-"]');
+    const emptyState = this.dialog.locator(
+      '[data-testid="no-models"], [data-testid="no-models-create-connection"], [data-testid="no-providers-available"]',
+    );
+    await expect(modelRows.first().or(emptyState.first())).toBeVisible({ timeout });
+    return modelRows.count();
+  }
+
   async getModelLabels(): Promise<string[]> {
     const rows = this.dialog.locator('[data-testid^="model-row-"]');
     const count = await rows.count();

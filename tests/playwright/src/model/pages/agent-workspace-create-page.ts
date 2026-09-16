@@ -362,6 +362,22 @@ export class AgentWorkspaceCreatePage extends BasePage {
     await expect(this.modelList.first()).toBeVisible({ timeout: TIMEOUTS.STANDARD });
   }
 
+  /**
+   * Waits for the model catalog area to finish loading without requiring
+   * models to be present. Returns the number of model rows found.
+   *
+   * Use this in tests that can gracefully skip when no models are available
+   * (e.g. on CI without local inference).
+   */
+  async waitForModelCatalogReady(timeout: number = TIMEOUTS.DEFAULT): Promise<number> {
+    const modelRows = this.getModelTableRows();
+    const emptyState = this.page.locator(
+      '[data-testid="no-models"], [data-testid="no-models-create-connection"], [data-testid="no-providers-available"]',
+    );
+    await expect(modelRows.first().or(emptyState.first())).toBeVisible({ timeout });
+    return modelRows.count();
+  }
+
   get modelSearchInput(): Locator {
     return this.page.getByRole('searchbox', { name: 'Filter catalog models' });
   }
