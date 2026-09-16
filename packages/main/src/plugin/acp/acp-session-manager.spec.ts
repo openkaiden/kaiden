@@ -973,9 +973,10 @@ describe('AcpSessionManager', () => {
   describe('setSessionModel', () => {
     test('resets contextUsed and contextSize to undefined after model switch', async () => {
       const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
+      const { readdir, readFile, writeFile } = await import('node:fs/promises');
 
       vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(writeFile).mockResolvedValue();
       vi.mocked(readdir).mockResolvedValue(['session-model.json' as never]);
 
       const storedSession = {
@@ -1019,15 +1020,24 @@ describe('AcpSessionManager', () => {
         modelId: 'new-1m-model',
       });
       expect(apiSender.send).toHaveBeenCalledWith('acp-session-update');
+
+      await vi.waitFor(() => {
+        expect(writeFile).toHaveBeenCalledWith(
+          join(FAKE_SESSIONS_DIR, 'session-model.json'),
+          expect.stringContaining('"new-1m-model"'),
+          'utf-8',
+        );
+      });
     });
   });
 
   describe('setSessionConfigOption', () => {
     test('resets contextUsed and contextSize to undefined when config option category is model', async () => {
       const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
+      const { readdir, readFile, writeFile } = await import('node:fs/promises');
 
       vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(writeFile).mockResolvedValue();
       vi.mocked(readdir).mockResolvedValue(['session-config.json' as never]);
 
       const storedSession = {
@@ -1086,13 +1096,22 @@ describe('AcpSessionManager', () => {
       expect(updated?.contextSize).toBeUndefined();
       expect(updated?.contextUsed).toBeUndefined();
       expect(apiSender.send).toHaveBeenCalledWith('acp-session-update');
+
+      await vi.waitFor(() => {
+        expect(writeFile).toHaveBeenCalledWith(
+          join(FAKE_SESSIONS_DIR, 'session-config.json'),
+          expect.any(String),
+          'utf-8',
+        );
+      });
     });
 
     test('preserves context data when config option category is not model', async () => {
       const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
+      const { readdir, readFile, writeFile } = await import('node:fs/promises');
 
       vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(writeFile).mockResolvedValue();
       vi.mocked(readdir).mockResolvedValue(['session-config-other.json' as never]);
 
       const storedSession = {
@@ -1149,6 +1168,51 @@ describe('AcpSessionManager', () => {
 
       expect(updated?.contextSize).toBe(200_000);
       expect(updated?.contextUsed).toBe(50_000);
+    });
+  });
+
+  describe('usage_update notification', () => {
+    test('notifies subscribers for cost-free usage_update events', async () => {
+      const { existsSync } = await import('node:fs');
+      const { readdir, readFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readdir).mockResolvedValue(['session-usage.json' as never]);
+
+      const storedSession = {
+        info: {
+          id: 'session-usage',
+          sandboxName: 'sb',
+          sandboxId: 'sb-id',
+          prompt: 'hello',
+          status: 'running' as const,
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+        events: [],
+        acpSessionId: 'acp-usage-test',
+        agentCommand: ['openclaw', 'acp'],
+      };
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify(storedSession));
+
+      await manager.init();
+
+      vi.mocked(apiSender.send).mockClear();
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (manager as any).handleSessionUpdate('session-usage', {
+        update: {
+          sessionUpdate: 'usage_update',
+          used: 10_000,
+          size: 128_000,
+        },
+      });
+
+      const listed = await manager.listSessions();
+      const updated = listed.find(s => s.id === 'session-usage');
+      expect(updated?.contextUsed).toBe(10_000);
+      expect(updated?.contextSize).toBe(128_000);
+      expect(apiSender.send).toHaveBeenCalledWith('acp-session-update');
     });
   });
 

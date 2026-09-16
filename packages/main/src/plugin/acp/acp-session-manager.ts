@@ -525,6 +525,9 @@ export class AcpSessionManager {
           session.info.cost = (flowEvent as Extract<AcpFlowEvent, { kind: 'cost_update' }>).cost;
         }
         session.info.updatedAt = Date.now();
+        if (!flowEvent) {
+          this.apiSender.send('acp-session-update');
+        }
         break;
       }
       case 'current_mode_update': {
@@ -986,6 +989,9 @@ export class AcpSessionManager {
     this.resetContextUsageData(session);
     session.info.updatedAt = Date.now();
     this.apiSender.send('acp-session-update');
+    this.saveToDisk(sessionId).catch((err: unknown) => {
+      console.error(`[ACP] Failed to persist session "${sessionId}":`, err);
+    });
   }
 
   async setSessionMode(sessionId: string, modeId: string): Promise<void> {
@@ -1026,6 +1032,9 @@ export class AcpSessionManager {
 
     session.info.updatedAt = Date.now();
     this.apiSender.send('acp-session-update');
+    this.saveToDisk(sessionId).catch((err: unknown) => {
+      console.error(`[ACP] Failed to persist session "${sessionId}":`, err);
+    });
   }
 
   private resetContextUsageData(session: AcpSession): void {
