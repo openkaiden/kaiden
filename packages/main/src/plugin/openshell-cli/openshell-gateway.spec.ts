@@ -1776,6 +1776,8 @@ describe('gateway.pid persistence', () => {
 
     await gateway.start();
     proc.emit('exit', 0, undefined);
+    // Flush microtask queue — unlink is chained after the PID write promise
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(unlink).toHaveBeenCalledWith(join(GATEWAY_STORAGE_DIRECTORY, 'gateway.pid'));
   });
@@ -1791,6 +1793,8 @@ describe('gateway.pid persistence', () => {
 
     await gateway.start();
     proc.emit('error', new Error('spawn error'));
+    // Flush microtask queue — unlink is chained after the PID write promise
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(unlink).toHaveBeenCalledWith(join(GATEWAY_STORAGE_DIRECTORY, 'gateway.pid'));
   });
@@ -1868,6 +1872,27 @@ describe('gateway.pid persistence', () => {
     await gateway.init();
 
     expect(unlink).not.toHaveBeenCalled();
+  });
+
+  test('keeps gateway.pid when process.kill throws unknown error', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(openshellCli.listGateways).mockResolvedValue([
+      { name: 'local-dev', endpoint: 'http://127.0.0.1:17675', active: true, type: 'local' },
+    ]);
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+    vi.mocked(readFile).mockResolvedValue('12345');
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      const err = new Error('EINVAL') as NodeJS.ErrnoException;
+      err.code = 'EINVAL';
+      throw err;
+    });
+
+    await gateway.init();
+
+    const pidPath = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev', 'gateway.pid');
+    expect(unlink).not.toHaveBeenCalledWith(pidPath);
+    killSpy.mockRestore();
   });
 
   test('removes gateway.pid with invalid content during init', async () => {

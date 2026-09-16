@@ -541,15 +541,16 @@ export class OpenshellGateway implements Disposable {
   private trackGatewayProcess(name: string, gatewayProcess: ChildProcess): void {
     const pidPath = join(this.getGatewayStorageDirectory(name), GATEWAY_PID_FILENAME);
 
-    if (gatewayProcess.pid !== undefined) {
-      writeFile(pidPath, String(gatewayProcess.pid), 'utf-8').catch(() => {});
-    }
+    const pidWritten =
+      gatewayProcess.pid !== undefined
+        ? writeFile(pidPath, String(gatewayProcess.pid), 'utf-8').catch(() => {})
+        : Promise.resolve();
 
     const cleanup = (): void => {
       if (this.#gatewayProcesses.get(name) === gatewayProcess) {
         this.#gatewayProcesses.delete(name);
+        pidWritten.then(() => unlink(pidPath).catch(() => {}));
       }
-      unlink(pidPath).catch(() => {});
     };
     gatewayProcess.once('exit', cleanup);
     gatewayProcess.once('error', cleanup);
@@ -569,11 +570,11 @@ export class OpenshellGateway implements Disposable {
         process.kill(pid, 0);
         return pid;
       } catch (err: unknown) {
-        if ((err as NodeJS.ErrnoException).code === 'EPERM') {
-          return pid;
+        if ((err as NodeJS.ErrnoException).code === 'ESRCH') {
+          await unlink(pidPath).catch(() => {});
+          return undefined;
         }
-        await unlink(pidPath).catch(() => {});
-        return undefined;
+        return pid;
       }
     } catch {
       return undefined;
