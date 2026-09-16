@@ -69,6 +69,16 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
 
       config.model = context.model.model.label;
 
+      const endpoint = context.model.endpoint;
+      if (endpoint) {
+        context.workspace.environment ??= [];
+        const index = context.workspace.environment.findIndex(e => e.name === 'OPENAI_BASE_URL');
+        if (index >= 0) {
+          context.workspace.environment.splice(index, 1);
+        }
+        context.workspace.environment.push({ name: 'OPENAI_BASE_URL', value: endpoint });
+      }
+
       const mcpServers = context.workspace.mcp?.servers;
       const mcpCommands = context.workspace.mcp?.commands;
 

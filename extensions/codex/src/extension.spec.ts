@@ -51,16 +51,18 @@ function createContext(
   configFiles: AgentConfigurationFile[],
   options: {
     modelLabel?: string;
+    endpoint?: string;
     mcp?: {
       servers?: { name: string; url: string; headers?: Record<string, string> }[];
       commands?: { name: string; command: string; args?: string[]; env?: Record<string, string> }[];
     };
   } = {},
 ): AgentWorkspaceContext {
-  const { modelLabel = 'gpt-4o', mcp } = options;
+  const { modelLabel = 'gpt-4o', endpoint, mcp } = options;
   return {
     model: {
       model: { label: modelLabel },
+      ...(endpoint !== undefined ? { endpoint } : {}),
     },
     configurationFiles: configFiles,
     workspace: { ...(mcp ? { mcp } : {}) },
@@ -373,6 +375,69 @@ describe('activate', () => {
       expect(written.mcp_servers).toEqual({
         minimal: { command: 'my-server', args: [] },
       });
+    });
+
+    test('sets OPENAI_BASE_URL when model has a custom endpoint', async () => {
+      await activate(extensionContextMock);
+      const agent = getRegisteredAgent();
+
+      const configFile = createConfigFile();
+      const ctx = createContext([configFile], { endpoint: 'https://my-custom-host.local/v1' });
+      ctx.workspace.environment = [];
+      await agent.preWorkspaceStart(ctx);
+
+      expect(ctx.workspace.environment).toContainEqual({
+        name: 'OPENAI_BASE_URL',
+        value: 'https://my-custom-host.local/v1',
+      });
+    });
+
+    test('does not set OPENAI_BASE_URL when no endpoint is provided', async () => {
+      await activate(extensionContextMock);
+      const agent = getRegisteredAgent();
+
+      const configFile = createConfigFile();
+      const ctx = createContext([configFile]);
+      await agent.preWorkspaceStart(ctx);
+
+      expect(ctx.workspace.environment).toBeUndefined();
+    });
+
+    test('initializes environment array when setting OPENAI_BASE_URL and none exists', async () => {
+      await activate(extensionContextMock);
+      const agent = getRegisteredAgent();
+
+      const configFile = createConfigFile();
+      const ctx = createContext([configFile], { endpoint: 'https://custom.example.com/v1' });
+      await agent.preWorkspaceStart(ctx);
+
+      expect(ctx.workspace.environment).toContainEqual({
+        name: 'OPENAI_BASE_URL',
+        value: 'https://custom.example.com/v1',
+      });
+    });
+
+    test('replaces existing OPENAI_BASE_URL in environment', async () => {
+      await activate(extensionContextMock);
+      const agent = getRegisteredAgent();
+
+      const configFile = createConfigFile();
+      const ctx = createContext([configFile], { endpoint: 'https://new-endpoint.local/v1' });
+      ctx.workspace.environment = [
+        { name: 'OTHER_VAR', value: 'keep-me' },
+        { name: 'OPENAI_BASE_URL', value: 'https://old-endpoint.local/v1' },
+      ];
+      await agent.preWorkspaceStart(ctx);
+
+      expect(ctx.workspace.environment).toContainEqual({
+        name: 'OPENAI_BASE_URL',
+        value: 'https://new-endpoint.local/v1',
+      });
+      expect(ctx.workspace.environment).toContainEqual({
+        name: 'OTHER_VAR',
+        value: 'keep-me',
+      });
+      expect(ctx.workspace.environment.filter(e => e.name === 'OPENAI_BASE_URL')).toHaveLength(1);
     });
   });
 });
