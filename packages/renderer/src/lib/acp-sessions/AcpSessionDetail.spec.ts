@@ -233,7 +233,8 @@ describe('permission request focus management', () => {
 
     await vi.waitFor(() => {
       expect(document.activeElement).toBeInstanceOf(HTMLButtonElement);
-      expect(document.activeElement?.closest('.tool-call-pending-permission')).toBeTruthy();
+      expect(document.activeElement?.closest('.permission-actions')).toBeTruthy();
+      expect(document.activeElement?.textContent?.trim()).toMatch(/^(Allow|Deny)$/);
     });
   });
 });

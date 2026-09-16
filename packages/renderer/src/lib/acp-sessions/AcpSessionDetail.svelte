@@ -347,7 +347,7 @@ $effect(() => {
       if (pending?.length) {
         const lastPending = pending[pending.length - 1];
         lastPending?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const firstButton = lastPending?.querySelector<HTMLButtonElement>('button');
+        const firstButton = lastPending?.querySelector<HTMLButtonElement>('.permission-actions button');
         firstButton?.focus();
       }
     });

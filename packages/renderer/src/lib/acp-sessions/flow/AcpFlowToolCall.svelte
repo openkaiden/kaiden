@@ -103,7 +103,7 @@ async function handleOption(optionId: string): Promise<void> {
           {/if}
         </div>
       {:else}
-        <div class="flex items-center gap-2 flex-wrap">
+        <div class="permission-actions flex items-center gap-2 flex-wrap">
           {#each event.permissionRequest.options as option (option.optionId)}
             <Button
               type={option.kind === 'deny' ? 'secondary' : 'primary'}
