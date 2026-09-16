@@ -112,7 +112,7 @@ jobs:
           flatpak install flathub --user -y org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08
 
       - name: Run Build
-        timeout-minutes: 20
+        timeout-minutes: 30
         run: pnpm compile:pull-request
 
       - name: List Build
