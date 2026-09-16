@@ -20,13 +20,11 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { RunError, RunOptions } from '@openkaiden/api';
-import { inject, injectable, preDestroy } from 'inversify';
+import { inject, injectable } from 'inversify';
 import z from 'zod';
 
 import { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
-import { Emitter } from '/@/plugin/events/emitter.js';
 import { Exec } from '/@/plugin/util/exec.js';
-import type { Event } from '/@api/event.js';
 import {
   type CreateProviderOptions,
   type GatewayAddOptions,
@@ -34,13 +32,10 @@ import {
   GatewayInfoSchema,
   type GatewayRuntimeInfo,
   GatewayRuntimeInfoSchema,
-  type GatewaySandboxes,
   type OpenshellProfile,
   OpenshellProfileSchema,
   type OpenshellProviderInfo,
   OpenshellProviderInfoSchema,
-  type SandboxInfo,
-  SandboxInfoSchema,
   type SetInferenceOptions,
 } from '/@api/openshell-gateway-info.js';
 
@@ -61,7 +56,6 @@ const OpenshellSettingsSchema = z.looseObject({
  * Low-level wrapper around the `openshell` CLI binary.
  *
  * Sandbox commands:
- *   - `openshell sandbox list`
  *   - `openshell sandbox start`
  *   - `openshell sandbox stop`
  *   - `openshell sandbox connect`
@@ -82,16 +76,8 @@ const OpenshellSettingsSchema = z.looseObject({
  *   - `openshell provider delete <name>`
  *   - `openshell provider create`
  */
-const TRANSITIONAL_PHASES = new Set(['Deleting', 'Provisioning']);
-const TRANSITIONAL_POLL_INTERVAL_MS = 5_000;
-const MAX_TRANSITIONAL_POLL_RETRIES = 3;
-
 @injectable()
 export class OpenshellCli {
-  private readonly _onDidSandboxListChange = new Emitter<GatewaySandboxes[]>();
-  readonly onDidSandboxListChange: Event<GatewaySandboxes[]> = this._onDidSandboxListChange.event;
-  private _transitionalPollTimer: ReturnType<typeof setTimeout> | undefined;
-
   constructor(
     @inject(Exec)
     private readonly exec: Exec,
@@ -167,15 +153,6 @@ export class OpenshellCli {
 
   // ── sandbox commands ──────────────────────────────────────────────
 
-  async listSandboxes(gatewayName?: string): Promise<SandboxInfo[]> {
-    const args = ['sandbox', 'list'];
-    if (gatewayName) {
-      args.push('-g', gatewayName);
-    }
-    const data = await this.execCLI<unknown>(args);
-    return z.array(SandboxInfoSchema).parse(data);
-  }
-
   async startSandbox(name: string): Promise<void> {
     await this.runCli(['sandbox', 'start', name]);
   }
@@ -202,76 +179,6 @@ export class OpenshellCli {
       args.push('-g', gatewayName);
     }
     await this.runCli(args);
-  }
-
-  async listSandboxesForGateway(gatewayName: string): Promise<GatewaySandboxes> {
-    const gateways = await this.listGateways();
-    const targetGateway = gateways.find(g => g.name === gatewayName);
-    if (!targetGateway) {
-      throw new Error(`Gateway not found: ${gatewayName}`);
-    }
-
-    const sandboxes = await this.listSandboxes(gatewayName);
-    return { gateway: targetGateway, sandboxes };
-  }
-
-  async listSandboxesPerGateway(): Promise<GatewaySandboxes[]> {
-    const gateways = await this.listGateways();
-    if (gateways.length === 0) {
-      return [];
-    }
-
-    const results: GatewaySandboxes[] = [];
-    for (const gateway of gateways) {
-      try {
-        const sandboxes = await this.listSandboxes(gateway.name);
-        results.push({ gateway, sandboxes });
-      } catch (err: unknown) {
-        console.warn(
-          `[openshell] failed to list sandboxes for gateway ${gateway.name}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        results.push({ gateway, sandboxes: [] });
-      }
-    }
-
-    this.scheduleTransitionalPollIfNeeded(results);
-    return results;
-  }
-
-  private snapshotPhases(sandboxes: SandboxInfo[]): string {
-    return sandboxes
-      .map(s => `${s.id}:${s.phase}`)
-      .sort((a, b) => a.localeCompare(b))
-      .join(',');
-  }
-
-  private scheduleTransitionalPollIfNeeded(results: GatewaySandboxes[], retries = 0): void {
-    const allSandboxes = results.flatMap(entry => entry.sandboxes);
-    const transitionalCount = allSandboxes.filter(s => TRANSITIONAL_PHASES.has(s.phase)).length;
-    if (
-      transitionalCount === 0 ||
-      retries > MAX_TRANSITIONAL_POLL_RETRIES ||
-      this._transitionalPollTimer !== undefined
-    ) {
-      return;
-    }
-    const previousSnapshot = this.snapshotPhases(allSandboxes);
-    this._transitionalPollTimer = setTimeout(() => {
-      this._transitionalPollTimer = undefined;
-      this.listSandboxesPerGateway()
-        .then(updated => {
-          const updatedSandboxes = updated.flatMap(entry => entry.sandboxes);
-          if (this.snapshotPhases(updatedSandboxes) !== previousSnapshot) {
-            this._onDidSandboxListChange.fire(updated);
-          }
-        })
-        .catch((err: unknown) => {
-          console.warn(
-            `[openshell] transitional-poll refresh failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
-          this.scheduleTransitionalPollIfNeeded(results, retries + 1);
-        });
-    }, TRANSITIONAL_POLL_INTERVAL_MS);
   }
 
   // ── gateway registration commands ─────────────────────────────────
@@ -458,14 +365,5 @@ export class OpenshellCli {
       console.error(`openshell failed: ${cliPath} ${fullArgs.join(' ')} — ${detail}`);
       throw new Error(detail);
     }
-  }
-
-  @preDestroy()
-  dispose(): void {
-    if (this._transitionalPollTimer !== undefined) {
-      clearTimeout(this._transitionalPollTimer);
-      this._transitionalPollTimer = undefined;
-    }
-    this._onDidSandboxListChange.dispose();
   }
 }

@@ -23,7 +23,7 @@ import { basename, extname, join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 
 import * as acp from '@agentclientprotocol/sdk';
-import type { ExecInteractiveSession } from '@nvidia/openshell-sdk';
+import type { ExecInteractiveSession, SandboxPhaseName } from '@nvidia/openshell-sdk';
 import { inject, injectable, preDestroy } from 'inversify';
 
 import { AgentRegistry } from '/@/plugin/agent-registry.js';
@@ -50,6 +50,18 @@ import { createAcpDebug } from './acp-debug.js';
 
 const MAX_STDERR_LINES = 100;
 const PTY_COLS = 65_535;
+const SDK_PHASE_MAP: Record<SandboxPhaseName, SandboxInfo['phase']> = {
+  unspecified: 'Unspecified',
+  provisioning: 'Provisioning',
+  ready: 'Ready',
+  error: 'Error',
+  deleting: 'Deleting',
+  unknown: 'Unknown',
+  starting: 'Starting',
+  stopping: 'Stopping',
+  stopped: 'Stopped',
+};
+// eslint-disable-next-line sonarjs/publicly-writable-directories
 const ATTACHMENT_UPLOAD_DIR = '/sandbox/.kaiden-attachments';
 
 const debugPty = createAcpDebug('pty');
@@ -92,7 +104,7 @@ export class AcpSessionManager {
     @inject(OpenshellCli) private readonly openshellCli: OpenshellCli,
     @inject(AgentRegistry) private readonly agentRegistry: AgentRegistry,
     @inject(Directories) private readonly directories: Directories,
-    @inject(OpenshellSdkClientManager) private readonly openshellSdkClientManager: OpenshellSdkClientManager,
+    @inject(OpenshellSdkClientManager) private readonly sdkClientManager: OpenshellSdkClientManager,
   ) {}
 
   async init(): Promise<void> {
@@ -179,7 +191,7 @@ export class AcpSessionManager {
   }
 
   async createSession(options: AcpSessionCreateOptions): Promise<AcpSessionInfo> {
-    const sandboxes = await this.openshellCli.listSandboxes();
+    const sandboxes = await this.#listSandboxes();
     const sandbox = sandboxes.find(s => s.name === options.sandboxName);
     if (!sandbox) {
       throw new Error(`Sandbox "${options.sandboxName}" not found`);
@@ -196,7 +208,7 @@ export class AcpSessionManager {
     debugPty(`${sandbox.name} execInteractive: ${command.join(' ')}`);
 
     const abortController = new AbortController();
-    const sdkClient = await this.openshellSdkClientManager.getClient(gatewayName);
+    const sdkClient = await this.sdkClientManager.getClient(gatewayName);
     const execSession = await sdkClient.sandbox.execInteractive(sandbox.name, command, {
       tty: false,
       cols: PTY_COLS,
@@ -691,7 +703,7 @@ export class AcpSessionManager {
     debugPty(`${session.info.sandboxName} reconnecting via execInteractive: ${session.agentCommand.join(' ')}`);
 
     const abortController = new AbortController();
-    const sdkClient = await this.openshellSdkClientManager.getClient(session.gatewayName);
+    const sdkClient = await this.sdkClientManager.getClient(session.gatewayName);
     const execSession = await sdkClient.sandbox.execInteractive(session.info.sandboxName, session.agentCommand, {
       tty: false,
       cols: PTY_COLS,
@@ -1299,7 +1311,7 @@ export class AcpSessionManager {
   private async validateSandboxes(): Promise<void> {
     if (this.sessions.size === 0) return;
     try {
-      const sandboxes = await this.openshellCli.listSandboxes();
+      const sandboxes = await this.#listSandboxes();
       const readySandboxes = new Map(sandboxes.filter(s => s.phase === 'Ready').map(s => [s.name, s.id]));
       for (const session of this.sessions.values()) {
         if (readySandboxes.has(session.info.sandboxName)) {
@@ -1339,5 +1351,17 @@ export class AcpSessionManager {
     } catch {
       // file may not exist
     }
+  }
+
+  async #listSandboxes(): Promise<SandboxInfo[]> {
+    const client = await this.sdkClientManager.getClient();
+    const refs = await client.sandbox.list();
+    return refs.map(ref => ({
+      id: ref.id,
+      name: ref.name,
+      phase: SDK_PHASE_MAP[ref.phase] ?? 'Unknown',
+      labels: ref.labels,
+      resource_version: Number(ref.resourceVersion),
+    }));
   }
 }

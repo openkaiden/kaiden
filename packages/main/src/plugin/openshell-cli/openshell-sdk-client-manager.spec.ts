@@ -101,6 +101,28 @@ describe('OpenshellSdkClientManager', () => {
       expect(mockConnect).toHaveBeenCalledTimes(1);
     });
 
+    test('concurrent calls for same gateway share a single connection attempt', async () => {
+      const gw = gateway();
+      const sdkClient = createSdkClient(async () => [gw]);
+
+      const [first, second] = await Promise.all([sdkClient.getClient(), sdkClient.getClient()]);
+
+      expect(first).toBe(second);
+      expect(mockConnect).toHaveBeenCalledTimes(1);
+    });
+
+    test('evicts cached promise when connect rejects', async () => {
+      const gw = gateway();
+      const sdkClient = createSdkClient(async () => [gw]);
+      mockConnect.mockRejectedValueOnce(new Error('connection refused'));
+
+      await expect(sdkClient.getClient()).rejects.toThrow('connection refused');
+
+      mockConnect.mockResolvedValueOnce({ sandbox: {}, raw: {}, transport: {} });
+      await expect(sdkClient.getClient()).resolves.toBeDefined();
+      expect(mockConnect).toHaveBeenCalledTimes(2);
+    });
+
     test('creates separate clients for different gateways', async () => {
       const localGw = gateway({ name: 'local', endpoint: 'http://127.0.0.1:17670', active: true });
       const remoteGw = gateway({ name: 'remote', endpoint: 'http://10.0.0.1:17670', active: false });

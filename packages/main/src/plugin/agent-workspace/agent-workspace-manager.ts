@@ -20,7 +20,7 @@ import { access, lstat, readFile, realpath, rm, writeFile } from 'node:fs/promis
 import { homedir, tmpdir } from 'node:os';
 import { basename, isAbsolute, join, posix, resolve } from 'node:path';
 
-import type { ExecInteractiveSession } from '@nvidia/openshell-sdk';
+import type { ExecInteractiveSession, SandboxPhaseName } from '@nvidia/openshell-sdk';
 import type { Disposable } from '@openkaiden/api';
 import type { WebContents } from 'electron';
 import { inject, injectable, preDestroy } from 'inversify';
@@ -70,6 +70,18 @@ const MOUNT_HOME_PREFIX = '$HOME';
 // Timeouts for sandbox startup and deletion cleanup for sdk.
 const SANDBOX_READY_TIMEOUT_SECONDS = 300;
 const SANDBOX_DELETE_TIMEOUT_SECONDS = 120;
+
+const SDK_PHASE_MAP: Record<SandboxPhaseName, SandboxInfo['phase']> = {
+  unspecified: 'Unspecified',
+  provisioning: 'Provisioning',
+  ready: 'Ready',
+  error: 'Error',
+  deleting: 'Deleting',
+  unknown: 'Unknown',
+  starting: 'Starting',
+  stopping: 'Stopping',
+  stopped: 'Stopped',
+};
 
 interface WorkspaceTerminalSession {
   callbackId: number;
@@ -531,6 +543,11 @@ export class AgentWorkspaceManager implements Disposable {
       // delete doesnt log like create does so matched the convention here
       console.log(`[workspace-timing] deleteSandbox: deleting "${name}" on gateway "${gateway}"`);
       await sdkClient.sandbox.delete(name);
+      try {
+        await sdkClient.sandbox.waitDeleted(name, SANDBOX_DELETE_TIMEOUT_SECONDS);
+      } catch {
+        console.warn(`[workspace-timing] deleteSandbox: timed out waiting for "${name}" to be fully removed`);
+      }
       this.apiSender.send('agent-workspace-update');
       if (terminalId) this.closeWorkspaceTerminal(terminalId);
       await rm(this.getGlobalConfigDir(gateway, name), { recursive: true, force: true });
@@ -612,12 +629,34 @@ export class AgentWorkspaceManager implements Disposable {
   }
 
   async listOpenshellSandboxes(): Promise<GatewaySandboxes[]> {
-    const results = await this.openshellCli.listSandboxesPerGateway();
-    for (const entry of results) {
-      for (const sandbox of entry.sandboxes) {
-        if (sandbox.labels) {
-          sandbox.sourcePath = decodeWorkspaceLabels(sandbox.labels);
+    const gateways = this.openshellGatewayStateManager.listGateways();
+    if (gateways.length === 0) {
+      return [];
+    }
+
+    const results: GatewaySandboxes[] = [];
+    for (const gateway of gateways) {
+      try {
+        const client = await this.openshellSdkClientManager.getClient(gateway.name);
+        const refs = await client.sandbox.list();
+        const sandboxes: SandboxInfo[] = refs.map(ref => ({
+          id: ref.id,
+          name: ref.name,
+          phase: SDK_PHASE_MAP[ref.phase] ?? 'Unknown',
+          labels: ref.labels,
+          resource_version: Number(ref.resourceVersion),
+        }));
+        for (const sandbox of sandboxes) {
+          if (sandbox.labels) {
+            sandbox.sourcePath = decodeWorkspaceLabels(sandbox.labels);
+          }
         }
+        results.push({ gateway, sandboxes });
+      } catch (err: unknown) {
+        console.warn(
+          `[openshell] failed to list sandboxes for gateway ${gateway.name}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        results.push({ gateway, sandboxes: [] });
       }
     }
     return results;
@@ -957,12 +996,6 @@ export class AgentWorkspaceManager implements Disposable {
     this.disposables.push(
       this.openshellGatewayStateManager.onDidUpdateGateways(() => {
         this.apiSender.send('agent-gateway-update');
-      }),
-    );
-
-    this.disposables.push(
-      this.openshellCli.onDidSandboxListChange(() => {
-        this.apiSender.send('agent-workspace-update');
       }),
     );
   }

@@ -52,8 +52,8 @@ import type { Exec } from '/@/plugin/util/exec.js';
 import type { AgentWorkspaceCreateOptions } from '/@api/agent-workspace-info.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationPropertyRecordedSchema, IConfigurationRegistry } from '/@api/configuration/models.js';
-import type { GatewayInfo, GatewaySandboxes } from '/@api/openshell-gateway-info.js';
-import { AGENT_LABEL, decodeWorkspaceLabels } from '/@api/openshell-gateway-info.js';
+import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
+import { AGENT_LABEL, decodeWorkspaceLabels, WORKSPACE_LABEL } from '/@api/openshell-gateway-info.js';
 import type { TaskState, TaskStatus } from '/@api/taskInfo.js';
 
 import { AgentWorkspaceManager, encodeWorkspaceLabels } from './agent-workspace-manager.js';
@@ -67,22 +67,49 @@ vi.mock(import('/@/plugin/openshell-cli/openshell-policy-manager.js'));
 
 const openshellPolicyManager = new OpenshellPolicyManager({} as never);
 
-const TEST_SUMMARIES: GatewaySandboxes[] = [
+const TEST_SDK_REFS: {
+  id: string;
+  name: string;
+  phase: string;
+  labels: Record<string, string>;
+  resourceVersion: string;
+}[] = [
   {
-    gateway: {
-      name: 'kaiden',
-      endpoint: 'http://localhost:10080',
-    },
-    sandboxes: [
-      { id: 'ws-1', name: 'test-workspace-1', phase: 'Ready', sourcePath: '/tmp/ws1' },
-      {
-        id: 'ws-2',
-        name: 'test-workspace-2',
-        phase: 'Ready',
-      },
-    ],
+    id: 'ws-1',
+    name: 'test-workspace-1',
+    phase: 'ready',
+    labels: { [WORKSPACE_LABEL]: Buffer.from('/tmp/ws1').toString('base64url') },
+    resourceVersion: '1',
+  },
+  {
+    id: 'ws-2',
+    name: 'test-workspace-2',
+    phase: 'ready',
+    labels: {},
+    resourceVersion: '2',
   },
 ];
+
+const TEST_GATEWAY: GatewayInfo = {
+  name: 'kaiden',
+  endpoint: 'http://localhost:10080',
+};
+
+function mockSdkListSandboxes(
+  refs: {
+    id: string;
+    name: string;
+    phase: string;
+    labels: Record<string, string>;
+    resourceVersion: string;
+  }[] = TEST_SDK_REFS,
+  gateways: GatewayInfo[] = [TEST_GATEWAY],
+): void {
+  vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue(gateways);
+  vi.mocked(openshellSdkClientManager.getClient).mockResolvedValue({
+    sandbox: { ...sdkSandbox, list: vi.fn().mockResolvedValue(refs) },
+  } as never);
+}
 
 let manager: AgentWorkspaceManager;
 
@@ -95,6 +122,7 @@ const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry);
 const sdkSandbox = {
   create: vi.fn(),
   delete: vi.fn(),
+  list: vi.fn(),
   waitDeleted: vi.fn(),
   waitReady: vi.fn(),
   execInteractive: vi.fn(),
@@ -146,7 +174,6 @@ const providerRegistry = {
 let gatewayStartCallback: (() => void) | undefined;
 let gatewayInitFailedCallback: ((message: string) => void) | undefined;
 let gatewayStateUpdateCallback: (() => void) | undefined;
-let sandboxListChangeCallback: (() => void) | undefined;
 
 const openshellGateway = {
   createLocalGateway: vi.fn(),
@@ -246,15 +273,6 @@ beforeEach(() => {
   gatewayStartCallback = undefined;
   gatewayInitFailedCallback = undefined;
   gatewayStateUpdateCallback = undefined;
-  sandboxListChangeCallback = undefined;
-  Object.defineProperty(openshellCli, 'onDidSandboxListChange', {
-    value: vi.fn((cb: () => void) => {
-      sandboxListChangeCallback = cb;
-      return { dispose: vi.fn() };
-    }),
-    writable: true,
-    configurable: true,
-  });
   manager = new AgentWorkspaceManager(
     apiSender,
     ipcHandle,
@@ -367,15 +385,6 @@ describe('init', () => {
   test('sends gateway update event when monitored gateway state changes', () => {
     gatewayStateUpdateCallback!();
     expect(apiSender.send).toHaveBeenCalledWith('agent-gateway-update');
-  });
-
-  test('subscribes to sandbox list change event', () => {
-    expect(openshellCli.onDidSandboxListChange).toHaveBeenCalled();
-  });
-
-  test('sends agent-workspace-update when sandbox list changes from polling', () => {
-    sandboxListChangeCallback!();
-    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
   });
 });
 
@@ -1445,20 +1454,33 @@ describe('ensureModelSecret', () => {
 });
 
 describe('list', () => {
-  test('delegates to kdnCli.list and returns items', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+  test('delegates to SDK client and returns items', async () => {
+    mockSdkListSandboxes();
 
     const result = await manager.listOpenshellSandboxes();
 
-    expect(openshellCli.listSandboxesPerGateway).toHaveBeenCalled();
+    expect(openshellGatewayStateManager.listGateways).toHaveBeenCalled();
+    expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith('kaiden');
     expect(result).toHaveLength(1);
     expect(result.flatMap(gw => gw.sandboxes).map(s => s.id)).toEqual(['ws-1', 'ws-2']);
   });
 
-  test('rejects when kdnCli.list fails', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockRejectedValue(new Error('command not found'));
+  test('returns empty sandboxes when SDK client fails for a gateway', async () => {
+    vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([TEST_GATEWAY]);
+    vi.mocked(openshellSdkClientManager.getClient).mockRejectedValue(new Error('connection refused'));
 
-    await expect(manager.listOpenshellSandboxes()).rejects.toThrow('command not found');
+    const result = await manager.listOpenshellSandboxes();
+
+    expect(result).toHaveLength(1);
+    expect(result[0]!.sandboxes).toEqual([]);
+  });
+
+  test('returns empty when no gateways exist', async () => {
+    vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([]);
+
+    const result = await manager.listOpenshellSandboxes();
+
+    expect(result).toEqual([]);
   });
 });
 
@@ -1512,7 +1534,7 @@ describe('remove', () => {
   test('refreshes sandboxes while SDK deletion is still pending and keeps the task running', async () => {
     vi.useFakeTimers();
     let finishDelete!: () => void;
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     vi.mocked(sdkSandbox.delete).mockReturnValue(
       new Promise<void>(resolve => {
         finishDelete = resolve;
@@ -1534,25 +1556,25 @@ describe('remove', () => {
 
       expect(mockTask.state).toBe('completed');
       expect(mockTask.status).toBe('success');
-      expect(sdkSandbox.waitDeleted).not.toHaveBeenCalled();
+      expect(sdkSandbox.waitDeleted).toHaveBeenCalledWith('test-workspace-1', 120);
     } finally {
       vi.useRealTimers();
     }
   });
 
   test('deletes through the SDK and returns the workspace id', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     const result = await manager.remove('ws-1', 'kaiden');
 
     expect(sdkSandbox.delete).toHaveBeenCalledWith('test-workspace-1');
-    expect(sdkSandbox.waitDeleted).not.toHaveBeenCalled();
+    expect(sdkSandbox.waitDeleted).toHaveBeenCalledWith('test-workspace-1', 120);
     expect(result).toEqual({ id: 'ws-1' });
   });
 
   test('creates a task with workspace name and sets success status on completion', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     await manager.remove('ws-1', 'kaiden');
@@ -1563,7 +1585,7 @@ describe('remove', () => {
   });
 
   test('uses workspace id as fallback when workspace not found in list', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue([]);
+    mockSdkListSandboxes([]);
     vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     await manager.remove('unknown-id', 'kaiden');
@@ -1572,7 +1594,7 @@ describe('remove', () => {
   });
 
   test('sets task failure status when SDK deletion fails', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     vi.mocked(sdkSandbox.delete).mockRejectedValue(new Error('workspace not found: unknown-id'));
 
     await expect(manager.remove('unknown-id', 'kaiden')).rejects.toThrow('workspace not found: unknown-id');
@@ -1583,7 +1605,7 @@ describe('remove', () => {
   });
 
   test('preserves error detail in task error message', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     vi.mocked(sdkSandbox.delete).mockRejectedValue(new Error('failed to remove workspace: permission denied'));
 
     await expect(manager.remove('ws-1', 'kaiden')).rejects.toThrow('failed to remove workspace: permission denied');
@@ -1592,7 +1614,7 @@ describe('remove', () => {
   });
 
   test('emits agent-workspace-update event', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     await manager.remove('ws-1', 'kaiden');
@@ -1606,7 +1628,7 @@ describe('remove', () => {
   });
 
   test('cleans up global config directory after sandbox deletion', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
 
     await manager.remove('ws-1', 'kaiden');
@@ -1637,7 +1659,7 @@ describe('deleteOpenshellSandbox', () => {
 
     expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith('remote-gateway');
     expect(sdkSandbox.delete).toHaveBeenCalledWith('shared-name');
-    expect(sdkSandbox.waitDeleted).not.toHaveBeenCalled();
+    expect(sdkSandbox.waitDeleted).toHaveBeenCalledWith('shared-name', 120);
   });
 
   test('cleans up global config directory after sandbox deletion', async () => {
@@ -1654,18 +1676,18 @@ describe('deleteOpenshellSandbox', () => {
 
 describe('getConfiguration', () => {
   test('reads JSON configuration file from workspace directory', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     vi.mocked(readFile).mockResolvedValue('{"mounts":{"dependencies":[]}}');
 
     const result = await manager.getConfiguration('ws-1');
 
-    expect(openshellCli.listSandboxesPerGateway).toHaveBeenCalled();
+    expect(openshellGatewayStateManager.listGateways).toHaveBeenCalled();
     expect(readFile).toHaveBeenCalledWith(join('/tmp/ws1/.kaiden', 'workspace.json'), 'utf-8');
     expect(result).toEqual({ mounts: { dependencies: [] } });
   });
 
   test('throws when workspace id is not found in list', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
 
     await expect(manager.getConfiguration('unknown-id')).rejects.toThrow(
       'workspace "unknown-id" not found. Use "workspace list" to see available workspaces.',
@@ -1673,7 +1695,7 @@ describe('getConfiguration', () => {
   });
 
   test('returns empty configuration when file does not exist', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     const enoent = Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' });
     vi.mocked(readFile).mockRejectedValue(enoent);
 
@@ -1683,7 +1705,7 @@ describe('getConfiguration', () => {
   });
 
   test('rejects when reading the configuration file fails with a non-ENOENT error', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     const eacces = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
     vi.mocked(readFile).mockRejectedValue(eacces);
 
@@ -1691,7 +1713,7 @@ describe('getConfiguration', () => {
   });
 
   test('reads from global directory for no-folder workspaces', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     vi.mocked(readFile).mockResolvedValue('{"network":{"mode":"allow"}}');
 
     const result = await manager.getConfiguration('ws-2');
@@ -1704,7 +1726,7 @@ describe('getConfiguration', () => {
   });
 
   test('returns empty config when global directory file does not exist for no-folder workspace', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
 
     const result = await manager.getConfiguration('ws-2');
@@ -1715,7 +1737,7 @@ describe('getConfiguration', () => {
 
 describe('updateConfiguration', () => {
   test('delegates to kdnCli.updateWorkspaceConfig with the workspace configuration path', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     const spy = vi.spyOn(configWriter, 'updateWorkspaceConfig');
 
     await manager.updateConfiguration('ws-1', { skills: ['/path/to/skill'] });
@@ -1724,7 +1746,7 @@ describe('updateConfiguration', () => {
   });
 
   test('emits agent-workspace-update event', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
 
     await manager.updateConfiguration('ws-1', { network: { mode: 'allow' } });
 
@@ -1732,7 +1754,7 @@ describe('updateConfiguration', () => {
   });
 
   test('throws when workspace id is not found', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
 
     await expect(manager.updateConfiguration('unknown-id', {})).rejects.toThrow(
       'workspace "unknown-id" not found. Use "workspace list" to see available workspaces.',
@@ -1740,14 +1762,14 @@ describe('updateConfiguration', () => {
   });
 
   test('propagates errors from kdnCli.updateWorkspaceConfig', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     vi.mocked(configWriter.updateWorkspaceConfig).mockRejectedValue(new Error('permission denied'));
 
     await expect(manager.updateConfiguration('ws-1', {})).rejects.toThrow('permission denied');
   });
 
   test('writes to global directory for no-folder workspaces', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     const spy = vi.spyOn(configWriter, 'updateWorkspaceConfig');
 
     await manager.updateConfiguration('ws-2', { skills: ['/new/skill'] });
@@ -1919,7 +1941,7 @@ describe('dispose', () => {
   }
 
   test('closes active terminal sessions', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
 
     const mockSession = createMockExecSessionForIpc();
     sdkSandbox.execInteractive.mockResolvedValue(mockSession);
@@ -1941,7 +1963,7 @@ describe('dispose', () => {
   });
 
   test('terminal IPC handler rejects when workspace id is not found', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
 
     const terminalHandler = vi
       .mocked(ipcHandle)
@@ -1958,7 +1980,7 @@ describe('dispose', () => {
   });
 
   test('does not send terminal data when webContents is destroyed', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
 
     type StreamEvent = { stream: 'stdout' | 'stderr'; data: Buffer };
     const events: StreamEvent[] = [];
@@ -2039,7 +2061,7 @@ describe('terminal IPC session lifecycle', () => {
   }
 
   test('closes an active workspace terminal before opening a fresh one', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     const first = createTerminalMockExecSession();
     sdkSandbox.execInteractive.mockResolvedValue(first.session);
 
@@ -2063,7 +2085,7 @@ describe('terminal IPC session lifecycle', () => {
   });
 
   test('routes send and resize through the workspace terminal session and removes it on close', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(TEST_SUMMARIES);
+    mockSdkListSandboxes();
     const mock = createTerminalMockExecSession();
     sdkSandbox.execInteractive.mockResolvedValue(mock.session);
 
@@ -2097,23 +2119,21 @@ describe('terminal IPC session lifecycle', () => {
 });
 
 describe('terminal agent command execution', () => {
-  const SANDBOXES_WITH_AGENT: GatewaySandboxes[] = [
+  const SDK_REFS_WITH_AGENT: {
+    id: string;
+    name: string;
+    phase: string;
+    labels: Record<string, string>;
+    resourceVersion: string;
+  }[] = [
     {
-      gateway: { name: 'kaiden', endpoint: 'http://localhost:10080' },
-      sandboxes: [
-        {
-          id: 'ws-agent',
-          name: 'agent-workspace',
-          phase: 'Ready',
-          labels: { [AGENT_LABEL]: 'test-agent' },
-        },
-        {
-          id: 'ws-no-label',
-          name: 'no-label-workspace',
-          phase: 'Ready',
-        },
-      ],
+      id: 'ws-agent',
+      name: 'agent-workspace',
+      phase: 'ready',
+      labels: { [AGENT_LABEL]: 'test-agent' },
+      resourceVersion: '1',
     },
+    { id: 'ws-no-label', name: 'no-label-workspace', phase: 'ready', labels: {}, resourceVersion: '2' },
   ];
 
   function createTerminalMockExecSession(): MockExecSession {
@@ -2129,7 +2149,7 @@ describe('terminal agent command execution', () => {
   }
 
   test('executes agent command on first terminal data', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(SANDBOXES_WITH_AGENT);
+    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
     vi.mocked(agentRegistry.getAgent).mockResolvedValue({
       id: 'test-agent',
       name: 'Test Agent',
@@ -2147,7 +2167,7 @@ describe('terminal agent command execution', () => {
   });
 
   test('does not execute agent command on subsequent connections', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(SANDBOXES_WITH_AGENT);
+    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
     vi.mocked(agentRegistry.getAgent).mockResolvedValue({
       id: 'test-agent',
       name: 'Test Agent',
@@ -2173,7 +2193,7 @@ describe('terminal agent command execution', () => {
   });
 
   test('retries agent command when replaced before first terminal data', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(SANDBOXES_WITH_AGENT);
+    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
     vi.mocked(agentRegistry.getAgent).mockResolvedValue({
       id: 'test-agent',
       name: 'Test Agent',
@@ -2200,7 +2220,7 @@ describe('terminal agent command execution', () => {
   });
 
   test('does not execute command when workspace has no agent label', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(SANDBOXES_WITH_AGENT);
+    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
     const mock = createTerminalMockExecSession();
     sdkSandbox.execInteractive.mockResolvedValue(mock.session);
 
@@ -2213,7 +2233,7 @@ describe('terminal agent command execution', () => {
   });
 
   test('does not execute command when agent has no command', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(SANDBOXES_WITH_AGENT);
+    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
     vi.mocked(agentRegistry.getAgent).mockResolvedValue({
       id: 'test-agent',
       name: 'Test Agent',
@@ -2232,7 +2252,7 @@ describe('terminal agent command execution', () => {
   });
 
   test('executes agent command only once despite multiple data events', async () => {
-    vi.mocked(openshellCli.listSandboxesPerGateway).mockResolvedValue(SANDBOXES_WITH_AGENT);
+    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
     vi.mocked(agentRegistry.getAgent).mockResolvedValue({
       id: 'test-agent',
       name: 'Test Agent',

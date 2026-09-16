@@ -32,7 +32,7 @@ import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
  */
 @injectable()
 export class OpenshellSdkClientManager {
-  readonly #cache = new Map<string, OpenShellClient>();
+  readonly #cache = new Map<string, Promise<OpenShellClient>>();
 
   constructor(
     @inject(OpenshellCli)
@@ -49,11 +49,14 @@ export class OpenshellSdkClientManager {
       return cached;
     }
 
-    const { OpenShellClient: ClientClass } = await import('@nvidia/openshell-sdk');
-    const options = await this.gatewayConfig.buildConnectOptions(gateway);
-    const client = await ClientClass.connect(options);
-    this.#cache.set(gateway.name, client);
-    return client;
+    const connecting = this.#connect(gateway);
+    this.#cache.set(gateway.name, connecting);
+    try {
+      return await connecting;
+    } catch (err: unknown) {
+      this.#cache.delete(gateway.name);
+      throw err;
+    }
   }
 
   invalidate(gatewayName?: string): void {
@@ -67,6 +70,12 @@ export class OpenshellSdkClientManager {
   @preDestroy()
   dispose(): void {
     this.#cache.clear();
+  }
+
+  async #connect(gateway: GatewayInfo): Promise<OpenShellClient> {
+    const { OpenShellClient: ClientClass } = await import('@nvidia/openshell-sdk');
+    const options = await this.gatewayConfig.buildConnectOptions(gateway);
+    return ClientClass.connect(options);
   }
 
   async #resolveGateway(gatewayName?: string): Promise<GatewayInfo> {
