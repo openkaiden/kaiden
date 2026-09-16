@@ -36,7 +36,7 @@ export async function launchGuidedSetupSession(): Promise<GuidedSetupSession> {
 }
 
 export async function closeGuidedSetupSession(electronApp: ElectronApplication): Promise<void> {
-  killDetachedGateway(electronApp);
+  await killDetachedGateway(electronApp);
   await electronApp.close().catch(() => {});
 }
 

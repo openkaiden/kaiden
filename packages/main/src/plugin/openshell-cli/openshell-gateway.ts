@@ -56,16 +56,6 @@ const SUPERVISOR_IMAGE_BASE = 'ghcr.io/nvidia/openshell/supervisor';
 const GATEWAY_LOG_FILENAME = 'gateway.log';
 const DEFAULT_GATEWAY_NAME = KAIDEN_LOCAL_GATEWAY_NAME;
 
-function spawnGatewayDetached(binaryPath: string, args: string[], logFd: number): ChildProcess {
-  const child = spawn(binaryPath, args, {
-    stdio: ['ignore', logFd, logFd],
-    detached: true,
-    env: { ...process.env, NO_COLOR: '1' },
-  });
-  child.unref();
-  return child;
-}
-
 const GatewayConfigSchema = z.object({
   openshell: z.object({
     drivers: z.record(z.string(), z.object({ enable_bind_mounts: z.boolean().optional() })),
@@ -343,6 +333,16 @@ export class OpenshellGateway implements Disposable {
     }
   }
 
+  private spawnGatewayDetached(binaryPath: string, args: string[], logFd: number): ChildProcess {
+    const child = spawn(binaryPath, args, {
+      stdio: ['ignore', logFd, logFd],
+      detached: true,
+      env: { ...process.env, NO_COLOR: '1' },
+    });
+    child.unref();
+    return child;
+  }
+
   private async spawnCreatedGateway(
     name: string,
     binaryPath: string,
@@ -356,7 +356,7 @@ export class OpenshellGateway implements Disposable {
     const processState: { spawnError?: Error } = {};
     let gatewayProcess: ChildProcess;
     try {
-      gatewayProcess = spawnGatewayDetached(
+      gatewayProcess = this.spawnGatewayDetached(
         binaryPath,
         this.buildArgs(true, configPath, storageDirectory, port, bindAddress),
         logFile.fd,
@@ -401,7 +401,7 @@ export class OpenshellGateway implements Disposable {
 
     let gatewayProcess: ChildProcess;
     try {
-      gatewayProcess = spawnGatewayDetached(binaryPath, args, logFile.fd);
+      gatewayProcess = this.spawnGatewayDetached(binaryPath, args, logFile.fd);
       this.trackGatewayProcess(DEFAULT_GATEWAY_NAME, gatewayProcess);
     } finally {
       await logFile.close();
@@ -426,8 +426,8 @@ export class OpenshellGateway implements Disposable {
       let stderrOutput = '';
       try {
         stderrOutput = (await readFile(logPath, 'utf-8')).trim();
-      } catch {
-        // log file may not exist
+      } catch (readErr: unknown) {
+        console.warn('[openshell-gateway] failed to read log file:', readErr);
       }
       const baseMessage = err instanceof Error ? err.message : String(err);
       throw new Error(stderrOutput ? `${baseMessage}: ${stderrOutput}` : baseMessage);
