@@ -27,8 +27,6 @@ import { GcloudAdcProviderFactory } from './gcloud-adc-provider-factory.js';
 import { OpenshellSecretAdapter } from './openshell-secret-adapter.js';
 
 vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-client-manager.js'));
-vi.mock(import('./default-provider-factory.js'));
-vi.mock(import('./gcloud-adc-provider-factory.js'));
 
 let adapter: OpenshellSecretAdapter;
 let mockRaw: {
@@ -38,6 +36,8 @@ let mockRaw: {
   listProviderProfiles: Mock;
 };
 let sdkClientManager: OpenshellSdkClientManager;
+let defaultFactory: DefaultProviderFactory;
+let gcloudFactory: GcloudAdcProviderFactory;
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -50,10 +50,13 @@ beforeEach(() => {
   const mockClient = { raw: mockRaw } as unknown as OpenShellClient;
   sdkClientManager = new OpenshellSdkClientManager(undefined!, undefined!);
   vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
-  adapter = new OpenshellSecretAdapter(sdkClientManager);
 
-  vi.mocked(DefaultProviderFactory.prototype.createProvider).mockResolvedValue(undefined);
-  vi.mocked(GcloudAdcProviderFactory.prototype.createProvider).mockResolvedValue(undefined);
+  defaultFactory = new DefaultProviderFactory();
+  gcloudFactory = new GcloudAdcProviderFactory();
+  vi.spyOn(defaultFactory, 'createProvider').mockResolvedValue(undefined);
+  vi.spyOn(gcloudFactory, 'createProvider').mockResolvedValue(undefined);
+
+  adapter = new OpenshellSecretAdapter(sdkClientManager, [defaultFactory, gcloudFactory]);
 });
 
 describe('createSecret', () => {
@@ -66,21 +69,21 @@ describe('createSecret', () => {
 
     const result = await adapter.createSecret(options);
 
-    expect(DefaultProviderFactory.prototype.createProvider).toHaveBeenCalledWith(expect.anything(), options);
+    expect(defaultFactory.createProvider).toHaveBeenCalledWith(expect.anything(), options);
     expect(result).toEqual({ name: 'my-secret' });
   });
 
-  test('delegates to GcloudAdcProviderFactory when --from-gcloud-adc flag is set', async () => {
+  test('delegates to GcloudAdcProviderFactory when type is google-vertex-ai', async () => {
     const options: SecretCreateOptions = {
       name: 'my-gcp',
       type: 'google-vertex-ai',
-      value: { credentials: {}, flags: ['--from-gcloud-adc'] },
+      value: { credentials: {} },
     };
 
     const result = await adapter.createSecret(options);
 
-    expect(GcloudAdcProviderFactory.prototype.createProvider).toHaveBeenCalledWith(expect.anything(), options);
-    expect(DefaultProviderFactory.prototype.createProvider).not.toHaveBeenCalled();
+    expect(gcloudFactory.createProvider).toHaveBeenCalledWith(expect.anything(), options);
+    expect(defaultFactory.createProvider).not.toHaveBeenCalled();
     expect(result).toEqual({ name: 'my-gcp' });
   });
 
@@ -104,16 +107,6 @@ describe('createSecret', () => {
     };
 
     await expect(adapter.createSecret(options)).rejects.toThrow('options.value must be a record for Openshell');
-  });
-
-  test('rejects unsupported flags', async () => {
-    const options: SecretCreateOptions = {
-      name: 'my-secret',
-      type: 'github',
-      value: { credentials: {}, flags: ['--from-existing'] },
-    };
-
-    await expect(adapter.createSecret(options)).rejects.toThrow('Unsupported provider factory flag');
   });
 });
 

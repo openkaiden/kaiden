@@ -620,7 +620,7 @@ describe('connection delete lifecycle', () => {
     expect(SECRET_STORAGE_MOCK.delete).toHaveBeenCalledWith(`${PROVIDER_ID}:fake-uuid-1:token`);
 
     expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('vertex-ai.connection._type', undefined);
-    expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('vertex-ai.connection._flags', undefined);
+    expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('vertex-ai.connection._needsInferenceSetup', undefined);
     expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('vertex-ai.connection.GOOGLE_APPLICATION_CREDENTIALS', undefined);
     expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('vertex-ai.connection.VERTEX_AI_PROJECT_ID', undefined);
     expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('vertex-ai.connection.VERTEX_AI_REGION', undefined);
@@ -658,7 +658,7 @@ describe('workspace configuration', () => {
     expect(CONFIGURATION_API_MOCK.getConfiguration).toHaveBeenCalledWith(undefined, connection);
 
     expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('vertex-ai.connection._type', OPENSHELL_PROVIDER_ID);
-    expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('vertex-ai.connection._flags', '--from-gcloud-adc');
+    expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('vertex-ai.connection._needsInferenceSetup', true);
     expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith(
       'vertex-ai.connection.GOOGLE_APPLICATION_CREDENTIALS',
       `${PROVIDER_ID}:fake-uuid-1:token`,
@@ -700,7 +700,7 @@ describe('workspace configuration', () => {
     expect(SECRET_STORAGE_MOCK.store).toHaveBeenCalledWith(`${PROVIDER_ID}:id-2:token`, '/path/b');
 
     expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('vertex-ai.connection._type', OPENSHELL_PROVIDER_ID);
-    expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('vertex-ai.connection._flags', '--from-gcloud-adc');
+    expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('vertex-ai.connection._needsInferenceSetup', true);
     expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith(
       'vertex-ai.connection.GOOGLE_APPLICATION_CREDENTIALS',
       `${PROVIDER_ID}:id-1:token`,

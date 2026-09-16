@@ -32,6 +32,8 @@ import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
+import { DefaultProviderFactory } from './default-provider-factory.js';
+import { GcloudAdcProviderFactory } from './gcloud-adc-provider-factory.js';
 import { OpenshellSecretAdapter } from './openshell-secret-adapter.js';
 import { SecretManager } from './secret-manager.js';
 
@@ -53,7 +55,10 @@ const mockRaw = {
 };
 const mockClient = { raw: mockRaw } as unknown as OpenShellClient;
 const sdkClientManager = new OpenshellSdkClientManager(undefined!, undefined!);
-const openshellAdapter = new OpenshellSecretAdapter(sdkClientManager);
+const openshellAdapter = new OpenshellSecretAdapter(sdkClientManager, [
+  new GcloudAdcProviderFactory(),
+  new DefaultProviderFactory(),
+]);
 
 let gatewayStartCallback: (() => void) | undefined;
 

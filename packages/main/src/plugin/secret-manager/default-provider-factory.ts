@@ -17,12 +17,20 @@
  ***********************************************************************/
 
 import type { OpenShellClient } from '@nvidia/openshell-sdk';
+import { injectable } from 'inversify';
 
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
 import type { ProviderFactory } from './provider-factory.js';
 
+@injectable()
 export class DefaultProviderFactory implements ProviderFactory {
+  readonly priority = 0;
+
+  supports(_type: string): boolean {
+    return true;
+  }
+
   async createProvider(client: OpenShellClient, options: SecretCreateOptions): Promise<void> {
     const value = options.value;
     if (typeof value === 'string') {

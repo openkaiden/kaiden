@@ -80,7 +80,10 @@ import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
 import { RagEnvironmentRegistry } from '/@/plugin/rag-environment-registry.js';
 import { SchedulerRegistry } from '/@/plugin/scheduler/scheduler-registry.js';
+import { DefaultProviderFactory } from '/@/plugin/secret-manager/default-provider-factory.js';
+import { GcloudAdcProviderFactory } from '/@/plugin/secret-manager/gcloud-adc-provider-factory.js';
 import { OpenshellSecretAdapter } from '/@/plugin/secret-manager/openshell-secret-adapter.js';
+import { ProviderFactoryToken } from '/@/plugin/secret-manager/provider-factory.js';
 import { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import { SemanticRouterManager } from '/@/plugin/semantic-router/semantic-router-manager.js';
 import { SkillManager } from '/@/plugin/skill/skill-manager.js';
@@ -611,6 +614,8 @@ export class PluginSystem {
     container.bind<OpenshellGatewayStateManager>(OpenshellGatewayStateManager).toSelf().inSingletonScope();
     container.bind<OpenshellImageBuilder>(OpenshellImageBuilder).toSelf().inSingletonScope();
     container.bind<AgentWorkspaceManager>(AgentWorkspaceManager).toSelf().inSingletonScope();
+    container.bind(ProviderFactoryToken).to(GcloudAdcProviderFactory).inSingletonScope();
+    container.bind(ProviderFactoryToken).to(DefaultProviderFactory).inSingletonScope();
     container.bind<OpenshellSecretAdapter>(OpenshellSecretAdapter).toSelf().inSingletonScope();
     container.bind<AcpSessionManager>(AcpSessionManager).toSelf().inSingletonScope();
     container.bind<AcpIPCHandler>(AcpIPCHandler).toSelf().inSingletonScope();

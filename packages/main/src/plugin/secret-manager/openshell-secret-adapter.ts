@@ -16,23 +16,22 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { inject, injectable } from 'inversify';
+import { inject, injectable, multiInject } from 'inversify';
 
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import type { OpenshellProfile } from '/@api/openshell-gateway-info.js';
 import type { SecretCliBackend, SecretCreateOptions, SecretInfo, SecretName } from '/@api/secret-info.js';
 
-import { DefaultProviderFactory } from './default-provider-factory.js';
-import { GcloudAdcProviderFactory } from './gcloud-adc-provider-factory.js';
 import type { ProviderFactory } from './provider-factory.js';
-
-const FROM_GCLOUD_ADC = '--from-gcloud-adc';
+import { ProviderFactoryToken } from './provider-factory.js';
 
 @injectable()
 export class OpenshellSecretAdapter implements SecretCliBackend {
   constructor(
     @inject(OpenshellSdkClientManager)
     private readonly sdkClientManager: OpenshellSdkClientManager,
+    @multiInject(ProviderFactoryToken)
+    private readonly providerFactories: ProviderFactory[],
   ) {}
 
   async createSecret(options: SecretCreateOptions, gateway?: string): Promise<SecretName> {
@@ -77,14 +76,12 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
   }
 
   #resolveFactory(options: SecretCreateOptions): ProviderFactory {
-    const flags = typeof options.value !== 'string' ? options.value.flags : undefined;
-    if (flags?.some(f => f !== FROM_GCLOUD_ADC)) {
-      const unsupported = flags.filter(f => f !== FROM_GCLOUD_ADC);
-      throw new Error(`Unsupported provider factory flag: ${unsupported.join(', ')}`);
+    const factory = this.providerFactories
+      .toSorted((a, b) => b.priority - a.priority)
+      .find(f => f.supports(options.type));
+    if (!factory) {
+      throw new Error(`No provider factory supports type '${options.type}'`);
     }
-    if (flags?.includes(FROM_GCLOUD_ADC)) {
-      return new GcloudAdcProviderFactory();
-    }
-    return new DefaultProviderFactory();
+    return factory;
   }
 }

@@ -108,3 +108,17 @@ describe('createProvider', () => {
     await expect(factory.createProvider(client, options)).rejects.toThrow('provider type not supported');
   });
 });
+
+describe('supports', () => {
+  test('returns true for any type', () => {
+    expect(factory.supports('github')).toBe(true);
+    expect(factory.supports('google-vertex-ai')).toBe(true);
+    expect(factory.supports('cursor')).toBe(true);
+  });
+});
+
+describe('priority', () => {
+  test('has the lowest priority', () => {
+    expect(factory.priority).toBe(0);
+  });
+});

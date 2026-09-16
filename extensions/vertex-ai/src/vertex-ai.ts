@@ -287,7 +287,7 @@ export class VertexAi implements Disposable {
 
     const cfg = this.configurationAPI.getConfiguration(undefined, connection);
     await cfg.update('vertex-ai.connection._type', OPENSHELL_PROVIDER_ID);
-    await cfg.update('vertex-ai.connection._flags', '--from-gcloud-adc');
+    await cfg.update('vertex-ai.connection._needsInferenceSetup', true);
     await cfg.update('vertex-ai.connection.GOOGLE_APPLICATION_CREDENTIALS', secretName);
     await cfg.update('vertex-ai.connection.VERTEX_AI_PROJECT_ID', config.projectId);
     await cfg.update('vertex-ai.connection.VERTEX_AI_REGION', config.region);
@@ -299,7 +299,7 @@ export class VertexAi implements Disposable {
 
     const cfg = this.configurationAPI.getConfiguration(undefined, connection);
     await cfg.update('vertex-ai.connection._type', undefined);
-    await cfg.update('vertex-ai.connection._flags', undefined);
+    await cfg.update('vertex-ai.connection._needsInferenceSetup', undefined);
     await cfg.update('vertex-ai.connection.GOOGLE_APPLICATION_CREDENTIALS', undefined);
     await cfg.update('vertex-ai.connection.VERTEX_AI_PROJECT_ID', undefined);
     await cfg.update('vertex-ai.connection.VERTEX_AI_REGION', undefined);

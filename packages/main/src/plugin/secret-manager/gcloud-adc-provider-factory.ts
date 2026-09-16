@@ -22,14 +22,22 @@ import { join } from 'node:path';
 
 import type { OpenShellClient } from '@nvidia/openshell-sdk';
 import { ProviderCredentialRefreshStrategy } from '@nvidia/openshell-sdk/raw';
+import { injectable } from 'inversify';
 
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
 import type { ProviderFactory } from './provider-factory.js';
 
+@injectable()
 export class GcloudAdcProviderFactory implements ProviderFactory {
+  readonly priority = 10;
+
+  supports(type: string): boolean {
+    return type === 'google-vertex-ai';
+  }
+
   async createProvider(client: OpenShellClient, options: SecretCreateOptions): Promise<void> {
-    const env = typeof options.value !== 'string' ? options.value.env : undefined;
+    const credentials = typeof options.value !== 'string' ? options.value.credentials : undefined;
 
     const profileResponse = await client.raw.getProviderProfile({ id: options.type, workspace: '' });
     const adcCredential = profileResponse.profile?.credentials.find(
@@ -53,7 +61,7 @@ export class GcloudAdcProviderFactory implements ProviderFactory {
       workspace: '',
     });
 
-    const { clientId, clientSecret, refreshToken } = await readGcloudAdc(env);
+    const { clientId, clientSecret, refreshToken } = await readGcloudAdc(credentials);
     try {
       await client.raw.configureProviderRefresh({
         provider: options.name,

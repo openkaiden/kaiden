@@ -42,7 +42,6 @@ const adcOptions: SecretCreateOptions = {
   type: 'google-vertex-ai',
   value: {
     credentials: {},
-    flags: ['--from-gcloud-adc'],
   },
 };
 
@@ -142,7 +141,6 @@ describe('createProvider', () => {
       value: {
         credentials: {},
         config: { GOOGLE_VERTEX_PROJECT: 'my-project' },
-        flags: ['--from-gcloud-adc'],
       },
     };
 
@@ -155,21 +153,36 @@ describe('createProvider', () => {
     );
   });
 
-  test('reads ADC file from env GOOGLE_APPLICATION_CREDENTIALS path', async () => {
+  test('reads ADC file from credentials GOOGLE_APPLICATION_CREDENTIALS path', async () => {
     const { readFile } = await import('node:fs/promises');
-    const optionsWithEnv: SecretCreateOptions = {
+    const optionsWithCreds: SecretCreateOptions = {
       name: 'my-gcp',
       type: 'google-vertex-ai',
       value: {
-        credentials: {},
-        env: { GOOGLE_APPLICATION_CREDENTIALS: '/custom/path/adc.json' },
-        flags: ['--from-gcloud-adc'],
+        credentials: { GOOGLE_APPLICATION_CREDENTIALS: '/custom/path/adc.json' },
       },
     };
 
-    await factory.createProvider(client, optionsWithEnv);
+    await factory.createProvider(client, optionsWithCreds);
 
     expect(readFile).toHaveBeenCalledWith('/custom/path/adc.json', 'utf-8');
+  });
+});
+
+describe('supports', () => {
+  test('returns true for google-vertex-ai', () => {
+    expect(factory.supports('google-vertex-ai')).toBe(true);
+  });
+
+  test('returns false for other types', () => {
+    expect(factory.supports('cursor')).toBe(false);
+    expect(factory.supports('openai')).toBe(false);
+  });
+});
+
+describe('priority', () => {
+  test('has higher priority than DefaultProviderFactory', () => {
+    expect(factory.priority).toBeGreaterThan(0);
   });
 });
 
