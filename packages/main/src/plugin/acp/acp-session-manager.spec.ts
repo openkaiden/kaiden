@@ -302,7 +302,7 @@ describe('AcpSessionManager', () => {
       expect(blocks).toHaveLength(2);
       expect(blocks[0]).toEqual({
         type: 'resource_link',
-        uri: 'file:///sandbox/.kaiden-attachments/uuid-123/photo.png',
+        uri: pathToFileURL('/sandbox/.kaiden-attachments/uuid-123/photo.png').href,
         name: 'photo.png',
         mimeType: 'image/png',
       });
@@ -325,7 +325,7 @@ describe('AcpSessionManager', () => {
       expect(blocks).toHaveLength(2);
       expect(blocks[0]).toEqual({
         type: 'resource_link',
-        uri: 'file:///sandbox/.kaiden-attachments/uuid-456/notes.txt',
+        uri: pathToFileURL('/sandbox/.kaiden-attachments/uuid-456/notes.txt').href,
         name: 'notes.txt',
         mimeType: 'text/plain',
       });
@@ -354,7 +354,7 @@ describe('AcpSessionManager', () => {
         mimeType: 'text/markdown',
       });
       // The '#' must be percent-encoded so it is not parsed as a URI fragment
-      expect(blocks[0].uri).toBe('file:///sandbox/.kaiden-attachments/uuid-789/notes%23final.md');
+      expect(blocks[0].uri).toBe(pathToFileURL(remotePath).href);
       expect(blocks[1]).toEqual({ type: 'text', text: 'read this' });
     });
 
