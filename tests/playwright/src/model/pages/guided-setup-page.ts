@@ -243,10 +243,15 @@ export class GuidedSetupPage extends BasePage {
       await expect(input).toBeVisible();
       await this.fillSecret(input, field.value);
     }
-    await form.getByRole('button', { name: 'Create' }).click();
-
-    for (const field of setup.fields) {
-      await form.getByLabel(field.label).fill('');
+    try {
+      await form.getByRole('button', { name: 'Create' }).click();
+    } finally {
+      for (const field of setup.fields) {
+        await form
+          .getByLabel(field.label)
+          .fill('')
+          .catch(() => {});
+      }
     }
 
     const closePanel = form.getByRole('button', { name: 'Close panel' });

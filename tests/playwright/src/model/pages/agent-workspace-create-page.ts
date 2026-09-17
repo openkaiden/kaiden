@@ -449,9 +449,15 @@ export class AgentWorkspaceCreatePage extends BasePage {
     } else if (await this.noModelsGate.isVisible()) {
       await this.selectConnectionProvider(setup.providerName);
       await this.fillInlineConnectionFields(setup.fields);
-      await this.submitInlineConnection();
-      for (const field of setup.fields) {
-        await this.inlineConnectionForm.getByLabel(field.label).fill('');
+      try {
+        await this.submitInlineConnection();
+      } finally {
+        for (const field of setup.fields) {
+          await this.inlineConnectionForm
+            .getByLabel(field.label)
+            .fill('')
+            .catch(() => {});
+        }
       }
       await this.waitForModelCatalog();
       await this.selectDefaultModel();

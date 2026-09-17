@@ -97,8 +97,11 @@ export class McpInstallTabPage extends BaseTablePage {
     await expect(this.passwordInput).toBeVisible();
     await this.fillSecret(this.passwordInput, token);
 
-    await expect(this.connectButton).toBeEnabled();
-    await this.connectButton.click();
-    await this.passwordInput.fill('').catch(() => {});
+    try {
+      await expect(this.connectButton).toBeEnabled();
+      await this.connectButton.click();
+    } finally {
+      await this.passwordInput.fill('').catch(() => {});
+    }
   }
 }
