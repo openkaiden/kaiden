@@ -545,8 +545,9 @@ export class AgentWorkspaceManager implements Disposable {
       await sdkClient.sandbox.delete(name);
       try {
         await sdkClient.sandbox.waitDeleted(name, SANDBOX_DELETE_TIMEOUT_SECONDS);
-      } catch {
-        console.warn(`[workspace-timing] deleteSandbox: timed out waiting for "${name}" to be fully removed`);
+      } catch (waitErr: unknown) {
+        const detail = waitErr instanceof Error ? waitErr.message : String(waitErr);
+        console.warn(`[workspace-timing] deleteSandbox: waitDeleted failed for "${name}": ${detail}`);
       }
       this.apiSender.send('agent-workspace-update');
       if (terminalId) this.closeWorkspaceTerminal(terminalId);
