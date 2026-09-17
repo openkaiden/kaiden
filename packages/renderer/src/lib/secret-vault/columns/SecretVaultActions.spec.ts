@@ -78,3 +78,21 @@ test('should not remove secret when user cancels removal', async () => {
 
   expect(window.removeSecret).not.toHaveBeenCalled();
 });
+
+test('should display error when secret removal fails', async () => {
+  vi.mocked(window.showMessageBox).mockResolvedValue({ response: 0 });
+  vi.mocked(window.removeSecret).mockRejectedValue(new Error('secret is in use by sandbox'));
+
+  render(SecretVaultActions, { object: secret });
+
+  // no error icon before clicking
+  expect(screen.queryByTestId('tooltip-trigger')).not.toBeInTheDocument();
+
+  const removeButton = screen.getByRole('button', { name: 'Remove secret' });
+  await fireEvent.click(removeButton);
+
+  // error icon should appear after failed removal
+  await waitFor(() => {
+    expect(screen.getByTestId('tooltip-trigger')).toBeInTheDocument();
+  });
+});
