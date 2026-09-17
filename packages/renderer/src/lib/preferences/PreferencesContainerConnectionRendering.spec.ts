@@ -60,7 +60,6 @@ const EMPTY_PROVIDER_MOCK: ProviderInfo = {
   inferenceConnections: [],
   ragConnections: [],
   chunkConnections: [],
-  flowConnections: [],
   inferenceProviderConnectionCreation: false,
   inferenceProviderConnectionInitialization: false,
   ragProviderConnectionCreation: false,

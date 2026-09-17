@@ -64,13 +64,6 @@ export interface ProviderVmConnectionInfo {
   status: ProviderConnectionStatus;
   lifecycleMethods?: LifecycleMethod[];
 }
-export interface ProviderFlowConnectionInfo {
-  name: string;
-  status: ProviderConnectionStatus;
-  lifecycleMethods?: LifecycleMethod[];
-  connectionType: 'flow';
-}
-
 export interface ProviderChunkProviderConnectionInfo {
   id: string;
   name: string;
@@ -108,7 +101,6 @@ export type ProviderConnectionInfo =
   | ProviderVmConnectionInfo
   | ProviderInferenceConnectionInfo
   | ProviderRagConnectionInfo
-  | ProviderFlowConnectionInfo
   | ProviderChunkProviderConnectionInfo;
 
 export interface ProviderInfo {
@@ -123,7 +115,6 @@ export interface ProviderInfo {
   vmConnections: ProviderVmConnectionInfo[];
   inferenceConnections: ProviderInferenceConnectionInfo[];
   ragConnections: ProviderRagConnectionInfo[];
-  flowConnections: ProviderFlowConnectionInfo[];
   chunkConnections: ProviderChunkProviderConnectionInfo[];
 
   status: ProviderStatus;

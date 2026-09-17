@@ -67,7 +67,6 @@ const providerInfo: ProviderInfo = {
   inferenceConnections: [],
   ragConnections: [],
   chunkConnections: [],
-  flowConnections: [],
   inferenceProviderConnectionCreation: false,
   inferenceProviderConnectionInitialization: false,
   ragProviderConnectionCreation: false,

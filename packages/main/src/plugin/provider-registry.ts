@@ -24,7 +24,6 @@ import type {
   ConnectionFactory,
   ConnectionFactoryDetails,
   ContainerProviderConnection,
-  FlowProviderConnection,
   InferenceProviderConnection,
   KubernetesProviderConnection,
   Logger,
@@ -54,7 +53,6 @@ import type {
   RagProviderConnection,
   RegisterChunkProviderConnectionEvent,
   RegisterContainerConnectionEvent,
-  RegisterFlowConnectionEvent,
   RegisterInferenceConnectionEvent,
   RegisterKubernetesConnectionEvent,
   RegisterRagConnectionEvent,
@@ -62,7 +60,6 @@ import type {
   SemanticRouterFactory,
   UnregisterChunkProviderConnectionEvent,
   UnregisterContainerConnectionEvent,
-  UnregisterFlowConnectionEvent,
   UnregisterInferenceConnectionEvent,
   UnregisterKubernetesConnectionEvent,
   UnregisterRagConnectionEvent,
@@ -88,7 +85,6 @@ import type {
   ProviderCleanupActionInfo,
   ProviderConnectionInfo,
   ProviderContainerConnectionInfo,
-  ProviderFlowConnectionInfo,
   ProviderInferenceConnectionInfo,
   ProviderInfo,
   ProviderKubernetesConnectionInfo,
@@ -144,7 +140,6 @@ export class ProviderRegistry {
   protected vmProviders: Map<string, VmProviderConnection> = new Map();
   protected inferenceProviders: Map<string, InferenceProviderConnection> = new Map();
   protected ragProviders: Map<string, RagProviderConnection> = new Map();
-  protected flowProviders: Map<string, FlowProviderConnection> = new Map();
   protected chunkProviders: Map<string, ChunkProviderConnection> = new Map();
 
   private readonly _onDidUpdateProvider = new Emitter<ProviderEvent>();
@@ -201,13 +196,6 @@ export class ProviderRegistry {
 
   private readonly _onDidUnregisterRagConnection = new Emitter<UnregisterRagConnectionEvent>();
   readonly onDidUnregisterRagConnection: Event<UnregisterRagConnectionEvent> = this._onDidUnregisterRagConnection.event;
-
-  private readonly _onDidRegisterFlowConnection = new Emitter<RegisterFlowConnectionEvent>();
-  readonly onDidRegisterFlowConnection: Event<RegisterFlowConnectionEvent> = this._onDidRegisterFlowConnection.event;
-
-  private readonly _onDidUnregisterFlowConnection = new Emitter<UnregisterFlowConnectionEvent>();
-  readonly onDidUnregisterFlowConnection: Event<UnregisterFlowConnectionEvent> =
-    this._onDidUnregisterFlowConnection.event;
 
   private readonly _onDidRegisterChunkConnection = new Emitter<RegisterChunkProviderConnectionEvent>();
   readonly onDidRegisterChunkConnection: Event<RegisterChunkProviderConnectionEvent> =
@@ -775,10 +763,6 @@ export class ProviderRegistry {
     return this.getProviderConnectionInfo(connection) as ProviderRagConnectionInfo;
   }
 
-  public getProviderFlowConnectionInfo(connection: FlowProviderConnection): ProviderFlowConnectionInfo {
-    return this.getProviderConnectionInfo(connection) as ProviderFlowConnectionInfo;
-  }
-
   public getProviderChunkConnectionInfo(connection: ChunkProviderConnection): ProviderChunkProviderConnectionInfo {
     return this.getProviderConnectionInfo(connection) as ProviderChunkProviderConnectionInfo;
   }
@@ -828,12 +812,6 @@ export class ProviderRegistry {
         name: connection.name,
         status: connection.status(),
         connectionType: 'rag',
-      };
-    } else if (this.isFlowConnection(connection)) {
-      providerConnection = {
-        name: connection.name,
-        status: connection.status(),
-        connectionType: 'flow',
       };
     } else if (this.isChunkConnection(connection)) {
       providerConnection = {
@@ -886,9 +864,6 @@ export class ProviderRegistry {
     });
     const ragConnections: ProviderRagConnectionInfo[] = provider.ragConnections.map(connection => {
       return this.getProviderRagConnectionInfo(connection);
-    });
-    const flowConnections: ProviderFlowConnectionInfo[] = provider.flowConnections.map(connection => {
-      return this.getProviderFlowConnectionInfo(connection);
     });
     const chunkConnections: ProviderChunkProviderConnectionInfo[] = provider.chunkConnections.map(connection => {
       return this.getProviderChunkConnectionInfo(connection);
@@ -1006,7 +981,6 @@ export class ProviderRegistry {
       vmConnections,
       inferenceConnections,
       ragConnections,
-      flowConnections,
       chunkConnections,
       status: provider.status,
       containerProviderConnectionCreation,
@@ -1343,21 +1317,6 @@ export class ProviderRegistry {
     return connection;
   }
 
-  protected getMatchingFlowConnectionFromProvider(
-    internalProviderId: string,
-    providerFlowConnectionInfo: ProviderFlowConnectionInfo,
-  ): FlowProviderConnection {
-    // grab the correct provider
-    const provider = this.getMatchingProvider(internalProviderId);
-
-    // grab the correct kubernetes connection
-    const connection = provider.flowConnections.find(connection => connection.name === providerFlowConnectionInfo.name);
-    if (!connection) {
-      throw new Error(`no flow connection matching provider id ${internalProviderId}`);
-    }
-    return connection;
-  }
-
   protected getMatchingChunkConnectionFromProvider(
     internalProviderId: string,
     providerChunkConnectionInfo: ProviderChunkProviderConnectionInfo,
@@ -1379,8 +1338,7 @@ export class ProviderRegistry {
       | ProviderConnectionInfo
       | ContainerProviderConnection
       | ProviderVmConnectionInfo
-      | ProviderInferenceConnectionInfo
-      | ProviderFlowConnectionInfo,
+      | ProviderInferenceConnectionInfo,
   ): ProviderConnection {
     if (this.isProviderContainerConnection(providerContainerConnectionInfo)) {
       return this.getMatchingContainerConnectionFromProvider(internalProviderId, providerContainerConnectionInfo);
@@ -1390,8 +1348,6 @@ export class ProviderRegistry {
       return this.getMatchingVmConnectionFromProvider(internalProviderId, providerContainerConnectionInfo);
     } else if (this.isInferenceConnectionInfo(providerContainerConnectionInfo)) {
       return this.getMatchingInferenceConnectionFromProvider(internalProviderId, providerContainerConnectionInfo);
-    } else if (this.isFlowConnectionInfo(providerContainerConnectionInfo)) {
-      return this.getMatchingFlowConnectionFromProvider(internalProviderId, providerContainerConnectionInfo);
     } else if (this.isRagConnectionInfo(providerContainerConnectionInfo)) {
       return this.getMatchingRagConnectionFromProvider(internalProviderId, providerContainerConnectionInfo);
     } else if (this.isChunkConnectionInfo(providerContainerConnectionInfo)) {
@@ -1429,10 +1385,6 @@ export class ProviderRegistry {
     return (connection as ProviderInferenceConnectionInfo).connectionType === 'inference';
   }
 
-  isFlowConnectionInfo(connection: ProviderConnectionInfo): connection is ProviderFlowConnectionInfo {
-    return (connection as ProviderFlowConnectionInfo).connectionType === 'flow';
-  }
-
   isChunkConnectionInfo(connection: ProviderConnectionInfo): connection is ProviderChunkProviderConnectionInfo {
     return (connection as ProviderChunkProviderConnectionInfo).connectionType === 'chunk';
   }
@@ -1454,10 +1406,6 @@ export class ProviderRegistry {
 
   isRagConnection(connection: ProviderConnection): connection is RagProviderConnection {
     return 'mcpServer' in connection;
-  }
-
-  isFlowConnection(connection: ProviderConnection): connection is FlowProviderConnection {
-    return 'flow' in connection;
   }
 
   isChunkConnection(connection: ProviderConnection): connection is ChunkProviderConnection {
@@ -1818,12 +1766,6 @@ export class ProviderRegistry {
     this._onDidRegisterRagConnection.fire({ providerId: provider.id, connection: ragProviderConnection });
   }
 
-  onDidRegisterFlowConnectionCallback(provider: ProviderImpl, connection: FlowProviderConnection): void {
-    this.connectionLifecycleContexts.set(connection, new LifecycleContextImpl());
-    this.apiSender.send('provider-register-flow-connection', { name: connection.name });
-    this._onDidRegisterFlowConnection.fire({ providerId: provider.id, connection: connection });
-  }
-
   onDidRegisterChunkConnectionCallback(provider: ProviderImpl, connection: ChunkProviderConnection): void {
     this.connectionLifecycleContexts.set(connection, new LifecycleContextImpl());
     this.apiSender.send('provider-register-chunk-connection', { name: connection.name });
@@ -1884,11 +1826,6 @@ export class ProviderRegistry {
   onDidUnregisterRagConnectionCallback(provider: ProviderImpl, ragProviderConnection: RagProviderConnection): void {
     this.apiSender.send('provider-unregister-rag-connection', { name: ragProviderConnection.name });
     this._onDidUnregisterRagConnection.fire({ providerId: provider.id, connection: ragProviderConnection });
-  }
-
-  onDidUnregisterFlowConnectionCallback(provider: ProviderImpl, connection: FlowProviderConnection): void {
-    this.apiSender.send('provider-unregister-flow-connection', { name: connection.name });
-    this._onDidUnregisterFlowConnection.fire({ providerId: provider.id, connectionName: connection.name });
   }
 
   onDidUnregisterChunkConnectionCallback(provider: ProviderImpl, connection: ChunkProviderConnection): void {
@@ -2074,33 +2011,6 @@ export class ProviderRegistry {
     return connections;
   }
 
-  registerFlowConnection(provider: Provider, connection: FlowProviderConnection): Disposable {
-    const providerName = connection.name;
-    const id = `${provider.id}.${providerName}`;
-    this.flowProviders.set(id, connection);
-    this.telemetryService.track('registerFlowProviderConnection', {
-      name: connection.name,
-      total: this.flowProviders.size,
-    });
-
-    let previousStatus = connection.status();
-
-    // track the status of the provider
-    const timer = setInterval(() => {
-      const newStatus = connection.status();
-      if (newStatus !== previousStatus) {
-        this.apiSender.send('provider-change', {});
-        previousStatus = newStatus;
-      }
-    }, 2000);
-
-    return Disposable.create(() => {
-      clearInterval(timer);
-      this.flowProviders.delete(id);
-      this.apiSender.send('provider-change', {});
-    });
-  }
-
   registerChunkConnection(provider: Provider, connection: ChunkProviderConnection): Disposable {
     const providerName = connection.name;
     const id = `${provider.id}.${providerName}`;
@@ -2164,7 +2074,6 @@ export class ProviderRegistry {
       if (
         !this.isKubernetesConnection(containerConnection) &&
         !this.isInferenceConnection(containerConnection) &&
-        !this.isFlowConnection(containerConnection) &&
         !this.isRagConnection(containerConnection) &&
         !this.isChunkConnection(containerConnection) &&
         providerConnectionInfo.status === 'started'
@@ -2323,13 +2232,6 @@ export class ProviderRegistry {
       }
     }
     return undefined;
-  }
-
-  getFlowProviderConnection(internalProviderId: string): Array<FlowProviderConnection> {
-    const provider = this.providers.get(internalProviderId);
-    if (!provider) throw new Error('Provider not found');
-
-    return provider.flowConnections;
   }
 
   getChunkProviderConnection(internalProviderId: string): Array<ChunkProviderConnection> {

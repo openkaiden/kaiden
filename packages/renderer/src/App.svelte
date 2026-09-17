@@ -12,9 +12,6 @@ import AgentWorkspaceCreate from '/@/lib/agent-workspaces/AgentWorkspaceCreate.s
 import AgentWorkspaceDetails from '/@/lib/agent-workspaces/AgentWorkspaceDetails.svelte';
 import AgentWorkspaceList from '/@/lib/agent-workspaces/AgentWorkspaceList.svelte';
 import { parseExtensionListRequest } from '/@/lib/extensions/extension-list';
-import FlowCreate from '/@/lib/flows/FlowCreate.svelte';
-import FlowDetails from '/@/lib/flows/FlowDetails.svelte';
-import FlowList from '/@/lib/flows/FlowList.svelte';
 import KubernetesRoot from '/@/lib/kube/KubernetesRoot.svelte';
 import ProjectCreate from '/@/lib/projects/ProjectCreate.svelte';
 import ProjectDetails from '/@/lib/projects/ProjectDetails.svelte';
@@ -259,22 +256,6 @@ tablePersistence.storage = new PodmanDesktopStoragePersist();
           </Route>
           <Route path="/:id/*" breadcrumb="Project Details" let:meta navigationHint="details">
             <ProjectDetails projectId={decodeURIComponent(meta.params.id)} />
-          </Route>
-        </Route>
-
-        <Route path="/flows/*" breadcrumb="Flows" navigationHint="root" firstmatch>
-          <Route path="/" breadcrumb="Flows" navigationHint="root">
-            <FlowList/>
-          </Route>
-          <Route path="/create" breadcrumb="Create">
-            <FlowCreate/>
-          </Route>
-          <Route path="/:providerId/:connectionName/:flowId/*" let:meta breadcrumb="Flow Details">
-            <FlowDetails
-              providerId={decodeURIComponent(meta.params.providerId)}
-              connectionName={decodeURIComponent(meta.params.connectionName)}
-              flowId={decodeURIComponent(meta.params.flowId)}
-            />
           </Route>
         </Route>
 

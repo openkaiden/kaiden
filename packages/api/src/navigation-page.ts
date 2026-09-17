@@ -18,10 +18,6 @@
 
 export enum NavigationPage {
   DASHBOARD = 'dashboard',
-  FLOWS = 'flows',
-  FLOW_CREATE = 'flow-create',
-  FLOW_DETAILS = 'flow-details',
-  FLOW_RUN = 'flow-run',
   MCP_INSTALL_FROM_REGISTRY = 'mcp-install-from-registry',
   CONTAINERS = 'containers',
   CONTAINER_EXPORT = 'container-export',

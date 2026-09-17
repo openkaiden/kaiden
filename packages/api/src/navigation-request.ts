@@ -57,19 +57,6 @@ export interface NavigationParameters {
   [NavigationPage.NETWORK]: { name: string; engineId: string };
   [NavigationPage.NETWORK_CREATE]: never;
   [NavigationPage.EXTENSIONS_CATALOG]: { searchTerm?: string };
-  // flows
-  [NavigationPage.FLOWS]: never;
-  [NavigationPage.FLOW_CREATE]: never;
-  [NavigationPage.FLOW_RUN]: {
-    providerId: string;
-    connectionName: string;
-    flowId: string;
-  };
-  [NavigationPage.FLOW_DETAILS]: {
-    providerId: string;
-    connectionName: string;
-    flowId: string;
-  };
   [NavigationPage.MCP_DETAILS]: {
     id: string;
   };

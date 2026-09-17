@@ -62,7 +62,6 @@ import { ExtensionApiVersion } from '/@/plugin/extension/extension-api-version.j
 import { ExtensionLoader } from '/@/plugin/extension/extension-loader.js';
 import { ExtensionWatcher } from '/@/plugin/extension/extension-watcher.js';
 import { FeatureRegistry } from '/@/plugin/feature-registry.js';
-import { FlowManager } from '/@/plugin/flow/flow-manager.js';
 import { KubeGeneratorRegistry } from '/@/plugin/kubernetes/kube-generator-registry.js';
 import { LockedConfiguration } from '/@/plugin/locked-configuration.js';
 import { MCPExchanges } from '/@/plugin/mcp/mcp-exchanges.js';
@@ -230,7 +229,7 @@ import { downloadGuideList } from './learning-center/learning-center.js';
 import { LearningCenterInit } from './learning-center-init.js';
 import { LibpodApiInit } from './libpod-api-enable/libpod-api-init.js';
 import { ListOrganizerRegistry } from './list-organizer.js';
-import { INTERNAL_PROVIDER_ID, MCPRegistry } from './mcp/mcp-registry.js';
+import { MCPRegistry } from './mcp/mcp-registry.js';
 import { MCPSchemaValidator } from './mcp/mcp-schema-validator.js';
 import { MessageBox } from './message-box.js';
 import { ModelCatalogInit } from './model-catalog-init.js';
@@ -616,7 +615,6 @@ export class PluginSystem {
     container.bind<AcpSessionManager>(AcpSessionManager).toSelf().inSingletonScope();
     container.bind<AcpIPCHandler>(AcpIPCHandler).toSelf().inSingletonScope();
     container.bind<SecretManager>(SecretManager).toSelf().inSingletonScope();
-    container.bind<FlowManager>(FlowManager).toSelf().inSingletonScope();
     container.bind<SkillManager>(SkillManager).toSelf().inSingletonScope();
     container.bind<WorkspaceProjectManager>(WorkspaceProjectManager).toSelf().inSingletonScope();
     container.bind<SemanticRouterManager>(SemanticRouterManager).toSelf().inSingletonScope();
@@ -719,9 +717,6 @@ export class PluginSystem {
     secretManager.init();
     const onboardingInit = container.get<OnboardingInit>(OnboardingInit);
     onboardingInit.init();
-
-    const flowManager = container.get<FlowManager>(FlowManager);
-    flowManager.init();
 
     const skillManager = container.get<SkillManager>(SkillManager);
     await skillManager.init();
@@ -985,148 +980,6 @@ export class PluginSystem {
     this.ipcHandle('container-provider-registry:listPods', async (): Promise<PodInfo[]> => {
       return containerProviderRegistry.listPods();
     });
-
-    this.ipcHandle(
-      'flows:delete',
-      async (_listener, providerId: string, connectionName: string, flowId: string): Promise<void> => {
-        // Get the flow provider to use
-        const flowProvider = providerRegistry.getProvider(providerId);
-        const flowConnection: containerDesktopAPI.FlowProviderConnection | undefined =
-          flowProvider.flowConnections.find(({ name }) => name === connectionName);
-        if (!flowConnection) throw new Error(`cannot find flow connection with name ${connectionName}`);
-
-        flowManager.refresh();
-
-        return flowConnection.flow.delete(flowId);
-      },
-    );
-
-    this.ipcHandle(
-      'flows:read',
-      async (_listener, providerId: string, connectionName: string, flowId: string): Promise<string> => {
-        // Get the flow provider to use
-        const flowProvider = providerRegistry.getProvider(providerId);
-        const flowConnection: containerDesktopAPI.FlowProviderConnection | undefined =
-          flowProvider.flowConnections.find(({ name }) => name === connectionName);
-        if (!flowConnection) throw new Error(`cannot find flow connection with name ${connectionName}`);
-
-        return flowConnection.flow.read(flowId);
-      },
-    );
-
-    this.ipcHandle(
-      'flows:generate',
-      async (
-        _listener,
-        providerId: string,
-        connectionName: string,
-        options: containerDesktopAPI.FlowGenerateOptions & { mcp: MCPRemoteServerInfo[] },
-      ): Promise<string> => {
-        const task = taskManager.createTask({
-          title: `Generating flow for ${connectionName}'`,
-        });
-
-        try {
-          // Get the flow provider to use
-          const flowProvider = providerRegistry.getProvider(providerId);
-          const flowConnection: containerDesktopAPI.FlowProviderConnection | undefined =
-            flowProvider.flowConnections.find(({ name }) => name === connectionName);
-          if (!flowConnection) throw new Error(`cannot find flow connection with name ${connectionName}`);
-
-          /**
-           * Painfully recover the headers credentials for a given MCP id
-           */
-          const accumulator: Array<{
-            name: string;
-            type: 'streamable_http';
-            uri: string;
-            headers?: {
-              [key: string]: string;
-            };
-          }> = [];
-          for (const {
-            name,
-            url,
-            infos: { internalProviderId, serverId, remoteId },
-          } of options.mcp) {
-            // skip non-internal (should not happen)
-            if (internalProviderId !== INTERNAL_PROVIDER_ID) continue;
-
-            // Collect the credentials
-            const init = await mcpRegistry.getCredentials(serverId, remoteId);
-
-            accumulator.push({
-              name,
-              type: 'streamable_http',
-              uri: url,
-              headers: init.headers ?? {},
-            });
-          }
-
-          // Generate the raw string
-          const generated = await flowConnection.flow.generate({
-            ...options,
-            mcp: accumulator,
-          });
-
-          // Save it
-          const flowId = await flowConnection.flow.create(generated);
-
-          task.status = 'success';
-
-          return flowId;
-        } catch (err: unknown) {
-          task.status = 'failure';
-          task.error = String(err);
-          throw err;
-        }
-      },
-    );
-
-    this.ipcHandle(
-      'flows:deploy:kubernetes',
-      async (
-        _listener,
-        flow: {
-          providerId: string;
-          connectionName: string;
-          flowId: string;
-        },
-        options: {
-          namespace: string;
-          hideSecrets: boolean;
-          dryrun: boolean;
-          params: Record<string, string>;
-        },
-      ): Promise<string> => {
-        if (!options.dryrun && options.hideSecrets) throw new Error('cannot apply YAML while hidding secrets');
-
-        // Get the flow provider to use
-        const flowProvider = providerRegistry.getProvider(flow.providerId);
-        const flowConnection: containerDesktopAPI.FlowProviderConnection | undefined =
-          flowProvider.flowConnections.find(({ name }) => name === flow.connectionName);
-        if (!flowConnection) throw new Error(`cannot find flow connection with name ${flow.connectionName}`);
-
-        // Generate the Kubernetes YAML
-        const { resources } = await flowConnection.flow.generateKubernetesYAML({
-          flowId: flow.flowId,
-          namespace: options.namespace,
-          hideSecrets: options.hideSecrets,
-          params: options.params,
-        });
-
-        if (options.dryrun) {
-          return resources;
-        }
-
-        const currentContext = kubernetesClient.getCurrentContextName();
-        if (!currentContext) throw new Error('cannot find current context');
-        const objects = await kubernetesClient.applyResourcesFromYAML(currentContext, resources);
-        console.log('[FlowGenerate] created', objects);
-
-        return resources;
-      },
-    );
 
     this.ipcHandle('container-provider-registry:listNetworks', async (): Promise<NetworkInspectInfo[]> => {
       return containerProviderRegistry.listNetworks();

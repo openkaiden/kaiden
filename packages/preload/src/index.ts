@@ -91,9 +91,6 @@ import type { ExtensionDevelopmentFolderInfo } from '/@api/extension-development
 import type { ExtensionInfo } from '/@api/extension-info';
 import type { FeaturedExtension } from '/@api/featured/featured-api';
 import type { FeedbackMessages, FeedbackProperties, GitHubIssue } from '/@api/feedback';
-import type { FlowExecuteInfo } from '/@api/flow-execute-info';
-import type { FlowInfo } from '/@api/flow-info';
-import type { FlowScheduleInfo } from '/@api/flow-schedule-info';
 import type { ItemInfo } from '/@api/help-menu';
 import type { HistoryInfo } from '/@api/history-info';
 import type { IconInfo } from '/@api/icon-info';
@@ -103,8 +100,6 @@ import type { ImageFilesystemLayersUI } from '/@api/image-filesystem-layers';
 import type { ImageInfo, PodmanListImagesOptions } from '/@api/image-info';
 import type { ImageInspectInfo } from '/@api/image-inspect-info';
 import type { ImageSearchOptions, ImageSearchResult, ImageTagsListOptions } from '/@api/image-registry';
-import type { DetectFlowFieldsParams, DetectFlowFieldsResult } from '/@api/inference/detect-flow-fields-schema.ts';
-import type { FlowGenerationParameters } from '/@api/inference/flow-generation-parameters-schema';
 import type { InferenceParameters } from '/@api/inference/InferenceParameters.js';
 import type {
   GenerateKubeResult,
@@ -559,30 +554,6 @@ export function initExposure(): void {
     return ipcInvoke('secret-manager:list-services');
   });
 
-  contextBridge.exposeInMainWorld('listFlows', async (): Promise<Array<FlowInfo>> => {
-    return ipcInvoke('flows:list');
-  });
-  contextBridge.exposeInMainWorld(
-    'scheduleFlow',
-    async (
-      schedulerName: string,
-      flowId: string,
-      providerId: string,
-      connectionName: string,
-      cronExpression: string,
-    ): Promise<void> => {
-      return ipcInvoke('flows:schedule', schedulerName, flowId, providerId, connectionName, cronExpression);
-    },
-  );
-
-  contextBridge.exposeInMainWorld('listExecuteFlows', async (): Promise<Array<FlowExecuteInfo>> => {
-    return ipcInvoke('flows:listExecute');
-  });
-
-  contextBridge.exposeInMainWorld('listScheduledFlows', async (): Promise<Array<FlowScheduleInfo>> => {
-    return ipcInvoke('flows:listSchedules');
-  });
-
   contextBridge.exposeInMainWorld('listSkills', async (): Promise<Array<SkillInfo>> => {
     return ipcInvoke('skill-manager:listSkills');
   });
@@ -706,77 +677,6 @@ export function initExposure(): void {
       return ipcInvoke('scheduler:get-execution', schedulerName, id);
     },
   );
-
-  contextBridge.exposeInMainWorld(
-    'readFlow',
-    async (providerId: string, connectionName: string, flowId: string): Promise<string> => {
-      return ipcInvoke('flows:read', providerId, connectionName, flowId);
-    },
-  );
-
-  contextBridge.exposeInMainWorld(
-    'deleteFlow',
-    async (providerId: string, connectionName: string, flowId: string): Promise<string> => {
-      return ipcInvoke('flows:delete', providerId, connectionName, flowId);
-    },
-  );
-
-  contextBridge.exposeInMainWorld(
-    'flowDispatchLog',
-    async (providerId: string, connectionName: string, flowId: string, taskId: string): Promise<void> => {
-      return ipcInvoke('flows:dispatchLog', providerId, connectionName, flowId, taskId);
-    },
-  );
-
-  contextBridge.exposeInMainWorld('getLogCurrentFlow', async (): Promise<string> => {
-    return ipcInvoke('flows:getLogCurrent');
-  });
-
-  contextBridge.exposeInMainWorld(
-    'generateFlow',
-    async (
-      providerId: string,
-      connectionName: string,
-      options: Omit<containerDesktopAPI.FlowGenerateOptions, 'mcp'> & { mcp: MCPRemoteServerInfo[] },
-    ): Promise<string> => {
-      return ipcInvoke('flows:generate', providerId, connectionName, options);
-    },
-  );
-
-  contextBridge.exposeInMainWorld(
-    'flowDeployKubernetes',
-    async (
-      flow: {
-        providerId: string;
-        connectionName: string;
-        flowId: string;
-      },
-      options: {
-        namespace: string;
-        hideSecrets: boolean;
-        dryrun: boolean;
-        params: Record<string, string>;
-      },
-    ): Promise<string> => {
-      return ipcInvoke('flows:deploy:kubernetes', flow, options);
-    },
-  );
-
-  contextBridge.exposeInMainWorld(
-    'flowExecute',
-    async (flow: {
-      providerId: string;
-      connectionName: string;
-      flowId: string;
-      params?: Record<string, string>;
-    }): Promise<string> => {
-      return ipcInvoke('flows:execute', flow);
-    },
-  );
-
-  contextBridge.exposeInMainWorld('refreshFlows', async (): Promise<void> => {
-    return ipcInvoke('flows:refresh');
-  });
 
   contextBridge.exposeInMainWorld('reconnectContainerProviders', async (): Promise<PodInfo[]> => {
     return ipcInvoke('container-provider-registry:reconnectContainerProviders');
@@ -1592,19 +1492,7 @@ export function initExposure(): void {
     return ipcInvoke('inference:generate', params);
   });
 
-  contextBridge.exposeInMainWorld(
-    'inferenceGenerateFlowParams',
-    async (params: InferenceParameters): Promise<FlowGenerationParameters> => {
-      return ipcInvoke('inference:generateFlowParams', params);
-    },
-  );
 
-  contextBridge.exposeInMainWorld(
-    'inferenceDetectFlowFields',
-    async (params: DetectFlowFieldsParams): Promise<DetectFlowFieldsResult> => {
-      return ipcInvoke('inference:detectFlowFields', params);
-    },
-  );
 
   contextBridge.exposeInMainWorld(
     'createInferenceProviderConnection',

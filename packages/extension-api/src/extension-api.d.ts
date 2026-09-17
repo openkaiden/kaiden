@@ -412,112 +412,6 @@ declare module '@openkaiden/api' {
     vmTypeDisplayName?: string;
   }
 
-  export interface FlowParameter {
-    required: boolean;
-    name: string;
-    description: string;
-    format: string;
-    default?: string;
-  }
-
-  export interface Flow {
-    id: string;
-    path: string;
-    parameters?: Array<FlowParameter>;
-  }
-
-  export interface FlowGenerateKubernetesResult {
-    resources: string;
-  }
-
-  export interface FlowGenerateKubernetesOptions {
-    flowId: string;
-    hideSecrets: boolean;
-    namespace: string;
-    params: Record<string, string>;
-  }
-
-  export interface FlowGenerateCommandLineOptions {
-    flowId: string;
-  }
-
-  export interface FlowExecuteParams {
-    flowId: string;
-    logger: Logger;
-    params?: Record<string, string>;
-  }
-
-  export interface FlowGenerateCommandLineResult {
-    command: string;
-    args: string[];
-    env: Record<string, string>;
-  }
-
-  export interface FlowGenerateOptions {
-    name: string;
-    description: string;
-    /**
-     * system prompt
-     */
-    prompt: string;
-    parameters?: Array<FlowParameter>;
-    instruction: string;
-    model: {
-      providerId: string;
-      label: string;
-    };
-    mcp: Array<{
-      name: string;
-      type: 'streamable_http' | 'sse';
-      uri: string;
-      headers?: {
-        [key: string]: string;
-      };
-    }>;
-  }
-
-  export interface FlowProviderConnection {
-    name: string;
-    displayName?: string;
-    status(): ProviderConnectionStatus;
-    lifecycle?: ProviderConnectionLifecycle;
-    flow: {
-      all(): Promise<Array<Flow>>;
-      onDidChange: Event<void>;
-      /**
-       * @experimental expect change
-       */
-      delete(flowId: string): Promise<void>;
-      /**
-       * @experimental expect change
-       */
-      read(flowId: string): Promise<string>;
-      /**
-       * @experimental expect change
-       * @returns the flowId
-       */
-      create(content: string): Promise<string>;
-      /**
-       * @experimental expect change
-       */
-      generate(options?: FlowGenerateOptions): Promise<string>;
-
-      /**
-       * @experimental expect change
-       */
-      generateCommandLine(options: FlowGenerateCommandLineOptions): Promise<FlowGenerateCommandLineResult>;
-
-      /**
-       * @experimental expect change
-       */
-      generateKubernetesYAML(options: FlowGenerateKubernetesOptions): Promise<FlowGenerateKubernetesResult>;
-      /**
-       * @experimental expect change
-       */
-      execute(options: FlowExecuteParams): Promise<void>;
-    };
-  }
-
   export interface PodCreatePortOptions {
     host_ip: string;
     container_port: number;
@@ -749,7 +643,6 @@ declare module '@openkaiden/api' {
     | VmProviderConnection
     | InferenceProviderConnection
     | RagProviderConnection
-    | FlowProviderConnection
     | ChunkProviderConnection;
 
   // common set of options for creating a provider
@@ -1026,8 +919,6 @@ declare module '@openkaiden/api' {
     registerInferenceProviderConnection(connection: InferenceProviderConnection): Disposable;
     registerRagProviderConnection(connection: RagProviderConnection): Disposable;
 
-    registerFlowProviderConnection(connection: FlowProviderConnection): Disposable;
-
     registerChunkProviderConnection(connection: ChunkProviderConnection): Disposable;
 
     registerSkill(skill: CreateSkillParams): Disposable;
@@ -1207,15 +1098,6 @@ declare module '@openkaiden/api' {
   export interface UnregisterChunkProviderConnectionEvent {
     providerId: string;
     connection: ChunkProviderConnection;
-  }
-
-  export interface RegisterFlowConnectionEvent {
-    providerId: string;
-    connection: FlowProviderConnection;
-  }
-  export interface UnregisterFlowConnectionEvent {
-    providerId: string;
-    connectionName: string;
   }
 
   export interface RegisterContainerConnectionEvent {

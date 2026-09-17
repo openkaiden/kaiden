@@ -482,7 +482,6 @@ function hasConnections(provider: ProviderInfo): boolean {
     provider.vmConnections.length > 0 ||
     provider.inferenceConnections.length > 0 ||
     provider.ragConnections.length > 0 ||
-    provider.flowConnections.length > 0 ||
     provider.chunkConnections.length > 0
   );
 }
@@ -765,20 +764,6 @@ function hasConnections(provider: ProviderInfo): boolean {
               provider={provider}
               connection={ragConnection}
               connectionStatus={containerConnectionStatus.get(getProviderConnectionName(provider, ragConnection))}
-              updateConnectionStatus={updateContainerStatus}
-              addConnectionToRestartingQueue={addConnectionToRestartingQueue}>
-            </PreferencesConnectionActions>
-          </div>
-          {/each}
-          {#each provider.flowConnections as flowConnection, index (index)}
-          <div class="px-5 py-2 w-[240px] border-r border-[var(--pd-content-divider)]" role="region" aria-label={flowConnection.name}>
-            <div class="font-semibold">
-              {flowConnection.name} (Flow)
-            </div>
-            <PreferencesConnectionActions
-              provider={provider}
-              connection={flowConnection}
-              connectionStatus={containerConnectionStatus.get(getProviderConnectionName(provider, flowConnection))}
               updateConnectionStatus={updateContainerStatus}
               addConnectionToRestartingQueue={addConnectionToRestartingQueue}>
             </PreferencesConnectionActions>

@@ -24,7 +24,6 @@ import type {
   ContainerProviderConnectionFactory,
   CreateSkillParams,
   Event,
-  FlowProviderConnection,
   InferenceProviderConnection,
   InferenceProviderConnectionFactory,
   KubernetesProviderConnection,
@@ -66,7 +65,6 @@ export class ProviderImpl implements Provider, IDisposable {
   private vmProviderConnections: Set<VmProviderConnection>;
   private inferenceProviderConnections: Set<InferenceProviderConnection>;
   private ragProviderConnections: Set<RagProviderConnection>;
-  private flowProviderConnections: Set<FlowProviderConnection>;
   private chunkProviderConnections: Set<ChunkProviderConnection>;
 
   // optional factory
@@ -116,7 +114,6 @@ export class ProviderImpl implements Provider, IDisposable {
     this.vmProviderConnections = new Set();
     this.inferenceProviderConnections = new Set();
     this.ragProviderConnections = new Set();
-    this.flowProviderConnections = new Set();
     this.chunkProviderConnections = new Set();
     this._status = providerOptions.status;
     this._version = providerOptions.version;
@@ -255,10 +252,6 @@ export class ProviderImpl implements Provider, IDisposable {
     return Array.from(this.ragProviderConnections.values());
   }
 
-  get flowConnections(): FlowProviderConnection[] {
-    return Array.from(this.flowProviderConnections.values());
-  }
-
   get chunkConnections(): ChunkProviderConnection[] {
     return Array.from(this.chunkProviderConnections.values());
   }
@@ -375,17 +368,6 @@ export class ProviderImpl implements Provider, IDisposable {
     return Disposable.create(() => {
       this._semanticRouterConnectionFactory = undefined;
       this._connectionAuditor = undefined;
-    });
-  }
-
-  registerFlowProviderConnection(connection: FlowProviderConnection): Disposable {
-    this.flowProviderConnections.add(connection);
-    const disposable = this.providerRegistry.registerFlowConnection(this, connection);
-    this.providerRegistry.onDidRegisterFlowConnectionCallback(this, connection);
-    return Disposable.create(() => {
-      this.flowProviderConnections.delete(connection);
-      disposable.dispose();
-      this.providerRegistry.onDidUnregisterFlowConnectionCallback(this, connection);
     });
   }
 

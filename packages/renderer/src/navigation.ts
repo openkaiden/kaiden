@@ -42,22 +42,6 @@ export const handleNavigation = (request: InferredNavigationRequest<NavigationPa
     case NavigationPage.DASHBOARD:
       router.goto('/');
       break;
-    case NavigationPage.FLOWS:
-      router.goto('/flows');
-      break;
-    case NavigationPage.FLOW_CREATE:
-      router.goto(`/flows/create`);
-      break;
-    case NavigationPage.FLOW_DETAILS:
-      router.goto(
-        `/flows/${encodeURIComponent(request.parameters.providerId)}/${encodeURIComponent(request.parameters.connectionName)}/${encodeURIComponent(request.parameters.flowId)}/summary`,
-      );
-      break;
-    case NavigationPage.FLOW_RUN:
-      router.goto(
-        `/flows/${encodeURIComponent(request.parameters.providerId)}/${encodeURIComponent(request.parameters.connectionName)}/${encodeURIComponent(request.parameters.flowId)}/run`,
-      );
-      break;
     case NavigationPage.MCP_INSTALL_FROM_REGISTRY:
       router.goto(`/mcp-install-from-registry/${encodeURIComponent(request.parameters.serverId)}`);
       break;

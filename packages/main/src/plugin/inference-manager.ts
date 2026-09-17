@@ -20,23 +20,13 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import type { LanguageModel, ModelMessage, StopCondition, ToolSet, UIMessage } from 'ai';
-import { convertToModelMessages, generateObject, generateText, isStepCount } from 'ai';
+import { convertToModelMessages, generateText, isStepCount } from 'ai';
 import { inject, injectable } from 'inversify';
 
-import type {
-  DetectFlowFieldsParams,
-  DetectFlowFieldsResult,
-  FlowParameter,
-  FlowParameterAIGenerated,
-} from '/@api/inference/detect-flow-fields-schema.js';
-import { DetectFlowFieldsResultSchema } from '/@api/inference/detect-flow-fields-schema.js';
-import type { FlowGenerationParameters } from '/@api/inference/flow-generation-parameters-schema.js';
-import { FlowGenerationParametersSchema } from '/@api/inference/flow-generation-parameters-schema.js';
 import type { InferenceParameters } from '/@api/inference/InferenceParameters.js';
 
 import { IPCHandle } from './api.js';
 import { FileContentDetector } from './inference/file-content-detector.js';
-import { buildPromptOnlySystemPrompt } from './inference/flow-detect-prompts.js';
 import { MCPManager } from './mcp/mcp-manager.js';
 import { ProviderRegistry } from './provider-registry.js';
 
@@ -55,8 +45,6 @@ export class InferenceManager {
 
   init(): void {
     this.ipcHandle('inference:generate', (_, params) => this.generate(params));
-    this.ipcHandle('inference:generateFlowParams', (_, params) => this.generateFlowParams(params));
-    this.ipcHandle('inference:detectFlowFields', (_, params) => this.detectFlowFields(params));
   }
 
   private convertFilePartForModel(
@@ -152,72 +140,5 @@ export class InferenceManager {
   async generate(params: InferenceParameters): Promise<string> {
     const result = await generateText(await this.getInferenceComponents(params));
     return result.text;
-  }
-
-  async generateFlowParams(params: InferenceParameters): Promise<FlowGenerationParameters> {
-    const result = await generateObject({
-      ...(await this.getInferenceComponents(params)),
-      schema: FlowGenerationParametersSchema,
-    });
-    return result.object;
-  }
-
-  private extractParameterNamesFromPrompt(prompt: string): string[] {
-    const regex = /\{\{(\w+)\}\}/g;
-    const matches = [...prompt.matchAll(regex)];
-    const paramNames = matches.map(match => match[1]).filter((name): name is string => name !== undefined);
-    return [...new Set(paramNames)];
-  }
-
-  private mergeParameters(
-    extracted: FlowParameterAIGenerated[],
-    aiGenerated: FlowParameterAIGenerated[],
-  ): FlowParameter[] {
-    const paramMap = new Map<string, FlowParameterAIGenerated>();
-
-    for (const param of aiGenerated) {
-      paramMap.set(param.name, param);
-    }
-
-    for (const param of extracted) {
-      const existing = paramMap.get(param.name);
-      if (existing) {
-        paramMap.set(param.name, {
-          ...existing,
-          default: param.default ?? existing.default,
-        });
-      }
-    }
-
-    return Array.from(paramMap.values()).map(param => ({
-      ...param,
-      required: param.default === undefined,
-    }));
-  }
-
-  async detectFlowFields(params: DetectFlowFieldsParams): Promise<DetectFlowFieldsResult> {
-    const internalProviderId = this.providerRegistry.getMatchingProviderInternalId(params.providerId);
-    const sdk = this.providerRegistry.getInferenceSDK(internalProviderId, params.connectionId);
-    const model = sdk.languageModel(params.modelId);
-
-    const systemPrompt = buildPromptOnlySystemPrompt(params.prompt);
-
-    const result = await generateObject({
-      model,
-      prompt: params.prompt,
-      instructions: systemPrompt,
-      schema: DetectFlowFieldsResultSchema,
-    });
-
-    const { prompt: updatedPrompt, parameters: aiParameters } = result.object;
-
-    const parameterNamesInPrompt = this.extractParameterNamesFromPrompt(updatedPrompt);
-    const filteredParameters = aiParameters.filter(param => parameterNamesInPrompt.includes(param.name));
-    const mergedParameters = this.mergeParameters([], filteredParameters);
-
-    return {
-      prompt: updatedPrompt,
-      parameters: mergedParameters,
-    };
   }
 }

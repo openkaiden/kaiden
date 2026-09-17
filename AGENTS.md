@@ -4,7 +4,7 @@ This file provides guidance to AI code assistants when working with code in this
 
 ## Project Overview
 
-Kaiden is an Electron-based desktop application built with Svelte that provides AI-powered container and Kubernetes management capabilities. It integrates with multiple AI providers (Gemini, OpenAI-compatible services, OpenShift AI) and supports flow execution through providers like Goose. The application also implements the Model Context Protocol (MCP) for AI agent integration.
+Kaiden is an Electron-based desktop application built with Svelte that provides AI-powered container and Kubernetes management capabilities. It integrates with multiple AI providers (Gemini, OpenAI-compatible services, OpenShift AI). The application also implements the Model Context Protocol (MCP) for AI agent integration.
 
 ## Core Architecture
 
@@ -30,8 +30,6 @@ All major services are registered as singletons in the DI container during initi
 - `ContainerProviderRegistry`: Handles Docker/Podman container operations
 - `KubernetesClient`: Kubernetes cluster management
 - `MCPManager` and `MCPRegistry`: Model Context Protocol integration
-- `FlowManager`: Manages flow execution with providers like Goose
-- `ChatManager`: AI chat functionality
 - `ConfigurationRegistry`: Settings and configuration management
 
 ### Extensions
@@ -42,7 +40,6 @@ Extensions are located in the `extensions/` directory and follow a standard stru
 - Extensions must declare `engines.kaiden` version compatibility
 - Extensions can contribute:
   - Inference providers (Gemini, OpenAI-compatible, OpenShift AI)
-  - Flow providers (Goose)
   - MCP registries
   - Configuration properties
 - Extensions are built using Vite and export a standard activation API
@@ -50,7 +47,7 @@ Extensions are located in the `extensions/` directory and follow a standard stru
 Available built-in extensions:
 
 - `gemini`: Google Gemini AI provider integration
-- `goose`: Goose flow execution provider
+- `goose`: Goose agent provider
 - `mcp-registries`: MCP server registries
 - `openai-compatible`: OpenAI-compatible API support
 - `openshift-ai`: OpenShift AI platform integration
@@ -59,7 +56,7 @@ Available built-in extensions:
 
 Extensions interact with Kaiden through `@openkaiden/api` (`packages/extension-api`), which provides TypeScript definitions for:
 
-- Provider registration (inference, container, Kubernetes, VM, flow)
+- Provider registration (inference, container, Kubernetes, VM)
 - Configuration management
 - Command and menu contributions
 - UI components (webviews, views, status bar items)
@@ -225,16 +222,6 @@ Configuration is managed through `ConfigurationRegistry`:
 - Scopes: `DEFAULT`, `ContainerProviderConnection`, `KubernetesProviderConnection`, `InferenceProviderConnection`, `InferenceProviderConnectionFactory`
 - Configuration can be experimental and requires explicit enablement
 - Values stored and retrieved with dot notation (e.g., `gemini.factory.apiKey`)
-
-### Flow Execution
-
-Flows are AI-powered automation workflows:
-
-- Providers register flow capabilities through `ProviderRegistry`
-- `FlowManager` coordinates flow generation, execution, and lifecycle
-- Flows can be deployed to Kubernetes (YAML generation)
-- Goose extension provides flow runtime capabilities
-- MCP servers can be connected to flows for tool access
 
 ### MCP (Model Context Protocol) Integration
 

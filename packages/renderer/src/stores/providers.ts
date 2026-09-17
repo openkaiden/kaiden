@@ -38,8 +38,6 @@ const windowEvents = [
   'provider-unregister-kubernetes-connection',
   'provider-register-vm-connection',
   'provider-unregister-vm-connection',
-  'provider-register-flow-connection',
-  'provider-unregister-flow-connection',
   'provider-register-inference-connection',
   'provider-register-mcp-connection',
   'provider-register-rag-connection',

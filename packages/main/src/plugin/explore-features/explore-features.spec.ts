@@ -131,7 +131,6 @@ const providerInfoMock: ProviderInfo = {
   images: {},
   installationSupport: false,
   cleanupSupport: false,
-  flowConnections: [],
   ragConnections: [],
   chunkConnections: [],
   ragProviderConnectionCreation: false,

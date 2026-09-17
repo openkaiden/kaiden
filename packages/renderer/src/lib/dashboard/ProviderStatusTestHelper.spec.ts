@@ -55,7 +55,6 @@ export function verifyStatus<
     inferenceConnections: [],
     ragConnections: [],
     chunkConnections: [],
-    flowConnections: [],
     inferenceProviderConnectionCreation: false,
     inferenceProviderConnectionInitialization: false,
     ragProviderConnectionCreation: false,
