@@ -1492,8 +1492,6 @@ export function initExposure(): void {
     return ipcInvoke('inference:generate', params);
   });
 
-
-
   contextBridge.exposeInMainWorld(
     'createInferenceProviderConnection',
     async (
