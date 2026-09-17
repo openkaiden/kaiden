@@ -20,7 +20,7 @@ import { access, lstat, readFile, realpath, rm, writeFile } from 'node:fs/promis
 import { homedir, tmpdir } from 'node:os';
 import { basename, isAbsolute, join, posix, resolve } from 'node:path';
 
-import type { ExecInteractiveSession, SandboxPhaseName } from '@nvidia/openshell-sdk';
+import type { ExecInteractiveSession } from '@nvidia/openshell-sdk';
 import type { Disposable } from '@openkaiden/api';
 import type { WebContents } from 'electron';
 import { inject, injectable, preDestroy } from 'inversify';
@@ -36,6 +36,7 @@ import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-
 import { buildPolicyObject, rewriteLocalhostUrl } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
+import { mapSdkSandboxRef } from '/@/plugin/openshell-cli/openshell-sdk-sandbox-mapper.js';
 import { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import { TaskManager } from '/@/plugin/tasks/task-manager.js';
@@ -70,18 +71,6 @@ const MOUNT_HOME_PREFIX = '$HOME';
 // Timeouts for sandbox startup and deletion cleanup for sdk.
 const SANDBOX_READY_TIMEOUT_SECONDS = 300;
 const SANDBOX_DELETE_TIMEOUT_SECONDS = 120;
-
-const SDK_PHASE_MAP: Record<SandboxPhaseName, SandboxInfo['phase']> = {
-  unspecified: 'Unspecified',
-  provisioning: 'Provisioning',
-  ready: 'Ready',
-  error: 'Error',
-  deleting: 'Deleting',
-  unknown: 'Unknown',
-  starting: 'Starting',
-  stopping: 'Stopping',
-  stopped: 'Stopped',
-};
 
 interface WorkspaceTerminalSession {
   callbackId: number;
@@ -640,13 +629,7 @@ export class AgentWorkspaceManager implements Disposable {
       try {
         const client = await this.openshellSdkClientManager.getClient(gateway.name);
         const refs = await client.sandbox.list();
-        const sandboxes: SandboxInfo[] = refs.map(ref => ({
-          id: ref.id,
-          name: ref.name,
-          phase: SDK_PHASE_MAP[ref.phase] ?? 'Unknown',
-          labels: ref.labels,
-          resource_version: Number(ref.resourceVersion),
-        }));
+        const sandboxes: SandboxInfo[] = refs.map(mapSdkSandboxRef);
         for (const sandbox of sandboxes) {
           if (sandbox.labels) {
             sandbox.sourcePath = decodeWorkspaceLabels(sandbox.labels);

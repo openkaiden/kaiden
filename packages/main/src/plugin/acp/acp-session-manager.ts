@@ -23,13 +23,14 @@ import { basename, extname, join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 
 import * as acp from '@agentclientprotocol/sdk';
-import type { ExecInteractiveSession, SandboxPhaseName } from '@nvidia/openshell-sdk';
+import type { ExecInteractiveSession } from '@nvidia/openshell-sdk';
 import { inject, injectable, preDestroy } from 'inversify';
 
 import { AgentRegistry } from '/@/plugin/agent-registry.js';
 import { Directories } from '/@/plugin/directories.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
+import { mapSdkSandboxRef } from '/@/plugin/openshell-cli/openshell-sdk-sandbox-mapper.js';
 import type {
   AcpAttachment,
   AcpElicitationResponseData,
@@ -50,17 +51,7 @@ import { createAcpDebug } from './acp-debug.js';
 
 const MAX_STDERR_LINES = 100;
 const PTY_COLS = 65_535;
-const SDK_PHASE_MAP: Record<SandboxPhaseName, SandboxInfo['phase']> = {
-  unspecified: 'Unspecified',
-  provisioning: 'Provisioning',
-  ready: 'Ready',
-  error: 'Error',
-  deleting: 'Deleting',
-  unknown: 'Unknown',
-  starting: 'Starting',
-  stopping: 'Stopping',
-  stopped: 'Stopped',
-};
+
 // eslint-disable-next-line sonarjs/publicly-writable-directories
 const ATTACHMENT_UPLOAD_DIR = '/sandbox/.kaiden-attachments';
 
@@ -1356,12 +1347,6 @@ export class AcpSessionManager {
   async #listSandboxes(): Promise<SandboxInfo[]> {
     const client = await this.sdkClientManager.getClient();
     const refs = await client.sandbox.list();
-    return refs.map(ref => ({
-      id: ref.id,
-      name: ref.name,
-      phase: SDK_PHASE_MAP[ref.phase] ?? 'Unknown',
-      labels: ref.labels,
-      resource_version: Number(ref.resourceVersion),
-    }));
+    return refs.map(mapSdkSandboxRef);
   }
 }
