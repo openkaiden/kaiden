@@ -20,6 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { stripVTControlCharacters } from 'node:util';
 
 import * as acp from '@agentclientprotocol/sdk';
@@ -878,7 +879,7 @@ export class AcpSessionManager {
       for (const attachment of attachments) {
         blocks.push({
           type: 'resource_link',
-          uri: `file://${attachment.remotePath}`,
+          uri: pathToFileURL(attachment.remotePath).href,
           name: attachment.fileName,
           mimeType: attachment.mimeType,
         });

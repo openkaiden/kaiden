@@ -17,6 +17,7 @@
  ***********************************************************************/
 
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import * as acp from '@agentclientprotocol/sdk';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -329,6 +330,32 @@ describe('AcpSessionManager', () => {
         mimeType: 'text/plain',
       });
       expect(blocks[1]).toEqual({ type: 'text', text: 'summarize this' });
+    });
+
+    test('encodes reserved characters in resource_link URI', () => {
+      const remotePath = '/tmp/kaiden-attachments/uuid-789/notes#final.md';
+      const attachments = [
+        {
+          filePath: '/local/notes#final.md',
+          fileName: 'notes#final.md',
+          mimeType: 'text/markdown',
+          remotePath,
+        },
+      ];
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const blocks = (manager as any).buildContentBlocks('read this', attachments);
+
+      expect(blocks).toHaveLength(2);
+      expect(blocks[0]).toEqual({
+        type: 'resource_link',
+        uri: pathToFileURL(remotePath).href,
+        name: 'notes#final.md',
+        mimeType: 'text/markdown',
+      });
+      // The '#' must be percent-encoded so it is not parsed as a URI fragment
+      expect(blocks[0].uri).toBe('file:///tmp/kaiden-attachments/uuid-789/notes%23final.md');
+      expect(blocks[1]).toEqual({ type: 'text', text: 'read this' });
     });
 
     test('creates only text block when no attachments', () => {
