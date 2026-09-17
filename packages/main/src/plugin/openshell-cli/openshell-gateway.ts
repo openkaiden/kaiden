@@ -549,7 +549,7 @@ export class OpenshellGateway implements Disposable {
     const cleanup = (): void => {
       if (this.#gatewayProcesses.get(name) === gatewayProcess) {
         this.#gatewayProcesses.delete(name);
-        pidWritten.then(() => unlink(pidPath).catch(() => {}));
+        pidWritten.then(() => unlink(pidPath).catch(() => {})).catch(() => {});
       }
     };
     gatewayProcess.once('exit', cleanup);
