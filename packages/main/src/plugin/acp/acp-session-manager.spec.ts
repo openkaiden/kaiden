@@ -333,7 +333,7 @@ describe('AcpSessionManager', () => {
     });
 
     test('encodes reserved characters in resource_link URI', () => {
-      const remotePath = '/tmp/kaiden-attachments/uuid-789/notes#final.md';
+      const remotePath = '/sandbox/.kaiden-attachments/uuid-789/notes#final.md';
       const attachments = [
         {
           filePath: '/local/notes#final.md',
@@ -354,7 +354,7 @@ describe('AcpSessionManager', () => {
         mimeType: 'text/markdown',
       });
       // The '#' must be percent-encoded so it is not parsed as a URI fragment
-      expect(blocks[0].uri).toBe('file:///tmp/kaiden-attachments/uuid-789/notes%23final.md');
+      expect(blocks[0].uri).toBe('file:///sandbox/.kaiden-attachments/uuid-789/notes%23final.md');
       expect(blocks[1]).toEqual({ type: 'text', text: 'read this' });
     });
 
