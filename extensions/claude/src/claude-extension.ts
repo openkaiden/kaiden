@@ -29,7 +29,6 @@ export const PROVIDER_ID = 'claude';
 export const CLAUDE_SETTINGS_PATH = '.claude/settings.json';
 export const CLAUDE_JSON_PATH = '.claude.json';
 const WORKSPACE_SOURCES_PATH = '/sandbox';
-const ATTACHMENTS_READ_PERMISSION = 'Read(/tmp/kaiden-attachments/**)';
 
 function jsonCodec<T extends z.ZodType>(schema: T): z.ZodCodec<z.ZodString, T> {
   return z.codec(z.string(), schema, {
@@ -50,14 +49,9 @@ function jsonCodec<T extends z.ZodType>(schema: T): z.ZodCodec<z.ZodString, T> {
   });
 }
 
-const PermissionsSchema = z.looseObject({
-  allow: z.array(z.string()).optional(),
-});
-
 const ClaudeSettingsCodec = jsonCodec(
   z.looseObject({
     model: z.string().optional(),
-    permissions: PermissionsSchema.optional(),
   }),
 );
 
@@ -161,15 +155,6 @@ export class ClaudeExtension {
         if (settingsFile) {
           const config = ClaudeSettingsCodec.decode(await settingsFile.read());
           config.model = context.model.model.label;
-
-          const existingAllow = config.permissions?.allow ?? [];
-          if (!existingAllow.includes(ATTACHMENTS_READ_PERMISSION)) {
-            config.permissions = {
-              ...config.permissions,
-              allow: [...existingAllow, ATTACHMENTS_READ_PERMISSION],
-            };
-          }
-
           await settingsFile.update(ClaudeSettingsCodec.encode(config));
         }
 

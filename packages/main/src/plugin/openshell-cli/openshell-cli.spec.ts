@@ -220,11 +220,11 @@ describe('uploadToSandbox', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.mocked(exec.exec).mockResolvedValue(mockExecResult(''));
 
-    await openshellCli.uploadToSandbox('my-sandbox', '/local/image.png', '/tmp/kaiden-attachments/abc');
+    await openshellCli.uploadToSandbox('my-sandbox', '/local/image.png', '/sandbox/.kaiden-attachments/abc');
 
     expect(exec.exec).toHaveBeenCalledWith(
       OPENSHELL_CLI_PATH,
-      ['sandbox', 'upload', 'my-sandbox', '/local/image.png', '/tmp/kaiden-attachments/abc'],
+      ['sandbox', 'upload', 'my-sandbox', '/local/image.png', '/sandbox/.kaiden-attachments/abc'],
       undefined,
     );
   });

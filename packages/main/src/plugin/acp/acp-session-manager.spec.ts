@@ -199,12 +199,12 @@ describe('AcpSessionManager', () => {
       expect(openshellCli.uploadToSandbox).toHaveBeenCalledWith(
         'test-sandbox',
         '/local/photo.png',
-        expect.stringContaining('/tmp/kaiden-attachments/'),
+        expect.stringContaining('/sandbox/.kaiden-attachments/'),
         undefined,
       );
       expect(result).toHaveLength(1);
       expect(result[0].isText).toBe(false);
-      expect(result[0].remotePath).toMatch(/\/tmp\/kaiden-attachments\/.*\/photo\.png/);
+      expect(result[0].remotePath).toMatch(/\/sandbox\/\.kaiden-attachments\/.*\/photo\.png/);
     });
 
     test('reads text attachments inline without uploading', async () => {
@@ -231,7 +231,7 @@ describe('AcpSessionManager', () => {
 
       expect(openshellCli.uploadToSandbox).toHaveBeenCalled();
       expect(result[0].isText).toBe(false);
-      expect(result[0].remotePath).toMatch(/\/tmp\/kaiden-attachments\/.*\/doc\.pdf/);
+      expect(result[0].remotePath).toMatch(/\/sandbox\/\.kaiden-attachments\/.*\/doc\.pdf/);
     });
 
     test('returns undefined when no attachments', async () => {
@@ -251,7 +251,7 @@ describe('AcpSessionManager', () => {
       expect(openshellCli.uploadToSandbox).toHaveBeenCalledWith(
         'test-sandbox',
         '/local/photo.png',
-        expect.stringContaining('/tmp/kaiden-attachments/'),
+        expect.stringContaining('/sandbox/.kaiden-attachments/'),
         'my-gateway',
       );
     });
@@ -265,7 +265,7 @@ describe('AcpSessionManager', () => {
           fileName: 'photo.png',
           mimeType: 'image/png',
           isText: false,
-          remotePath: '/tmp/kaiden-attachments/uuid-123/photo.png',
+          remotePath: '/sandbox/.kaiden-attachments/uuid-123/photo.png',
         },
       ];
 
@@ -275,7 +275,7 @@ describe('AcpSessionManager', () => {
       expect(blocks).toHaveLength(2);
       expect(blocks[0]).toEqual({
         type: 'resource_link',
-        uri: 'file:///tmp/kaiden-attachments/uuid-123/photo.png',
+        uri: 'file:///sandbox/.kaiden-attachments/uuid-123/photo.png',
         name: 'photo.png',
         mimeType: 'image/png',
       });

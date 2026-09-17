@@ -50,8 +50,7 @@ import { createAcpDebug } from './acp-debug.js';
 
 const MAX_STDERR_LINES = 100;
 const PTY_COLS = 65_535;
-// eslint-disable-next-line sonarjs/publicly-writable-directories
-const ATTACHMENT_UPLOAD_DIR = '/tmp/kaiden-attachments';
+const ATTACHMENT_UPLOAD_DIR = '/sandbox/.kaiden-attachments';
 
 const debugPty = createAcpDebug('pty');
 const debugProtocol = createAcpDebug('protocol');

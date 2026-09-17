@@ -142,74 +142,7 @@ describe('ClaudeExtension', () => {
 
       expect(updateMock).toHaveBeenCalledOnce();
       const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
-      expect(written).toEqual({
-        model: 'claude-sonnet-4-20250514',
-        permissions: { allow: ['Read(/tmp/kaiden-attachments/**)'] },
-      });
-    });
-
-    test('grants read access to kaiden-attachments', async () => {
-      await claudeExtension.activate();
-      const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
-
-      const updateMock = vi.fn();
-      const configFile: AgentConfigurationFile = {
-        path: CLAUDE_SETTINGS_PATH,
-        read: vi.fn().mockResolvedValue('{}'),
-        update: updateMock,
-      };
-
-      await agent.preWorkspaceStart(createContext([configFile]));
-
-      const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
-      expect(written.permissions).toEqual({
-        allow: ['Read(/tmp/kaiden-attachments/**)'],
-      });
-    });
-
-    test('preserves existing permissions when adding attachments read access', async () => {
-      await claudeExtension.activate();
-      const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
-
-      const updateMock = vi.fn();
-      const existingConfig = JSON.stringify({
-        permissions: {
-          allow: ['Bash(ls)'],
-        },
-      });
-      const configFile: AgentConfigurationFile = {
-        path: CLAUDE_SETTINGS_PATH,
-        read: vi.fn().mockResolvedValue(existingConfig),
-        update: updateMock,
-      };
-
-      await agent.preWorkspaceStart(createContext([configFile]));
-
-      const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
-      expect(written.permissions.allow).toContain('Bash(ls)');
-      expect(written.permissions.allow).toContain('Read(/tmp/kaiden-attachments/**)');
-    });
-
-    test('does not duplicate attachments permission if already present', async () => {
-      await claudeExtension.activate();
-      const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
-
-      const updateMock = vi.fn();
-      const existingConfig = JSON.stringify({
-        permissions: {
-          allow: ['Read(/tmp/kaiden-attachments/**)'],
-        },
-      });
-      const configFile: AgentConfigurationFile = {
-        path: CLAUDE_SETTINGS_PATH,
-        read: vi.fn().mockResolvedValue(existingConfig),
-        update: updateMock,
-      };
-
-      await agent.preWorkspaceStart(createContext([configFile]));
-
-      const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
-      expect(written.permissions.allow).toEqual(['Read(/tmp/kaiden-attachments/**)']);
+      expect(written).toEqual({ model: 'claude-sonnet-4-20250514' });
     });
 
     test('preserves existing config fields', async () => {
