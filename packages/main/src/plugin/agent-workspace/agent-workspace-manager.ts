@@ -166,8 +166,8 @@ export class AgentWorkspaceManager implements Disposable {
         }
       }
 
-      const secretName = await this.ensureModelSecret(options);
-      const workspaceId = await this.createOpenshell(options, gateway, secretName);
+      await this.ensureModelSecret(options);
+      const workspaceId = await this.createOpenshell(options, gateway);
       task.status = 'success';
       return workspaceId;
     } catch (err: unknown) {
@@ -181,11 +181,7 @@ export class AgentWorkspaceManager implements Disposable {
     }
   }
 
-  private async createOpenshell(
-    options: AgentWorkspaceCreateOptions,
-    gateway: GatewayInfo,
-    secretName?: string,
-  ): Promise<AgentWorkspaceId> {
+  private async createOpenshell(options: AgentWorkspaceCreateOptions, gateway: GatewayInfo): Promise<AgentWorkspaceId> {
     const connectionInfo = this.providerRegistry.getInferenceConnectionCredentials(options.model);
 
     const modelName = options.model.split('::')[1] ?? '';
@@ -234,21 +230,6 @@ export class AgentWorkspaceManager implements Disposable {
 
     const skillUploads = await this.buildOpenshellSkillUploads(options.skills, agent.destinationSkillsFolder);
 
-    if (secretName !== undefined) {
-      const connection = this.providerRegistry.getInferenceConnection(options.model);
-      if (connection) {
-        const provider = this.providerRegistry.getProvider(connection?.providerId);
-        const { connectionProperties } = this.secretManager.getConnectionProperties(connection.connection, provider);
-        const hasFlags = connectionProperties.find(([fullKey]) => fullKey.endsWith('._flags'));
-        if (hasFlags) {
-          await this.openshellCli.setInference({
-            provider: secretName,
-            model: modelName,
-          });
-        }
-      }
-    }
-
     const workspaceFiles = await this.buildOpenshellFilesystem(options.sourcePath, workspace, supportsMounts);
     const skillFiles = await partitionOpenshellUploads(skillUploads, { supportsMounts, readOnly: true });
     const uploads = this.dedupeOpenshellUploads([
@@ -265,14 +246,6 @@ export class AgentWorkspaceManager implements Disposable {
         return acc;
       }, {});
     const t0 = performance.now();
-
-    const v2Globally = await this.openshellCli.isV2ProviderEnabled();
-    if (!v2Globally) {
-      await this.openshellCli.enableV2Provider();
-    }
-
-    const tV2 = performance.now();
-    console.log(`[workspace-timing] enableV2Provider: ${(tV2 - t0).toFixed(0)}ms`);
 
     const sdkClient = await this.openshellSdkClientManager.getClient(options.gateway);
     await sdkClient.sandbox.create({
@@ -300,7 +273,7 @@ export class AgentWorkspaceManager implements Disposable {
     this.apiSender.send('agent-workspace-update');
     await sdkClient.sandbox.waitReady(sandboxName, SANDBOX_READY_TIMEOUT_SECONDS);
     const tSandbox = performance.now();
-    console.log(`[workspace-timing] createSandbox: ${(tSandbox - tV2).toFixed(0)}ms`);
+    console.log(`[workspace-timing] createSandbox: ${(tSandbox - t0).toFixed(0)}ms`);
 
     try {
       for (const upload of uploads) {

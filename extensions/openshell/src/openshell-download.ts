@@ -47,7 +47,7 @@ export interface GitHubArtifactDownload {
 
 export const OPENSHELL_DOWNLOAD: GitHubArtifactDownload = {
   name: 'openshell',
-  repository: 'NVIDIA/OpenShell',
+  repository: 'jeffmaury/openshell-dist',
   assets: {
     'darwin-arm64': [
       { assetName: 'openshell-aarch64-apple-darwin.tar.gz', binaryName: 'openshell' },

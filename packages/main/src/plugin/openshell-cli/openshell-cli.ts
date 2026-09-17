@@ -38,9 +38,9 @@ import {
   type OpenshellProfile,
   OpenshellProfileSchema,
   type OpenshellProviderInfo,
-  OpenshellProviderInfoSchema,
+  OpenshellProviderInfoListSchema,
   type SandboxInfo,
-  SandboxInfoSchema,
+  SandboxInfoListSchema,
   type SetInferenceOptions,
 } from '/@api/openshell-gateway-info.js';
 
@@ -173,7 +173,7 @@ export class OpenshellCli {
       args.push('-g', gatewayName);
     }
     const data = await this.execCLI<unknown>(args);
-    return z.array(SandboxInfoSchema).parse(data);
+    return SandboxInfoListSchema.parse(data).sandboxes;
   }
 
   async startSandbox(name: string): Promise<void> {
@@ -353,7 +353,7 @@ export class OpenshellCli {
       args.push('-g', gateway);
     }
     const data = await this.execCLI<unknown>(args);
-    return z.array(OpenshellProviderInfoSchema).parse(data);
+    return OpenshellProviderInfoListSchema.parse(data).providers;
   }
 
   async listProfiles(): Promise<OpenshellProfile[]> {
