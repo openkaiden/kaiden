@@ -19,7 +19,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { basename, extname, join } from 'node:path';
+import { basename, join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 
 import * as acp from '@agentclientprotocol/sdk';
@@ -62,9 +62,7 @@ interface PendingRequest {
 }
 
 interface UploadedAttachment extends AcpAttachment {
-  isText: boolean;
-  textContent?: string;
-  remotePath?: string;
+  remotePath: string;
 }
 
 interface AcpSession {
@@ -865,19 +863,10 @@ export class AcpSessionManager {
 
     const results: UploadedAttachment[] = [];
     for (const attachment of attachments) {
-      const isText =
-        attachment.mimeType.startsWith('text/') ||
-        AcpSessionManager.TEXT_EXTENSIONS.has(extname(attachment.filePath).toLowerCase());
-
-      if (isText) {
-        const data = await readFile(attachment.filePath, 'utf-8');
-        results.push({ ...attachment, isText: true, textContent: data });
-      } else {
-        const destDir = `${ATTACHMENT_UPLOAD_DIR}/${randomUUID()}/`;
-        await this.openshellCli.uploadToSandbox(sandboxName, attachment.filePath, destDir, gatewayName);
-        const remotePath = `${destDir}${basename(attachment.filePath)}`;
-        results.push({ ...attachment, isText: false, remotePath });
-      }
+      const destDir = `${ATTACHMENT_UPLOAD_DIR}/${randomUUID()}/`;
+      await this.openshellCli.uploadToSandbox(sandboxName, attachment.filePath, destDir, gatewayName);
+      const remotePath = `${destDir}${basename(attachment.filePath)}`;
+      results.push({ ...attachment, remotePath });
     }
     return results;
   }
@@ -887,70 +876,18 @@ export class AcpSessionManager {
 
     if (attachments) {
       for (const attachment of attachments) {
-        if (attachment.isText) {
-          blocks.push({
-            type: 'resource',
-            resource: {
-              uri: `file://${attachment.remotePath ?? attachment.filePath}`,
-              text: attachment.textContent!,
-              mimeType: attachment.mimeType,
-            },
-          });
-        } else {
-          blocks.push({
-            type: 'resource_link',
-            uri: `file://${attachment.remotePath!}`,
-            name: attachment.fileName,
-            mimeType: attachment.mimeType,
-          });
-        }
+        blocks.push({
+          type: 'resource_link',
+          uri: `file://${attachment.remotePath}`,
+          name: attachment.fileName,
+          mimeType: attachment.mimeType,
+        });
       }
     }
 
     blocks.push({ type: 'text', text });
     return blocks;
   }
-
-  private static readonly TEXT_EXTENSIONS = new Set([
-    '.txt',
-    '.md',
-    '.json',
-    '.yaml',
-    '.yml',
-    '.xml',
-    '.csv',
-    '.tsv',
-    '.js',
-    '.ts',
-    '.jsx',
-    '.tsx',
-    '.py',
-    '.rb',
-    '.go',
-    '.rs',
-    '.java',
-    '.c',
-    '.cpp',
-    '.h',
-    '.hpp',
-    '.cs',
-    '.swift',
-    '.kt',
-    '.sh',
-    '.bash',
-    '.html',
-    '.css',
-    '.scss',
-    '.less',
-    '.sql',
-    '.toml',
-    '.ini',
-    '.cfg',
-    '.env',
-    '.log',
-    '.svelte',
-    '.vue',
-  ]);
 
   private extractModels(session: AcpSession, newSessionResponse: unknown): void {
     const raw = newSessionResponse as {
