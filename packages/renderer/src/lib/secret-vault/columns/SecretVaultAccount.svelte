@@ -1,8 +1,8 @@
 <script lang="ts">
-import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
+import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
 
 interface Props {
-  object: SecretVaultInfo;
+  object: SecretVaultInfoUI;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

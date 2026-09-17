@@ -2,13 +2,13 @@
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
 import { getSecretIcon, getServiceLabel } from '/@/lib/secret-vault/secret-vault-utils';
+import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
 import Badge from '/@/lib/ui/Badge.svelte';
 import { handleNavigation } from '/@/navigation';
 import { NavigationPage } from '/@api/navigation-page';
-import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 
 interface Props {
-  object: SecretVaultInfo;
+  object: SecretVaultInfoUI;
 }
 
 let { object }: Props = $props();

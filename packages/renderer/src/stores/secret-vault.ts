@@ -17,22 +17,22 @@
  ***********************************************************************/
 
 import type { Writable } from 'svelte/store';
-import { derived, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 
+import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
 import { findMatchInLeaves } from '/@/stores/search-util';
 import type { GatewaySecretInfo } from '/@api/secret-info';
-import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 
 import { EventStore } from './event-store';
 
-function secretInfoToVaultInfo(info: GatewaySecretInfo): SecretVaultInfo {
+function secretInfoToVaultInfo(info: GatewaySecretInfo): SecretVaultInfoUI {
   return {
     ...info,
     id: `${info.gateway}/${info.name}`,
   };
 }
 
-export const secretVaultInfos: Writable<readonly SecretVaultInfo[]> = writable([]);
+export const secretVaultInfos: Writable<readonly SecretVaultInfoUI[]> = writable([]);
 
 export const secretVaultSearchPattern = writable('');
 
@@ -57,6 +57,14 @@ export const filteredSecretVaultInfos = derived(
   },
 );
 
+export function setSecretActionError(id: string, error: string): void {
+  secretVaultInfos.update(secrets => secrets.map(s => (s.id === id ? { ...s, actionError: error } : s)));
+}
+
+export function clearSecretActionError(id: string): void {
+  secretVaultInfos.update(secrets => secrets.map(s => (s.id === id ? { ...s, actionError: undefined } : s)));
+}
+
 let readyToUpdate = false;
 
 async function checkForUpdate(eventName: string): Promise<boolean> {
@@ -66,12 +74,20 @@ async function checkForUpdate(eventName: string): Promise<boolean> {
   return readyToUpdate;
 }
 
-const listSecrets = async (): Promise<readonly SecretVaultInfo[]> => {
+const listSecrets = async (): Promise<readonly SecretVaultInfoUI[]> => {
   const items = await window.listSecrets();
-  return items.map(secretInfoToVaultInfo);
+  const current = get(secretVaultInfos);
+  return items.map(item => {
+    const vaultInfo = secretInfoToVaultInfo(item);
+    const existing = current.find(s => s.id === vaultInfo.id);
+    if (existing?.actionError) {
+      vaultInfo.actionError = existing.actionError;
+    }
+    return vaultInfo;
+  });
 };
 
-export const secretVaultEventStore = new EventStore<readonly SecretVaultInfo[]>(
+export const secretVaultEventStore = new EventStore<readonly SecretVaultInfoUI[]>(
   'secret-vault',
   secretVaultInfos,
   checkForUpdate,

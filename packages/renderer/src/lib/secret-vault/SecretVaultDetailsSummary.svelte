@@ -1,11 +1,11 @@
 <script lang="ts">
 import { getServiceLabel } from '/@/lib/secret-vault/secret-vault-utils';
+import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
 import { allOpenshellSandboxes } from '/@/stores/openshell-sandboxes';
 import type { AgentWorkspaceConfiguration } from '/@api/agent-workspace-info';
-import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 
 interface Props {
-  secretInfo: SecretVaultInfo | undefined;
+  secretInfo: SecretVaultInfoUI | undefined;
 }
 
 let { secretInfo }: Props = $props();

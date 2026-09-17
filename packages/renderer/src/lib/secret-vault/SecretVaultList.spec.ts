@@ -20,23 +20,24 @@ import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
+import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
 import { openshellGateways } from '/@/stores/openshell-gateways';
 import { secretVaultInfos, secretVaultSearchPattern, selectedGateway } from '/@/stores/secret-vault';
 import type { GatewayInfo } from '/@api/openshell-gateway-info';
-import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 
 import SecretVaultList from './SecretVaultList.svelte';
 
-const localSecret: SecretVaultInfo = {
+const localSecret: SecretVaultInfoUI = {
   id: 'local/github-pat',
   name: 'github-pat',
   type: 'github',
   gateway: 'local',
 };
 
-const remoteSecret: SecretVaultInfo = {
+const remoteSecret: SecretVaultInfoUI = {
   id: 'remote/anthropic-key',
   name: 'anthropic-key',
   type: 'anthropic',
@@ -263,7 +264,7 @@ test('Expect bulk delete calls removeSecret for each selected secret', async () 
   });
 });
 
-test('Expect bulk delete shows error message when removeSecret fails', async () => {
+test('Expect bulk delete sets actionError on failed secrets', async () => {
   secretVaultInfos.set([localSecret, remoteSecret]);
 
   render(SecretVaultList);
@@ -275,21 +276,22 @@ test('Expect bulk delete shows error message when removeSecret fails', async () 
   await fireEvent.click(checkboxes[1]);
   await tick();
 
-  vi.mocked(window.getConfigurationValue).mockResolvedValue(true);
-  vi.mocked(window.showMessageBox).mockResolvedValue({ response: 0 });
+  vi.mocked(window.getConfigurationValue).mockResolvedValue(false);
   vi.mocked(window.removeSecret).mockResolvedValueOnce({ name: '' }).mockRejectedValueOnce(new Error('network error'));
 
   const deleteButton = await screen.findByRole('button', { name: 'Delete selected secrets' });
   await fireEvent.click(deleteButton);
 
   await waitFor(() => {
-    expect(window.showMessageBox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Error',
-        message: 'Failed to delete 1 secret',
-      }),
-    );
+    expect(window.removeSecret).toHaveBeenCalledTimes(2);
   });
+
+  await vi.advanceTimersByTimeAsync(100);
+
+  const secrets = get(secretVaultInfos);
+  // Table sorts by name: anthropic-key (1st call, resolves) then github-pat (2nd call, rejects)
+  const failedSecret = secrets.find(s => s.id === localSecret.id);
+  expect(failedSecret?.actionError).toBe('Error: network error');
 });
 
 test('Expect bulk delete shows confirmation dialog when bulk confirmation is enabled', async () => {

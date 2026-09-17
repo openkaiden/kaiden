@@ -23,8 +23,8 @@ import { writable } from 'svelte/store';
 import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
 import * as secretVaultStore from '/@/stores/secret-vault';
-import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 
 import SecretVaultDetails from './SecretVaultDetails.svelte';
 
@@ -39,7 +39,7 @@ const routerStore = writable({
   hash: '',
 });
 
-const githubSecret: SecretVaultInfo = {
+const githubSecret: SecretVaultInfoUI = {
   id: 'github-pat',
   name: 'GitHub',
   type: 'github',
@@ -51,7 +51,7 @@ const githubSecret: SecretVaultInfo = {
   gateway: 'kaiden',
 };
 
-const minimalSecret: SecretVaultInfo = {
+const minimalSecret: SecretVaultInfoUI = {
   id: 'my-other-secret',
   name: 'Other secret',
   type: 'other',
@@ -62,7 +62,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.mocked(router).subscribe.mockImplementation(routerStore.subscribe);
-  vi.mocked(secretVaultStore).secretVaultInfos = writable<readonly SecretVaultInfo[]>([githubSecret, minimalSecret]);
+  vi.mocked(secretVaultStore).secretVaultInfos = writable<readonly SecretVaultInfoUI[]>([githubSecret, minimalSecret]);
   vi.mocked(window.removeSecret).mockResolvedValue({ name: 'github-pat' });
   vi.mocked(window.showMessageBox).mockResolvedValue({ response: 1 });
 });
@@ -80,7 +80,7 @@ test('should show Summary tab', () => {
 });
 
 test.each(['nonexistent', 'some-missing-id'])('should fallback to id when secret is not found (%s)', id => {
-  vi.mocked(secretVaultStore).secretVaultInfos = writable<readonly SecretVaultInfo[]>([]);
+  vi.mocked(secretVaultStore).secretVaultInfos = writable<readonly SecretVaultInfoUI[]>([]);
 
   render(SecretVaultDetails, { id });
 
@@ -126,5 +126,27 @@ test('should not remove secret when user cancels removal', async () => {
   await fireEvent.click(removeButton);
 
   expect(window.removeSecret).not.toHaveBeenCalled();
+  expect(router.goto).not.toHaveBeenCalled();
+});
+
+test('should show error dialog and not navigate when removeSecret fails', async () => {
+  vi.mocked(window.showMessageBox).mockResolvedValueOnce({ response: 0 }).mockResolvedValueOnce({ response: 0 });
+  vi.mocked(window.removeSecret).mockRejectedValue(new Error('secret is in use'));
+
+  render(SecretVaultDetails, { id: 'github-pat' });
+
+  const removeButton = screen.getByRole('button', { name: 'Remove Secret' });
+  await fireEvent.click(removeButton);
+
+  await waitFor(() => {
+    expect(window.showMessageBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Error',
+        type: 'error',
+        message: 'Failed to remove secret GitHub',
+      }),
+    );
+  });
+
   expect(router.goto).not.toHaveBeenCalled();
 });

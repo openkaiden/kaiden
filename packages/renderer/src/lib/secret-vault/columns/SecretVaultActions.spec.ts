@@ -21,12 +21,13 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
+import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
+import { secretVaultInfos } from '/@/stores/secret-vault';
 
 import SecretVaultActions from './SecretVaultActions.svelte';
 
-const secret: SecretVaultInfo = {
-  id: 'github-pat',
+const secret: SecretVaultInfoUI = {
+  id: 'kaiden/GitHub',
   name: 'GitHub',
   type: 'github',
   description: 'Personal access token',
@@ -38,6 +39,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.mocked(window.removeSecret).mockResolvedValue({ name: 'github-pat' });
   vi.mocked(window.showMessageBox).mockResolvedValue({ response: 1 });
+  secretVaultInfos.set([secret]);
 });
 
 test('should display remove button', () => {
@@ -77,4 +79,38 @@ test('should not remove secret when user cancels removal', async () => {
   await fireEvent.click(removeButton);
 
   expect(window.removeSecret).not.toHaveBeenCalled();
+});
+
+test('should display error message when actionError is set on the object', async () => {
+  const secretWithError: SecretVaultInfoUI = { ...secret, actionError: 'secret is in use' };
+  secretVaultInfos.set([secretWithError]);
+
+  render(SecretVaultActions, { object: secretWithError });
+
+  const tooltipTrigger = screen.getByTestId('tooltip-trigger');
+  await fireEvent.mouseEnter(tooltipTrigger);
+
+  const error = await screen.findByText('secret is in use');
+  expect(error).toBeInTheDocument();
+});
+
+test('should set actionError via store when removeSecret fails', async () => {
+  vi.mocked(window.showMessageBox).mockResolvedValue({ response: 0 });
+  vi.mocked(window.removeSecret).mockRejectedValue(new Error('secret is in use by a sandbox'));
+
+  render(SecretVaultActions, { object: secret });
+
+  const removeButton = screen.getByRole('button', { name: 'Remove secret' });
+  await fireEvent.click(removeButton);
+
+  await waitFor(() => {
+    expect(window.removeSecret).toHaveBeenCalledWith('GitHub', 'kaiden');
+  });
+
+  await vi.advanceTimersByTimeAsync(100);
+
+  const { get } = await import('svelte/store');
+  const secrets = get(secretVaultInfos);
+  const failedSecret = secrets.find(s => s.id === secret.id);
+  expect(failedSecret?.actionError).toBe('Error: secret is in use by a sandbox');
 });

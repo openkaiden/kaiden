@@ -14,15 +14,17 @@ import {
 
 import { withBulkConfirmation } from '/@/lib/actions/BulkActions';
 import GatewayFilterDropdown from '/@/lib/gateways/GatewayFilterDropdown.svelte';
+import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
 import { handleNavigation } from '/@/navigation';
 import {
+  clearSecretActionError,
   filteredSecretVaultInfos,
   secretVaultSearchPattern,
   selectedGateway as secretVaultSelectedGateway,
+  setSecretActionError,
 } from '/@/stores/secret-vault';
 import { NavigationPage } from '/@api/navigation-page';
-import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 
 import SecretVaultAccount from './columns/SecretVaultAccount.svelte';
 import SecretVaultActions from './columns/SecretVaultActions.svelte';
@@ -30,7 +32,7 @@ import SecretVaultIntegration from './columns/SecretVaultIntegration.svelte';
 import SecretVaultMaskedSecret from './columns/SecretVaultMaskedSecret.svelte';
 import SecretVaultEmptyScreen from './SecretVaultEmptyScreen.svelte';
 
-type SecretVaultSelectable = SecretVaultInfo & { selected: boolean };
+type SecretVaultSelectable = SecretVaultInfoUI & { selected: boolean };
 
 let searchTerm = $state('');
 let gatewayFilter = $state('');
@@ -89,24 +91,18 @@ async function deleteSelectedSecrets(): Promise<void> {
 
   bulkDeleteInProgress = true;
 
-  try {
-    const results = await Promise.allSettled(
-      selectedSecrets.map(secret => window.removeSecret(secret.name, secret.gateway)),
-    );
+  await Promise.all(
+    selectedSecrets.map(async secret => {
+      clearSecretActionError(secret.id);
+      try {
+        await window.removeSecret(secret.name, secret.gateway);
+      } catch (e: unknown) {
+        setSecretActionError(secret.id, String(e));
+      }
+    }),
+  );
 
-    const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-    if (failures.length > 0) {
-      await window.showMessageBox({
-        title: 'Error',
-        type: 'error',
-        message: `Failed to delete ${failures.length} secret${failures.length > 1 ? 's' : ''}`,
-        detail: failures.map(f => String(f.reason)).join('\n'),
-        buttons: ['OK'],
-      });
-    }
-  } finally {
-    bulkDeleteInProgress = false;
-  }
+  bulkDeleteInProgress = false;
 }
 
 function addSecret(): void {
