@@ -47,6 +47,15 @@ const selectedOption = $derived(
     : undefined,
 );
 
+function handleArrowNav(e: KeyboardEvent): void {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  const buttons = Array.from((e.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button'));
+  const idx = buttons.indexOf(e.target as HTMLButtonElement);
+  if (idx < 0) return;
+  const next = e.key === 'ArrowRight' ? (idx + 1) % buttons.length : (idx - 1 + buttons.length) % buttons.length;
+  buttons[next]?.focus();
+}
+
 async function handleOption(optionId: string): Promise<void> {
   if (responding || !event.permissionRequest || event.permissionRequest.resolved) return;
   responding = true;
@@ -103,7 +112,7 @@ async function handleOption(optionId: string): Promise<void> {
           {/if}
         </div>
       {:else}
-        <div class="permission-actions flex items-center gap-2 flex-wrap">
+        <div class="permission-actions flex items-center gap-2 flex-wrap" role="toolbar" onkeydown={handleArrowNav}>
           {#each event.permissionRequest.options as option (option.optionId)}
             <Button
               type={option.kind === 'deny' ? 'secondary' : 'primary'}
