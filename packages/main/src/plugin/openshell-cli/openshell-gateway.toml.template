@@ -6,18 +6,19 @@ version = 1
 compute_drivers = ["{{{driver}}}"]
 
 [openshell.drivers.{{{driver}}}]
-enable_bind_mounts = true
-{{#supervisorImage}}
-supervisor_image = "{{{supervisorImage}}}"
-{{/supervisorImage}}
 {{/driver}}
 {{^driver}}
 [openshell.drivers.podman]
+{{/driver}}
+{{#enableBindMounts}}
 enable_bind_mounts = true
+{{/enableBindMounts}}
 {{#supervisorImage}}
 supervisor_image = "{{{supervisorImage}}}"
 {{/supervisorImage}}
-{{/driver}}
+{{#mxcExecPath}}
+wxc_exec_path = '''{{{mxcExecPath}}}'''
+{{/mxcExecPath}}
 
 [openshell.gateway.auth]
 allow_unauthenticated_users = true
