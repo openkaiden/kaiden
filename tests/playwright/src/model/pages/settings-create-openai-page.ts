@@ -43,10 +43,10 @@ export class SettingsCreateOpenAIPage extends BasePage {
   async create(baseURL: string, apiKey: string): Promise<void> {
     await this.baseURLInput.fill(baseURL);
     await expect(this.baseURLInput).toHaveValue(baseURL);
-    await this.apiKeyInput.fill(apiKey);
-    await expect(this.apiKeyInput).toHaveValue(apiKey);
+    await this.fillSecret(this.apiKeyInput, apiKey);
     await expect(this.createButton).toBeEnabled();
     await this.createButton.click();
+    await this.apiKeyInput.fill('');
   }
 
   async goBackToResources(): Promise<void> {

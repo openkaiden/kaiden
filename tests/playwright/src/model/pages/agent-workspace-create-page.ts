@@ -433,8 +433,7 @@ export class AgentWorkspaceCreatePage extends BasePage {
     for (const field of fields) {
       const input = this.inlineConnectionForm.getByLabel(field.label);
       await expect(input).toBeVisible();
-      await input.fill(field.value);
-      await expect(input).toHaveValue(field.value);
+      await this.fillSecret(input, field.value);
     }
   }
 
@@ -451,6 +450,9 @@ export class AgentWorkspaceCreatePage extends BasePage {
       await this.selectConnectionProvider(setup.providerName);
       await this.fillInlineConnectionFields(setup.fields);
       await this.submitInlineConnection();
+      for (const field of setup.fields) {
+        await this.inlineConnectionForm.getByLabel(field.label).fill('');
+      }
       await this.waitForModelCatalog();
       await this.selectDefaultModel();
     } else {

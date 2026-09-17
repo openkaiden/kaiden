@@ -54,5 +54,14 @@ export abstract class BasePage {
     }
   }
 
+  // Bypasses Playwright action logging so secrets don't appear in traces.
+  protected async fillSecret(locator: Locator, value: string): Promise<void> {
+    await locator.evaluate((el, val) => {
+      (el as HTMLInputElement).value = val;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }, value);
+  }
+
   abstract waitForLoad(): Promise<void>;
 }
