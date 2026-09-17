@@ -131,11 +131,11 @@ For UI component development guidelines (color-registry usage, Icon component, r
 pnpm run format:check        # Check formatting
 pnpm run format:fix          # Fix formatting issues
 
-# Linting — only staged files
+# Linting — only modified files
 # Do not run `pnpm run lint:check` or `pnpm run lint:fix` unless you modified
 # linting rules — they scan the entire monorepo and are extremely slow.
-# Instead, stage your changes and run:
-pnpm lint-staged             # Lint and format only staged files (fast)
+# Instead, run:
+pnpm lint-staged --diff      # Lint and format only modified files (fast)
 
 # Type checking
 pnpm run typecheck           # Check all packages
