@@ -109,7 +109,7 @@ export class OpenshellGateway implements Disposable {
           if (this.isCreatedGateway(gateway.name)) {
             const pid = await this.readAndValidatePid(gateway.name);
             if (pid !== undefined) {
-              gateway.pid = pid;
+              gateway.gatewayState = { ...(gateway.gatewayState ?? { reachable: false, health: 'unknown' }), pid };
             }
             if (!(await this.isEndpointHealthy(gateway.endpoint))) {
               try {
