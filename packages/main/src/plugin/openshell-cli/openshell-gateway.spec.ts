@@ -19,7 +19,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createWriteStream, existsSync, type WriteStream } from 'node:fs';
-import { type FileHandle, mkdir, open, readFile, rename, writeFile } from 'node:fs/promises';
+import { type FileHandle, mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 
 import type { RunResult } from '@openkaiden/api';
@@ -114,6 +114,8 @@ beforeEach(() => {
   vi.mocked(createWriteStream).mockReturnValue(gatewayLogStream);
   vi.mocked(existsSync).mockReturnValue(false);
   vi.mocked(open).mockResolvedValue({ fd: 42, close: closeLogFile } as unknown as FileHandle);
+  vi.mocked(writeFile).mockResolvedValue();
+  vi.mocked(unlink).mockResolvedValue();
   vi.mocked(exec.exec).mockResolvedValue({ command: '', stdout: '', stderr: '' });
   vi.mocked(isFreePort).mockResolvedValue(true);
   vi.mocked(openshellCli.removeGateway).mockResolvedValue();
@@ -226,9 +228,11 @@ describe('init', () => {
 
     // First spawn exits immediately (migration error in log file)
     Object.defineProperty(failProc, 'exitCode', { value: 1, configurable: true });
-    vi.mocked(readFile).mockResolvedValueOnce(
-      'migration error: migration 7 was previously applied but is missing in the resolved migrations',
-    );
+    vi.mocked(readFile)
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce(
+        'migration error: migration 7 was previously applied but is missing in the resolved migrations',
+      );
 
     // init() → startCreatedGateway detects migration error, backs up, notifies,
     // then retries once; the retry (retryProc) succeeds via getGatewayInfo
@@ -1713,5 +1717,239 @@ describe('gateway config generation', () => {
     expect(writtenContent).toContain('[openshell.drivers.podman]');
     expect(writtenContent).toContain('enable_bind_mounts');
     expect(writtenContent).not.toContain('compute_drivers');
+  });
+});
+
+describe('gateway.pid persistence', () => {
+  test('writes gateway.pid after spawning a created gateway', async () => {
+    const proc = createMockChildProcess();
+    Object.defineProperty(proc, 'pid', { value: 12345 });
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+
+    await gateway.createLocalGateway({
+      name: 'local-dev',
+      bindAddress: '127.0.0.1',
+      port: 17675,
+      driver: 'podman',
+    });
+
+    const storageDirectory = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev');
+    expect(writeFile).toHaveBeenCalledWith(join(storageDirectory, 'gateway.pid'), '12345', 'utf-8');
+  });
+
+  test('writes gateway.pid after starting the default gateway', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const proc = createMockChildProcess();
+    Object.defineProperty(proc, 'pid', { value: 54321 });
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+
+    await gateway.start();
+
+    expect(writeFile).toHaveBeenCalledWith(join(GATEWAY_STORAGE_DIRECTORY, 'gateway.pid'), '54321', 'utf-8');
+  });
+
+  test('does not write gateway.pid when spawn provides no pid', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+
+    await gateway.start();
+
+    expect(writeFile).not.toHaveBeenCalledWith(
+      join(GATEWAY_STORAGE_DIRECTORY, 'gateway.pid'),
+      expect.any(String),
+      'utf-8',
+    );
+  });
+
+  test('removes gateway.pid on process exit', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const proc = createMockChildProcess();
+    Object.defineProperty(proc, 'pid', { value: 12345 });
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+
+    await gateway.start();
+    proc.emit('exit', 0, undefined);
+    // Flush microtask queue — unlink is chained after the PID write promise
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(unlink).toHaveBeenCalledWith(join(GATEWAY_STORAGE_DIRECTORY, 'gateway.pid'));
+  });
+
+  test('removes gateway.pid on process error', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const proc = createMockChildProcess();
+    Object.defineProperty(proc, 'pid', { value: 12345 });
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+
+    await gateway.start();
+    proc.emit('error', new Error('spawn error'));
+    // Flush microtask queue — unlink is chained after the PID write promise
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(unlink).toHaveBeenCalledWith(join(GATEWAY_STORAGE_DIRECTORY, 'gateway.pid'));
+  });
+
+  test('reads and validates PID on init when process is still alive', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(openshellCli.listGateways).mockResolvedValue([
+      { name: 'local-dev', endpoint: 'http://127.0.0.1:17675', active: true, type: 'local' },
+    ]);
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+    vi.mocked(readFile).mockResolvedValue('12345');
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    await gateway.init();
+
+    const pidPath = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev', 'gateway.pid');
+    expect(readFile).toHaveBeenCalledWith(pidPath, 'utf-8');
+    expect(killSpy).toHaveBeenCalledWith(12345, 0);
+    expect(unlink).not.toHaveBeenCalledWith(pidPath);
+    killSpy.mockRestore();
+  });
+
+  test('removes stale gateway.pid when process is dead', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(openshellCli.listGateways).mockResolvedValue([
+      { name: 'local-dev', endpoint: 'http://127.0.0.1:17675', active: true, type: 'local' },
+    ]);
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+    vi.mocked(readFile).mockResolvedValue('99999');
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      const err = new Error('ESRCH') as NodeJS.ErrnoException;
+      err.code = 'ESRCH';
+      throw err;
+    });
+
+    await gateway.init();
+
+    const pidPath = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev', 'gateway.pid');
+    expect(unlink).toHaveBeenCalledWith(pidPath);
+    killSpy.mockRestore();
+  });
+
+  test('keeps gateway.pid when process.kill throws EPERM', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(openshellCli.listGateways).mockResolvedValue([
+      { name: 'local-dev', endpoint: 'http://127.0.0.1:17675', active: true, type: 'local' },
+    ]);
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+    vi.mocked(readFile).mockResolvedValue('12345');
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      const err = new Error('EPERM') as NodeJS.ErrnoException;
+      err.code = 'EPERM';
+      throw err;
+    });
+
+    await gateway.init();
+
+    const pidPath = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev', 'gateway.pid');
+    expect(unlink).not.toHaveBeenCalledWith(pidPath);
+    killSpy.mockRestore();
+  });
+
+  test('ignores missing gateway.pid file during init', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(openshellCli.listGateways).mockResolvedValue([
+      { name: 'local-dev', endpoint: 'http://127.0.0.1:17675', active: true, type: 'local' },
+    ]);
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+    vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
+
+    await gateway.init();
+
+    expect(unlink).not.toHaveBeenCalled();
+  });
+
+  test('keeps gateway.pid when process.kill throws unknown error', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(openshellCli.listGateways).mockResolvedValue([
+      { name: 'local-dev', endpoint: 'http://127.0.0.1:17675', active: true, type: 'local' },
+    ]);
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+    vi.mocked(readFile).mockResolvedValue('12345');
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      const err = new Error('EINVAL') as NodeJS.ErrnoException;
+      err.code = 'EINVAL';
+      throw err;
+    });
+
+    await gateway.init();
+
+    const pidPath = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev', 'gateway.pid');
+    expect(unlink).not.toHaveBeenCalledWith(pidPath);
+    killSpy.mockRestore();
+  });
+
+  test('removes gateway.pid with invalid content during init', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(openshellCli.listGateways).mockResolvedValue([
+      { name: 'local-dev', endpoint: 'http://127.0.0.1:17675', active: true, type: 'local' },
+    ]);
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+    vi.mocked(readFile).mockResolvedValue('not-a-number');
+
+    await gateway.init();
+
+    const pidPath = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev', 'gateway.pid');
+    expect(unlink).toHaveBeenCalledWith(pidPath);
+  });
+
+  test('getGatewayPid returns pid for alive process', async () => {
+    vi.mocked(readFile).mockResolvedValue('12345');
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    const pid = await gateway.getGatewayPid({
+      name: 'local-dev',
+      endpoint: 'http://127.0.0.1:17675',
+    });
+
+    expect(pid).toBe(12345);
+    killSpy.mockRestore();
+  });
+
+  test('getGatewayPid returns undefined for dead process', async () => {
+    vi.mocked(readFile).mockResolvedValue('99999');
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      const err = new Error('ESRCH') as NodeJS.ErrnoException;
+      err.code = 'ESRCH';
+      throw err;
+    });
+
+    const pid = await gateway.getGatewayPid({
+      name: 'local-dev',
+      endpoint: 'http://127.0.0.1:17675',
+    });
+
+    expect(pid).toBeUndefined();
+    killSpy.mockRestore();
+  });
+
+  test('getGatewayPid returns undefined when no pid file exists', async () => {
+    vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
+
+    const pid = await gateway.getGatewayPid({
+      name: 'local-dev',
+      endpoint: 'http://127.0.0.1:17675',
+    });
+
+    expect(pid).toBeUndefined();
   });
 });

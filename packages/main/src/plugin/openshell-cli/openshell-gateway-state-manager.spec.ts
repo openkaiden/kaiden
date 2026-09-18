@@ -21,12 +21,16 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 
 import type { OpenshellCli } from './openshell-cli.js';
+import type { OpenshellGateway } from './openshell-gateway.js';
 import { OpenshellGatewayStateManager } from './openshell-gateway-state-manager.js';
 
 const openshellCli = {
   listGateways: vi.fn(),
   getGatewayInfo: vi.fn(),
 } as unknown as OpenshellCli;
+const openshellGateway = {
+  getGatewayPid: vi.fn(),
+} as unknown as OpenshellGateway;
 let pollInterval = 5;
 let configurationChangeCallback: ((event: { key: string }) => void) | undefined;
 const configurationRegistry = {
@@ -50,7 +54,8 @@ beforeEach(() => {
     configurationChangeCallback = callback as (event: { key: string }) => void;
     return { dispose: vi.fn() };
   });
-  manager = new OpenshellGatewayStateManager(openshellCli, configurationRegistry);
+  vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(undefined);
+  manager = new OpenshellGatewayStateManager(openshellCli, configurationRegistry, openshellGateway);
 });
 
 afterEach(() => {
@@ -97,7 +102,7 @@ test('marks a gateway unreachable when runtime information cannot be retrieved',
     {
       name: 'stopped',
       endpoint: 'http://127.0.0.1:17671',
-      gatewayState: { reachable: false, health: 'unknown' },
+      gatewayState: { reachable: false, health: 'unknown', process: { status: 'not-running' } },
     },
   ]);
 });
@@ -269,4 +274,80 @@ test('clamps polling intervals above one hour', async () => {
   expect(openshellCli.listGateways).toHaveBeenCalledOnce();
   await vi.advanceTimersByTimeAsync(1);
   expect(openshellCli.listGateways).toHaveBeenCalledTimes(2);
+});
+
+test('includes process state with running pid when gateway is reachable', async () => {
+  vi.mocked(openshellCli.listGateways).mockResolvedValue([
+    { name: 'local', endpoint: 'http://127.0.0.1:17670', active: true },
+  ]);
+  vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+  vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(12345);
+
+  await manager.refresh();
+
+  expect(manager.listGateways()).toEqual([
+    {
+      name: 'local',
+      endpoint: 'http://127.0.0.1:17670',
+      active: true,
+      gatewayState: { reachable: true, health: 'healthy', process: { pid: 12345, status: 'running' } },
+    },
+  ]);
+});
+
+test('includes process state with running pid when gateway is unreachable', async () => {
+  vi.mocked(openshellCli.listGateways).mockResolvedValue([
+    { name: 'local', endpoint: 'http://127.0.0.1:17670', active: true },
+  ]);
+  vi.mocked(openshellCli.getGatewayInfo).mockRejectedValue(new Error('connection refused'));
+  vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(12345);
+
+  await manager.refresh();
+
+  expect(manager.listGateways()).toEqual([
+    {
+      name: 'local',
+      endpoint: 'http://127.0.0.1:17670',
+      active: true,
+      gatewayState: { reachable: false, health: 'unknown', process: { pid: 12345, status: 'running' } },
+    },
+  ]);
+});
+
+test('includes not-running process state when gateway is unreachable and no pid', async () => {
+  vi.mocked(openshellCli.listGateways).mockResolvedValue([
+    { name: 'local', endpoint: 'http://127.0.0.1:17670', active: true },
+  ]);
+  vi.mocked(openshellCli.getGatewayInfo).mockRejectedValue(new Error('connection refused'));
+  vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(undefined);
+
+  await manager.refresh();
+
+  expect(manager.listGateways()).toEqual([
+    {
+      name: 'local',
+      endpoint: 'http://127.0.0.1:17670',
+      active: true,
+      gatewayState: { reachable: false, health: 'unknown', process: { status: 'not-running' } },
+    },
+  ]);
+});
+
+test('omits process state when gateway is reachable and no pid', async () => {
+  vi.mocked(openshellCli.listGateways).mockResolvedValue([
+    { name: 'remote', endpoint: 'https://gateway.example.com', active: true },
+  ]);
+  vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+  vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(undefined);
+
+  await manager.refresh();
+
+  expect(manager.listGateways()).toEqual([
+    {
+      name: 'remote',
+      endpoint: 'https://gateway.example.com',
+      active: true,
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+  ]);
 });

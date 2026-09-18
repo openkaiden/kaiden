@@ -22,9 +22,17 @@ export const GatewayHealthSchema = z.enum(['healthy', 'degraded', 'unhealthy', '
 
 export type GatewayHealth = z.output<typeof GatewayHealthSchema>;
 
+export const GatewayProcessStateSchema = z.object({
+  pid: z.number().int().positive().optional(),
+  status: z.enum(['running', 'not-running', 'unknown']),
+});
+
+export type GatewayProcessState = z.output<typeof GatewayProcessStateSchema>;
+
 export const GatewayStateSchema = z.object({
   reachable: z.boolean(),
   health: GatewayHealthSchema,
+  process: GatewayProcessStateSchema.optional(),
 });
 
 export type GatewayState = z.output<typeof GatewayStateSchema>;
