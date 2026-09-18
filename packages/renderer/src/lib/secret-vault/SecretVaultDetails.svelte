@@ -29,20 +29,21 @@ function handleRemove(): void {
   if (!secretInfo) {
     return;
   }
+  const secret = $state.snapshot(secretInfo);
   withConfirmation(async () => {
     try {
-      await window.removeSecret(secretInfo.name, secretInfo.gateway);
+      await window.removeSecret(secret.name, secret.gateway);
       router.goto('/preferences/secret-vault');
     } catch (error: unknown) {
       await window.showMessageBox({
         title: 'Error',
         type: 'error',
-        message: `Failed to remove secret ${secretInfo.name}`,
+        message: `Failed to remove secret ${secret.name}`,
         detail: String(error),
         buttons: ['OK'],
       });
     }
-  }, `remove secret ${secretInfo.name}`);
+  }, `remove secret ${secret.name}`);
 }
 </script>
 
