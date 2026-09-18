@@ -56,7 +56,7 @@ beforeEach(() => {
   vi.spyOn(defaultFactory, 'createProvider').mockResolvedValue(undefined);
   vi.spyOn(gcloudFactory, 'createProvider').mockResolvedValue(undefined);
 
-  adapter = new OpenshellSecretAdapter(sdkClientManager, [defaultFactory, gcloudFactory]);
+  adapter = new OpenshellSecretAdapter(sdkClientManager, [gcloudFactory], defaultFactory);
 });
 
 describe('createSecret', () => {

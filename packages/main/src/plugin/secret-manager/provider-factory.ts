@@ -20,10 +20,12 @@ import type { OpenShellClient } from '@nvidia/openshell-sdk';
 
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
-export const ProviderFactoryToken = Symbol.for('ProviderFactory');
+export const SelectableProviderFactoryToken = Symbol.for('SelectableProviderFactory');
 
 export interface ProviderFactory {
-  readonly priority: number;
-  supports(type: string): boolean;
   createProvider(client: OpenShellClient, options: SecretCreateOptions): Promise<void>;
+}
+
+export interface SelectableProviderFactory extends ProviderFactory {
+  supports(type: string): boolean;
 }

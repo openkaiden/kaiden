@@ -55,10 +55,11 @@ const mockRaw = {
 };
 const mockClient = { raw: mockRaw } as unknown as OpenShellClient;
 const sdkClientManager = new OpenshellSdkClientManager(undefined!, undefined!);
-const openshellAdapter = new OpenshellSecretAdapter(sdkClientManager, [
-  new GcloudAdcProviderFactory(),
+const openshellAdapter = new OpenshellSecretAdapter(
+  sdkClientManager,
+  [new GcloudAdcProviderFactory()],
   new DefaultProviderFactory(),
-]);
+);
 
 let gatewayStartCallback: (() => void) | undefined;
 

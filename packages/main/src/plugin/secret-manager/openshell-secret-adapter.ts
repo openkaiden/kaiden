@@ -19,19 +19,23 @@
 import { inject, injectable, multiInject } from 'inversify';
 
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
+import { DefaultProviderFactory } from '/@/plugin/secret-manager/default-provider-factory.js';
 import type { OpenshellProfile } from '/@api/openshell-gateway-info.js';
 import type { SecretCliBackend, SecretCreateOptions, SecretInfo, SecretName } from '/@api/secret-info.js';
 
-import type { ProviderFactory } from './provider-factory.js';
-import { ProviderFactoryToken } from './provider-factory.js';
+import type { ProviderFactory, SelectableProviderFactory } from './provider-factory.js';
+import { SelectableProviderFactoryToken } from './provider-factory.js';
 
 @injectable()
 export class OpenshellSecretAdapter implements SecretCliBackend {
   constructor(
     @inject(OpenshellSdkClientManager)
     private readonly sdkClientManager: OpenshellSdkClientManager,
-    @multiInject(ProviderFactoryToken)
-    private readonly providerFactories: ProviderFactory[],
+    @multiInject(SelectableProviderFactoryToken)
+    private readonly providerFactories: SelectableProviderFactory[],
+
+    @inject(DefaultProviderFactory)
+    private readonly defaultProviderFactory: DefaultProviderFactory,
   ) {}
 
   async createSecret(options: SecretCreateOptions, gateway?: string): Promise<SecretName> {
@@ -76,11 +80,9 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
   }
 
   #resolveFactory(options: SecretCreateOptions): ProviderFactory {
-    const factory = this.providerFactories
-      .toSorted((a, b) => b.priority - a.priority)
-      .find(f => f.supports(options.type));
+    const factory = this.providerFactories.find(f => f.supports(options.type));
     if (!factory) {
-      throw new Error(`No provider factory supports type '${options.type}'`);
+      return this.defaultProviderFactory;
     }
     return factory;
   }

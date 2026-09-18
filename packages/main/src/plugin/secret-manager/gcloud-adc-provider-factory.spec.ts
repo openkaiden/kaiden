@@ -180,12 +180,6 @@ describe('supports', () => {
   });
 });
 
-describe('priority', () => {
-  test('has higher priority than DefaultProviderFactory', () => {
-    expect(factory.priority).toBeGreaterThan(0);
-  });
-});
-
 describe('readGcloudAdc', () => {
   test('rejects for service account type', async () => {
     const { readFile } = await import('node:fs/promises');

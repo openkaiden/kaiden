@@ -26,12 +26,10 @@ import { injectable } from 'inversify';
 
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
-import type { ProviderFactory } from './provider-factory.js';
+import type { SelectableProviderFactory } from './provider-factory.js';
 
 @injectable()
-export class GcloudAdcProviderFactory implements ProviderFactory {
-  readonly priority = 10;
-
+export class GcloudAdcProviderFactory implements SelectableProviderFactory {
   supports(type: string): boolean {
     return type === 'google-vertex-ai';
   }
