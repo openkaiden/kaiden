@@ -19,7 +19,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createWriteStream, existsSync, type WriteStream } from 'node:fs';
-import { type FileHandle, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { type FileHandle, mkdir, open, readFile, rename, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 
 import type { RunResult } from '@openkaiden/api';

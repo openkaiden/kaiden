@@ -20,7 +20,7 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import type { WriteStream } from 'node:fs';
 import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 
 import type { Disposable } from '@openkaiden/api';
