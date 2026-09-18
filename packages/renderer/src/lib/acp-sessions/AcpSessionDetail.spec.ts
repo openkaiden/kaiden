@@ -24,11 +24,18 @@ import { writable } from 'svelte/store';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import * as acpSessionsStore from '/@/stores/acp-sessions.svelte';
+import * as agentsStore from '/@/stores/agents';
+import type { SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
+import * as openshellSandboxesStore from '/@/stores/openshell-sandboxes';
 import type { AcpFlowToolCallEvent, AcpSessionInfo } from '/@api/acp-session-info';
+import type { AgentInfo } from '/@api/agent-info';
+import { AGENT_LABEL } from '/@api/openshell-gateway-info';
 
 import AcpSessionDetail from './AcpSessionDetail.svelte';
 
 vi.mock(import('/@/stores/acp-sessions.svelte'));
+vi.mock(import('/@/stores/agents'));
+vi.mock(import('/@/stores/openshell-sandboxes'));
 vi.mock(import('tinro'));
 
 const COMPLETED_SESSION: AcpSessionInfo = {
@@ -43,9 +50,28 @@ const COMPLETED_SESSION: AcpSessionInfo = {
   agentName: 'OpenClaw',
 };
 
+const DRAFT_SANDBOX: SandboxInfoWithGateway = {
+  id: 'sb-draft',
+  name: 'gone',
+  phase: 'Ready',
+  gatewayName: 'test-gateway',
+};
+
+const ACP_AGENT: AgentInfo = {
+  id: 'openclaw',
+  name: 'OpenClaw',
+  description: 'An ACP agent',
+  command: 'openclaw',
+  acp: { args: ['acp'] },
+  destinationSkillsFolder: '/skills',
+};
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(window.getAcpSessionEvents).mockResolvedValue([]);
+  vi.mocked(window.createAcpSession).mockReturnValue(new Promise(() => {}));
+  vi.mocked(openshellSandboxesStore).allOpenshellSandboxes = writable<SandboxInfoWithGateway[]>([]);
+  vi.mocked(agentsStore).agentInfos = writable<AgentInfo[]>([]);
 });
 
 describe('optimistic input clearing on send', () => {
@@ -140,17 +166,13 @@ describe('sendFollowUp error display', () => {
 });
 
 describe('createSession error display', () => {
-  test('displays error when createSession fails', async () => {
+  test('displays error when auto-create session fails', async () => {
     vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([]);
+    vi.mocked(openshellSandboxesStore).allOpenshellSandboxes = writable<SandboxInfoWithGateway[]>([DRAFT_SANDBOX]);
+    vi.mocked(agentsStore).agentInfos = writable<AgentInfo[]>([ACP_AGENT]);
     vi.mocked(window.createAcpSession).mockRejectedValue(new Error('Sandbox "gone" not found'));
 
     render(AcpSessionDetail, { sessionId: 'new', draftSandboxName: 'gone' });
-
-    const textarea = screen.getByRole('textbox');
-    await userEvent.type(textarea, 'start session');
-
-    const sendButton = screen.getByTitle('Send');
-    await userEvent.click(sendButton);
 
     expect(await screen.findByText('Sandbox "gone" not found')).toBeInTheDocument();
   });
@@ -276,6 +298,10 @@ describe('scroll lock', () => {
 describe('state reset on session change', () => {
   test('clears error and input when sessionId changes', async () => {
     vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(openshellSandboxesStore).allOpenshellSandboxes = writable<SandboxInfoWithGateway[]>([
+      { ...DRAFT_SANDBOX, name: 'sb' },
+    ]);
+    vi.mocked(agentsStore).agentInfos = writable<AgentInfo[]>([ACP_AGENT]);
     vi.mocked(window.sendAcpFollowUp).mockRejectedValue(new Error('something broke'));
 
     const { rerender } = render(AcpSessionDetail, { sessionId: 'session-1' });
@@ -353,5 +379,65 @@ describe('permission request focus management', () => {
       expect(document.activeElement?.closest('.permission-actions')).toBeTruthy();
       expect(document.activeElement?.textContent?.trim()).toMatch(/^(Allow|Deny)$/);
     });
+  });
+});
+
+describe('draft mode sandbox/agent selection', () => {
+  const SANDBOX_WITHOUT_LABEL: SandboxInfoWithGateway = {
+    id: 'sb-2',
+    name: 'plain-sandbox',
+    phase: 'Ready',
+    gatewayName: 'test-gateway',
+  };
+
+  const NON_ACP_AGENT: AgentInfo = {
+    id: 'claude',
+    name: 'Claude Code',
+    description: 'No ACP support',
+    command: 'claude',
+    destinationSkillsFolder: '/skills',
+  };
+
+  const SANDBOX_WITH_NON_ACP_AGENT: SandboxInfoWithGateway = {
+    id: 'sb-3',
+    name: 'non-acp-sandbox',
+    phase: 'Ready',
+    labels: { [AGENT_LABEL]: 'claude' },
+    gatewayName: 'test-gateway',
+  };
+
+  test('shows warning when sandbox agent does not support ACP', () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([]);
+    vi.mocked(openshellSandboxesStore).allOpenshellSandboxes = writable<SandboxInfoWithGateway[]>([
+      SANDBOX_WITH_NON_ACP_AGENT,
+    ]);
+    vi.mocked(agentsStore).agentInfos = writable<AgentInfo[]>([ACP_AGENT, NON_ACP_AGENT]);
+
+    render(AcpSessionDetail, { sessionId: 'new', draftSandboxName: 'non-acp-sandbox' });
+
+    expect(screen.getByText(/does not support ACP sessions/)).toBeInTheDocument();
+  });
+
+  test('shows no-sandbox warning when no ready sandboxes available', () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([]);
+    vi.mocked(openshellSandboxesStore).allOpenshellSandboxes = writable<SandboxInfoWithGateway[]>([]);
+    vi.mocked(agentsStore).agentInfos = writable<AgentInfo[]>([ACP_AGENT]);
+
+    render(AcpSessionDetail, { sessionId: 'new' });
+
+    expect(screen.getByText('No ready sandboxes available. Create a workspace first.')).toBeInTheDocument();
+  });
+
+  test('auto-selects first ready sandbox', () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([]);
+    vi.mocked(openshellSandboxesStore).allOpenshellSandboxes = writable<SandboxInfoWithGateway[]>([
+      SANDBOX_WITHOUT_LABEL,
+    ]);
+    vi.mocked(agentsStore).agentInfos = writable<AgentInfo[]>([ACP_AGENT]);
+
+    render(AcpSessionDetail, { sessionId: 'new' });
+
+    const sandboxSelect = screen.getByLabelText('Sandbox');
+    expect(sandboxSelect).toHaveValue('plain-sandbox');
   });
 });

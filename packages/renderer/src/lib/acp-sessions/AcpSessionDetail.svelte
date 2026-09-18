@@ -4,6 +4,8 @@ import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { router } from 'tinro';
 
 import { acpSessions, acpSessionsEventStoreInfo } from '/@/stores/acp-sessions.svelte';
+import { agentInfos } from '/@/stores/agents';
+import { allOpenshellSandboxes } from '/@/stores/openshell-sandboxes';
 import type {
   AcpAttachment,
   AcpFlowEvent,
@@ -14,6 +16,7 @@ import type {
   AcpSessionStatus,
   AcpSlashCommand,
 } from '/@api/acp-session-info';
+import { AGENT_LABEL } from '/@api/openshell-gateway-info';
 
 import AcpAtMentionCompletion from './AcpAtMentionCompletion.svelte';
 import AcpSlashCommandCompletion from './AcpSlashCommandCompletion.svelte';
@@ -31,7 +34,59 @@ interface Props {
 
 let { sessionId, draftSandboxName, draftAgentId }: Props = $props();
 
-const isDraft = $derived(sessionId === 'new' && !!draftSandboxName);
+const isDraft = $derived(sessionId === 'new');
+
+const readySandboxes = $derived($allOpenshellSandboxes.filter(s => s.phase === 'Ready'));
+const acpAgents = $derived($agentInfos.filter(a => a.acp !== undefined));
+
+let selectedSandboxName = $state('');
+let selectedAgentId = $state('');
+
+$effect(() => {
+  if (draftSandboxName) {
+    selectedSandboxName = draftSandboxName;
+  } else if (readySandboxes.length === 1 && !selectedSandboxName) {
+    selectedSandboxName = readySandboxes[0]!.name;
+  }
+});
+
+$effect(() => {
+  if (draftAgentId) {
+    selectedAgentId = draftAgentId;
+  } else if (draftNeedsAgentSelection && acpAgents.length > 0 && !selectedAgentId) {
+    selectedAgentId = acpAgents[0]!.id;
+  }
+});
+
+const selectedSandbox = $derived(readySandboxes.find(s => s.name === selectedSandboxName));
+const sandboxAgentId = $derived(selectedSandbox?.labels?.[AGENT_LABEL]);
+const sandboxAgentInfo = $derived(sandboxAgentId ? $agentInfos.find(a => a.id === sandboxAgentId) : undefined);
+const sandboxAgentSupportsAcp = $derived(!sandboxAgentId || sandboxAgentInfo?.acp !== undefined);
+const draftNeedsAgentSelection = $derived(!sandboxAgentId);
+const draftEffectiveAgentId = $derived(sandboxAgentId ?? selectedAgentId);
+const draftCanSend = $derived(isDraft && !!selectedSandbox && draftEffectiveAgentId !== '' && sandboxAgentSupportsAcp);
+
+let preparingSandbox = $state('');
+let failedSandbox = $state('');
+
+$effect(() => {
+  if (!isDraft || !selectedSandboxName || !draftCanSend) return;
+  if (preparingSandbox === selectedSandboxName) return;
+  if (failedSandbox === selectedSandboxName) return;
+  preparingSandbox = selectedSandboxName;
+  const agentId = draftEffectiveAgentId || undefined;
+  window
+    .createAcpSession({ sandboxName: selectedSandboxName, agentId })
+    .then(newSession => {
+      router.goto(`/acp-sessions/${encodeURIComponent(newSession.id)}`);
+    })
+    .catch((err: unknown) => {
+      console.error('Failed to prepare session', err);
+      sendError = err instanceof Error ? err.message : String(err);
+      failedSandbox = selectedSandboxName;
+      preparingSandbox = '';
+    });
+});
 
 let events: AcpFlowEvent[] = $state([]);
 let followUpText = $state('');
@@ -52,8 +107,8 @@ const isWaitingInput = $derived(!isDraft && session?.status === 'waiting_input')
 const hasPendingPermission = $derived(
   events.some(e => e.kind === 'tool_call' && e.permissionRequest && !e.permissionRequest.resolved),
 );
-const canSendFollowUp = $derived(
-  isDraft ||
+const showInputArea = $derived(
+  (isDraft && readySandboxes.length > 0) ||
     (session?.sandboxId &&
       (session?.status === 'running' ||
         session?.status === 'idle' ||
@@ -437,13 +492,13 @@ async function handleSendFollowUp(): Promise<void> {
       ? pendingAttachments.map(a => ({ filePath: a.filePath, fileName: a.fileName, mimeType: a.mimeType }))
       : undefined;
 
-  if (isDraft && draftSandboxName) {
+  if (isDraft && selectedSandboxName) {
     try {
       sendError = undefined;
       const newSession = await window.createAcpSession({
-        sandboxName: draftSandboxName,
+        sandboxName: selectedSandboxName,
         prompt: textToSend,
-        agentId: draftAgentId ?? undefined,
+        agentId: draftEffectiveAgentId || undefined,
       });
       followUpText = '';
       pendingAttachments = [];
@@ -500,9 +555,7 @@ function handleKeyDown(e: KeyboardEvent): void {
         {sessionDisplayName.length > 80 ? `${sessionDisplayName.slice(0, 80)}…` : sessionDisplayName}
       {/if}
     </span>
-    {#if isDraft && draftSandboxName}
-      <span class="text-xs text-[var(--pd-content-text)] opacity-50 shrink-0">({draftSandboxName})</span>
-    {:else if session?.sandboxName}
+    {#if session?.sandboxName}
       <span class="text-xs text-[var(--pd-content-text)] opacity-50 shrink-0">({session.sandboxName})</span>
     {/if}
   </div>
@@ -516,7 +569,7 @@ function handleKeyDown(e: KeyboardEvent): void {
 </div>
 
 <!-- Events flow -->
-<div class="flex-1 min-h-0 overflow-auto p-4" bind:this={flowContainer}>
+<div class="flex-1 min-h-0 overflow-auto p-4 {isDraft && readySandboxes.length > 0 ? 'flex flex-col justify-end' : ''}" bind:this={flowContainer}>
   <div class="flex flex-col gap-3 max-w-4xl mx-auto">
     {#each events as event, i (i)}
       {#if event.kind === 'prompt'}
@@ -534,6 +587,12 @@ function handleKeyDown(e: KeyboardEvent): void {
         <AcpFlowPlan {event} />
       {/if}
     {/each}
+
+    {#if isDraft && readySandboxes.length === 0}
+      <div class="rounded-lg border border-[var(--pd-state-warning)] bg-[var(--pd-state-warning)]/10 px-4 py-3 text-sm text-[var(--pd-state-warning)]">
+        No ready sandboxes available. Create a workspace first.
+      </div>
+    {/if}
 
     {#if session?.status === 'running'}
       <div class="flex items-center gap-2 text-sm text-[var(--pd-content-text)] opacity-60 py-2">
@@ -565,9 +624,44 @@ function handleKeyDown(e: KeyboardEvent): void {
 {/if}
 
 <!-- Input area -->
-{#if canSendFollowUp}
+{#if showInputArea}
   <div class="px-4 pb-3 pt-2">
     <div class="max-w-4xl mx-auto">
+      <!-- Draft mode: workspace selector above prompt -->
+      {#if isDraft && readySandboxes.length > 0}
+        <div class="flex items-center gap-3 pb-3">
+          <div class="inline-flex items-center gap-2 rounded-md border border-[var(--pd-content-divider)] bg-[var(--pd-content-card-bg)] px-3 py-1.5">
+            <span class="text-xs text-[var(--pd-content-text)] opacity-50">Workspace</span>
+            <select
+              bind:value={selectedSandboxName}
+              aria-label="Sandbox"
+              disabled={!!preparingSandbox}
+              class="bg-transparent text-sm text-[var(--pd-content-text)] border-none outline-none cursor-pointer disabled:opacity-40"
+            >
+              {#if !selectedSandboxName}
+                <option value="" disabled selected>Select workspace…</option>
+              {/if}
+              {#each readySandboxes as s (s.name)}
+                <option value={s.name}>{s.name}</option>
+              {/each}
+            </select>
+          </div>
+          {#if preparingSandbox}
+            <span class="text-xs text-[var(--pd-content-text)] opacity-50">Starting session…</span>
+          {/if}
+        </div>
+
+        {#if !sandboxAgentSupportsAcp}
+          <div class="rounded-lg border border-[var(--pd-status-dead)] bg-[var(--pd-status-dead)]/10 px-4 py-3 mb-3 text-sm text-[var(--pd-status-dead)]">
+            Agent "{sandboxAgentInfo?.name ?? sandboxAgentId}" does not support ACP sessions.
+          </div>
+        {:else if draftNeedsAgentSelection && acpAgents.length === 0}
+          <div class="rounded-lg border border-[var(--pd-state-warning)] bg-[var(--pd-state-warning)]/10 px-4 py-3 mb-3 text-sm text-[var(--pd-state-warning)]">
+            No ACP-capable agents available.
+          </div>
+        {/if}
+      {/if}
+
       <!-- Context usage bar -->
       {#if hasContext}
         <div class="flex items-center gap-3 pb-2">
@@ -626,7 +720,7 @@ function handleKeyDown(e: KeyboardEvent): void {
             bind:value={followUpText}
             rows={3}
             placeholder={isWaitingInput ? 'Respond to the pending request above to continue…' : isDraft ? 'Describe your goal to start a new session…' : 'Describe your goal...'}
-            disabled={isWaitingInput}
+            disabled={isWaitingInput || (isDraft && !draftCanSend) || !!preparingSandbox}
             onkeydown={handleKeyDown}
             oninput={handleInput}
             class="w-full bg-transparent px-3 py-2 text-sm text-[var(--pd-input-field-focused-text)] placeholder-[var(--pd-input-field-placeholder-text)] focus:outline-none resize-none disabled:opacity-40 disabled:cursor-not-allowed"
@@ -714,7 +808,7 @@ function handleKeyDown(e: KeyboardEvent): void {
             {:else}
               <button
                 onclick={(): void => { handleSendFollowUp().catch((e: unknown) => console.error(e)); }}
-                disabled={(!followUpText.trim() && pendingAttachments.length === 0) || isWaitingInput}
+                disabled={(!followUpText.trim() && pendingAttachments.length === 0) || isWaitingInput || (isDraft && !draftCanSend) || !!preparingSandbox}
                 title="Send"
                 class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium bg-[var(--pd-button-primary-bg)] text-[var(--pd-button-primary-text)] hover:bg-[var(--pd-button-primary-bg-hover)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
