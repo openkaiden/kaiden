@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { derived, type Writable, writable } from 'svelte/store';
+import { derived, get, type Writable, writable } from 'svelte/store';
 
 import { EventStore } from '/@/stores/event-store';
 import type { GatewaySandboxes, SandboxInfo } from '/@api/openshell-gateway-info';
@@ -53,6 +53,7 @@ openshellSandboxesEventStore.setup();
 
 export interface SandboxInfoWithGateway extends SandboxInfo {
   gatewayName: string;
+  actionError?: string;
 }
 
 // Workaround: the Podman driver's event watcher can briefly report a sandbox as
@@ -61,8 +62,25 @@ export interface SandboxInfoWithGateway extends SandboxInfo {
 // Pin the phase to Deleting once observed until the sandbox disappears.
 const deletingSandboxIds = new Set<string>();
 
-// Derived store: flatten all sandboxes across gateways and add gateway name for easier UI consumption
-export const allOpenshellSandboxes = derived(openshellSandboxes, $sandboxes => {
+// Writable store: flatten all sandboxes across gateways and add gateway name for easier UI consumption.
+// Updated via subscription to openshellSandboxes; reconciles with the current list to preserve actionError.
+const _allOpenshellSandboxes: Writable<SandboxInfoWithGateway[]> = writable([]);
+export const allOpenshellSandboxes = derived(
+  [_allOpenshellSandboxes],
+  $_allOpenshellSandboxes => $_allOpenshellSandboxes[0],
+);
+
+export function setSandboxActionError(id: string, error: string): void {
+  _allOpenshellSandboxes.update(sandboxes => sandboxes.map(s => (s.id === id ? { ...s, actionError: error } : s)));
+}
+
+export function clearSandboxActionError(id: string): void {
+  _allOpenshellSandboxes.update(sandboxes => sandboxes.map(s => (s.id === id ? { ...s, actionError: undefined } : s)));
+}
+
+// Reconcile backend data with current allOpenshellSandboxes, preserving actionError.
+openshellSandboxes.subscribe($sandboxes => {
+  const current = get(_allOpenshellSandboxes);
   const flattened: SandboxInfoWithGateway[] = [];
   const currentIds = new Set<string>();
   for (const gatewaySandboxes of $sandboxes) {
@@ -74,10 +92,12 @@ export const allOpenshellSandboxes = derived(openshellSandboxes, $sandboxes => {
         deletingSandboxIds.delete(sandbox.id);
       }
       const phase = deletingSandboxIds.has(sandbox.id) ? 'Deleting' : sandbox.phase;
+      const existing = current.find(s => s.id === sandbox.id);
       flattened.push({
         ...sandbox,
         phase,
         gatewayName: gatewaySandboxes.gateway.name,
+        actionError: existing?.actionError,
       });
     }
   }
@@ -86,7 +106,7 @@ export const allOpenshellSandboxes = derived(openshellSandboxes, $sandboxes => {
       deletingSandboxIds.delete(id);
     }
   }
-  return flattened;
+  _allOpenshellSandboxes.set(flattened);
 });
 
 // Search pattern for filtering sandboxes
@@ -97,7 +117,7 @@ export const selectedGateway = writable('');
 
 // Derived store: filtered sandboxes based on search pattern and selected gateway
 export const filteredOpenshellSandboxes = derived(
-  [searchPattern, selectedGateway, allOpenshellSandboxes],
+  [searchPattern, selectedGateway, _allOpenshellSandboxes],
   ([$searchPattern, $selectedGateway, $allSandboxes]) => {
     let result = $allSandboxes;
 
