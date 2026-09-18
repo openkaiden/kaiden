@@ -78,6 +78,7 @@ export class OpenshellGateway implements Disposable {
   #gatewayLogStream: WriteStream | undefined;
   #port: number = DEFAULT_PORT;
   #bindAddress: string = DEFAULT_BIND_ADDRESS;
+  #migrationRetryInProgress = new Set<string>();
 
   private readonly _onDidGatewayStart = new Emitter<void>();
   readonly onDidGatewayStart: Event<void> = this._onDidGatewayStart.event;
@@ -343,12 +344,26 @@ export class OpenshellGateway implements Disposable {
         const backupPath = await this.backupGatewayDatabase(name);
         this.notificationRegistry.addNotification({
           title: 'OpenShell Gateway database migration error',
-          body: `The gateway "${name}" encountered a database migration error. The database has been backed up to ${backupPath}. Please restart the gateway.`,
+          body: `The gateway "${name}" encountered a database migration error. The database has been backed up to ${backupPath}. Restarting the gateway automatically.`,
           extensionId: 'core',
           type: 'warn',
           highlight: true,
           silent: false,
         });
+        if (!this.#migrationRetryInProgress.has(name)) {
+          this.#migrationRetryInProgress.add(name);
+          try {
+            console.log(`[openshell-gateway] retrying start for "${name}" after migration error recovery`);
+            await this.startCreatedGateway(name, endpoint);
+            return;
+          } catch (retryErr: unknown) {
+            const retryMessage = retryErr instanceof Error ? retryErr.message : String(retryErr);
+            console.error(`[openshell-gateway] retry after migration error for "${name}" also failed: ${retryMessage}`);
+            throw retryErr;
+          } finally {
+            this.#migrationRetryInProgress.delete(name);
+          }
+        }
       }
       throw err;
     }
@@ -455,12 +470,26 @@ export class OpenshellGateway implements Disposable {
         const backupPath = await this.backupGatewayDatabase(DEFAULT_GATEWAY_NAME);
         this.notificationRegistry.addNotification({
           title: 'OpenShell Gateway database migration error',
-          body: `The gateway "${DEFAULT_GATEWAY_NAME}" encountered a database migration error. The database has been backed up to ${backupPath}. Please restart the gateway.`,
+          body: `The gateway "${DEFAULT_GATEWAY_NAME}" encountered a database migration error. The database has been backed up to ${backupPath}. Restarting the gateway automatically.`,
           extensionId: 'core',
           type: 'warn',
           highlight: true,
           silent: false,
         });
+        if (!this.#migrationRetryInProgress.has(DEFAULT_GATEWAY_NAME)) {
+          this.#migrationRetryInProgress.add(DEFAULT_GATEWAY_NAME);
+          try {
+            console.log('[openshell-gateway] retrying start after migration error recovery');
+            await this.start(options);
+            return;
+          } catch (retryErr: unknown) {
+            const retryMessage = retryErr instanceof Error ? retryErr.message : String(retryErr);
+            console.error(`[openshell-gateway] retry after migration error also failed: ${retryMessage}`);
+            throw retryErr;
+          } finally {
+            this.#migrationRetryInProgress.delete(DEFAULT_GATEWAY_NAME);
+          }
+        }
       }
       const baseMessage = err instanceof Error ? err.message : String(err);
       throw new Error(stderrOutput ? `${baseMessage}: ${stderrOutput}` : baseMessage);
