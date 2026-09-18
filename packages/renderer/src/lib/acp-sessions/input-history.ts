@@ -28,6 +28,7 @@ export class InputHistory {
   readonly #entries: string[] = [];
   #cursor = -1;
   #draft = '';
+  #populated = false;
 
   /** Record a sent message. Resets the navigation cursor. */
   push(text: string): void {
@@ -90,14 +91,17 @@ export class InputHistory {
     return draft;
   }
 
-  /** Whether the user is currently browsing history. */
-  get isNavigating(): boolean {
-    return this.#cursor !== -1;
-  }
-
-  /** Reset navigation state without clearing history. */
-  resetNavigation(): void {
-    this.#resetCursor();
+  /**
+   * Pre-populate history from existing prompt events (e.g. when
+   * loading a session from disk). No-op after the first call so
+   * live-session event refreshes don't re-add entries.
+   */
+  populateFromEvents(promptTexts: string[]): void {
+    if (this.#populated) return;
+    this.#populated = true;
+    for (const text of promptTexts) {
+      this.push(text);
+    }
   }
 
   #resetCursor(): void {

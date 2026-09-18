@@ -141,35 +141,6 @@ describe('InputHistory', () => {
     expect(history.navigateBack('')).toBe('msg3');
   });
 
-  test('should report isNavigating state correctly', () => {
-    const history = new InputHistory();
-    history.push('msg1');
-
-    expect(history.isNavigating).toBe(false);
-
-    history.navigateBack('');
-    expect(history.isNavigating).toBe(true);
-
-    // Navigate forward past newest restores draft and resets
-    history.navigateForward();
-    expect(history.isNavigating).toBe(false);
-  });
-
-  test('should handle resetNavigation', () => {
-    const history = new InputHistory();
-    history.push('msg1');
-    history.push('msg2');
-
-    history.navigateBack('');
-    expect(history.isNavigating).toBe(true);
-
-    history.resetNavigation();
-    expect(history.isNavigating).toBe(false);
-
-    // Should start from newest again
-    expect(history.navigateBack('')).toBe('msg2');
-  });
-
   test('should trim messages before storing', () => {
     const history = new InputHistory();
     history.push('  hello  ');
@@ -198,5 +169,33 @@ describe('InputHistory', () => {
 
     // No longer navigating
     expect(history.navigateForward()).toBeUndefined();
+  });
+
+  test('should pre-populate history from prompt events', () => {
+    const history = new InputHistory();
+    history.populateFromEvents(['first prompt', 'second prompt']);
+
+    expect(history.navigateBack('')).toBe('second prompt');
+    expect(history.navigateBack('second prompt')).toBe('first prompt');
+  });
+
+  test('should only populate from events once', () => {
+    const history = new InputHistory();
+    history.populateFromEvents(['prompt1']);
+    history.push('user msg');
+    // Second call is a no-op
+    history.populateFromEvents(['prompt1', 'extra']);
+
+    expect(history.navigateBack('')).toBe('user msg');
+    expect(history.navigateBack('user msg')).toBe('prompt1');
+    // 'extra' should not be present
+    expect(history.navigateBack('prompt1')).toBeUndefined();
+  });
+
+  test('should handle empty prompt events', () => {
+    const history = new InputHistory();
+    history.populateFromEvents([]);
+
+    expect(history.navigateBack('')).toBeUndefined();
   });
 });
