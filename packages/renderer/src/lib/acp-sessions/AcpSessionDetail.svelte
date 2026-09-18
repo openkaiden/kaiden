@@ -22,6 +22,7 @@ import AcpFlowPlan from './flow/AcpFlowPlan.svelte';
 import AcpFlowPrompt from './flow/AcpFlowPrompt.svelte';
 import AcpFlowThinking from './flow/AcpFlowThinking.svelte';
 import AcpFlowToolCall from './flow/AcpFlowToolCall.svelte';
+import { InputHistory } from './input-history.js';
 
 interface Props {
   sessionId: string;
@@ -75,6 +76,7 @@ function handleSlashCancel(): void {
   followUpText = '';
 }
 
+const inputHistory = new InputHistory();
 let textareaEl: HTMLTextAreaElement | undefined = $state(undefined);
 let atQuery: string | undefined = $state(undefined);
 let atStartIndex = $state(-1);
@@ -460,6 +462,7 @@ async function handleSendFollowUp(): Promise<void> {
   const savedScrollLock = userScrolledAway;
   try {
     sendError = undefined;
+    inputHistory.push(followUpText);
     followUpText = '';
     pendingAttachments = [];
     userScrolledAway = false;
@@ -485,6 +488,25 @@ function handleKeyDown(e: KeyboardEvent): void {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     handleSendFollowUp().catch((e: unknown) => console.error(e));
+    return;
+  }
+  if (e.key === 'ArrowUp' && textareaEl?.selectionStart === 0 && textareaEl.selectionEnd === 0) {
+    const entry = inputHistory.navigateBack(followUpText);
+    if (entry !== undefined) {
+      e.preventDefault();
+      followUpText = entry;
+    }
+    return;
+  }
+  if (e.key === 'ArrowDown' && textareaEl) {
+    const len = followUpText.length;
+    if (textareaEl.selectionStart === len && textareaEl.selectionEnd === len) {
+      const entry = inputHistory.navigateForward();
+      if (entry !== undefined) {
+        e.preventDefault();
+        followUpText = entry;
+      }
+    }
   }
 }
 </script>
