@@ -375,9 +375,7 @@ $effect(() => {
 // Pre-populate input history from existing prompt events (sessions loaded from disk)
 $effect(() => {
   if (events.length > 0) {
-    inputHistory.populateFromEvents(
-      events.filter(e => e.kind === 'prompt').map(e => e.text),
-    );
+    inputHistory.populateFromEvents(events.filter(e => e.kind === 'prompt').map(e => e.text));
   }
 });
 
@@ -470,13 +468,16 @@ async function handleSendFollowUp(): Promise<void> {
   const savedText = followUpText;
   const savedAttachments = pendingAttachments;
   const savedScrollLock = userScrolledAway;
+  const historyAtSend = inputHistory;
   try {
     sendError = undefined;
     followUpText = '';
     pendingAttachments = [];
     userScrolledAway = false;
     await window.sendAcpFollowUp(sessionId, textToSend, attachmentsToSend);
-    inputHistory.push(savedText);
+    if (inputHistory === historyAtSend) {
+      inputHistory.push(savedText);
+    }
     refreshEvents();
   } catch (err: unknown) {
     console.error('Failed to send follow-up', err);
@@ -500,17 +501,18 @@ function handleKeyDown(e: KeyboardEvent): void {
     handleSendFollowUp().catch((e: unknown) => console.error(e));
     return;
   }
-  if (e.key === 'ArrowUp' && textareaEl?.selectionStart === 0 && textareaEl.selectionEnd === 0) {
-    const entry = inputHistory.navigateBack(followUpText);
-    if (entry !== undefined) {
-      e.preventDefault();
-      followUpText = entry;
+  if (e.key === 'ArrowUp' && textareaEl && textareaEl.selectionStart === textareaEl.selectionEnd) {
+    if (!followUpText.substring(0, textareaEl.selectionStart).includes('\n')) {
+      const entry = inputHistory.navigateBack(followUpText);
+      if (entry !== undefined) {
+        e.preventDefault();
+        followUpText = entry;
+      }
     }
     return;
   }
-  if (e.key === 'ArrowDown' && textareaEl) {
-    const len = followUpText.length;
-    if (textareaEl.selectionStart === len && textareaEl.selectionEnd === len) {
+  if (e.key === 'ArrowDown' && textareaEl && textareaEl.selectionStart === textareaEl.selectionEnd) {
+    if (!followUpText.substring(textareaEl.selectionStart).includes('\n')) {
       const entry = inputHistory.navigateForward();
       if (entry !== undefined) {
         e.preventDefault();
