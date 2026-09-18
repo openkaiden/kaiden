@@ -22,6 +22,7 @@ import AcpFlowPlan from './flow/AcpFlowPlan.svelte';
 import AcpFlowPrompt from './flow/AcpFlowPrompt.svelte';
 import AcpFlowThinking from './flow/AcpFlowThinking.svelte';
 import AcpFlowToolCall from './flow/AcpFlowToolCall.svelte';
+import { InputHistory } from './input-history.js';
 
 interface Props {
   sessionId: string;
@@ -75,6 +76,7 @@ function handleSlashCancel(): void {
   followUpText = '';
 }
 
+let inputHistory = new InputHistory();
 let textareaEl: HTMLTextAreaElement | undefined = $state(undefined);
 let atQuery: string | undefined = $state(undefined);
 let atStartIndex = $state(-1);
@@ -362,11 +364,19 @@ $effect(() => {
 $effect(() => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars, sonarjs/no-unused-vars
   const _id = sessionId;
+  inputHistory = new InputHistory();
   followUpText = '';
   pendingAttachments = [];
   sendError = undefined;
   userScrolledAway = false;
   acpSessionsEventStoreInfo?.fetch()?.catch(() => {});
+});
+
+// Pre-populate input history from existing prompt events (sessions loaded from disk)
+$effect(() => {
+  if (events.length > 0) {
+    inputHistory.populateFromEvents(events.filter(e => e.kind === 'prompt').map(e => e.text));
+  }
 });
 
 $effect(() => {
@@ -458,12 +468,16 @@ async function handleSendFollowUp(): Promise<void> {
   const savedText = followUpText;
   const savedAttachments = pendingAttachments;
   const savedScrollLock = userScrolledAway;
+  const historyAtSend = inputHistory;
   try {
     sendError = undefined;
     followUpText = '';
     pendingAttachments = [];
     userScrolledAway = false;
     await window.sendAcpFollowUp(sessionId, textToSend, attachmentsToSend);
+    if (inputHistory === historyAtSend) {
+      inputHistory.push(savedText);
+    }
     refreshEvents();
   } catch (err: unknown) {
     console.error('Failed to send follow-up', err);
@@ -485,6 +499,26 @@ function handleKeyDown(e: KeyboardEvent): void {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     handleSendFollowUp().catch((e: unknown) => console.error(e));
+    return;
+  }
+  if (e.key === 'ArrowUp' && textareaEl && textareaEl.selectionStart === textareaEl.selectionEnd) {
+    if (!followUpText.substring(0, textareaEl.selectionStart).includes('\n')) {
+      const entry = inputHistory.navigateBack(followUpText);
+      if (entry !== undefined) {
+        e.preventDefault();
+        followUpText = entry;
+      }
+    }
+    return;
+  }
+  if (e.key === 'ArrowDown' && textareaEl && textareaEl.selectionStart === textareaEl.selectionEnd) {
+    if (!followUpText.substring(textareaEl.selectionStart).includes('\n')) {
+      const entry = inputHistory.navigateForward();
+      if (entry !== undefined) {
+        e.preventDefault();
+        followUpText = entry;
+      }
+    }
   }
 }
 </script>
