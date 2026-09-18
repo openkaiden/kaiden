@@ -80,10 +80,6 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
   }
 
   #resolveFactory(options: SecretCreateOptions): ProviderFactory {
-    const factory = this.providerFactories.find(f => f.supports(options.type));
-    if (!factory) {
-      return this.defaultProviderFactory;
-    }
-    return factory;
+    return this.providerFactories.find(f => f.supports(options.type)) ?? this.defaultProviderFactory;
   }
 }
