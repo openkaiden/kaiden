@@ -354,7 +354,7 @@ describe('input history navigation', () => {
     expect(textarea).toHaveValue('my draft');
   });
 
-  test('should not trigger history when cursor is not at input boundary', async () => {
+  test('should not trigger history when cursor is not on first line', async () => {
     vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
     vi.mocked(window.sendAcpFollowUp).mockResolvedValue(undefined);
 
@@ -367,12 +367,13 @@ describe('input history navigation', () => {
     await userEvent.click(screen.getByTitle('Send'));
     await vi.waitFor(() => expect(textarea).toHaveValue(''));
 
-    // Type text and place cursor in the middle
-    await userEvent.type(textarea, 'hello world');
-    textarea.setSelectionRange(5, 5);
+    // Type multi-line text (Shift+Enter inserts newline without sending)
+    await userEvent.type(textarea, 'line1{Shift>}{Enter}{/Shift}line2');
+    // Place cursor on second line
+    textarea.setSelectionRange(8, 8);
     await userEvent.keyboard('{ArrowUp}');
-    // Should NOT navigate — cursor is not at position 0
-    expect(textarea).toHaveValue('hello world');
+    // Should NOT navigate — cursor is not on the first line
+    expect(textarea).toHaveValue('line1\nline2');
   });
 });
 
