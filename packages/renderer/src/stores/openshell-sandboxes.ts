@@ -18,6 +18,7 @@
 
 import { derived, type Writable, writable } from 'svelte/store';
 
+import type { SandboxInfoUI } from '/@/lib/agent-workspaces/SandboxInfoUI';
 import type { GatewaySandboxes, SandboxInfo } from '/@api/openshell-gateway-info';
 
 import { EventStore } from './event-store';
@@ -56,6 +57,25 @@ export interface SandboxInfoWithGateway extends SandboxInfo {
   gatewayName: string;
 }
 
+// Store for sandbox action errors, keyed by sandbox ID
+const sandboxActionErrors: Writable<Map<string, string>> = writable(new Map());
+
+export function setSandboxActionError(id: string, error: string): void {
+  sandboxActionErrors.update(errors => {
+    const updated = new Map(errors);
+    updated.set(id, error);
+    return updated;
+  });
+}
+
+export function clearSandboxActionError(id: string): void {
+  sandboxActionErrors.update(errors => {
+    const updated = new Map(errors);
+    updated.delete(id);
+    return updated;
+  });
+}
+
 // Workaround: the Podman driver's event watcher can briefly report a sandbox as
 // Provisioning between Deleting and actual removal (stop event → inspect →
 // derive_phase returns Provisioning before the remove event arrives).
@@ -63,8 +83,8 @@ export interface SandboxInfoWithGateway extends SandboxInfo {
 const deletingSandboxIds = new Set<string>();
 
 // Derived store: flatten all sandboxes across gateways and add gateway name for easier UI consumption
-export const allOpenshellSandboxes = derived(openshellSandboxes, $sandboxes => {
-  const flattened: SandboxInfoWithGateway[] = [];
+export const allOpenshellSandboxes = derived([openshellSandboxes, sandboxActionErrors], ([$sandboxes, $errors]) => {
+  const flattened: SandboxInfoUI[] = [];
   const currentIds = new Set<string>();
   for (const gatewaySandboxes of $sandboxes) {
     for (const sandbox of gatewaySandboxes.sandboxes) {
@@ -75,10 +95,12 @@ export const allOpenshellSandboxes = derived(openshellSandboxes, $sandboxes => {
         deletingSandboxIds.delete(sandbox.id);
       }
       const phase = deletingSandboxIds.has(sandbox.id) ? 'Deleting' : sandbox.phase;
+      const actionError = $errors.get(sandbox.id);
       flattened.push({
         ...sandbox,
         phase,
         gatewayName: gatewaySandboxes.gateway.name,
+        actionError,
       });
     }
   }

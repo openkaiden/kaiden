@@ -13,16 +13,18 @@ import {
 } from '@podman-desktop/ui-svelte';
 
 import { withBulkConfirmation } from '/@/lib/actions/BulkActions';
+import type { SandboxInfoUI } from '/@/lib/agent-workspaces/SandboxInfoUI';
 import NotificationsBox from '/@/lib/dashboard/NotificationsBox.svelte';
 import GatewayFilterDropdown from '/@/lib/gateways/GatewayFilterDropdown.svelte';
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
 import { handleNavigation } from '/@/navigation';
 import {
   allOpenshellSandboxes,
+  clearSandboxActionError,
   filteredOpenshellSandboxes,
-  type SandboxInfoWithGateway,
   searchPattern as sandboxSearchPattern,
   selectedGateway as sandboxSelectedGateway,
+  setSandboxActionError,
 } from '/@/stores/openshell-sandboxes';
 import { NavigationPage } from '/@api/navigation-page';
 
@@ -33,7 +35,7 @@ import SandboxGateway from './columns/SandboxGateway.svelte';
 import SandboxName from './columns/SandboxName.svelte';
 import SandboxPhase from './columns/SandboxPhase.svelte';
 
-type SandboxSelectable = SandboxInfoWithGateway & { selected: boolean };
+type SandboxSelectable = SandboxInfoUI & { selected: boolean };
 
 let searchTerm = $state('');
 let gatewayFilter = $state('');
@@ -64,10 +66,11 @@ async function deleteSelectedSandboxes(): Promise<void> {
   bulkDeleteInProgress = true;
   await Promise.all(
     selectedSandboxes.map(async sandbox => {
+      clearSandboxActionError(sandbox.id);
       try {
         await window.deleteOpenshellSandbox(sandbox.name, sandbox.gatewayName);
-      } catch (error) {
-        console.error(`error while removing workspace ${sandbox.name}`, error);
+      } catch (e: unknown) {
+        setSandboxActionError(sandbox.id, String(e));
       }
     }),
   );
