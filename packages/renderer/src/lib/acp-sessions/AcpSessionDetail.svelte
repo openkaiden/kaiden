@@ -67,10 +67,12 @@ const draftEffectiveAgentId = $derived(sandboxAgentId ?? selectedAgentId);
 const draftCanSend = $derived(isDraft && !!selectedSandbox && draftEffectiveAgentId !== '' && sandboxAgentSupportsAcp);
 
 let preparingSandbox = $state('');
+let failedSandbox = $state('');
 
 $effect(() => {
   if (!isDraft || !selectedSandboxName || !draftCanSend) return;
   if (preparingSandbox === selectedSandboxName) return;
+  if (failedSandbox === selectedSandboxName) return;
   preparingSandbox = selectedSandboxName;
   const agentId = draftEffectiveAgentId || undefined;
   window
@@ -81,6 +83,8 @@ $effect(() => {
     .catch((err: unknown) => {
       console.error('Failed to prepare session', err);
       sendError = err instanceof Error ? err.message : String(err);
+      failedSandbox = selectedSandboxName;
+      preparingSandbox = '';
     });
 });
 
@@ -650,6 +654,10 @@ function handleKeyDown(e: KeyboardEvent): void {
         {#if !sandboxAgentSupportsAcp}
           <div class="rounded-lg border border-[var(--pd-status-dead)] bg-[var(--pd-status-dead)]/10 px-4 py-3 mb-3 text-sm text-[var(--pd-status-dead)]">
             Agent "{sandboxAgentInfo?.name ?? sandboxAgentId}" does not support ACP sessions.
+          </div>
+        {:else if draftNeedsAgentSelection && acpAgents.length === 0}
+          <div class="rounded-lg border border-[var(--pd-state-warning)] bg-[var(--pd-state-warning)]/10 px-4 py-3 mb-3 text-sm text-[var(--pd-state-warning)]">
+            No ACP-capable agents available.
           </div>
         {/if}
       {/if}
