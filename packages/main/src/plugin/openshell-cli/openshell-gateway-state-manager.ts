@@ -22,10 +22,11 @@ import type { Disposable } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
 
 import { Emitter } from '/@/plugin/events/emitter.js';
+import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { IDisposable } from '/@api/disposable.js';
 import type { Event } from '/@api/event.js';
-import type { GatewayInfo, LocalGatewayDriver } from '/@api/openshell-gateway-info.js';
+import type { GatewayInfo, GatewayProcessState, LocalGatewayDriver } from '/@api/openshell-gateway-info.js';
 
 import { OpenshellCli } from './openshell-cli.js';
 
@@ -54,6 +55,8 @@ export class OpenshellGatewayStateManager implements Disposable {
     private readonly openshellCli: OpenshellCli,
     @inject(IConfigurationRegistry)
     private readonly configurationRegistry: IConfigurationRegistry,
+    @inject(OpenshellGateway)
+    private readonly openshellGateway: OpenshellGateway,
   ) {}
 
   init(): void {
@@ -132,6 +135,7 @@ export class OpenshellGatewayStateManager implements Disposable {
     const registrations = await this.openshellCli.listGateways();
     const gateways = await Promise.all(
       registrations.map(async gateway => {
+        const pid = await this.openshellGateway.getGatewayPid(gateway).catch(() => undefined);
         try {
           const runtimeInfo = await this.openshellCli.getGatewayInfo(gateway.name);
           const reportedDriver = runtimeInfo.compute_drivers[0]?.capabilities.driver_name;
@@ -139,20 +143,24 @@ export class OpenshellGatewayStateManager implements Disposable {
             reportedDriver === 'vm' || reportedDriver === 'podman' || reportedDriver === 'docker'
               ? reportedDriver
               : undefined;
+          const processState: GatewayProcessState | undefined = this.deriveProcessState(pid, true);
           return {
             ...gateway,
             ...(driver ? { driver } : {}),
             gatewayState: {
               reachable: true,
               health: runtimeInfo.status,
+              ...(processState ? { process: processState } : {}),
             },
           };
         } catch {
+          const processState: GatewayProcessState | undefined = this.deriveProcessState(pid, false);
           return {
             ...gateway,
             gatewayState: {
               reachable: false,
               health: 'unknown' as const,
+              ...(processState ? { process: processState } : {}),
             },
           };
         }
@@ -163,6 +171,16 @@ export class OpenshellGatewayStateManager implements Disposable {
       this.#gateways = nextGateways;
       this.#onDidUpdateGateways.fire(this.listGateways());
     }
+  }
+
+  private deriveProcessState(pid: number | undefined, reachable: boolean): GatewayProcessState | undefined {
+    if (pid !== undefined) {
+      return { pid, status: 'running' };
+    }
+    if (!reachable) {
+      return { status: 'not-running' };
+    }
+    return undefined;
   }
 
   private hasChanged(nextGateways: ReadonlyMap<string, GatewayInfo>): boolean {

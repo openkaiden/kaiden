@@ -1909,4 +1909,45 @@ describe('gateway.pid persistence', () => {
     const pidPath = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev', 'gateway.pid');
     expect(unlink).toHaveBeenCalledWith(pidPath);
   });
+
+  test('getGatewayPid returns pid for alive process', async () => {
+    vi.mocked(readFile).mockResolvedValue('12345');
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    const pid = await gateway.getGatewayPid({
+      name: 'local-dev',
+      endpoint: 'http://127.0.0.1:17675',
+    });
+
+    expect(pid).toBe(12345);
+    killSpy.mockRestore();
+  });
+
+  test('getGatewayPid returns undefined for dead process', async () => {
+    vi.mocked(readFile).mockResolvedValue('99999');
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      const err = new Error('ESRCH') as NodeJS.ErrnoException;
+      err.code = 'ESRCH';
+      throw err;
+    });
+
+    const pid = await gateway.getGatewayPid({
+      name: 'local-dev',
+      endpoint: 'http://127.0.0.1:17675',
+    });
+
+    expect(pid).toBeUndefined();
+    killSpy.mockRestore();
+  });
+
+  test('getGatewayPid returns undefined when no pid file exists', async () => {
+    vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
+
+    const pid = await gateway.getGatewayPid({
+      name: 'local-dev',
+      endpoint: 'http://127.0.0.1:17675',
+    });
+
+    expect(pid).toBeUndefined();
+  });
 });

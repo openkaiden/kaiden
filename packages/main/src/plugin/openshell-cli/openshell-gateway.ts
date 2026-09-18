@@ -109,7 +109,10 @@ export class OpenshellGateway implements Disposable {
           if (this.isCreatedGateway(gateway.name)) {
             const pid = await this.readAndValidatePid(gateway.name);
             if (pid !== undefined) {
-              gateway.gatewayState = { ...(gateway.gatewayState ?? { reachable: false, health: 'unknown' }), pid };
+              gateway.gatewayState = {
+                ...(gateway.gatewayState ?? { reachable: false, health: 'unknown' }),
+                process: { pid, status: 'running' },
+              };
             }
             if (!(await this.isEndpointHealthy(gateway.endpoint))) {
               try {
@@ -555,6 +558,10 @@ export class OpenshellGateway implements Disposable {
     gatewayProcess.once('exit', cleanup);
     gatewayProcess.once('error', cleanup);
     this.#gatewayProcesses.set(name, gatewayProcess);
+  }
+
+  async getGatewayPid(gateway: GatewayInfo): Promise<number | undefined> {
+    return this.readAndValidatePid(gateway.name);
   }
 
   private async readAndValidatePid(name: string): Promise<number | undefined> {
