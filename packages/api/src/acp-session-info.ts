@@ -214,7 +214,7 @@ export interface AcpFlowCostUpdateEvent {
 
 export interface AcpSessionCreateOptions {
   sandboxName: string;
-  prompt: string;
+  prompt?: string;
   agentId?: string;
 }
 

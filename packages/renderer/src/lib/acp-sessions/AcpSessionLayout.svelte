@@ -10,15 +10,12 @@ import { acpSessions } from '/@/stores/acp-sessions.svelte';
 import { allOpenshellSandboxes } from '/@/stores/openshell-sandboxes';
 import type { AcpSessionInfo, AcpSessionStatus } from '/@api/acp-session-info';
 
-import AcpSessionCreate from './AcpSessionCreate.svelte';
-
 interface Props {
   currentSessionId?: string;
   children: Snippet;
 }
 
 let { currentSessionId, children }: Props = $props();
-let showCreateDialog = $state(false);
 let renamingSessionId = $state<string | undefined>(undefined);
 let renameInFlight = $state(false);
 let renameValue = $state('');
@@ -125,7 +122,7 @@ async function handleDeleteSession(e: MouseEvent, id: string): Promise<void> {
   <div class="w-64 shrink-0 flex flex-col border-r border-[var(--pd-content-divider)] bg-[var(--pd-content-card-bg)]">
     <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--pd-content-divider)]">
       <span class="text-xs font-semibold uppercase tracking-wider text-[var(--pd-content-header-text)]">Sessions</span>
-      <Button icon={faPlus} type="link" padding="p-0.5" disabled={!hasReadySandboxes} onclick={(): void => { showCreateDialog = true; }} title="New Session" />
+      <Button icon={faPlus} type="link" padding="p-0.5" disabled={!hasReadySandboxes} onclick={(): void => { router.goto('/acp-sessions/new'); }} title="New Session" />
     </div>
     <div class="flex-1 overflow-auto">
       {#snippet sessionRow(s: AcpSessionInfo)}
@@ -219,6 +216,3 @@ async function handleDeleteSession(e: MouseEvent, id: string): Promise<void> {
   </div>
 </div>
 
-{#if showCreateDialog && hasReadySandboxes}
-  <AcpSessionCreate onclose={(): void => { showCreateDialog = false; }} />
-{/if}

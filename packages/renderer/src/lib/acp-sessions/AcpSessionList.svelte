@@ -10,6 +10,7 @@ import {
   TableDurationColumn,
   TableRow,
 } from '@podman-desktop/ui-svelte';
+import { router } from 'tinro';
 
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
 import { acpSessions } from '/@/stores/acp-sessions.svelte';
@@ -17,7 +18,6 @@ import { allOpenshellSandboxes } from '/@/stores/openshell-sandboxes';
 import type { AcpSessionInfo, AcpSessionStatus } from '/@api/acp-session-info';
 
 import AcpNoSandboxEmptyScreen from './AcpNoSandboxEmptyScreen.svelte';
-import AcpSessionCreate from './AcpSessionCreate.svelte';
 import AcpSessionEmptyScreen from './AcpSessionEmptyScreen.svelte';
 import AcpSessionName from './columns/AcpSessionName.svelte';
 import AcpSessionStatusBadge from './columns/AcpSessionStatusBadge.svelte';
@@ -26,7 +26,6 @@ import AcpSessionWorkspace from './columns/AcpSessionWorkspace.svelte';
 type SessionSelectable = AcpSessionInfo & { selected: boolean };
 
 let searchTerm = $state('');
-let showCreateDialog = $state(false);
 
 const hasReadySandboxes = $derived($allOpenshellSandboxes.some(s => s.phase === 'Ready'));
 
@@ -98,7 +97,7 @@ const columns = [nameColumn, statusColumn, sandboxColumn, timeColumn];
 
 <NavPage bind:searchTerm={searchTerm} searchEnabled={false} title="Agents">
   {#snippet additionalActions()}
-    <Button icon={faPlus} disabled={!hasReadySandboxes} onclick={(): void => { showCreateDialog = true; }}>New Session</Button>
+    <Button icon={faPlus} disabled={!hasReadySandboxes} onclick={(): void => { router.goto('/acp-sessions/new'); }}>New Session</Button>
   {/snippet}
 
   {#snippet content()}
@@ -114,7 +113,7 @@ const columns = [nameColumn, statusColumn, sandboxColumn, timeColumn];
           {:else if !hasReadySandboxes}
             <AcpNoSandboxEmptyScreen />
           {:else}
-            <AcpSessionEmptyScreen oncreate={(): void => { showCreateDialog = true; }} />
+            <AcpSessionEmptyScreen oncreate={(): void => { router.goto('/acp-sessions/new'); }} />
           {/if}
         {:else if !hasMultipleGroups}
           <div class="flex min-w-full">
@@ -159,6 +158,3 @@ const columns = [nameColumn, statusColumn, sandboxColumn, timeColumn];
   {/snippet}
 </NavPage>
 
-{#if showCreateDialog && hasReadySandboxes}
-  <AcpSessionCreate onclose={(): void => { showCreateDialog = false; }} />
-{/if}
