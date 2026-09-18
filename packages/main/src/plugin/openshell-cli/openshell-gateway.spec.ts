@@ -228,9 +228,11 @@ describe('init', () => {
 
     // First spawn exits immediately (migration error in log file)
     Object.defineProperty(failProc, 'exitCode', { value: 1, configurable: true });
-    vi.mocked(readFile).mockResolvedValueOnce(
-      'migration error: migration 7 was previously applied but is missing in the resolved migrations',
-    );
+    vi.mocked(readFile)
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce(
+        'migration error: migration 7 was previously applied but is missing in the resolved migrations',
+      );
 
     // init() → startCreatedGateway detects migration error, backs up, notifies,
     // then retries once; the retry (retryProc) succeeds via getGatewayInfo
