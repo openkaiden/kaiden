@@ -219,6 +219,9 @@ export class ProviderRegistry {
   private readonly _onDidUnsetConnectionFactory = new Emitter<ConnectionFactory>();
   readonly onDidUnsetConnectionFactory: Event<ConnectionFactory> = this._onDidUnsetConnectionFactory.event;
 
+  private readonly _onDidSetSemanticRouterConnectionFactory = new Emitter<void>();
+  readonly onDidSetSemanticRouterConnectionFactory: Event<void> = this._onDidSetSemanticRouterConnectionFactory.event;
+
   constructor(
     @inject(ApiSenderType)
     private apiSender: ApiSenderType,
@@ -1687,6 +1690,10 @@ export class ProviderRegistry {
     });
   }
 
+  onDidSetSemanticRouterConnectionFactoryCallback(): void {
+    this._onDidSetSemanticRouterConnectionFactory.fire();
+  }
+
   getConnectionFactories(): ConnectionFactoryDetails[] {
     const factories: ConnectionFactoryDetails[] = [];
     this.providers.forEach(provider => {
@@ -2139,30 +2146,21 @@ export class ProviderRegistry {
   }
 
   getInferenceConnectionType(providerId: string, connectionId: string): InferenceProviderConnection['type'] {
-    const internalId = this.getMatchingProviderInternalId(providerId);
-    const provider = this.providers.get(internalId);
-    if (!provider) throw new Error('Provider not found');
-
-    const connection =
-      provider.inferenceConnections.find(({ id }) => id === connectionId) ??
-      provider.inferenceConnections.find(({ name }) => name === connectionId);
-    if (!connection) throw new Error('Connection not found');
+    const connection = this.getInferenceConnection(providerId, connectionId);
     return connection.type;
   }
 
   getInferenceConnectionEndpoint(providerId: string, connectionId: string): InferenceProviderConnection['endpoint'] {
-    const internalId = this.getMatchingProviderInternalId(providerId);
-    const provider = this.providers.get(internalId);
-    if (!provider) throw new Error('Provider not found');
-
-    const connection =
-      provider.inferenceConnections.find(({ id }) => id === connectionId) ??
-      provider.inferenceConnections.find(({ name }) => name === connectionId);
-    if (!connection) throw new Error('Connection not found');
+    const connection = this.getInferenceConnection(providerId, connectionId);
     return connection.endpoint;
   }
 
   getInferenceConnectionName(providerId: string, connectionId: string): string {
+    const connection = this.getInferenceConnection(providerId, connectionId);
+    return connection.name;
+  }
+
+  getInferenceConnection(providerId: string, connectionId: string): InferenceProviderConnection {
     const internalId = this.getMatchingProviderInternalId(providerId);
     const provider = this.providers.get(internalId);
     if (!provider) throw new Error('Provider not found');
@@ -2171,9 +2169,8 @@ export class ProviderRegistry {
       provider.inferenceConnections.find(({ id }) => id === connectionId) ??
       provider.inferenceConnections.find(({ name }) => name === connectionId);
     if (!connection) throw new Error('Connection not found');
-    return connection.name;
+    return connection;
   }
-
   getFirstInferenceSDK(providerName: string): ProviderV3 | ProviderV4 {
     const provider = this.providers.values().find(provider => provider.id === providerName);
     if (!provider) throw new Error('Provider not found');
@@ -2215,7 +2212,9 @@ export class ProviderRegistry {
     return undefined;
   }
 
-  getInferenceConnection(modelId: string): { connection: InferenceProviderConnection; providerId: string } | undefined {
+  getInferenceConnectionLegacy(
+    modelId: string,
+  ): { connection: InferenceProviderConnection; providerId: string } | undefined {
     const [metadataName = '', modelLabel = '', endpoint = ''] = modelId.split('::');
 
     for (const provider of this.providers.values()) {
