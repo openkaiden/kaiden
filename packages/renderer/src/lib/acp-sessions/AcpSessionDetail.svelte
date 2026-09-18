@@ -76,7 +76,7 @@ function handleSlashCancel(): void {
   followUpText = '';
 }
 
-const inputHistory = new InputHistory();
+let inputHistory = new InputHistory();
 let textareaEl: HTMLTextAreaElement | undefined = $state(undefined);
 let atQuery: string | undefined = $state(undefined);
 let atStartIndex = $state(-1);
@@ -364,11 +364,21 @@ $effect(() => {
 $effect(() => {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars, sonarjs/no-unused-vars
   const _id = sessionId;
+  inputHistory = new InputHistory();
   followUpText = '';
   pendingAttachments = [];
   sendError = undefined;
   userScrolledAway = false;
   acpSessionsEventStoreInfo?.fetch()?.catch(() => {});
+});
+
+// Pre-populate input history from existing prompt events (sessions loaded from disk)
+$effect(() => {
+  if (events.length > 0) {
+    inputHistory.populateFromEvents(
+      events.filter(e => e.kind === 'prompt').map(e => e.text),
+    );
+  }
 });
 
 $effect(() => {
@@ -462,11 +472,11 @@ async function handleSendFollowUp(): Promise<void> {
   const savedScrollLock = userScrolledAway;
   try {
     sendError = undefined;
-    inputHistory.push(followUpText);
     followUpText = '';
     pendingAttachments = [];
     userScrolledAway = false;
     await window.sendAcpFollowUp(sessionId, textToSend, attachmentsToSend);
+    inputHistory.push(savedText);
     refreshEvents();
   } catch (err: unknown) {
     console.error('Failed to send follow-up', err);
