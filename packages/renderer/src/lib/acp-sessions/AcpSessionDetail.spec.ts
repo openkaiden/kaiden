@@ -298,6 +298,84 @@ describe('state reset on session change', () => {
   });
 });
 
+describe('input history navigation', () => {
+  test('should navigate back through sent messages with ArrowUp', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.sendAcpFollowUp).mockResolvedValue(undefined);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+
+    // Send two messages
+    await userEvent.type(textarea, 'first message');
+    await userEvent.click(screen.getByTitle('Send'));
+    await vi.waitFor(() => expect(textarea).toHaveValue(''));
+
+    await userEvent.type(textarea, 'second message');
+    await userEvent.click(screen.getByTitle('Send'));
+    await vi.waitFor(() => expect(textarea).toHaveValue(''));
+
+    // Focus the textarea and place cursor at start before pressing ArrowUp
+    textarea.focus();
+    textarea.setSelectionRange(0, 0);
+    await userEvent.keyboard('{ArrowUp}');
+    expect(textarea).toHaveValue('second message');
+
+    // Press ArrowUp again — should show oldest message
+    textarea.setSelectionRange(0, 0);
+    await userEvent.keyboard('{ArrowUp}');
+    expect(textarea).toHaveValue('first message');
+  });
+
+  test('should navigate forward and restore draft with ArrowDown', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.sendAcpFollowUp).mockResolvedValue(undefined);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+
+    // Send a message
+    await userEvent.type(textarea, 'sent msg');
+    await userEvent.click(screen.getByTitle('Send'));
+    await vi.waitFor(() => expect(textarea).toHaveValue(''));
+
+    // Type a draft, then navigate back
+    await userEvent.type(textarea, 'my draft');
+    textarea.setSelectionRange(0, 0);
+    await userEvent.keyboard('{ArrowUp}');
+    expect(textarea).toHaveValue('sent msg');
+
+    // Navigate forward — should restore the draft
+    const len = 'sent msg'.length;
+    textarea.setSelectionRange(len, len);
+    await userEvent.keyboard('{ArrowDown}');
+    expect(textarea).toHaveValue('my draft');
+  });
+
+  test('should not trigger history when cursor is not at input boundary', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.sendAcpFollowUp).mockResolvedValue(undefined);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+
+    // Send a message
+    await userEvent.type(textarea, 'sent');
+    await userEvent.click(screen.getByTitle('Send'));
+    await vi.waitFor(() => expect(textarea).toHaveValue(''));
+
+    // Type text and place cursor in the middle
+    await userEvent.type(textarea, 'hello world');
+    textarea.setSelectionRange(5, 5);
+    await userEvent.keyboard('{ArrowUp}');
+    // Should NOT navigate — cursor is not at position 0
+    expect(textarea).toHaveValue('hello world');
+  });
+});
+
 describe('permission request focus management', () => {
   test('should move focus to permission button when events load after initial effect', async () => {
     Element.prototype.scrollIntoView = vi.fn();
