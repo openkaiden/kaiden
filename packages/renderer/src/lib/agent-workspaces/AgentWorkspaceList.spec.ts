@@ -20,11 +20,12 @@ import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
+import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { notificationQueue } from '/@/stores/notifications';
 import { openshellGateways } from '/@/stores/openshell-gateways';
-import { openshellSandboxes, selectedGateway } from '/@/stores/openshell-sandboxes';
+import { allOpenshellSandboxes, openshellSandboxes, selectedGateway } from '/@/stores/openshell-sandboxes';
 import type { NotificationCard } from '/@api/notification';
 import type { GatewayInfo, GatewaySandboxes } from '/@api/openshell-gateway-info';
 
@@ -328,4 +329,46 @@ test('Expect user confirmation for bulk delete when required', async () => {
   await fireEvent.click(deleteButton);
   expect(window.showMessageBox).toHaveBeenCalledTimes(2);
   await waitFor(() => expect(window.deleteOpenshellSandbox).toHaveBeenCalledWith('workspace-1', 'local'));
+});
+
+test('Expect bulk delete sets actionError on failed workspaces', async () => {
+  const workspaces: GatewaySandboxes[] = [
+    {
+      gateway: { name: 'local', endpoint: 'http://localhost:18080' },
+      sandboxes: [
+        { id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() },
+        { id: 'ws-2', name: 'workspace-2', phase: 'Ready', created_at: Date.now().toString() },
+      ],
+    },
+  ];
+
+  openshellSandboxes.set(workspaces);
+  render(AgentWorkspaceList);
+  await tick();
+
+  const checkboxes = screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' });
+  await fireEvent.click(checkboxes[0]);
+  await fireEvent.click(checkboxes[1]);
+  await tick();
+
+  vi.mocked(window.getConfigurationValue).mockResolvedValue(false);
+  vi.mocked(window.deleteOpenshellSandbox)
+    .mockResolvedValueOnce(undefined)
+    .mockRejectedValueOnce(new Error('network error'));
+
+  const deleteButton = screen.getByRole('button', { name: 'Delete 2 selected items' });
+  await fireEvent.click(deleteButton);
+
+  await waitFor(() => {
+    expect(window.deleteOpenshellSandbox).toHaveBeenCalledTimes(2);
+  });
+
+  await vi.advanceTimersByTimeAsync(100);
+
+  const sandboxes = get(allOpenshellSandboxes);
+  const failedSandbox = sandboxes.find(s => s.id === 'ws-2');
+  expect(failedSandbox?.actionError).toBe('Error: network error');
+
+  const successSandbox = sandboxes.find(s => s.id === 'ws-1');
+  expect(successSandbox?.actionError).toBeUndefined();
 });
