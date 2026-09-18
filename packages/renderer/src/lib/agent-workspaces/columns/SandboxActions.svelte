@@ -2,13 +2,16 @@
 import { faTrash } from '@fortawesome/free-solid-svg-icons';
 import { ErrorMessage } from '@podman-desktop/ui-svelte';
 
-import type { SandboxInfoUI } from '/@/lib/agent-workspaces/SandboxInfoUI';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
-import { clearSandboxActionError, setSandboxActionError } from '/@/stores/openshell-sandboxes';
+import {
+  clearSandboxActionError,
+  setSandboxActionError,
+  type SandboxInfoWithGateway,
+} from '/@/stores/openshell-sandboxes';
 
 interface Props {
-  object: SandboxInfoUI;
+  object: SandboxInfoWithGateway;
 }
 
 let { object }: Props = $props();

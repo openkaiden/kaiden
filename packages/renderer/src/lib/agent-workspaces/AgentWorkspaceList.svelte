@@ -13,7 +13,6 @@ import {
 } from '@podman-desktop/ui-svelte';
 
 import { withBulkConfirmation } from '/@/lib/actions/BulkActions';
-import type { SandboxInfoUI } from '/@/lib/agent-workspaces/SandboxInfoUI';
 import NotificationsBox from '/@/lib/dashboard/NotificationsBox.svelte';
 import GatewayFilterDropdown from '/@/lib/gateways/GatewayFilterDropdown.svelte';
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
@@ -22,6 +21,7 @@ import {
   allOpenshellSandboxes,
   clearSandboxActionError,
   filteredOpenshellSandboxes,
+  type SandboxInfoWithGateway,
   searchPattern as sandboxSearchPattern,
   selectedGateway as sandboxSelectedGateway,
   setSandboxActionError,
@@ -35,7 +35,7 @@ import SandboxGateway from './columns/SandboxGateway.svelte';
 import SandboxName from './columns/SandboxName.svelte';
 import SandboxPhase from './columns/SandboxPhase.svelte';
 
-type SandboxSelectable = SandboxInfoUI & { selected: boolean };
+type SandboxSelectable = SandboxInfoWithGateway & { selected: boolean };
 
 let searchTerm = $state('');
 let gatewayFilter = $state('');

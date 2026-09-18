@@ -22,15 +22,18 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import type { SandboxInfoUI } from '/@/lib/agent-workspaces/SandboxInfoUI';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
-import { allOpenshellSandboxes, openshellSandboxes } from '/@/stores/openshell-sandboxes';
+import {
+  allOpenshellSandboxes,
+  openshellSandboxes,
+  type SandboxInfoWithGateway,
+} from '/@/stores/openshell-sandboxes';
 
 import SandboxActions from './SandboxActions.svelte';
 
 vi.mock(import('/@/lib/dialogs/messagebox-utils'));
 
-const sandbox: SandboxInfoUI = {
+const sandbox: SandboxInfoWithGateway = {
   id: 'sandbox-1',
   name: 'shared-name',
   phase: 'Ready',
@@ -59,7 +62,7 @@ test('deletes the sandbox from its gateway', async () => {
 });
 
 test('should display error message when actionError is set on the object', async () => {
-  const sandboxWithError: SandboxInfoUI = { ...sandbox, actionError: 'network timeout' };
+  const sandboxWithError: SandboxInfoWithGateway = { ...sandbox, actionError: 'network timeout' };
 
   render(SandboxActions, { object: sandboxWithError });
 

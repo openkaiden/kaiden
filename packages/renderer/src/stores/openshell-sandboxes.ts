@@ -18,7 +18,6 @@
 
 import { derived, type Writable, writable } from 'svelte/store';
 
-import type { SandboxInfoUI } from '/@/lib/agent-workspaces/SandboxInfoUI';
 import type { GatewaySandboxes, SandboxInfo } from '/@api/openshell-gateway-info';
 
 import { EventStore } from './event-store';
@@ -55,6 +54,7 @@ openshellSandboxesEventStore.setup();
 
 export interface SandboxInfoWithGateway extends SandboxInfo {
   gatewayName: string;
+  actionError?: string;
 }
 
 // Store for sandbox action errors, keyed by sandbox ID
@@ -84,7 +84,7 @@ const deletingSandboxIds = new Set<string>();
 
 // Derived store: flatten all sandboxes across gateways and add gateway name for easier UI consumption
 export const allOpenshellSandboxes = derived([openshellSandboxes, sandboxActionErrors], ([$sandboxes, $errors]) => {
-  const flattened: SandboxInfoUI[] = [];
+  const flattened: SandboxInfoWithGateway[] = [];
   const currentIds = new Set<string>();
   for (const gatewaySandboxes of $sandboxes) {
     for (const sandbox of gatewaySandboxes.sandboxes) {
