@@ -126,6 +126,7 @@ test('displays active gateway in the Active Gateway section', () => {
     endpoint: 'http://127.0.0.1:17670',
     active: true,
     type: 'local',
+    source: 'kaiden',
     gatewayState: { reachable: true, health: 'healthy' },
   };
   openshellGateways.set([activeGateway]);
@@ -150,6 +151,7 @@ test('displays non-active gateways in Other Gateways section', () => {
       endpoint: 'http://127.0.0.1:17670',
       active: true,
       type: 'local',
+      source: 'kaiden',
     },
     {
       name: 'production',
@@ -184,6 +186,23 @@ test('shows Referenced badge for non-local gateways', () => {
   render(PreferencesOpenshellGatewaysRendering);
 
   expect(screen.getByText('Referenced')).toBeInTheDocument();
+});
+
+test('shows Managed badge for a Kaiden-created gateway with custom name', () => {
+  setOpenshellStarted();
+  const gateways: GatewayInfo[] = [
+    {
+      name: 'my-custom-gateway',
+      endpoint: 'http://127.0.0.1:17675',
+      active: true,
+      type: 'local',
+      source: 'kaiden',
+    },
+  ];
+  openshellGateways.set(gateways);
+  render(PreferencesOpenshellGatewaysRendering);
+
+  expect(screen.getByText('Managed')).toBeInTheDocument();
 });
 
 test('shows Referenced badge for a local gateway not managed by Kaiden', () => {
