@@ -79,6 +79,17 @@ interface WorkspaceTerminalSession {
   write: (param: string) => void;
   resize: (w: number, h: number) => void;
   commandExecuted: boolean;
+  /**
+   * Buffered output from a pre-started agent session (before a renderer attaches).
+   * Flushed and cleared when the terminal tab opens.
+   */
+  outputBuffer?: string[];
+  /**
+   * Callback to transition a headless pre-started session to one connected to a renderer.
+   * Present only on sessions created by {@link AgentWorkspaceManager.startAgentInWorkspace}.
+   * Calling it flushes buffered output and begins forwarding to the renderer.
+   */
+  attachRenderer?: (callbackId: number) => void;
 }
 
 export function encodeWorkspaceLabels(sourcePath: string): Record<string, string> {
@@ -170,6 +181,17 @@ export class AgentWorkspaceManager implements Disposable {
 
       const secretName = await this.ensureModelSecret(options);
       const workspaceId = await this.createOpenshell(options, gateway, secretName);
+
+      // Eagerly start the agent so it is already running when the
+      // terminal tab is opened — eliminates the lazy-loading delay.
+      this.startAgentInWorkspace(workspaceId.id, options.gateway, options.agent).catch((err: unknown) => {
+        console.warn(
+          `[AgentWorkspaceManager] agent pre-start failed for "${workspaceId.id}": ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      });
+
       task.status = 'success';
       return workspaceId;
     } catch (err: unknown) {
@@ -334,6 +356,103 @@ export class AgentWorkspaceManager implements Disposable {
     }
 
     return { id: sandboxName };
+  }
+
+  /**
+   * Pre-start the agent command in the sandbox so that it is already
+   * running when the user opens the terminal tab.  Output is buffered
+   * until a renderer attaches via the `agent-workspace:terminal` IPC
+   * handler.
+   *
+   * Failures are swallowed — the caller logs them and falls back to
+   * the existing lazy-start path in the terminal handler.
+   */
+  private async startAgentInWorkspace(sandboxName: string, gatewayName: string, agentId: string): Promise<void> {
+    const agent = await this.agentRegistry.getAgent(agentId);
+    if (!agent?.command) {
+      return;
+    }
+
+    // Guard: if a terminal was already opened for this workspace
+    // (e.g. the renderer raced ahead of us), do not overwrite it.
+    if (this.workspaceTerminals.has(sandboxName)) {
+      return;
+    }
+
+    const outputBuffer: string[] = [];
+    // Mutable target: undefined → buffer mode; set when renderer attaches.
+    let rendererCallbackId: number | undefined;
+
+    const invocation = await this.shellInAgentWorkspace(
+      sandboxName,
+      gatewayName,
+      (content: string) => {
+        const session = this.workspaceTerminals.get(sandboxName);
+        if (session && session.execSession !== invocation.execSession) {
+          return;
+        }
+        if (rendererCallbackId !== undefined) {
+          if (!this.webContents.isDestroyed()) {
+            this.webContents.send('agent-workspace:terminal-onData', rendererCallbackId, content);
+          }
+        } else {
+          outputBuffer.push(content);
+        }
+      },
+      (error: string) => {
+        const session = this.workspaceTerminals.get(sandboxName);
+        if (session && session.execSession !== invocation.execSession) {
+          return;
+        }
+        if (rendererCallbackId !== undefined && !this.webContents.isDestroyed()) {
+          this.webContents.send('agent-workspace:terminal-onError', rendererCallbackId, error);
+        }
+      },
+      () => {
+        const session = this.workspaceTerminals.get(sandboxName);
+        if (session && session.execSession !== invocation.execSession) {
+          return;
+        }
+        if (rendererCallbackId !== undefined && !this.webContents.isDestroyed()) {
+          this.webContents.send('agent-workspace:terminal-onEnd', rendererCallbackId);
+        }
+        if (session?.execSession === invocation.execSession) {
+          this.workspaceTerminals.delete(sandboxName);
+        }
+      },
+    );
+
+    // If a terminal was opened while we were creating the shell, bail out.
+    if (this.workspaceTerminals.has(sandboxName)) {
+      try {
+        invocation.execSession.close();
+      } catch {
+        /* already closed */
+      }
+      invocation.abortController.abort();
+      return;
+    }
+
+    invocation.write(`${agent.command}\n`);
+
+    this.workspaceTerminals.set(sandboxName, {
+      callbackId: -1,
+      execSession: invocation.execSession,
+      abortController: invocation.abortController,
+      write: invocation.write,
+      resize: invocation.resize,
+      commandExecuted: true,
+      outputBuffer,
+      attachRenderer: (callbackId: number): void => {
+        rendererCallbackId = callbackId;
+        for (const chunk of outputBuffer) {
+          if (!this.webContents.isDestroyed()) {
+            this.webContents.send('agent-workspace:terminal-onData', callbackId, chunk);
+          }
+        }
+        outputBuffer.length = 0;
+      },
+    });
   }
 
   async checkWorkspaceConfigExists(sourcePath: string): Promise<boolean> {
@@ -842,6 +961,17 @@ export class AgentWorkspaceManager implements Disposable {
     this.ipcHandle(
       'agent-workspace:terminal',
       async (_listener: unknown, id: string, onDataId: number): Promise<number> => {
+        // If the agent was pre-started during workspace creation, reuse
+        // the existing session instead of creating a new one.
+        const preStarted = this.workspaceTerminals.get(id);
+        if (preStarted?.attachRenderer) {
+          preStarted.attachRenderer(onDataId);
+          preStarted.callbackId = onDataId;
+          preStarted.attachRenderer = undefined;
+          preStarted.outputBuffer = undefined;
+          return onDataId;
+        }
+
         const workspaces = await this.listOpenshellSandboxes();
         let workspace: SandboxInfo | undefined;
         let gatewayName: string | undefined;

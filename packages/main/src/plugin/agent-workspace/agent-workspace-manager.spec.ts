@@ -2278,6 +2278,152 @@ describe('terminal agent command execution', () => {
   });
 });
 
+describe('agent pre-start during workspace creation', () => {
+  const defaultOptions: AgentWorkspaceCreateOptions = {
+    sourcePath: '/tmp/my-project',
+    agent: 'claude',
+    name: 'my-sandbox',
+    model: 'ramalama::granite-4.6::',
+    gateway: 'kaiden',
+  };
+
+  const mockAgent: Agent = {
+    id: 'claude',
+    name: 'Claude Code',
+    description: 'Test agent',
+    command: 'claude --run',
+    configurationFiles: [],
+    destinationSkillsFolder: '${HOME}/.claude/skills',
+    async preWorkspaceStart(): Promise<void> {},
+  };
+
+  // Inline helper to retrieve and invoke the terminal IPC handler,
+  // structurally distinct from getTerminalHandler() in other describe
+  // blocks to satisfy sonarjs/no-identical-functions.
+  function invokeTerminalIpc(id: string, onDataId: number): Promise<number> {
+    const [, handler] = vi.mocked(ipcHandle).mock.calls.find(([ch]) => ch === 'agent-workspace:terminal')!;
+    return (handler as (_l: unknown, _id: string, _d: number) => Promise<number>)({}, id, onDataId);
+  }
+
+  const agentInfo = {
+    id: 'claude',
+    name: 'Claude Code',
+    description: '',
+    command: 'claude --run',
+    destinationSkillsFolder: '~/.claude/skills',
+  };
+
+  beforeEach(() => {
+    vi.mocked(sdkSandbox.create).mockResolvedValue(undefined);
+    vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue(mockAgent);
+    vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+  });
+
+  test('starts agent shell after workspace creation', async () => {
+    const mock = createMockExecSession();
+    sdkSandbox.execInteractive.mockResolvedValue(mock.session);
+    vi.mocked(agentRegistry.getAgent).mockResolvedValue(agentInfo);
+
+    await manager.create(defaultOptions);
+    // Allow the fire-and-forget pre-start to complete
+    await vi.waitFor(() => {
+      expect(sdkSandbox.execInteractive).toHaveBeenCalledWith(
+        'my-sandbox',
+        ['/bin/sh'],
+        expect.objectContaining({ tty: true }),
+      );
+    });
+    expect(mock.session.write).toHaveBeenCalledWith(Buffer.from('claude --run\n'));
+  });
+
+  test('does not block workspace creation when pre-start fails', async () => {
+    sdkSandbox.execInteractive.mockRejectedValue(new Error('exec failed'));
+    vi.mocked(agentRegistry.getAgent).mockResolvedValue(agentInfo);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await manager.create(defaultOptions);
+
+    expect(result).toEqual({ id: 'my-sandbox' });
+    expect(mockTask.status).toBe('success');
+    // Allow the fire-and-forget pre-start to settle
+    await new Promise(r => setTimeout(r, 0));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('agent pre-start failed'));
+    warnSpy.mockRestore();
+  });
+
+  test('skips pre-start when agent has no command', async () => {
+    vi.mocked(agentRegistry.getAgent).mockResolvedValue({ ...agentInfo, command: '' });
+
+    await manager.create(defaultOptions);
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(sdkSandbox.execInteractive).not.toHaveBeenCalled();
+  });
+
+  test('terminal handler reuses pre-started session instead of creating a new one', async () => {
+    const mock = createMockExecSession();
+    sdkSandbox.execInteractive.mockResolvedValue(mock.session);
+    vi.mocked(agentRegistry.getAgent).mockResolvedValue(agentInfo);
+
+    await manager.create(defaultOptions);
+    await vi.waitFor(() => {
+      expect(sdkSandbox.execInteractive).toHaveBeenCalledTimes(1);
+    });
+
+    // Now open the terminal — should reuse the pre-started session
+    mockSdkListSandboxes([{ id: 'my-sandbox', name: 'my-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' }]);
+    const callbackId = await invokeTerminalIpc('my-sandbox', 42);
+
+    expect(callbackId).toBe(42);
+    // Should NOT have created a second exec session
+    expect(sdkSandbox.execInteractive).toHaveBeenCalledTimes(1);
+  });
+
+  test('flushes buffered output when renderer attaches to pre-started session', async () => {
+    const mock = createMockExecSession();
+    sdkSandbox.execInteractive.mockResolvedValue(mock.session);
+    vi.mocked(agentRegistry.getAgent).mockResolvedValue(agentInfo);
+
+    await manager.create(defaultOptions);
+    await vi.waitFor(() => {
+      expect(sdkSandbox.execInteractive).toHaveBeenCalledTimes(1);
+    });
+
+    // Simulate agent output before terminal tab is opened
+    mock.pushEvent({ stream: 'stdout', data: Buffer.from('agent starting...') });
+    mock.pushEvent({ stream: 'stdout', data: Buffer.from('ready!') });
+    await new Promise(r => setTimeout(r, 0));
+
+    // Now open the terminal — buffered output should be flushed
+    mockSdkListSandboxes([{ id: 'my-sandbox', name: 'my-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' }]);
+    await invokeTerminalIpc('my-sandbox', 42);
+
+    expect(webContents.send).toHaveBeenCalledWith('agent-workspace:terminal-onData', 42, 'agent starting...');
+    expect(webContents.send).toHaveBeenCalledWith('agent-workspace:terminal-onData', 42, 'ready!');
+  });
+
+  test('forwards new output to renderer after attaching to pre-started session', async () => {
+    const mock = createMockExecSession();
+    sdkSandbox.execInteractive.mockResolvedValue(mock.session);
+    vi.mocked(agentRegistry.getAgent).mockResolvedValue(agentInfo);
+
+    await manager.create(defaultOptions);
+    await vi.waitFor(() => {
+      expect(sdkSandbox.execInteractive).toHaveBeenCalledTimes(1);
+    });
+
+    // Open terminal (attach renderer)
+    mockSdkListSandboxes([{ id: 'my-sandbox', name: 'my-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' }]);
+    await invokeTerminalIpc('my-sandbox', 42);
+
+    // New output after attaching should be forwarded directly
+    mock.pushEvent({ stream: 'stdout', data: Buffer.from('live output') });
+    await vi.waitFor(() => {
+      expect(webContents.send).toHaveBeenCalledWith('agent-workspace:terminal-onData', 42, 'live output');
+    });
+  });
+});
+
 describe('encodeWorkspaceLabels', () => {
   test('returns single label for short paths', () => {
     const labels = encodeWorkspaceLabels('/tmp/my-project');
