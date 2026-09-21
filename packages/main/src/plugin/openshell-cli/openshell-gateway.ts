@@ -32,7 +32,7 @@ import z from 'zod';
 import { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
 import { Directories } from '/@/plugin/directories.js';
 import { Emitter } from '/@/plugin/events/emitter.js';
-import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
+import { OpenshellGatewayManager } from '/@/plugin/openshell-cli/openshell-gateway-manager.js';
 import { NotificationRegistry } from '/@/plugin/tasks/notification-registry.js';
 import { Exec } from '/@/plugin/util/exec.js';
 import { isFreePort } from '/@/plugin/util/port.js';
@@ -90,8 +90,8 @@ export class OpenshellGateway implements Disposable {
   constructor(
     @inject(CliToolRegistry)
     private readonly cliToolRegistry: CliToolRegistry,
-    @inject(OpenshellCli)
-    private readonly openshellCli: OpenshellCli,
+    @inject(OpenshellGatewayManager)
+    private readonly gatewayManager: OpenshellGatewayManager,
     @inject(Directories)
     private readonly directories: Directories,
     @inject(Exec)
@@ -102,25 +102,19 @@ export class OpenshellGateway implements Disposable {
 
   async init(): Promise<void> {
     try {
-      const gateways = await this.openshellCli.listGateways();
-      const localGateways = gateways.filter(gw => gw.type === 'local' || this.isLocalEndpoint(gw.endpoint));
+      const gateways = await this.gatewayManager.listGateways();
+      const activeGatewayName = await this.gatewayManager.getActiveGateway();
+      const localGateways = gateways.filter(
+        gw => !gw.metadata.is_remote || this.isLocalEndpoint(gw.metadata.gateway_endpoint),
+      );
       await Promise.all(
-        localGateways.map(async gateway => {
-          if (this.isCreatedGateway(gateway.name)) {
-            const pid = await this.readAndValidatePid(gateway.name);
-            if (pid !== undefined) {
-              gateway.gatewayState = {
-                ...(gateway.gatewayState ?? { reachable: false, health: 'unknown' }),
-                process: { pid, status: 'running' },
-              };
-            }
-            if (!(await this.isEndpointHealthy(gateway.endpoint))) {
-              try {
-                await this.startCreatedGateway(gateway.name, gateway.endpoint);
-              } catch (err: unknown) {
-                const message = err instanceof Error ? err.message : String(err);
-                console.warn(`[openshell-gateway] failed to start created gateway "${gateway.name}": ${message}`);
-              }
+        localGateways.map(async gw => {
+          if (this.isCreatedGateway(gw.metadata.name) && !(await this.isGatewayHealthy(gw.metadata.name))) {
+            try {
+              await this.startCreatedGateway(gw.metadata.name, gw.metadata.gateway_endpoint);
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : String(err);
+              console.warn(`[openshell-gateway] failed to start created gateway "${gw.metadata.name}": ${message}`);
             }
           }
         }),
@@ -128,39 +122,42 @@ export class OpenshellGateway implements Disposable {
       if (localGateways.length > 0) {
         // When an unmanaged gateway runs on the kaiden-local default port, try it first
         // so we select the user's gateway instead of the auto-registered one.
-        const kaidenLocal = localGateways.find(gw => gw.name === DEFAULT_GATEWAY_NAME);
-        const kaidenLocalPort = kaidenLocal ? this.getEndpointPort(kaidenLocal.endpoint) : undefined;
+        const kaidenLocal = localGateways.find(gw => gw.metadata.name === DEFAULT_GATEWAY_NAME);
+        const kaidenLocalPort = kaidenLocal ? this.getEndpointPort(kaidenLocal.metadata.gateway_endpoint) : undefined;
         const hasSamePortDuplicate =
           kaidenLocalPort !== undefined &&
           localGateways.some(
-            gw => gw.name !== DEFAULT_GATEWAY_NAME && this.getEndpointPort(gw.endpoint) === kaidenLocalPort,
+            gw =>
+              gw.metadata.name !== DEFAULT_GATEWAY_NAME &&
+              this.getEndpointPort(gw.metadata.gateway_endpoint) === kaidenLocalPort,
           );
         const ordered = hasSamePortDuplicate
           ? [...localGateways].sort((a, b) => {
               const rank = (gw: typeof kaidenLocal): number =>
-                gw!.name !== DEFAULT_GATEWAY_NAME && this.getEndpointPort(gw!.endpoint) === kaidenLocalPort
+                gw!.metadata.name !== DEFAULT_GATEWAY_NAME &&
+                this.getEndpointPort(gw!.metadata.gateway_endpoint) === kaidenLocalPort
                   ? 0
-                  : gw!.name === DEFAULT_GATEWAY_NAME
+                  : gw!.metadata.name === DEFAULT_GATEWAY_NAME
                     ? 2
                     : 1;
               return rank(a) - rank(b);
             })
           : localGateways;
         for (const gw of ordered) {
-          if (await this.isEndpointHealthy(gw.endpoint)) {
-            if (!gw.active) {
-              await this.openshellCli.selectGateway(gw.name);
+          if (await this.isGatewayHealthy(gw.metadata.name)) {
+            if (activeGatewayName !== gw.metadata.name) {
+              await this.gatewayManager.setActiveGateway(gw.metadata.name);
             }
             // Remove the redundant kaiden-local registration when another gateway on the
-            // same port is healthy, otherwise all CLI calls would target kaiden-local.
+            // same port is healthy, otherwise all operations would target kaiden-local.
             if (
-              gw.name !== DEFAULT_GATEWAY_NAME &&
+              gw.metadata.name !== DEFAULT_GATEWAY_NAME &&
               kaidenLocal &&
-              kaidenLocalPort === this.getEndpointPort(gw.endpoint)
+              kaidenLocalPort === this.getEndpointPort(gw.metadata.gateway_endpoint)
             ) {
-              await this.openshellCli.removeGateway(DEFAULT_GATEWAY_NAME).catch(() => {});
+              await this.gatewayManager.removeGateway(DEFAULT_GATEWAY_NAME).catch(() => {});
             }
-            console.log(`[openshell-gateway] gateway detected (${gw.endpoint}) and is healthy`);
+            console.log(`[openshell-gateway] gateway detected (${gw.metadata.gateway_endpoint}) and is healthy`);
             this._onDidGatewayStart.fire();
             return;
           }
@@ -178,14 +175,18 @@ export class OpenshellGateway implements Disposable {
       return;
     }
 
-    if (await this.isEndpointHealthy()) {
-      console.log('[openshell-gateway] found healthy gateway on default port, registering');
-      await this.registerWithCli().catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(`[openshell-gateway] failed to register with CLI: ${message}`);
-      });
-      this._onDidGatewayStart.fire();
-      return;
+    // Register on default port first, then check health. If the gateway is
+    // unreachable the registration is removed before proceeding to auto-start.
+    try {
+      await this.registerGateway();
+      if (await this.isGatewayHealthy(DEFAULT_GATEWAY_NAME)) {
+        console.log('[openshell-gateway] found healthy gateway on default port, registering');
+        this._onDidGatewayStart.fire();
+        return;
+      }
+      await this.gatewayManager.removeGateway(DEFAULT_GATEWAY_NAME).catch(() => {});
+    } catch {
+      // Registration or health check failed, fall through to auto-start
     }
 
     console.log('[openshell-gateway] no existing gateways found, auto-starting local gateway');
@@ -207,9 +208,13 @@ export class OpenshellGateway implements Disposable {
     }
   }
 
-  private async isEndpointHealthy(endpoint?: string): Promise<boolean> {
-    const target = endpoint ?? `http://${this.#bindAddress}:${this.#port}`;
-    return this.openshellCli.checkEndpointStatus(target);
+  private async isGatewayHealthy(gatewayName: string): Promise<boolean> {
+    try {
+      const result = await this.gatewayManager.health(gatewayName);
+      return result.status !== 'unhealthy';
+    } catch {
+      return false;
+    }
   }
 
   private getEndpointPort(endpoint: string): number | undefined {
@@ -252,8 +257,8 @@ export class OpenshellGateway implements Disposable {
     if (bindAddress !== DEFAULT_BIND_ADDRESS) {
       throw new Error(`Local gateways must bind to ${DEFAULT_BIND_ADDRESS}`);
     }
-    const gateways = await this.openshellCli.listGateways();
-    if (gateways.some(gateway => gateway.name === name)) {
+    const gateways = await this.gatewayManager.listGateways();
+    if (gateways.some(gw => gw.metadata.name === name)) {
       throw new Error(`A gateway named "${name}" is already registered`);
     }
     await isFreePort(options.port);
@@ -276,17 +281,18 @@ export class OpenshellGateway implements Disposable {
 
     let registered = false;
     try {
-      await this.openshellCli.addGateway({
-        endpoint: `http://${DEFAULT_BIND_ADDRESS}:${options.port}`,
-        local: true,
+      await this.gatewayManager.addGateway(name, {
         name,
+        gateway_endpoint: `http://${DEFAULT_BIND_ADDRESS}:${options.port}`,
+        is_remote: false,
+        gateway_port: options.port,
       });
       registered = true;
       await this.waitForIndependentGateway(gatewayProcess, name, processState);
     } catch (err: unknown) {
       await this.stopGateway(name);
       if (registered) {
-        await this.openshellCli.removeGateway(name).catch(() => undefined);
+        await this.gatewayManager.removeGateway(name).catch(() => undefined);
       }
       throw err;
     }
@@ -328,7 +334,7 @@ export class OpenshellGateway implements Disposable {
 
   async #supportsMountsFromRuntime(gateway: GatewayInfo): Promise<boolean> {
     try {
-      const runtimeInfo = await this.openshellCli.getGatewayInfo(gateway.name);
+      const runtimeInfo = await this.gatewayManager.getGatewayInfo(gateway.name);
       const driver = runtimeInfo.compute_drivers[0];
       if (!driver) {
         return false;
@@ -492,6 +498,20 @@ export class OpenshellGateway implements Disposable {
       console.error(`[openshell-gateway] failed to start: ${err.message}`);
     });
 
+    // Register the gateway before waiting so that health() can resolve it.
+    if (!options?.skipRegistration) {
+      try {
+        await this.registerGateway();
+      } catch (err: unknown) {
+        await this.stop().catch((stopErr: unknown) => {
+          console.warn('[openshell-gateway] failed to stop after registration error:', stopErr);
+        });
+        this.#port = previousPort;
+        this.#bindAddress = previousBindAddress;
+        throw err;
+      }
+    }
+
     try {
       await this.waitForReady();
     } catch (err: unknown) {
@@ -529,19 +549,6 @@ export class OpenshellGateway implements Disposable {
       }
       const baseMessage = err instanceof Error ? err.message : String(err);
       throw new Error(stderrOutput ? `${baseMessage}: ${stderrOutput}` : baseMessage);
-    }
-
-    if (!options?.skipRegistration) {
-      try {
-        await this.registerWithCli();
-      } catch (err: unknown) {
-        await this.stop().catch((stopErr: unknown) => {
-          console.warn('[openshell-gateway] failed to stop after registration error:', stopErr);
-        });
-        this.#port = previousPort;
-        this.#bindAddress = previousBindAddress;
-        throw err;
-      }
     }
   }
 
@@ -742,7 +749,7 @@ export class OpenshellGateway implements Disposable {
         throw new Error('Gateway process exited before becoming ready');
       }
 
-      if (await this.openshellCli.checkEndpointStatus(endpoint)) {
+      if (await this.isGatewayHealthy(DEFAULT_GATEWAY_NAME)) {
         console.log('[openshell-gateway] server is ready');
         return;
       }
@@ -753,19 +760,25 @@ export class OpenshellGateway implements Disposable {
     throw new Error(`Gateway did not become ready within ${MAX_HEALTH_CHECK_ATTEMPTS}s`);
   }
 
-  private async registerWithCli(): Promise<void> {
+  private async registerGateway(): Promise<void> {
     const endpoint = `http://${this.#bindAddress}:${this.#port}`;
-    const gateways = await this.openshellCli.listGateways();
-    const existing = gateways.find(gw => gw.name === DEFAULT_GATEWAY_NAME);
-    if (existing) {
-      if (existing.endpoint === endpoint) {
+    try {
+      const existing = await this.gatewayManager.getGateway(DEFAULT_GATEWAY_NAME);
+      if (existing.gateway_endpoint === endpoint) {
         console.log(`[openshell-gateway] ${DEFAULT_GATEWAY_NAME} already registered at ${endpoint}`);
         return;
       }
-      await this.openshellCli.removeGateway(DEFAULT_GATEWAY_NAME).catch(() => {});
+      await this.gatewayManager.removeGateway(DEFAULT_GATEWAY_NAME).catch(() => {});
+    } catch {
+      // Gateway does not exist yet — proceed to register.
     }
-    await this.openshellCli.addGateway({ endpoint, local: true, name: DEFAULT_GATEWAY_NAME });
-    console.log(`[openshell-gateway] registered with CLI as ${DEFAULT_GATEWAY_NAME} at ${endpoint}`);
+    await this.gatewayManager.addGateway(DEFAULT_GATEWAY_NAME, {
+      name: DEFAULT_GATEWAY_NAME,
+      gateway_endpoint: endpoint,
+      is_remote: false,
+      gateway_port: this.#port,
+    });
+    console.log(`[openshell-gateway] registered as ${DEFAULT_GATEWAY_NAME} at ${endpoint}`);
   }
 
   private async initializeGatewayLog(): Promise<void> {
@@ -864,7 +877,7 @@ export class OpenshellGateway implements Disposable {
         throw new Error('Gateway process exited before becoming ready');
       }
       try {
-        await this.openshellCli.getGatewayInfo(name);
+        await this.gatewayManager.getGatewayInfo(name);
         return;
       } catch {
         // The gateway may accept connections shortly after its process starts; retry until the timeout.

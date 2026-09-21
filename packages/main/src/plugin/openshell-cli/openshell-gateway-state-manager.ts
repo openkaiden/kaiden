@@ -28,7 +28,7 @@ import type { IDisposable } from '/@api/disposable.js';
 import type { Event } from '/@api/event.js';
 import type { GatewayInfo, GatewayProcessState, LocalGatewayDriver } from '/@api/openshell-gateway-info.js';
 
-import { OpenshellCli } from './openshell-cli.js';
+import { OpenshellGatewayManager } from './openshell-gateway-manager.js';
 
 const OPENSHELL_CONFIGURATION_SECTION = 'openshell';
 const GATEWAY_POLL_INTERVAL_CONFIGURATION = 'gateway.pollInterval';
@@ -51,8 +51,8 @@ export class OpenshellGatewayStateManager implements Disposable {
   readonly onDidUpdateGateways: Event<readonly GatewayInfo[]> = this.#onDidUpdateGateways.event;
 
   constructor(
-    @inject(OpenshellCli)
-    private readonly openshellCli: OpenshellCli,
+    @inject(OpenshellGatewayManager)
+    private readonly gatewayManager: OpenshellGatewayManager,
     @inject(IConfigurationRegistry)
     private readonly configurationRegistry: IConfigurationRegistry,
     @inject(OpenshellGateway)
@@ -132,12 +132,22 @@ export class OpenshellGatewayStateManager implements Disposable {
   }
 
   private async doRefresh(): Promise<void> {
-    const registrations = await this.openshellCli.listGateways();
+    const registrations = await this.gatewayManager.listGateways();
+    const activeGatewayName = await this.gatewayManager.getActiveGateway();
     const gateways = await Promise.all(
-      registrations.map(async gateway => {
-        const pid = await this.openshellGateway.getGatewayPid(gateway).catch(() => undefined);
+      registrations.map(async listed => {
+        const base: GatewayInfo = {
+          name: listed.metadata.name,
+          endpoint: listed.metadata.gateway_endpoint,
+          active: listed.metadata.name === activeGatewayName,
+          source: listed.source,
+          is_remote: listed.metadata.is_remote,
+          remote_host: listed.metadata.remote_host ?? undefined,
+          resolved_host: listed.metadata.resolved_host ?? undefined,
+        };
+        const pid = await this.openshellGateway.getGatewayPid(base).catch(() => undefined);
         try {
-          const runtimeInfo = await this.openshellCli.getGatewayInfo(gateway.name);
+          const runtimeInfo = await this.gatewayManager.getGatewayInfo(listed.metadata.name);
           const reportedDriver = runtimeInfo.compute_drivers[0]?.capabilities.driver_name;
           const driver: LocalGatewayDriver | undefined =
             reportedDriver === 'vm' || reportedDriver === 'podman' || reportedDriver === 'docker'
@@ -145,7 +155,7 @@ export class OpenshellGatewayStateManager implements Disposable {
               : undefined;
           const processState: GatewayProcessState | undefined = this.deriveProcessState(pid, true);
           return {
-            ...gateway,
+            ...base,
             ...(driver ? { driver } : {}),
             gatewayState: {
               reachable: true,
@@ -156,7 +166,7 @@ export class OpenshellGatewayStateManager implements Disposable {
         } catch {
           const processState: GatewayProcessState | undefined = this.deriveProcessState(pid, false);
           return {
-            ...gateway,
+            ...base,
             gatewayState: {
               reachable: false,
               health: 'unknown' as const,

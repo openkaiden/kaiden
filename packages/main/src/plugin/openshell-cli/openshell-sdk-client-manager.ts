@@ -19,13 +19,13 @@
 import type { OpenShellClient } from '@nvidia/openshell-sdk';
 import { inject, injectable, preDestroy } from 'inversify';
 
-import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellGatewayConfig } from '/@/plugin/openshell-cli/openshell-gateway-config.js';
-import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
+import { OpenshellGatewayManager } from '/@/plugin/openshell-cli/openshell-gateway-manager.js';
+import type { GatewayMetadata } from '/@api/openshell-gateway-info.js';
 
 /**
  * Cached factory for OpenShell SDK clients. Resolves gateway metadata from
- * the CLI (`openshell gateway list`) and delegates connect-option assembly
+ * the gateway manager (config folders) and delegates connect-option assembly
  * to {@link OpenshellGatewayConfig}.
  *
  * Clients are lazy — no network request is made until the first RPC.
@@ -35,8 +35,8 @@ export class OpenshellSdkClientManager {
   readonly #cache = new Map<string, Promise<OpenShellClient>>();
 
   constructor(
-    @inject(OpenshellCli)
-    private readonly openshellCli: OpenshellCli,
+    @inject(OpenshellGatewayManager)
+    private readonly gatewayManager: OpenshellGatewayManager,
     @inject(OpenshellGatewayConfig)
     private readonly gatewayConfig: OpenshellGatewayConfig,
   ) {}
@@ -72,29 +72,30 @@ export class OpenshellSdkClientManager {
     this.#cache.clear();
   }
 
-  async #connect(gateway: GatewayInfo): Promise<OpenShellClient> {
+  async #connect(gateway: GatewayMetadata): Promise<OpenShellClient> {
     const { OpenShellClient: ClientClass } = await import('@nvidia/openshell-sdk');
-    const options = await this.gatewayConfig.buildConnectOptions(gateway);
+    const options = await this.gatewayConfig.buildConnectOptions({
+      name: gateway.name,
+      endpoint: gateway.gateway_endpoint,
+    });
     return ClientClass.connect(options);
   }
 
-  async #resolveGateway(gatewayName?: string): Promise<GatewayInfo> {
-    const gateways = await this.openshellCli.listGateways();
-
+  async #resolveGateway(gatewayName?: string): Promise<GatewayMetadata> {
     if (gatewayName) {
-      const match = gateways.find(g => g.name === gatewayName);
-      if (!match) {
-        throw new Error(`OpenShell gateway '${gatewayName}' not found`);
-      }
-      return match;
+      return this.gatewayManager.getGateway(gatewayName);
     }
 
-    const active = gateways.find(g => g.active);
-    if (active) return active;
+    const activeName = await this.gatewayManager.getActiveGateway();
+    if (activeName) {
+      return this.gatewayManager.getGateway(activeName);
+    }
 
-    if (gateways.length === 1) return gateways[0]!;
+    const all = await this.gatewayManager.listGateways();
 
-    if (gateways.length === 0) {
+    if (all.length === 1) return all[0]!.metadata;
+
+    if (all.length === 0) {
       throw new Error('No OpenShell gateways registered');
     }
     throw new Error('Multiple OpenShell gateways registered but none is active');

@@ -25,11 +25,11 @@ import type { GatewayMetadata } from '/@api/openshell-gateway-info.js';
 
 import type { OpenshellGatewayConfig } from './openshell-gateway-config.js';
 import { OpenshellGatewayManager } from './openshell-gateway-manager.js';
-import type { OpenshellSdkClientManager } from './openshell-sdk-client-manager.js';
 
 vi.mock(import('node:fs'));
 vi.mock(import('node:fs/promises'));
 vi.mock(import('node:http2'));
+vi.mock(import('@nvidia/openshell-sdk'));
 
 const USER_CONFIG = '/home/testuser/.config';
 const USER_GATEWAYS_DIR = join(USER_CONFIG, 'openshell', 'gateways');
@@ -49,10 +49,6 @@ function validMetadata(overrides: Partial<GatewayMetadata> = {}): GatewayMetadat
 const gatewayConfig = {
   buildConnectOptions: vi.fn().mockResolvedValue({ gateway: 'http://127.0.0.1:17670' }),
 } as unknown as OpenshellGatewayConfig;
-
-const sdkClientManager = {
-  getClient: vi.fn(),
-} as unknown as OpenshellSdkClientManager;
 
 function encodeVarint(value: number): Buffer {
   const bytes: number[] = [];
@@ -139,7 +135,7 @@ beforeEach(() => {
   vi.unstubAllEnvs();
   vi.stubEnv('XDG_CONFIG_HOME', USER_CONFIG);
   vi.mocked(gatewayConfig.buildConnectOptions).mockResolvedValue({ gateway: 'http://127.0.0.1:17670' });
-  manager = new OpenshellGatewayManager(gatewayConfig, sdkClientManager);
+  manager = new OpenshellGatewayManager(gatewayConfig);
 });
 
 describe('OpenshellGatewayManager', () => {
@@ -161,7 +157,7 @@ describe('OpenshellGatewayManager', () => {
 
     test('lists gateways from both user and system directories', async () => {
       vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', SYSTEM_CONFIG_DIR);
-      manager = new OpenshellGatewayManager(gatewayConfig, sdkClientManager);
+      manager = new OpenshellGatewayManager(gatewayConfig);
       const { readdir, readFile } = await import('node:fs/promises');
       const { existsSync } = await import('node:fs');
       vi.mocked(readdir)
@@ -185,7 +181,7 @@ describe('OpenshellGatewayManager', () => {
 
     test('user gateways take precedence over system gateways with the same name', async () => {
       vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', SYSTEM_CONFIG_DIR);
-      manager = new OpenshellGatewayManager(gatewayConfig, sdkClientManager);
+      manager = new OpenshellGatewayManager(gatewayConfig);
       const { readdir, readFile } = await import('node:fs/promises');
       const { existsSync } = await import('node:fs');
       vi.mocked(readdir)
@@ -277,7 +273,7 @@ describe('OpenshellGatewayManager', () => {
 
     test('falls back to system directory when not found in user', async () => {
       vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', SYSTEM_CONFIG_DIR);
-      manager = new OpenshellGatewayManager(gatewayConfig, sdkClientManager);
+      manager = new OpenshellGatewayManager(gatewayConfig);
       const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile)
         .mockRejectedValueOnce(new Error('ENOENT'))
@@ -378,7 +374,7 @@ describe('OpenshellGatewayManager', () => {
 
     test('throws when trying to remove a system gateway', async () => {
       vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', SYSTEM_CONFIG_DIR);
-      manager = new OpenshellGatewayManager(gatewayConfig, sdkClientManager);
+      manager = new OpenshellGatewayManager(gatewayConfig);
       const { existsSync } = await import('node:fs');
       vi.mocked(existsSync).mockReturnValueOnce(false).mockReturnValueOnce(true);
 
@@ -410,7 +406,7 @@ describe('OpenshellGatewayManager', () => {
 
     test('falls back to system active gateway when user has none', async () => {
       vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', SYSTEM_CONFIG_DIR);
-      manager = new OpenshellGatewayManager(gatewayConfig, sdkClientManager);
+      manager = new OpenshellGatewayManager(gatewayConfig);
       const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockRejectedValueOnce(new Error('ENOENT')).mockResolvedValueOnce('system-active');
 
@@ -582,30 +578,33 @@ describe('OpenshellGatewayManager', () => {
   });
 
   describe('health', () => {
-    test('delegates to SDK client health check', async () => {
-      const mockClient = { health: vi.fn().mockResolvedValue({ status: 'healthy', version: '1.0.0' }) };
-      vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient as never);
+    test('creates an SDK client and returns its health', async () => {
+      const { readdir, readFile } = await import('node:fs/promises');
+      const { existsSync } = await import('node:fs');
+      vi.mocked(readdir)
+        .mockResolvedValueOnce(['my-gw'] as unknown as never[])
+        .mockRejectedValueOnce(new Error());
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'my-gw' })));
+      const mockHealth = vi.fn().mockResolvedValue({ status: 'healthy', version: '1.0.0' });
+      const mockConnect = vi.fn().mockResolvedValue({ health: mockHealth });
+      const sdk = await import('@nvidia/openshell-sdk');
+      vi.mocked(sdk.OpenShellClient.connect).mockImplementation(mockConnect);
 
       const result = await manager.health('my-gw');
 
-      expect(sdkClientManager.getClient).toHaveBeenCalledWith('my-gw');
+      expect(gatewayConfig.buildConnectOptions).toHaveBeenCalledWith({
+        name: 'my-gw',
+        endpoint: 'http://127.0.0.1:17670',
+      });
       expect(result).toEqual({ status: 'healthy', version: '1.0.0' });
-    });
-
-    test('passes undefined gateway name when not specified', async () => {
-      const mockClient = { health: vi.fn().mockResolvedValue({ status: 'healthy', version: '1.0.0' }) };
-      vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient as never);
-
-      await manager.health();
-
-      expect(sdkClientManager.getClient).toHaveBeenCalledWith(undefined);
     });
   });
 
   describe('path resolution', () => {
     test('uses XDG_CONFIG_HOME when set', async () => {
       vi.stubEnv('XDG_CONFIG_HOME', '/custom/config');
-      manager = new OpenshellGatewayManager(gatewayConfig, sdkClientManager);
+      manager = new OpenshellGatewayManager(gatewayConfig);
 
       const { readdir } = await import('node:fs/promises');
       vi.mocked(readdir).mockRejectedValue(new Error('ENOENT'));
@@ -620,7 +619,7 @@ describe('OpenshellGatewayManager', () => {
       vi.stubEnv('XDG_CONFIG_HOME', '');
       vi.stubEnv('APPDATA', 'C:\\Users\\test\\AppData\\Roaming');
 
-      manager = new OpenshellGatewayManager(gatewayConfig, sdkClientManager);
+      manager = new OpenshellGatewayManager(gatewayConfig);
 
       const { readdir } = await import('node:fs/promises');
       vi.mocked(readdir).mockRejectedValue(new Error('ENOENT'));
@@ -637,7 +636,7 @@ describe('OpenshellGatewayManager', () => {
         vi.stubEnv('XDG_CONFIG_HOME', '');
         vi.stubEnv('HOME', '/home/testuser');
 
-        manager = new OpenshellGatewayManager(gatewayConfig, sdkClientManager);
+        manager = new OpenshellGatewayManager(gatewayConfig);
 
         const { readdir } = await import('node:fs/promises');
         vi.mocked(readdir).mockRejectedValue(new Error('ENOENT'));
@@ -651,7 +650,7 @@ describe('OpenshellGatewayManager', () => {
     test('uses OPENSHELL_SYSTEM_GATEWAY_DIR env override for system directory', async () => {
       vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', '/custom/system/openshell');
 
-      manager = new OpenshellGatewayManager(gatewayConfig, sdkClientManager);
+      manager = new OpenshellGatewayManager(gatewayConfig);
 
       const { readdir, readFile } = await import('node:fs/promises');
       const { existsSync } = await import('node:fs');

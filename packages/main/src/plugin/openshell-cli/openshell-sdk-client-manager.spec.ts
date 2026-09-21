@@ -18,13 +18,13 @@
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
+import type { GatewayMetadata, ListedGateway } from '/@api/openshell-gateway-info.js';
 
 import type { OpenshellGatewayConfig } from './openshell-gateway-config.js';
 import { OpenshellSdkClientManager } from './openshell-sdk-client-manager.js';
 
 vi.mock(import('@nvidia/openshell-sdk'));
-vi.mock(import('/@/plugin/openshell-cli/openshell-cli.js'));
+vi.mock(import('/@/plugin/openshell-cli/openshell-gateway-manager.js'));
 vi.mock(import('/@/plugin/openshell-cli/openshell-gateway-config.js'));
 
 const mockConnect = vi.fn();
@@ -37,34 +37,47 @@ beforeEach(async () => {
   mockConnect.mockResolvedValue({ sandbox: {}, raw: {}, transport: {} });
 });
 
-function gateway(overrides: Partial<GatewayInfo> = {}): GatewayInfo {
+function metadata(overrides: Partial<GatewayMetadata> = {}): GatewayMetadata {
   return {
     name: 'kaiden-local',
-    endpoint: 'http://127.0.0.1:17670',
-    active: true,
+    gateway_endpoint: 'http://127.0.0.1:17670',
+    is_remote: false,
+    gateway_port: 17670,
     ...overrides,
   };
 }
 
+function listed(meta: GatewayMetadata, source: 'user' | 'system' = 'user'): ListedGateway {
+  return { metadata: meta, source };
+}
+
 function createSdkClient(
-  listGateways: () => Promise<GatewayInfo[]>,
+  opts: {
+    listGateways?: () => Promise<ListedGateway[]>;
+    getGateway?: (name: string) => Promise<GatewayMetadata>;
+    getActiveGateway?: () => Promise<string | undefined>;
+  } = {},
   buildConnectOptions?: OpenshellGatewayConfig['buildConnectOptions'],
 ): OpenshellSdkClientManager {
-  const openshellCli = { listGateways } as never;
+  const gatewayManager = {
+    listGateways: opts.listGateways ?? vi.fn().mockResolvedValue([listed(metadata())]),
+    getGateway: opts.getGateway ?? vi.fn().mockImplementation(async (name: string) => metadata({ name })),
+    getActiveGateway: opts.getActiveGateway ?? vi.fn().mockResolvedValue(undefined),
+  } as never;
   const gatewayConfig = {
     buildConnectOptions:
-      buildConnectOptions ?? vi.fn().mockImplementation(async (gw: GatewayInfo) => ({ gateway: gw.endpoint })),
+      buildConnectOptions ??
+      vi.fn().mockImplementation(async (gw: { name: string; endpoint: string }) => ({ gateway: gw.endpoint })),
   } as never;
-  return new OpenshellSdkClientManager(openshellCli, gatewayConfig);
+  return new OpenshellSdkClientManager(gatewayManager, gatewayConfig);
 }
 
 describe('OpenshellSdkClientManager', () => {
   describe('getClient', () => {
     test('connects with options from gateway config', async () => {
-      const gw = gateway();
-      const sdkClient = createSdkClient(async () => [gw]);
+      const sdkClient = createSdkClient();
 
-      await sdkClient.getClient();
+      await sdkClient.getClient('kaiden-local');
 
       expect(mockConnect).toHaveBeenCalledWith({ gateway: 'http://127.0.0.1:17670' });
     });
@@ -76,12 +89,17 @@ describe('OpenshellSdkClientManager', () => {
         clientCert: Buffer.from('cert'),
         clientKey: Buffer.from('key'),
       });
-      const gw = gateway({ name: 'remote', endpoint: 'https://gw.example.com' });
-      const sdkClient = createSdkClient(async () => [gw], mockBuild);
+      const remoteMeta = metadata({ name: 'remote', gateway_endpoint: 'https://gw.example.com', is_remote: true });
+      const sdkClient = createSdkClient(
+        {
+          getGateway: vi.fn().mockResolvedValue(remoteMeta),
+        },
+        mockBuild,
+      );
 
       await sdkClient.getClient('remote');
 
-      expect(mockBuild).toHaveBeenCalledWith(gw);
+      expect(mockBuild).toHaveBeenCalledWith({ name: 'remote', endpoint: 'https://gw.example.com' });
       expect(mockConnect).toHaveBeenCalledWith({
         gateway: 'https://gw.example.com',
         caCert: Buffer.from('ca'),
@@ -91,42 +109,48 @@ describe('OpenshellSdkClientManager', () => {
     });
 
     test('caches client for same gateway name', async () => {
-      const gw = gateway();
-      const sdkClient = createSdkClient(async () => [gw]);
+      const sdkClient = createSdkClient();
 
-      const first = await sdkClient.getClient();
-      const second = await sdkClient.getClient();
+      const first = await sdkClient.getClient('kaiden-local');
+      const second = await sdkClient.getClient('kaiden-local');
 
       expect(first).toBe(second);
       expect(mockConnect).toHaveBeenCalledTimes(1);
     });
 
     test('concurrent calls for same gateway share a single connection attempt', async () => {
-      const gw = gateway();
-      const sdkClient = createSdkClient(async () => [gw]);
+      const sdkClient = createSdkClient();
 
-      const [first, second] = await Promise.all([sdkClient.getClient(), sdkClient.getClient()]);
+      const [first, second] = await Promise.all([
+        sdkClient.getClient('kaiden-local'),
+        sdkClient.getClient('kaiden-local'),
+      ]);
 
       expect(first).toBe(second);
       expect(mockConnect).toHaveBeenCalledTimes(1);
     });
 
     test('evicts cached promise when connect rejects', async () => {
-      const gw = gateway();
-      const sdkClient = createSdkClient(async () => [gw]);
+      const sdkClient = createSdkClient();
       mockConnect.mockRejectedValueOnce(new Error('connection refused'));
 
-      await expect(sdkClient.getClient()).rejects.toThrow('connection refused');
+      await expect(sdkClient.getClient('kaiden-local')).rejects.toThrow('connection refused');
 
       mockConnect.mockResolvedValueOnce({ sandbox: {}, raw: {}, transport: {} });
-      await expect(sdkClient.getClient()).resolves.toBeDefined();
+      await expect(sdkClient.getClient('kaiden-local')).resolves.toBeDefined();
       expect(mockConnect).toHaveBeenCalledTimes(2);
     });
 
     test('creates separate clients for different gateways', async () => {
-      const localGw = gateway({ name: 'local', endpoint: 'http://127.0.0.1:17670', active: true });
-      const remoteGw = gateway({ name: 'remote', endpoint: 'http://10.0.0.1:17670', active: false });
-      const sdkClient = createSdkClient(async () => [localGw, remoteGw]);
+      const localMeta = metadata({ name: 'local' });
+      const remoteMeta = metadata({ name: 'remote', gateway_endpoint: 'http://10.0.0.1:17670' });
+      const sdkClient = createSdkClient({
+        getGateway: vi.fn().mockImplementation(async (name: string) => {
+          if (name === 'local') return localMeta;
+          if (name === 'remote') return remoteMeta;
+          throw new Error(`Not found: ${name}`);
+        }),
+      });
 
       mockConnect.mockResolvedValueOnce({ id: 'client-local' }).mockResolvedValueOnce({ id: 'client-remote' });
 
@@ -138,9 +162,10 @@ describe('OpenshellSdkClientManager', () => {
     });
 
     test('selects active gateway when no name is provided', async () => {
-      const inactive = gateway({ name: 'inactive', active: false });
-      const active = gateway({ name: 'active-gw', endpoint: 'http://127.0.0.1:17670', active: true });
-      const sdkClient = createSdkClient(async () => [inactive, active]);
+      const sdkClient = createSdkClient({
+        getActiveGateway: vi.fn().mockResolvedValue('active-gw'),
+        getGateway: vi.fn().mockResolvedValue(metadata({ name: 'active-gw' })),
+      });
 
       await sdkClient.getClient();
 
@@ -148,8 +173,10 @@ describe('OpenshellSdkClientManager', () => {
     });
 
     test('selects sole gateway when none is active', async () => {
-      const gw = gateway({ active: false });
-      const sdkClient = createSdkClient(async () => [gw]);
+      const sdkClient = createSdkClient({
+        getActiveGateway: vi.fn().mockResolvedValue(undefined),
+        listGateways: vi.fn().mockResolvedValue([listed(metadata())]),
+      });
 
       await sdkClient.getClient();
 
@@ -157,21 +184,27 @@ describe('OpenshellSdkClientManager', () => {
     });
 
     test('throws when named gateway is not found', async () => {
-      const sdkClient = createSdkClient(async () => [gateway()]);
+      const sdkClient = createSdkClient({
+        getGateway: vi.fn().mockRejectedValue(new Error("No metadata found for gateway 'missing'")),
+      });
 
-      await expect(sdkClient.getClient('missing')).rejects.toThrow(/gateway 'missing' not found/i);
+      await expect(sdkClient.getClient('missing')).rejects.toThrow(/gateway 'missing'/i);
     });
 
     test('throws when no gateways are registered', async () => {
-      const sdkClient = createSdkClient(async () => []);
+      const sdkClient = createSdkClient({
+        getActiveGateway: vi.fn().mockResolvedValue(undefined),
+        listGateways: vi.fn().mockResolvedValue([]),
+      });
 
       await expect(sdkClient.getClient()).rejects.toThrow(/no openshell gateways registered/i);
     });
 
     test('throws when multiple gateways exist but none is active', async () => {
-      const gw1 = gateway({ name: 'gw1', active: false });
-      const gw2 = gateway({ name: 'gw2', active: false });
-      const sdkClient = createSdkClient(async () => [gw1, gw2]);
+      const sdkClient = createSdkClient({
+        getActiveGateway: vi.fn().mockResolvedValue(undefined),
+        listGateways: vi.fn().mockResolvedValue([listed(metadata({ name: 'gw1' })), listed(metadata({ name: 'gw2' }))]),
+      });
 
       await expect(sdkClient.getClient()).rejects.toThrow(/multiple.*none is active/i);
     });
@@ -179,23 +212,21 @@ describe('OpenshellSdkClientManager', () => {
 
   describe('invalidate', () => {
     test('clears cache for a specific gateway', async () => {
-      const gw = gateway();
-      const sdkClient = createSdkClient(async () => [gw]);
+      const sdkClient = createSdkClient();
 
-      await sdkClient.getClient();
+      await sdkClient.getClient('kaiden-local');
       sdkClient.invalidate('kaiden-local');
-      await sdkClient.getClient();
+      await sdkClient.getClient('kaiden-local');
 
       expect(mockConnect).toHaveBeenCalledTimes(2);
     });
 
     test('clears entire cache when no name is given', async () => {
-      const gw = gateway();
-      const sdkClient = createSdkClient(async () => [gw]);
+      const sdkClient = createSdkClient();
 
-      await sdkClient.getClient();
+      await sdkClient.getClient('kaiden-local');
       sdkClient.invalidate();
-      await sdkClient.getClient();
+      await sdkClient.getClient('kaiden-local');
 
       expect(mockConnect).toHaveBeenCalledTimes(2);
     });
@@ -203,12 +234,11 @@ describe('OpenshellSdkClientManager', () => {
 
   describe('dispose', () => {
     test('clears cache on dispose', async () => {
-      const gw = gateway();
-      const sdkClient = createSdkClient(async () => [gw]);
+      const sdkClient = createSdkClient();
 
-      await sdkClient.getClient();
+      await sdkClient.getClient('kaiden-local');
       sdkClient.dispose();
-      await sdkClient.getClient();
+      await sdkClient.getClient('kaiden-local');
 
       expect(mockConnect).toHaveBeenCalledTimes(2);
     });

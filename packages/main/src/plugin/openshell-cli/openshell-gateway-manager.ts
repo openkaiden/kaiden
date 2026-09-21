@@ -34,7 +34,6 @@ import {
 } from '/@api/openshell-gateway-info.js';
 
 import { OpenshellGatewayConfig } from './openshell-gateway-config.js';
-import { OpenshellSdkClientManager } from './openshell-sdk-client-manager.js';
 
 const SYSTEM_GATEWAY_DIR_ENV = 'OPENSHELL_SYSTEM_GATEWAY_DIR';
 // Only used on Linux/macOS; #systemConfigDir() returns undefined on Windows.
@@ -61,8 +60,6 @@ export class OpenshellGatewayManager {
   constructor(
     @inject(OpenshellGatewayConfig)
     private readonly gatewayConfig: OpenshellGatewayConfig,
-    @inject(OpenshellSdkClientManager)
-    private readonly sdkClientManager: OpenshellSdkClientManager,
   ) {}
 
   // ── Config folder CRUD ────────────────────────────────────────────
@@ -193,7 +190,13 @@ export class OpenshellGatewayManager {
   }
 
   async health(gatewayName?: string): Promise<{ status: string; version: string }> {
-    const client = await this.sdkClientManager.getClient(gatewayName);
+    const gateway = await this.#resolveGateway(gatewayName);
+    const connectOpts = await this.gatewayConfig.buildConnectOptions({
+      name: gateway.name,
+      endpoint: gateway.gateway_endpoint,
+    });
+    const { OpenShellClient } = await import('@nvidia/openshell-sdk');
+    const client = await OpenShellClient.connect(connectOpts);
     return client.health();
   }
 

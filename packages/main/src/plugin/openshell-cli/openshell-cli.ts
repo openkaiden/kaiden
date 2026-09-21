@@ -19,20 +19,13 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { RunError, RunOptions } from '@openkaiden/api';
+import type { RunError } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
 import z from 'zod';
 
 import { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
 import { Exec } from '/@/plugin/util/exec.js';
-import {
-  type GatewayAddOptions,
-  type GatewayInfo,
-  GatewayInfoSchema,
-  type GatewayRuntimeInfo,
-  GatewayRuntimeInfoSchema,
-  type SetInferenceOptions,
-} from '/@api/openshell-gateway-info.js';
+import type { SetInferenceOptions } from '/@api/openshell-gateway-info.js';
 
 const SettingValue = z.union([z.string(), z.boolean(), z.number()]);
 
@@ -58,13 +51,6 @@ const OpenshellSettingsSchema = z.looseObject({
  *
  * Policy commands:
  *   - `openshell policy update`
- *
- * Gateway registration commands:
- *   - `openshell gateway add <endpoint>`
- *   - `openshell gateway remove [name]`
- *   - `openshell gateway select [name]`
- *   - `openshell gateway list`
- *   - `openshell status`
  *
  * Provider commands:
  *   - `openshell provider list`
@@ -176,77 +162,6 @@ export class OpenshellCli {
     await this.runCli(args);
   }
 
-  // ── gateway registration commands ─────────────────────────────────
-
-  async addGateway(options: GatewayAddOptions): Promise<void> {
-    const args = ['gateway', 'add', options.endpoint];
-    if (options.name) {
-      args.push('--name', options.name);
-    }
-    if (options.remote) {
-      args.push('--remote', options.remote);
-    }
-    if (options.local) {
-      args.push('--local');
-    }
-    await this.runCli(args);
-  }
-
-  async removeGateway(name?: string): Promise<void> {
-    const args = ['gateway', 'remove'];
-    if (name) {
-      args.push(name);
-    }
-    await this.runCli(args);
-  }
-
-  async selectGateway(name?: string): Promise<void> {
-    const args = ['gateway', 'select'];
-    if (name) {
-      args.push(name);
-    }
-    await this.runCli(args);
-  }
-
-  async listGateways(): Promise<GatewayInfo[]> {
-    const data = await this.execCLI<unknown>(['gateway', 'list']);
-    return z.array(GatewayInfoSchema).parse(data);
-  }
-
-  async getGatewayInfo(gatewayName?: string): Promise<GatewayRuntimeInfo> {
-    const args = ['gateway', 'info'];
-    if (gatewayName) {
-      args.push('-g', gatewayName);
-    }
-    const data = await this.execCLI<unknown>(args);
-    return GatewayRuntimeInfoSchema.parse(data);
-  }
-
-  async checkEndpointStatus(endpoint: string): Promise<boolean> {
-    const args = ['status', '--gateway-endpoint', endpoint];
-    if (endpoint.startsWith('http://')) {
-      args.push('--gateway-insecure');
-    }
-    try {
-      await this.runCli(args, { quiet: true });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  async getGatewayStatus(): Promise<string> {
-    const cliPath = this.getCliPath();
-    try {
-      const result = await this.exec.exec(cliPath, ['status']);
-      return result.stdout.trim();
-    } catch (err: unknown) {
-      const detail = this.extractCliError(err);
-      console.error(`openshell failed: ${cliPath} status — ${detail}`);
-      throw new Error(detail);
-    }
-  }
-
   async setInference(options: SetInferenceOptions): Promise<void> {
     return this.runCli(['inference', 'set', '--provider', options.provider, '--model', options.model, '--no-verify']);
   }
@@ -299,16 +214,4 @@ export class OpenshellCli {
     });
   }
 
-  private async execCLI<T>(args: string[], options?: RunOptions): Promise<T> {
-    const cliPath = this.getCliPath();
-    const fullArgs = [...args, '-o', 'json'];
-    try {
-      const result = await this.exec.exec(cliPath, fullArgs, options);
-      return JSON.parse(result.stdout) as T;
-    } catch (err: unknown) {
-      const detail = this.extractCliError(err);
-      console.error(`openshell failed: ${cliPath} ${fullArgs.join(' ')} — ${detail}`);
-      throw new Error(detail);
-    }
-  }
 }
