@@ -599,6 +599,30 @@ describe('OpenshellGatewayManager', () => {
       });
       expect(result).toEqual({ status: 'healthy', version: '1.0.0' });
     });
+
+    test('resolves gateway when name is undefined', async () => {
+      const { readdir, readFile } = await import('node:fs/promises');
+      const { existsSync } = await import('node:fs');
+      vi.mocked(readdir)
+        .mockResolvedValueOnce(['only-gw'] as unknown as never[])
+        .mockRejectedValueOnce(new Error());
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFile)
+        .mockRejectedValueOnce(new Error('ENOENT'))
+        .mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'only-gw' })))
+        .mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'only-gw' })));
+      const mockHealth = vi.fn().mockResolvedValue({ status: 'healthy', version: '1.0.0' });
+      const mockConnect = vi.fn().mockResolvedValue({ health: mockHealth });
+      const sdk = await import('@nvidia/openshell-sdk');
+      vi.mocked(sdk.OpenShellClient.connect).mockImplementation(mockConnect);
+
+      await manager.health();
+
+      expect(gatewayConfig.buildConnectOptions).toHaveBeenCalledWith({
+        name: 'only-gw',
+        endpoint: 'http://127.0.0.1:17670',
+      });
+    });
   });
 
   describe('path resolution', () => {
