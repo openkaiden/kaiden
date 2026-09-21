@@ -23,11 +23,7 @@ import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
-import {
-  allOpenshellSandboxes,
-  openshellSandboxes,
-  type SandboxInfoWithGateway,
-} from '/@/stores/openshell-sandboxes';
+import { allOpenshellSandboxes, openshellSandboxes, type SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
 
 import SandboxActions from './SandboxActions.svelte';
 

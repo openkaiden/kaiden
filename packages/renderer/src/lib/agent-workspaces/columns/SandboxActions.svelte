@@ -6,8 +6,8 @@ import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
 import {
   clearSandboxActionError,
-  setSandboxActionError,
   type SandboxInfoWithGateway,
+  setSandboxActionError,
 } from '/@/stores/openshell-sandboxes';
 
 interface Props {
