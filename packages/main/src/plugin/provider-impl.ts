@@ -341,9 +341,11 @@ export class ProviderImpl implements Provider, IDisposable {
   ): Disposable {
     this._ragProviderConnectionFactory = ragProviderConnectionFactory;
     this._connectionAuditor = connectionAuditor;
+    this.providerRegistry.onDidSetConnectionFactoryCallback(this, ragProviderConnectionFactory, 'rag');
     return Disposable.create(() => {
       this._ragProviderConnectionFactory = undefined;
       this._connectionAuditor = undefined;
+      this.providerRegistry.onDidUnsetConnectionFactoryCallback(this, 'rag');
     });
   }
 
@@ -353,9 +355,11 @@ export class ProviderImpl implements Provider, IDisposable {
   ): Disposable {
     this._chunkProviderConnectionFactory = chunkProviderConnectionFactory;
     this._connectionAuditor = connectionAuditor;
+    this.providerRegistry.onDidSetConnectionFactoryCallback(this, chunkProviderConnectionFactory, 'chunk');
     return Disposable.create(() => {
       this._chunkProviderConnectionFactory = undefined;
       this._connectionAuditor = undefined;
+      this.providerRegistry.onDidUnsetConnectionFactoryCallback(this, 'chunk');
     });
   }
 
@@ -365,9 +369,11 @@ export class ProviderImpl implements Provider, IDisposable {
   ): Disposable {
     this._semanticRouterConnectionFactory = semanticRouterConnectionFactory;
     this._connectionAuditor = connectionAuditor;
+    this.providerRegistry.onDidSetConnectionFactoryCallback(this, semanticRouterConnectionFactory, 'semanticRouter');
     return Disposable.create(() => {
       this._semanticRouterConnectionFactory = undefined;
       this._connectionAuditor = undefined;
+      this.providerRegistry.onDidUnsetConnectionFactoryCallback(this, 'semanticRouter');
     });
   }
 

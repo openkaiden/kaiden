@@ -1665,7 +1665,7 @@ export class ProviderRegistry {
   onDidSetConnectionFactoryCallback(
     provider: ProviderImpl,
     factory: ProviderConnectionFactory,
-    factoryType: 'container' | 'kubernetes' | 'vm' | 'inference',
+    factoryType: 'container' | 'kubernetes' | 'vm' | 'inference' | 'rag' | 'chunk' | 'semanticRouter',
   ): void {
     this._onDidSetConnectionFactory.fire({
       providerId: provider.id,
@@ -1679,7 +1679,7 @@ export class ProviderRegistry {
 
   onDidUnsetConnectionFactoryCallback(
     provider: ProviderImpl,
-    factoryType: 'container' | 'kubernetes' | 'vm' | 'inference',
+    factoryType: 'container' | 'kubernetes' | 'vm' | 'inference' | 'rag' | 'chunk' | 'semanticRouter',
   ): void {
     this._onDidUnsetConnectionFactory.fire({
       providerId: provider.id,

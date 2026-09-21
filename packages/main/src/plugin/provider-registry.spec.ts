@@ -250,6 +250,148 @@ test('onDidSetConnectionFactory is called when an inference connection factory i
   });
 });
 
+test('onDidSetConnectionFactory is called when a rag connection factory is set and onDidUnsetConnectionFactory is called when the disposable is disposed', async () => {
+  const onDidSetConnectionFactoryMock: (e: ConnectionFactoryDetails) => void = vi.fn();
+  providerRegistry.onDidSetConnectionFactory(onDidSetConnectionFactoryMock);
+
+  const onDidUnsetConnectionFactoryMock: (e: ConnectionFactory) => void = vi.fn();
+  providerRegistry.onDidUnsetConnectionFactory(onDidUnsetConnectionFactoryMock);
+
+  const images = {
+    icon: {
+      light: 'a light image',
+      dark: 'a dark image',
+    },
+    logo: {
+      light: 'a light image',
+      dark: 'a dark image',
+    },
+  } as ProviderImages;
+  const provider = providerRegistry.createProvider('id', 'name', {
+    id: 'aProviderId',
+    name: 'aProviderName',
+    status: 'installed',
+    emptyConnectionMarkdownDescription: 'an empty connection markdown description',
+    images,
+  });
+
+  const disposable = provider.setRagProviderConnectionFactory({
+    create: async () => {},
+    creationDisplayName: 'a creation Display Name',
+    creationButtonTitle: 'a creation Button Title',
+  });
+
+  expect(onDidSetConnectionFactoryMock).toHaveBeenCalledWith({
+    type: 'rag',
+    providerId: 'aProviderId',
+    creationDisplayName: 'a creation Display Name',
+    creationButtonTitle: 'a creation Button Title',
+    emptyConnectionMarkdownDescription: 'an empty connection markdown description',
+    images,
+  });
+
+  disposable.dispose();
+  expect(onDidUnsetConnectionFactoryMock).toHaveBeenCalledWith({
+    type: 'rag',
+    providerId: 'aProviderId',
+  });
+});
+
+test('onDidSetConnectionFactory is called when a chunk connection factory is set and onDidUnsetConnectionFactory is called when the disposable is disposed', async () => {
+  const onDidSetConnectionFactoryMock: (e: ConnectionFactoryDetails) => void = vi.fn();
+  providerRegistry.onDidSetConnectionFactory(onDidSetConnectionFactoryMock);
+
+  const onDidUnsetConnectionFactoryMock: (e: ConnectionFactory) => void = vi.fn();
+  providerRegistry.onDidUnsetConnectionFactory(onDidUnsetConnectionFactoryMock);
+
+  const images = {
+    icon: {
+      light: 'a light image',
+      dark: 'a dark image',
+    },
+    logo: {
+      light: 'a light image',
+      dark: 'a dark image',
+    },
+  } as ProviderImages;
+  const provider = providerRegistry.createProvider('id', 'name', {
+    id: 'aProviderId',
+    name: 'aProviderName',
+    status: 'installed',
+    emptyConnectionMarkdownDescription: 'an empty connection markdown description',
+    images,
+  });
+
+  const disposable = provider.setChunkProviderConnectionFactory({
+    create: async () => {},
+    creationDisplayName: 'a creation Display Name',
+    creationButtonTitle: 'a creation Button Title',
+  });
+
+  expect(onDidSetConnectionFactoryMock).toHaveBeenCalledWith({
+    type: 'chunk',
+    providerId: 'aProviderId',
+    creationDisplayName: 'a creation Display Name',
+    creationButtonTitle: 'a creation Button Title',
+    emptyConnectionMarkdownDescription: 'an empty connection markdown description',
+    images,
+  });
+
+  disposable.dispose();
+  expect(onDidUnsetConnectionFactoryMock).toHaveBeenCalledWith({
+    type: 'chunk',
+    providerId: 'aProviderId',
+  });
+});
+
+test('onDidSetConnectionFactory is called when a semanticRouter connection factory is set and onDidUnsetConnectionFactory is called when the disposable is disposed', async () => {
+  const onDidSetConnectionFactoryMock: (e: ConnectionFactoryDetails) => void = vi.fn();
+  providerRegistry.onDidSetConnectionFactory(onDidSetConnectionFactoryMock);
+
+  const onDidUnsetConnectionFactoryMock: (e: ConnectionFactory) => void = vi.fn();
+  providerRegistry.onDidUnsetConnectionFactory(onDidUnsetConnectionFactoryMock);
+
+  const images = {
+    icon: {
+      light: 'a light image',
+      dark: 'a dark image',
+    },
+    logo: {
+      light: 'a light image',
+      dark: 'a dark image',
+    },
+  } as ProviderImages;
+  const provider = providerRegistry.createProvider('id', 'name', {
+    id: 'aProviderId',
+    name: 'aProviderName',
+    status: 'installed',
+    emptyConnectionMarkdownDescription: 'an empty connection markdown description',
+    images,
+  });
+
+  const disposable = provider.setSemanticRouterConnectionFactory({
+    type: 'test-router',
+    create: async () => ({ connectionId: 'test' }),
+    creationDisplayName: 'a creation Display Name',
+    creationButtonTitle: 'a creation Button Title',
+  });
+
+  expect(onDidSetConnectionFactoryMock).toHaveBeenCalledWith({
+    type: 'semanticRouter',
+    providerId: 'aProviderId',
+    creationDisplayName: 'a creation Display Name',
+    creationButtonTitle: 'a creation Button Title',
+    emptyConnectionMarkdownDescription: 'an empty connection markdown description',
+    images,
+  });
+
+  disposable.dispose();
+  expect(onDidUnsetConnectionFactoryMock).toHaveBeenCalledWith({
+    type: 'semanticRouter',
+    providerId: 'aProviderId',
+  });
+});
+
 test('should initialize provider if there is VM connection provider', async () => {
   const providerInternalId = '0';
 

@@ -1110,7 +1110,7 @@ declare module '@openkaiden/api' {
   }
 
   export interface ConnectionFactory {
-    type: 'container' | 'kubernetes' | 'vm' | 'inference';
+    type: 'container' | 'kubernetes' | 'vm' | 'inference' | 'rag' | 'chunk' | 'semanticRouter';
     providerId: string;
   }
 
