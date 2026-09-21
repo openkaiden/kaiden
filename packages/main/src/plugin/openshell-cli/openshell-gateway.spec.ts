@@ -1453,8 +1453,12 @@ describe('supportsMounts', () => {
     await gateway.start();
   });
 
-  test('does not enable mounts for a discovered gateway even with a saved config', async () => {
+  test('queries runtime info for a discovered gateway instead of reading local config', async () => {
     vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true');
+    vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({
+      status: 'healthy',
+      compute_drivers: [{ name: 'podman', capabilities: { driver_name: 'podman' } }],
+    });
     await expect(
       gateway.supportsMounts({
         name: 'discovered',
@@ -1462,8 +1466,9 @@ describe('supportsMounts', () => {
         type: 'local',
         driver: 'podman',
       }),
-    ).resolves.toBe(false);
+    ).resolves.toBe(true);
     expect(readFile).not.toHaveBeenCalled();
+    expect(openshellCli.getGatewayInfo).toHaveBeenCalledWith('discovered');
   });
 
   test.each([
@@ -1533,7 +1538,7 @@ describe('supportsMounts', () => {
     ).resolves.toBe(false);
   });
 
-  test('disables mount support when the managed gateway exits', async () => {
+  test('falls back to runtime check when the managed gateway exits', async () => {
     vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true\n');
     const info = {
       name: 'kaiden-local',
@@ -1544,6 +1549,7 @@ describe('supportsMounts', () => {
     await expect(gateway.supportsMounts(info)).resolves.toBe(true);
 
     vi.mocked(spawn).mock.results[0]?.value.emit('exit', 0);
+    vi.mocked(openshellCli.getGatewayInfo).mockRejectedValue(new Error('gateway unreachable'));
 
     await expect(gateway.supportsMounts(info)).resolves.toBe(false);
   });
@@ -1562,6 +1568,115 @@ describe('supportsMounts', () => {
       }),
     ).resolves.toBe(false);
     expect(readFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('supportsMounts (non-managed gateways)', () => {
+  test.each([
+    'podman',
+    'docker',
+  ] as const)('returns true for a non-managed local gateway with %s driver', async driverName => {
+    vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({
+      status: 'healthy',
+      compute_drivers: [{ name: driverName, capabilities: { driver_name: driverName } }],
+    });
+
+    await expect(
+      gateway.supportsMounts({
+        name: 'external-gw',
+        endpoint: 'http://127.0.0.1:17671',
+        type: 'local',
+        driver: driverName,
+      }),
+    ).resolves.toBe(true);
+    expect(openshellCli.getGatewayInfo).toHaveBeenCalledWith('external-gw');
+  });
+
+  test('returns false for a non-managed local gateway with vm driver', async () => {
+    vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({
+      status: 'healthy',
+      compute_drivers: [{ name: 'vm', capabilities: { driver_name: 'vm' } }],
+    });
+
+    await expect(
+      gateway.supportsMounts({
+        name: 'external-gw',
+        endpoint: 'http://127.0.0.1:17671',
+        type: 'local',
+        driver: 'vm',
+      }),
+    ).resolves.toBe(false);
+  });
+
+  test('returns false when getGatewayInfo fails for a non-managed gateway', async () => {
+    vi.mocked(openshellCli.getGatewayInfo).mockRejectedValue(new Error('connection refused'));
+
+    await expect(
+      gateway.supportsMounts({
+        name: 'external-gw',
+        endpoint: 'http://127.0.0.1:17671',
+        type: 'local',
+        driver: 'podman',
+      }),
+    ).resolves.toBe(false);
+  });
+
+  test('returns false when the non-managed gateway has no compute drivers', async () => {
+    vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({
+      status: 'healthy',
+      compute_drivers: [],
+    });
+
+    await expect(
+      gateway.supportsMounts({
+        name: 'external-gw',
+        endpoint: 'http://127.0.0.1:17671',
+        type: 'local',
+        driver: 'podman',
+      }),
+    ).resolves.toBe(false);
+  });
+
+  test('returns false for a non-managed remote gateway with podman driver', async () => {
+    await expect(
+      gateway.supportsMounts({
+        name: 'remote-gw',
+        endpoint: 'https://gateway.example.com',
+        type: 'local',
+        is_remote: true,
+        driver: 'podman',
+      }),
+    ).resolves.toBe(false);
+    expect(openshellCli.getGatewayInfo).not.toHaveBeenCalled();
+  });
+
+  test('returns false for a non-managed gateway on a non-local endpoint', async () => {
+    await expect(
+      gateway.supportsMounts({
+        name: 'external-gw',
+        endpoint: 'http://10.0.0.5:17671',
+        type: 'local',
+        driver: 'podman',
+      }),
+    ).resolves.toBe(false);
+    expect(openshellCli.getGatewayInfo).not.toHaveBeenCalled();
+  });
+
+  test('returns true for a non-managed gateway bound to IPv6 loopback [::1]', async () => {
+    vi.mocked(openshellCli.getGatewayInfo).mockResolvedValue({
+      status: 'healthy',
+      compute_drivers: [{ name: 'podman', capabilities: { driver_name: 'podman' } }],
+    });
+
+    await expect(
+      gateway.supportsMounts({
+        name: 'ipv6-gw',
+        endpoint: 'http://[::1]:17671',
+        type: 'local',
+        driver: 'podman',
+      }),
+    ).resolves.toBe(true);
+    expect(openshellCli.getGatewayInfo).toHaveBeenCalledWith('ipv6-gw');
   });
 });
 

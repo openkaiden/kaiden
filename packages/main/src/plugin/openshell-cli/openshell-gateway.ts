@@ -214,7 +214,9 @@ export class OpenshellGateway implements Disposable {
   private isLocalEndpoint(endpoint: string): boolean {
     try {
       const url = new URL(endpoint);
-      return ['127.0.0.1', 'localhost', '::1', '0.0.0.0'].includes(url.hostname);
+      // url.hostname for IPv6 addresses includes brackets, e.g. "[::1]" — strip them before comparing
+      const hostname = url.hostname.replace(/^\[|\]$/g, '');
+      return ['127.0.0.1', 'localhost', '::1', '0.0.0.0'].includes(hostname);
     } catch {
       return false;
     }
@@ -290,19 +292,38 @@ export class OpenshellGateway implements Disposable {
   }
 
   async supportsMounts(gateway: GatewayInfo): Promise<boolean> {
-    if (
-      !this.#gatewayProcesses.has(gateway.name) ||
-      (gateway.driver !== 'podman' && gateway.driver !== 'docker') ||
-      gateway.type !== 'local' ||
-      gateway.is_remote ||
-      !this.isLocalEndpoint(gateway.endpoint)
-    ) {
+    if (gateway.type !== 'local' || gateway.is_remote || !this.isLocalEndpoint(gateway.endpoint)) {
+      return false;
+    }
+
+    if (this.#gatewayProcesses.has(gateway.name)) {
+      return this.#supportsMountsFromConfig(gateway);
+    }
+
+    return this.#supportsMountsFromRuntime(gateway);
+  }
+
+  async #supportsMountsFromConfig(gateway: GatewayInfo): Promise<boolean> {
+    if (gateway.driver !== 'podman' && gateway.driver !== 'docker') {
       return false;
     }
     const configPath = join(this.getGatewayStorageDirectory(gateway.name), 'gateway.toml');
     try {
       const config = GatewayConfigSchema.parse(parseToml(await readFile(configPath, 'utf-8')));
       return config.openshell.drivers[gateway.driver]?.enable_bind_mounts === true;
+    } catch {
+      return false;
+    }
+  }
+
+  async #supportsMountsFromRuntime(gateway: GatewayInfo): Promise<boolean> {
+    try {
+      const runtimeInfo = await this.openshellCli.getGatewayInfo(gateway.name);
+      const driver = runtimeInfo.compute_drivers[0];
+      if (!driver) {
+        return false;
+      }
+      return driver.name === 'podman' || driver.name === 'docker';
     } catch {
       return false;
     }
