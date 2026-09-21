@@ -22,6 +22,7 @@ import { connect as h2Connect, constants as h2constants } from 'node:http2';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 
+import { OpenShellClient } from '@nvidia/openshell-sdk';
 import { inject, injectable } from 'inversify';
 
 import {
@@ -195,7 +196,6 @@ export class OpenshellGatewayManager {
       name: gateway.name,
       endpoint: gateway.gateway_endpoint,
     });
-    const { OpenShellClient } = await import('@nvidia/openshell-sdk');
     const client = await OpenShellClient.connect(connectOpts);
     return client.health();
   }

@@ -19,6 +19,7 @@
 import { EventEmitter } from 'node:events';
 import { join } from 'node:path';
 
+import { OpenShellClient } from '@nvidia/openshell-sdk';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { GatewayMetadata } from '/@api/openshell-gateway-info.js';
@@ -588,8 +589,7 @@ describe('OpenshellGatewayManager', () => {
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'my-gw' })));
       const mockHealth = vi.fn().mockResolvedValue({ status: 'healthy', version: '1.0.0' });
       const mockConnect = vi.fn().mockResolvedValue({ health: mockHealth });
-      const sdk = await import('@nvidia/openshell-sdk');
-      vi.mocked(sdk.OpenShellClient.connect).mockImplementation(mockConnect);
+      vi.mocked(OpenShellClient.connect).mockImplementation(mockConnect);
 
       const result = await manager.health('my-gw');
 
@@ -613,8 +613,7 @@ describe('OpenshellGatewayManager', () => {
         .mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'only-gw' })));
       const mockHealth = vi.fn().mockResolvedValue({ status: 'healthy', version: '1.0.0' });
       const mockConnect = vi.fn().mockResolvedValue({ health: mockHealth });
-      const sdk = await import('@nvidia/openshell-sdk');
-      vi.mocked(sdk.OpenShellClient.connect).mockImplementation(mockConnect);
+      vi.mocked(OpenShellClient.connect).mockImplementation(mockConnect);
 
       await manager.health();
 
