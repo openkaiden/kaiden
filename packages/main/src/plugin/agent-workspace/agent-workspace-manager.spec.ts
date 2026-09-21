@@ -470,7 +470,7 @@ describe('create – OpenShell mode', () => {
       'gateway "kaiden" version 0.0.100 is below the minimum required version 0.0.116',
     );
 
-    expect(openshellCli.createSandbox).not.toHaveBeenCalled();
+    expect(openshellSdkClientManager.getClient).not.toHaveBeenCalled();
   });
 
   test('waits for the gateway cache before checking reachability', async () => {
