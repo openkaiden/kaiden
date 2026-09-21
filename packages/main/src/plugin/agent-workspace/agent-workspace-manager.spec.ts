@@ -2120,8 +2120,8 @@ describe('terminal IPC session lifecycle', () => {
   });
 });
 
-describe('terminal agent command execution', () => {
-  const SDK_REFS_WITH_AGENT: {
+describe('terminal handler does not execute agent command', () => {
+  const SDK_REFS: {
     id: string;
     name: string;
     phase: string;
@@ -2135,12 +2135,7 @@ describe('terminal agent command execution', () => {
       labels: { [AGENT_LABEL]: 'test-agent' },
       resourceVersion: '1',
     },
-    { id: 'ws-no-label', name: 'no-label-workspace', phase: 'ready', labels: {}, resourceVersion: '2' },
   ];
-
-  function createTerminalMockExecSession(): MockExecSession {
-    return createMockExecSession();
-  }
 
   function getTerminalHandler(): (_listener: unknown, id: string, onDataId: number) => Promise<number> {
     return vi.mocked(ipcHandle).mock.calls.find(call => call[0] === 'agent-workspace:terminal')![1] as (
@@ -2150,8 +2145,8 @@ describe('terminal agent command execution', () => {
     ) => Promise<number>;
   }
 
-  test('executes agent command on first terminal data', async () => {
-    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
+  test('opens a clean shell without injecting the agent command (#2958)', async () => {
+    mockSdkListSandboxes(SDK_REFS);
     vi.mocked(agentRegistry.getAgent).mockResolvedValue({
       id: 'test-agent',
       name: 'Test Agent',
@@ -2159,122 +2154,17 @@ describe('terminal agent command execution', () => {
       command: '/usr/bin/agent start',
       destinationSkillsFolder: '~/.agent',
     });
-    const mock = createTerminalMockExecSession();
+    const mock = createMockExecSession();
     sdkSandbox.execInteractive.mockResolvedValue(mock.session);
 
     await getTerminalHandler()({}, 'ws-agent', 10);
     mock.pushEvent({ stream: 'stdout', data: Buffer.from('$ ') });
-
-    await vi.waitFor(() => expect(mock.session.write).toHaveBeenCalledWith(Buffer.from('/usr/bin/agent start\n')));
-  });
-
-  test('does not execute agent command on subsequent connections', async () => {
-    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
-    vi.mocked(agentRegistry.getAgent).mockResolvedValue({
-      id: 'test-agent',
-      name: 'Test Agent',
-      description: '',
-      command: '/usr/bin/agent start',
-      destinationSkillsFolder: '~/.agent',
-    });
-    const mock1 = createTerminalMockExecSession();
-    sdkSandbox.execInteractive.mockResolvedValue(mock1.session);
-
-    await getTerminalHandler()({}, 'ws-agent', 10);
-    mock1.pushEvent({ stream: 'stdout', data: Buffer.from('$ ') });
-    await vi.waitFor(() => expect(mock1.session.write).toHaveBeenCalled());
-
-    const mock2 = createTerminalMockExecSession();
-    sdkSandbox.execInteractive.mockResolvedValue(mock2.session);
-
-    await getTerminalHandler()({}, 'ws-agent', 11);
-    mock2.pushEvent({ stream: 'stdout', data: Buffer.from('$ ') });
     await new Promise(r => setTimeout(r, 0));
 
-    expect(mock2.session.write).not.toHaveBeenCalled();
-  });
-
-  test('retries agent command when replaced before first terminal data', async () => {
-    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
-    vi.mocked(agentRegistry.getAgent).mockResolvedValue({
-      id: 'test-agent',
-      name: 'Test Agent',
-      description: '',
-      command: '/usr/bin/agent start',
-      destinationSkillsFolder: '~/.agent',
-    });
-    const mock1 = createTerminalMockExecSession();
-    sdkSandbox.execInteractive.mockResolvedValue(mock1.session);
-
-    await getTerminalHandler()({}, 'ws-agent', 10);
-
-    const mock2 = createTerminalMockExecSession();
-    sdkSandbox.execInteractive.mockResolvedValue(mock2.session);
-    await getTerminalHandler()({}, 'ws-agent', 11);
-
-    mock1.pushEvent({ stream: 'stdout', data: Buffer.from('$ ') });
-    mock2.pushEvent({ stream: 'stdout', data: Buffer.from('$ ') });
-
-    await vi.waitFor(() => {
-      expect(mock1.session.write).not.toHaveBeenCalledWith(Buffer.from('/usr/bin/agent start\n'));
-      expect(mock2.session.write).toHaveBeenCalledWith(Buffer.from('/usr/bin/agent start\n'));
-    });
-  });
-
-  test('does not execute command when workspace has no agent label', async () => {
-    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
-    const mock = createTerminalMockExecSession();
-    sdkSandbox.execInteractive.mockResolvedValue(mock.session);
-
-    await getTerminalHandler()({}, 'ws-no-label', 10);
-    mock.pushEvent({ stream: 'stdout', data: Buffer.from('$ ') });
-    await new Promise(r => setTimeout(r, 0));
-
+    // Terminal handler no longer injects the agent command —
+    // agent start is handled by startAgentInWorkspace().
     expect(mock.session.write).not.toHaveBeenCalled();
     expect(agentRegistry.getAgent).not.toHaveBeenCalled();
-  });
-
-  test('does not execute command when agent has no command', async () => {
-    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
-    vi.mocked(agentRegistry.getAgent).mockResolvedValue({
-      id: 'test-agent',
-      name: 'Test Agent',
-      description: '',
-      command: '',
-      destinationSkillsFolder: '~/.agent',
-    });
-    const mock = createTerminalMockExecSession();
-    sdkSandbox.execInteractive.mockResolvedValue(mock.session);
-
-    await getTerminalHandler()({}, 'ws-agent', 10);
-    mock.pushEvent({ stream: 'stdout', data: Buffer.from('$ ') });
-    await new Promise(r => setTimeout(r, 0));
-
-    expect(mock.session.write).not.toHaveBeenCalled();
-  });
-
-  test('executes agent command only once despite multiple data events', async () => {
-    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
-    vi.mocked(agentRegistry.getAgent).mockResolvedValue({
-      id: 'test-agent',
-      name: 'Test Agent',
-      description: '',
-      command: '/usr/bin/agent start',
-      destinationSkillsFolder: '~/.agent',
-    });
-    const mock = createTerminalMockExecSession();
-    sdkSandbox.execInteractive.mockResolvedValue(mock.session);
-
-    await getTerminalHandler()({}, 'ws-agent', 10);
-    mock.pushEvent({ stream: 'stdout', data: Buffer.from('$ ') });
-    await vi.waitFor(() => expect(mock.session.write).toHaveBeenCalled());
-
-    mock.pushEvent({ stream: 'stdout', data: Buffer.from('more output') });
-    mock.pushEvent({ stream: 'stdout', data: Buffer.from('even more output') });
-    await new Promise(r => setTimeout(r, 0));
-
-    expect(mock.session.write).toHaveBeenCalledTimes(1);
-    expect(mock.session.write).toHaveBeenCalledWith(Buffer.from('/usr/bin/agent start\n'));
   });
 });
 

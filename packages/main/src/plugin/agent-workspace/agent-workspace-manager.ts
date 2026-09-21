@@ -184,13 +184,16 @@ export class AgentWorkspaceManager implements Disposable {
 
       // Eagerly start the agent so it is already running when the
       // terminal tab is opened — eliminates the lazy-loading delay.
-      this.startAgentInWorkspace(workspaceId.id, options.gateway, options.agent).catch((err: unknown) => {
-        console.warn(
-          `[AgentWorkspaceManager] agent pre-start failed for "${workspaceId.id}": ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
-      });
+      // Guarded: workspaces can be created without an agent (#2958).
+      if (options.agent) {
+        this.startAgentInWorkspace(workspaceId.id, options.gateway, options.agent).catch((err: unknown) => {
+          console.warn(
+            `[AgentWorkspaceManager] agent pre-start failed for "${workspaceId.id}": ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        });
+      }
 
       task.status = 'success';
       return workspaceId;
@@ -988,26 +991,14 @@ export class AgentWorkspaceManager implements Disposable {
         }
 
         const existingSession = this.workspaceTerminals.get(id);
-        const commandExecuted = existingSession?.commandExecuted ?? false;
         if (existingSession) {
           this.closeWorkspaceTerminal(id);
         }
 
-        const shouldExecuteCommand = !commandExecuted;
-        let agentCommand: string | undefined;
-        if (shouldExecuteCommand && workspace.labels) {
-          const agentId = workspace.labels[AGENT_LABEL];
-          if (agentId) {
-            try {
-              const agent = await this.agentRegistry.getAgent(agentId);
-              agentCommand = agent?.command;
-            } catch (err: unknown) {
-              console.error(`Failed to resolve agent command for workspace "${id}":`, err);
-            }
-          }
-        }
-
-        let commandSent = false;
+        // Agent command execution is handled by startAgentInWorkspace()
+        // during workspace creation.  The terminal handler opens a
+        // clean shell so that additional terminals can be opened
+        // without an agent (#2958).
         const invocation = await this.shellInAgentWorkspace(
           workspace.name,
           gatewayName,
@@ -1018,14 +1009,6 @@ export class AgentWorkspaceManager implements Disposable {
             }
             if (!this.webContents.isDestroyed()) {
               this.webContents.send('agent-workspace:terminal-onData', session?.callbackId ?? onDataId, content);
-            }
-            if (!commandSent && agentCommand) {
-              commandSent = true;
-              invocation.write(`${agentCommand}\n`);
-              const activeSession = this.workspaceTerminals.get(id);
-              if (activeSession?.execSession === invocation.execSession) {
-                activeSession.commandExecuted = true;
-              }
             }
           },
           (error: string) => {
@@ -1056,7 +1039,7 @@ export class AgentWorkspaceManager implements Disposable {
           abortController: invocation.abortController,
           write: invocation.write,
           resize: invocation.resize,
-          commandExecuted,
+          commandExecuted: false,
         });
         return onDataId;
       },
