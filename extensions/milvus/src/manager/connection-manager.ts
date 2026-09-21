@@ -28,6 +28,7 @@ import {
   ProviderConnectionLifecycle,
   RagProviderConnectionFactory,
 } from '@openkaiden/api';
+import type { EndpointConnection } from '@openkaiden/container-extension-api';
 import { ContainerExtensionAPI } from '@openkaiden/container-extension-api';
 import { sanitizeContainerName } from '@openkaiden/container-extension-api/container-name';
 // eslint-disable-next-line import/no-extraneous-dependencies
@@ -67,6 +68,7 @@ export class ConnectionManager implements Disposable {
   private configHelper!: ConfigHelper;
 
   #connections: Map<string, ConnectionEntry> = new Map();
+  #factoryDisposable: Disposable | undefined;
 
   registerConnection(container: MilvusContainer): void {
     const connectionEntry = this.#connections.get(`${container.path}::${container.id}`);
@@ -136,6 +138,8 @@ export class ConnectionManager implements Disposable {
   dispose(): void {
     this.#connections.forEach((entry, _key) => entry.disposable.dispose());
     this.#connections.clear();
+    this.#factoryDisposable?.dispose();
+    this.#factoryDisposable = undefined;
   }
 
   async discoverExistingContainers(): Promise<void> {
@@ -175,17 +179,38 @@ export class ConnectionManager implements Disposable {
   }
 
   async init(): Promise<void> {
-    await this.discoverExistingContainers();
     this.containerExtensionAPI.onContainersChanged(this.discoverExistingContainers.bind(this));
-    this.containerExtensionAPI.onEndpointsChanged(this.discoverExistingContainers.bind(this));
+    this.containerExtensionAPI.onEndpointsChanged(this.handleEndpointsChanged.bind(this));
 
-    // Create the RAG connection factory
+    // If there are container endpoints available, register the factory right away
+    if (this.containerExtensionAPI.getEndpoints().length > 0) {
+      this.registerFactory();
+      await this.discoverExistingContainers();
+    }
+  }
+
+  handleEndpointsChanged(endpoints: readonly EndpointConnection[]): void {
+    if (endpoints.length > 0 && !this.#factoryDisposable) {
+      // Container endpoints appeared — register the factory and discover existing containers
+      this.registerFactory();
+      this.discoverExistingContainers().catch((err: unknown) => {
+        console.error(`Failed to discover containers after endpoints changed: ${err}`);
+      });
+    } else if (endpoints.length === 0 && this.#factoryDisposable) {
+      // All container endpoints gone — unregister connections and factory
+      this.#connections.forEach((entry, _key) => entry.disposable.dispose());
+      this.#connections.clear();
+      this.#factoryDisposable.dispose();
+      this.#factoryDisposable = undefined;
+    }
+  }
+
+  private registerFactory(): void {
     const ragFactory: RagProviderConnectionFactory = {
       creationDisplayName: 'Milvus Vector Database',
       create: this.factory.bind(this),
     };
-
-    this.extensionContext.subscriptions.push(this.milvusProvider.setRagProviderConnectionFactory(ragFactory));
+    this.#factoryDisposable = this.milvusProvider.setRagProviderConnectionFactory(ragFactory);
   }
 
   private async checkMilvusImage(dockerode: Dockerode, logger?: Logger): Promise<boolean> {

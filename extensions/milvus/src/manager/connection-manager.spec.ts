@@ -120,12 +120,81 @@ beforeEach(async () => {
 });
 
 describe('ConnectionManager', () => {
-  test('init should discover existing containers and setup listeners', async () => {
+  test('init should discover existing containers and setup listeners when endpoints exist', async () => {
     await connectionManager.init();
 
     expect(containerExtensionAPIMock.onContainersChanged).toHaveBeenCalled();
     expect(containerExtensionAPIMock.onEndpointsChanged).toHaveBeenCalled();
     expect(milvusProviderMock.setRagProviderConnectionFactory).toHaveBeenCalled();
+  });
+
+  test('init should not register factory when no endpoints exist', async () => {
+    vi.mocked(containerExtensionAPIMock.getEndpoints).mockReturnValue([]);
+
+    await connectionManager.init();
+
+    expect(containerExtensionAPIMock.onContainersChanged).toHaveBeenCalled();
+    expect(containerExtensionAPIMock.onEndpointsChanged).toHaveBeenCalled();
+    expect(milvusProviderMock.setRagProviderConnectionFactory).not.toHaveBeenCalled();
+  });
+
+  test('should register factory when endpoints appear after init with no endpoints', async () => {
+    vi.mocked(containerExtensionAPIMock.getEndpoints).mockReturnValue([]);
+
+    await connectionManager.init();
+
+    expect(milvusProviderMock.setRagProviderConnectionFactory).not.toHaveBeenCalled();
+
+    // Simulate endpoints appearing
+    vi.mocked(containerExtensionAPIMock.getEndpoints).mockReturnValue([endpointMock]);
+    connectionManager.handleEndpointsChanged([endpointMock]);
+
+    expect(milvusProviderMock.setRagProviderConnectionFactory).toHaveBeenCalled();
+  });
+
+  test('should unregister factory and connections when all endpoints disappear', async () => {
+    await connectionManager.init();
+
+    expect(milvusProviderMock.setRagProviderConnectionFactory).toHaveBeenCalled();
+
+    // Register a connection first
+    connectionManager.registerConnection({
+      path: '/test/path',
+      id: 'container123',
+      name: 'test-milvus',
+      port: 19530,
+      running: true,
+    });
+
+    // Simulate endpoints disappearing
+    connectionManager.handleEndpointsChanged([]);
+
+    // Factory disposable should be disposed
+    expect(disposableMock.dispose).toHaveBeenCalled();
+  });
+
+  test('should not register factory again if already registered when endpoints change', async () => {
+    await connectionManager.init();
+
+    expect(milvusProviderMock.setRagProviderConnectionFactory).toHaveBeenCalledTimes(1);
+
+    // Simulate endpoints changed but still have endpoints
+    connectionManager.handleEndpointsChanged([endpointMock]);
+
+    // Factory should not be registered again
+    expect(milvusProviderMock.setRagProviderConnectionFactory).toHaveBeenCalledTimes(1);
+  });
+
+  test('should not unregister factory when endpoints disappear if not registered', async () => {
+    vi.mocked(containerExtensionAPIMock.getEndpoints).mockReturnValue([]);
+
+    await connectionManager.init();
+
+    // Simulate endpoints disappearing — factory was never registered
+    connectionManager.handleEndpointsChanged([]);
+
+    // dispose should not have been called on the factory since it was never created
+    expect(disposableMock.dispose).not.toHaveBeenCalled();
   });
 
   test('registerConnection should create new connection when not exists', () => {
