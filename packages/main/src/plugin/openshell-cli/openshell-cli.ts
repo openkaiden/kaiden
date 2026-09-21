@@ -213,5 +213,4 @@ export class OpenshellCli {
       return arg;
     });
   }
-
 }

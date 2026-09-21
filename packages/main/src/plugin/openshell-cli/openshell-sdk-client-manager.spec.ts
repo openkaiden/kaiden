@@ -185,7 +185,7 @@ describe('OpenshellSdkClientManager', () => {
 
     test('throws when named gateway is not found', async () => {
       const sdkClient = createSdkClient({
-        getGateway: vi.fn().mockRejectedValue(new Error("No metadata found for gateway 'missing'")),
+        getGateway: vi.fn().mockRejectedValue(new Error(`No metadata found for gateway 'missing'`)),
       });
 
       await expect(sdkClient.getClient('missing')).rejects.toThrow(/gateway 'missing'/i);
