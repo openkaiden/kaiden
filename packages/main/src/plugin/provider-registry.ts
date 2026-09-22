@@ -1675,6 +1675,7 @@ export class ProviderRegistry {
       emptyConnectionMarkdownDescription: provider.emptyConnectionMarkdownDescription,
       images: provider.images,
     });
+    this.apiSender.send('provider-change', {});
   }
 
   onDidUnsetConnectionFactoryCallback(
@@ -1685,6 +1686,7 @@ export class ProviderRegistry {
       providerId: provider.id,
       type: factoryType,
     });
+    this.apiSender.send('provider-change', {});
   }
 
   getConnectionFactories(): ConnectionFactoryDetails[] {
