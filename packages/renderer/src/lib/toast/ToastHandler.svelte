@@ -19,38 +19,13 @@
 import { SvelteToast, toast } from '@zerodevx/svelte-toast';
 import { onDestroy, onMount } from 'svelte';
 
+import { toastThemes } from './toast-themes';
+
 let callback: (object: { type: string; message: string }) => void;
 
 onMount(() => {
   callback = (object: { type: string; message: string }): void => {
-    let theme: {
-      [x: string]: string;
-    } = {};
-    if (object.type === 'success') {
-      theme = {
-        '--toastBackground': '#16a34a',
-        '--toastColor': '#bbf7d0',
-        '--toastBarBackground': '#14532d',
-      };
-    } else if (object.type === 'error') {
-      theme = {
-        '--toastBackground': 'red',
-        '--toastColor': 'white',
-        '--toastBarBackground': 'maroon',
-      };
-    } else if (object.type === 'warning') {
-      theme = {
-        '--toastBackground': 'yellow',
-        '--toastColor': 'black',
-        '--toastBarBackground': 'olive',
-      };
-    } else if (object.type === 'info') {
-      theme = {
-        '--toastBackground': 'blue',
-        '--toastColor': 'white',
-        '--toastBarBackground': 'navy',
-      };
-    }
+    const theme = toastThemes[object.type] ?? {};
     toast.push(object.message, { pausable: true, theme });
   };
 
