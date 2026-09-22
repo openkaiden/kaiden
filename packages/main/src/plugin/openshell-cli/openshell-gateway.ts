@@ -385,7 +385,7 @@ export class OpenshellGateway implements Disposable {
       gatewayProcess = spawn(binaryPath, this.buildArgs(true, configPath, storageDirectory, port, bindAddress), {
         stdio: ['ignore', logFile.fd, logFile.fd],
         detached: false,
-        env: this.getGatewayEnvironment(binaryPath),
+        env: this.getGatewayEnvironment(binaryPath, storageDirectory),
       });
       gatewayProcess.once('error', err => (processState.spawnError = err));
       this.trackGatewayProcess(name, gatewayProcess);
@@ -395,8 +395,9 @@ export class OpenshellGateway implements Disposable {
     return { gatewayProcess, processState };
   }
 
-  private getGatewayEnvironment(binaryPath: string): NodeJS.ProcessEnv {
+  private getGatewayEnvironment(binaryPath: string, storageDirectory: string): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1' };
+    env['XDG_STATE_HOME'] = join(storageDirectory, 'state');
     if (isMac() || isLinux()) {
       // The VM driver finds the bundled e2fsprogs wrappers through PATH.
       env['PATH'] = [dirname(binaryPath), env['PATH']].filter(Boolean).join(delimiter);
@@ -437,7 +438,7 @@ export class OpenshellGateway implements Disposable {
     const gatewayProcess = spawn(binaryPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
-      env: this.getGatewayEnvironment(binaryPath),
+      env: this.getGatewayEnvironment(binaryPath, this.getGatewayStorageDirectory(DEFAULT_GATEWAY_NAME)),
     });
     this.trackGatewayProcess(DEFAULT_GATEWAY_NAME, gatewayProcess);
 

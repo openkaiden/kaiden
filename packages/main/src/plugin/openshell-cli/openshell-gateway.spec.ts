@@ -171,6 +171,29 @@ describe.each(['default', 'created'])('%s gateway process environment', launch =
     expect(process.env['PATH']).toBe(path);
     expect(process.env['NO_COLOR']).toBe('0');
   });
+
+  test('should set XDG_STATE_HOME to gateway storage state directory', async () => {
+    vi.mocked(spawn).mockReturnValue(createMockChildProcess());
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValue(true);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.116'));
+
+    if (launch === 'default') {
+      await gateway.start();
+      expect(vi.mocked(spawn).mock.calls[0]?.[2]?.env?.['XDG_STATE_HOME']).toBe(
+        join(GATEWAY_STORAGE_DIRECTORY, 'state'),
+      );
+    } else {
+      const name = 'local-dev';
+      await gateway.createLocalGateway({
+        name,
+        bindAddress: '127.0.0.1',
+        port: 17675,
+        driver: 'vm',
+      });
+      const expectedStorageDir = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', name);
+      expect(vi.mocked(spawn).mock.calls[0]?.[2]?.env?.['XDG_STATE_HOME']).toBe(join(expectedStorageDir, 'state'));
+    }
+  });
 });
 
 describe('init', () => {
