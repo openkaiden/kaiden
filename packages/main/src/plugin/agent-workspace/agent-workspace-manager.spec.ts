@@ -1119,8 +1119,10 @@ describe('create – OpenShell mode', () => {
   test('calls setInference during create when secret type requires it', async () => {
     vi.mocked(secretManager.ensureSecretForModel).mockResolvedValue({ name: 'vertex-ai-conn-1', type: 'vertex-ai' });
     vi.mocked(secretManager.getConnectionProperties).mockReturnValue({
-      config: {} as Configuration,
-      connectionProperties: [['kaiden.vertexai._flags', {} as IConfigurationPropertyRecordedSchema]],
+      config: {
+        get: vi.fn((key: string) => (key === 'kaiden.vertexai._needsInferenceSetup' ? true : undefined)),
+      } as unknown as Configuration,
+      connectionProperties: [['kaiden.vertexai._needsInferenceSetup', {} as IConfigurationPropertyRecordedSchema]],
     });
     vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
       connection: {

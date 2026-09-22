@@ -41,7 +41,9 @@ export class NavigationBar {
     this.extensionsLink = this.navigationLocator.getByRole('link', { name: 'Extensions', exact: true });
     this.workspacesLink = this.navigationLocator.getByRole('link', { name: 'Workspaces', exact: true });
     this.settingsLink = this.navigationLocator.getByRole('link', { name: 'Settings', exact: true });
-    this.links = [this.knowledgesLink, this.extensionsLink, this.workspacesLink, this.settingsLink];
+    // Knowledges link is conditionally hidden when no RAG/chunk providers exist,
+    // so it is excluded from the always-visible links list.
+    this.links = [this.extensionsLink, this.workspacesLink, this.settingsLink];
   }
 
   getAllLinks(): Locator[] {
@@ -58,7 +60,18 @@ export class NavigationBar {
   }
 
   async navigateToKnowledgePage(): Promise<KnowledgePage> {
-    return this.navigateTo(this.knowledgesLink, KnowledgePage);
+    // Knowledges link may be hidden when no RAG/chunk providers are registered.
+    // Fall back to the application's navigation event when the link is not visible.
+    if (await this.knowledgesLink.isVisible().catch(() => false)) {
+      return this.navigateTo(this.knowledgesLink, KnowledgePage);
+    }
+    await this.page.evaluate(() => {
+      const events = (window as unknown as { events: { send(channel: string, data: unknown): void } }).events;
+      events.send('navigate', { page: 'rag-environments' });
+    });
+    const pageInstance = new KnowledgePage(this.page);
+    await pageInstance.waitForLoad();
+    return pageInstance;
   }
 
   async navigateToExtensionsPage(): Promise<ExtensionsPage> {

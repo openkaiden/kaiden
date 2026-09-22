@@ -1,6 +1,5 @@
 <script lang="ts">
 import { Button, Dropdown, ErrorMessage, Input, NumberInput } from '@podman-desktop/ui-svelte';
-import { untrack } from 'svelte';
 
 import Dialog from '/@/lib/dialogs/Dialog.svelte';
 import { openshellGateways } from '/@/stores/openshell-gateways';
@@ -8,18 +7,15 @@ import { GATEWAY_NAME_PATTERN, KAIDEN_LOCAL_GATEWAY_NAME, type LocalGatewayDrive
 
 interface Props {
   existingNames: string[];
-  initialDriver: LocalGatewayDriver;
   closeCallback: () => void;
 }
 
-let { existingNames, initialDriver, closeCallback }: Props = $props();
+let { existingNames, closeCallback }: Props = $props();
 
 let name = $state('local-gateway');
 const bindAddress = '127.0.0.1';
 let port = $state(17675);
-let driver = $state<Exclude<LocalGatewayDriver, 'vm'>>(
-  untrack(() => (initialDriver === 'vm' ? 'podman' : initialDriver)),
-);
+let driver = $state<LocalGatewayDriver>('podman');
 let creating = $state(false);
 let error = $state('');
 let checkingPort = $state(true);
@@ -90,6 +86,7 @@ async function createGateway(): Promise<void> {
       <label class="block mb-2 text-sm font-semibold">
         <span class="block mb-2">Driver</span>
         <Dropdown name="gateway-driver" class="w-full" bind:value={driver}>
+          <option value="vm">VM</option>
           <option value="podman">Podman</option>
           <option value="docker">Docker</option>
         </Dropdown>

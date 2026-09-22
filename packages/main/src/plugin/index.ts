@@ -73,6 +73,7 @@ import { NavigationManager } from '/@/plugin/navigation/navigation-manager.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { OpenshellGatewayConfig } from '/@/plugin/openshell-cli/openshell-gateway-config.js';
+import { OpenshellGatewayManager } from '/@/plugin/openshell-cli/openshell-gateway-manager.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
 import { OpenshellImageBuilder } from '/@/plugin/openshell-cli/openshell-image-builder.js';
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
@@ -80,7 +81,10 @@ import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
 import { RagEnvironmentRegistry } from '/@/plugin/rag-environment-registry.js';
 import { SchedulerRegistry } from '/@/plugin/scheduler/scheduler-registry.js';
+import { DefaultProviderFactory } from '/@/plugin/secret-manager/default-provider-factory.js';
+import { GcloudAdcProviderFactory } from '/@/plugin/secret-manager/gcloud-adc-provider-factory.js';
 import { OpenshellSecretAdapter } from '/@/plugin/secret-manager/openshell-secret-adapter.js';
+import { SelectableProviderFactoryToken } from '/@/plugin/secret-manager/provider-factory.js';
 import { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import { SemanticRouterManager } from '/@/plugin/semantic-router/semantic-router-manager.js';
 import { SkillManager } from '/@/plugin/skill/skill-manager.js';
@@ -606,11 +610,14 @@ export class PluginSystem {
     container.bind<OpenshellCli>(OpenshellCli).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayConfig>(OpenshellGatewayConfig).toSelf();
     container.bind<OpenshellPolicyManager>(OpenshellPolicyManager).toSelf();
+    container.bind<OpenshellGatewayManager>(OpenshellGatewayManager).toSelf().inSingletonScope();
     container.bind<OpenshellSdkClientManager>(OpenshellSdkClientManager).toSelf().inSingletonScope();
     container.bind<OpenshellGateway>(OpenshellGateway).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayStateManager>(OpenshellGatewayStateManager).toSelf().inSingletonScope();
     container.bind<OpenshellImageBuilder>(OpenshellImageBuilder).toSelf().inSingletonScope();
     container.bind<AgentWorkspaceManager>(AgentWorkspaceManager).toSelf().inSingletonScope();
+    container.bind(SelectableProviderFactoryToken).to(GcloudAdcProviderFactory).inSingletonScope();
+    container.bind(DefaultProviderFactory).to(DefaultProviderFactory).inSingletonScope();
     container.bind<OpenshellSecretAdapter>(OpenshellSecretAdapter).toSelf().inSingletonScope();
     container.bind<AcpSessionManager>(AcpSessionManager).toSelf().inSingletonScope();
     container.bind<AcpIPCHandler>(AcpIPCHandler).toSelf().inSingletonScope();
@@ -712,6 +719,23 @@ export class PluginSystem {
     agentWorkspaceManager.init();
     const openshellGatewayStateManager = container.get<OpenshellGatewayStateManager>(OpenshellGatewayStateManager);
     openshellGatewayStateManager.init();
+
+    const openshellGatewayManager = container.get<OpenshellGatewayManager>(OpenshellGatewayManager);
+    this.ipcHandle('openshell-gateway-manager:listGateways', async () => {
+      return openshellGatewayManager.listGateways();
+    });
+    this.ipcHandle('openshell-gateway-manager:getGateway', async (_listener: unknown, name: string) => {
+      return openshellGatewayManager.getGateway(name);
+    });
+    this.ipcHandle('openshell-gateway-manager:getActiveGateway', async () => {
+      return openshellGatewayManager.getActiveGateway();
+    });
+    this.ipcHandle('openshell-gateway-manager:getGatewayInfo', async (_listener: unknown, name?: string) => {
+      return openshellGatewayManager.getGatewayInfo(name);
+    });
+    this.ipcHandle('openshell-gateway-manager:health', async (_listener: unknown, name?: string) => {
+      return openshellGatewayManager.health(name);
+    });
 
     const secretManager = container.get<SecretManager>(SecretManager);
     secretManager.init();

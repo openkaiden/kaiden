@@ -16,27 +16,28 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import type { OpenShellClient } from '@nvidia/openshell-sdk';
 import type { FileSystemWatcher, InferenceProviderConnection } from '@openkaiden/api';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { IPCHandle } from '/@/plugin/api.js';
-import type { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
 import type { FilesystemMonitoring } from '/@/plugin/filesystem-monitoring.js';
-import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
+import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import type { ProviderImpl } from '/@/plugin/provider-impl.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { SafeStorageRegistry } from '/@/plugin/safe-storage/safe-storage-registry.js';
-import type { Exec } from '/@/plugin/util/exec.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
+import { DefaultProviderFactory } from './default-provider-factory.js';
+import { GcloudAdcProviderFactory } from './gcloud-adc-provider-factory.js';
 import { OpenshellSecretAdapter } from './openshell-secret-adapter.js';
 import { SecretManager } from './secret-manager.js';
 
-vi.mock(import('/@/plugin/openshell-cli/openshell-cli.js'));
+vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-client-manager.js'));
 
 let manager: SecretManager;
 
@@ -45,8 +46,20 @@ const apiSender: ApiSenderType = {
   receive: vi.fn(),
 };
 const ipcHandle: IPCHandle = vi.fn();
-const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry);
-const openshellAdapter = new OpenshellSecretAdapter(openshellCli);
+
+const mockRaw = {
+  createProvider: vi.fn(),
+  listProviders: vi.fn(),
+  deleteProvider: vi.fn(),
+  listProviderProfiles: vi.fn(),
+};
+const mockClient = { raw: mockRaw } as unknown as OpenShellClient;
+const sdkClientManager = new OpenshellSdkClientManager(undefined!, undefined!);
+const openshellAdapter = new OpenshellSecretAdapter(
+  sdkClientManager,
+  [new GcloudAdcProviderFactory()],
+  new DefaultProviderFactory(),
+);
 
 let gatewayStartCallback: (() => void) | undefined;
 
@@ -99,6 +112,7 @@ beforeEach(() => {
   vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
     { name: 'kaiden', endpoint: 'http://localhost' },
   ]);
+  vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
   manager = new SecretManager(
     apiSender,
     ipcHandle,
@@ -155,6 +169,7 @@ describe('openshellAdapter', () => {
     vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
       { name: 'kaiden', endpoint: 'http://localhost' },
     ]);
+    vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
     manager = new SecretManager(
       apiSender,
       ipcHandle,
@@ -169,30 +184,33 @@ describe('openshellAdapter', () => {
   });
 
   test('delegates create to openshellAdapter', async () => {
-    vi.mocked(openshellCli.createProvider).mockResolvedValue(undefined);
+    mockRaw.createProvider.mockResolvedValue({});
 
     const result = await manager.create(defaultOptions);
 
-    expect(openshellCli.createProvider).toHaveBeenCalledWith(
-      {
-        name: 'my-secret',
+    expect(mockRaw.createProvider).toHaveBeenCalledWith({
+      provider: {
+        metadata: { name: 'my-secret' },
         type: 'github',
         credentials: { GH_TOKEN: 'ghp_abc123' },
+        config: {},
       },
-      undefined,
-    );
+      workspace: '',
+    });
     expect(result).toEqual({ name: 'my-secret' });
   });
 
   test('delegates list to openshellAdapter', async () => {
-    vi.mocked(openshellCli.listProviders).mockResolvedValue([
-      { name: 'my-openai', type: 'openai' },
-      { name: 'my-anthropic', type: 'anthropic' },
-    ]);
+    mockRaw.listProviders.mockResolvedValue({
+      providers: [
+        { metadata: { name: 'my-openai' }, type: 'openai' },
+        { metadata: { name: 'my-anthropic' }, type: 'anthropic' },
+      ],
+    });
 
     const result = await manager.list();
 
-    expect(openshellCli.listProviders).toHaveBeenCalledWith('kaiden');
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('kaiden');
     expect(result).toHaveLength(2);
     expect(result.map(s => s.name)).toEqual(['my-openai', 'my-anthropic']);
   });
@@ -202,28 +220,27 @@ describe('openshellAdapter', () => {
       { name: 'local', endpoint: 'http://local' },
       { name: 'remote', endpoint: 'http://remote' },
     ]);
-    vi.mocked(openshellCli.listProviders).mockImplementation(async gateway => {
-      return gateway === 'local'
-        ? [{ name: 'shared-provider', type: 'openai' }]
-        : [{ name: 'shared-provider', type: 'anthropic' }];
+    mockRaw.listProviders.mockResolvedValue({
+      providers: [{ metadata: { name: 'shared-provider' }, type: 'openai' }],
     });
 
-    await expect(manager.list()).resolves.toEqual([
-      { name: 'shared-provider', type: 'openai', gateway: 'local' },
-      { name: 'shared-provider', type: 'anthropic', gateway: 'remote' },
-    ]);
-    expect(openshellCli.listProviders).toHaveBeenNthCalledWith(1, 'local');
-    expect(openshellCli.listProviders).toHaveBeenNthCalledWith(2, 'remote');
+    const result = await manager.list();
+
+    expect(result).toContainEqual({ name: 'shared-provider', type: 'openai', gateway: 'local' });
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('local');
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
   });
 
   test('lists providers only from the requested gateway', async () => {
-    vi.mocked(openshellCli.listProviders).mockResolvedValue([{ name: 'remote-provider', type: 'openai' }]);
+    mockRaw.listProviders.mockResolvedValue({
+      providers: [{ metadata: { name: 'remote-provider' }, type: 'openai' }],
+    });
 
     await expect(manager.list('remote')).resolves.toEqual([
       { name: 'remote-provider', type: 'openai', gateway: 'remote' },
     ]);
     expect(openshellGatewayStateManager.whenReady).not.toHaveBeenCalled();
-    expect(openshellCli.listProviders).toHaveBeenCalledWith('remote');
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
   });
 
   test('keeps providers from reachable gateways when another gateway fails', async () => {
@@ -232,37 +249,40 @@ describe('openshellAdapter', () => {
       { name: 'offline', endpoint: 'http://offline' },
       { name: 'online', endpoint: 'http://online' },
     ]);
-    vi.mocked(openshellCli.listProviders)
+    mockRaw.listProviders
       .mockRejectedValueOnce(new Error('connection refused'))
-      .mockResolvedValueOnce([{ name: 'available-provider', type: 'openai' }]);
+      .mockResolvedValueOnce({ providers: [{ metadata: { name: 'available-provider' }, type: 'openai' }] });
 
     await expect(manager.list()).resolves.toEqual([{ name: 'available-provider', type: 'openai', gateway: 'online' }]);
   });
 
   test('delegates remove to openshellAdapter', async () => {
-    vi.mocked(openshellCli.deleteProvider).mockResolvedValue(undefined);
+    mockRaw.deleteProvider.mockResolvedValue({});
 
     const result = await manager.remove('my-openai');
 
-    expect(openshellCli.deleteProvider).toHaveBeenCalledWith('my-openai', undefined);
+    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({ name: 'my-openai', workspace: '' });
     expect(result).toEqual({ name: 'my-openai' });
   });
 
   test('removes a provider from its owning gateway', async () => {
-    vi.mocked(openshellCli.deleteProvider).mockResolvedValue(undefined);
+    mockRaw.deleteProvider.mockResolvedValue({});
 
     await manager.remove('my-openai', 'remote');
 
-    expect(openshellCli.deleteProvider).toHaveBeenCalledWith('my-openai', 'remote');
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
   });
 
   test('listServices delegates to openshellAdapter', async () => {
-    const profiles = [{ id: 'openai', display_name: 'OpenAI', description: 'OpenAI API provider' }];
-    vi.mocked(openshellCli.listProfiles).mockResolvedValue(profiles);
+    mockRaw.listProviderProfiles.mockResolvedValue({
+      profiles: [{ id: 'openai', displayName: 'OpenAI', description: 'OpenAI API provider', credentials: [] }],
+    });
 
     const result = await manager.listServices();
 
-    expect(result).toEqual(profiles);
+    expect(result).toEqual([
+      { id: 'openai', display_name: 'OpenAI', description: 'OpenAI API provider', credentials: [] },
+    ]);
   });
 
   test('skips file watching', () => {
@@ -270,7 +290,7 @@ describe('openshellAdapter', () => {
   });
 
   test('still emits secret-manager-update on create', async () => {
-    vi.mocked(openshellCli.createProvider).mockResolvedValue(undefined);
+    mockRaw.createProvider.mockResolvedValue({});
 
     await manager.create(defaultOptions);
 
@@ -278,7 +298,7 @@ describe('openshellAdapter', () => {
   });
 
   test('still emits secret-manager-update on remove', async () => {
-    vi.mocked(openshellCli.deleteProvider).mockResolvedValue(undefined);
+    mockRaw.deleteProvider.mockResolvedValue({});
 
     await manager.remove('my-openai');
 
@@ -302,14 +322,16 @@ describe('inference connection lifecycle', () => {
       connection: mockConnection,
       providerId: 'kaiden.cursor',
     });
-    vi.mocked(openshellCli.listProviders).mockResolvedValue([
-      { name: 'other-provider', type: 'other' },
-      { name: 'kaiden.cursor-conn-123', type: 'cursor' },
-    ]);
+    mockRaw.listProviders.mockResolvedValue({
+      providers: [
+        { metadata: { name: 'other-provider' }, type: 'other' },
+        { metadata: { name: 'kaiden.cursor-conn-123' }, type: 'cursor' },
+      ],
+    });
 
     const secret = await manager.getSecretForModel('cursor::model-1::', 'remote');
     expect(secret).toEqual({ name: 'kaiden.cursor-conn-123', type: 'cursor' });
-    expect(openshellCli.listProviders).toHaveBeenCalledWith('remote');
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
   });
 
   test('getSecretForModel returns undefined for unknown model', async () => {
@@ -324,7 +346,9 @@ describe('inference connection lifecycle', () => {
       connection: mockConnection,
       providerId: 'kaiden.vertex-ai',
     });
-    vi.mocked(openshellCli.listProviders).mockResolvedValue([{ name: 'kaiden.vertex-ai-conn-123', type: 'vertex-ai' }]);
+    mockRaw.listProviders.mockResolvedValue({
+      providers: [{ metadata: { name: 'kaiden.vertex-ai-conn-123' }, type: 'vertex-ai' }],
+    });
 
     const secret = await manager.getSecretForModel('vertexai::model-1::');
     expect(secret).toEqual({ name: 'kaiden.vertex-ai-conn-123', type: 'vertex-ai' });
@@ -373,8 +397,8 @@ describe('createSecretForConnection', () => {
     } as unknown as ReturnType<typeof configurationRegistry.getConfiguration>);
 
     vi.mocked(extensionStorageMock.get).mockResolvedValue('actual-api-key');
-    vi.mocked(openshellCli.listProviders).mockResolvedValue([]);
-    vi.mocked(openshellCli.createProvider).mockResolvedValue(undefined);
+    mockRaw.listProviders.mockResolvedValue({ providers: [] });
+    mockRaw.createProvider.mockResolvedValue({});
     vi.mocked(providerRegistry.getProvider).mockReturnValue({
       extensionId: 'kaiden.cursor',
     } as unknown as ProviderImpl);
@@ -385,14 +409,15 @@ describe('createSecretForConnection', () => {
 
     const result = await manager.createSecretForConnection('kaiden.cursor', mockConnection);
 
-    expect(openshellCli.createProvider).toHaveBeenCalledWith(
-      {
-        name: 'kaiden.cursor-conn-456',
+    expect(mockRaw.createProvider).toHaveBeenCalledWith({
+      provider: {
+        metadata: { name: 'kaiden.cursor-conn-456' },
         type: 'cursor',
         credentials: { token: 'actual-api-key' },
+        config: {},
       },
-      undefined,
-    );
+      workspace: '',
+    });
     expect(result).toEqual({ name: 'kaiden.cursor-conn-456', type: 'cursor' });
   });
 
@@ -410,7 +435,7 @@ describe('createSecretForConnection', () => {
     const result = await manager.createSecretForConnection('kaiden.cursor', mockConnection);
 
     expect(result).toBeUndefined();
-    expect(openshellCli.createProvider).not.toHaveBeenCalled();
+    expect(mockRaw.createProvider).not.toHaveBeenCalled();
   });
 });
 
@@ -430,13 +455,15 @@ describe('ensureSecretForModel', () => {
       connection: mockConnection,
       providerId: 'kaiden.cursor',
     });
-    vi.mocked(openshellCli.listProviders).mockResolvedValue([{ name: 'kaiden.cursor-conn-789', type: 'cursor' }]);
+    mockRaw.listProviders.mockResolvedValue({
+      providers: [{ metadata: { name: 'kaiden.cursor-conn-789' }, type: 'cursor' }],
+    });
 
     const result = await manager.ensureSecretForModel('cursor::model-1::', 'remote');
 
     expect(result).toEqual({ name: 'kaiden.cursor-conn-789', type: 'cursor' });
-    expect(openshellCli.createProvider).not.toHaveBeenCalled();
-    expect(openshellCli.listProviders).toHaveBeenCalledWith('remote');
+    expect(mockRaw.createProvider).not.toHaveBeenCalled();
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
   });
 
   test('creates and returns secret when missing but connection exists', async () => {
@@ -444,10 +471,8 @@ describe('ensureSecretForModel', () => {
       connection: mockConnection,
       providerId: 'kaiden.cursor',
     });
-    // First call from getSecretForModel: secret not found
-    // Second call from createSecretForConnection: still not found (dedup check)
-    vi.mocked(openshellCli.listProviders).mockResolvedValue([]);
-    vi.mocked(openshellCli.createProvider).mockResolvedValue(undefined);
+    mockRaw.listProviders.mockResolvedValue({ providers: [] });
+    mockRaw.createProvider.mockResolvedValue({});
     vi.mocked(providerRegistry.getProvider).mockReturnValue({
       extensionId: 'kaiden.cursor',
     } as unknown as ProviderImpl);
@@ -483,14 +508,15 @@ describe('ensureSecretForModel', () => {
 
     const result = await manager.ensureSecretForModel('cursor::model-1::', 'remote');
 
-    expect(openshellCli.createProvider).toHaveBeenCalledWith(
-      {
-        name: 'kaiden.cursor-conn-789',
+    expect(mockRaw.createProvider).toHaveBeenCalledWith({
+      provider: {
+        metadata: { name: 'kaiden.cursor-conn-789' },
         type: 'cursor',
         credentials: { token: 'actual-api-key' },
+        config: {},
       },
-      'remote',
-    );
+      workspace: '',
+    });
     expect(result).toEqual({ name: 'kaiden.cursor-conn-789', type: 'cursor' });
   });
 
@@ -500,6 +526,6 @@ describe('ensureSecretForModel', () => {
     const result = await manager.ensureSecretForModel('unknown::model::');
 
     expect(result).toBeUndefined();
-    expect(openshellCli.createProvider).not.toHaveBeenCalled();
+    expect(mockRaw.createProvider).not.toHaveBeenCalled();
   });
 });

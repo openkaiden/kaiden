@@ -176,6 +176,5 @@ function getDetails(gateway: GatewayInfo): string {
 {#if showCreateGateway}
   <PreferencesOpenshellGatewayCreate
     existingNames={$openshellGateways.map(gateway => gateway.name)}
-    initialDriver={activeGateway?.driver ?? 'podman'}
     closeCallback={closeCreateGateway} />
 {/if}

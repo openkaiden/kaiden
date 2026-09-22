@@ -240,9 +240,13 @@ export class AgentWorkspaceManager implements Disposable {
       const connection = this.providerRegistry.getInferenceConnection(options.model);
       if (connection) {
         const provider = this.providerRegistry.getProvider(connection?.providerId);
-        const { connectionProperties } = this.secretManager.getConnectionProperties(connection.connection, provider);
-        const hasFlags = connectionProperties.find(([fullKey]) => fullKey.endsWith('._flags'));
-        if (hasFlags) {
+        const { config, connectionProperties } = this.secretManager.getConnectionProperties(
+          connection.connection,
+          provider,
+        );
+        const inferenceSetupEntry = connectionProperties.find(([fullKey]) => fullKey.endsWith('._needsInferenceSetup'));
+        const needsInferenceSetup = inferenceSetupEntry ? config.get<boolean>(inferenceSetupEntry[0]) : false;
+        if (needsInferenceSetup) {
           await this.openshellCli.setInference({
             provider: secretName,
             model: modelName,

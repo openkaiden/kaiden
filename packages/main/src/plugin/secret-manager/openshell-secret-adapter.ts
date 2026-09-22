@@ -16,58 +16,70 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { inject, injectable } from 'inversify';
+import { inject, injectable, multiInject } from 'inversify';
 
-import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
+import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
+import { DefaultProviderFactory } from '/@/plugin/secret-manager/default-provider-factory.js';
 import type { OpenshellProfile } from '/@api/openshell-gateway-info.js';
 import type { SecretCliBackend, SecretCreateOptions, SecretInfo, SecretName } from '/@api/secret-info.js';
 
-/**
- * Adapts {@link OpenshellCli} provider commands to the
- * {@link SecretCliBackend} interface used by {@link SecretManager}.
- *
- * OpenShell manages credentials as "providers" rather than "secrets".
- * This adapter maps:
- *   - `createSecret`  → `openshell provider create`
- *   - `listSecrets`   → `openshell provider list`
- *   - `removeSecret`  → `openshell provider delete`
- *   - `listServices`  → `openshell provider list-profiles`
- */
+import type { ProviderFactory, SelectableProviderFactory } from './provider-factory.js';
+import { SelectableProviderFactoryToken } from './provider-factory.js';
+
 @injectable()
 export class OpenshellSecretAdapter implements SecretCliBackend {
   constructor(
-    @inject(OpenshellCli)
-    private readonly openshellCli: OpenshellCli,
+    @inject(OpenshellSdkClientManager)
+    private readonly sdkClientManager: OpenshellSdkClientManager,
+    @multiInject(SelectableProviderFactoryToken)
+    private readonly providerFactories: SelectableProviderFactory[],
+
+    @inject(DefaultProviderFactory)
+    private readonly defaultProviderFactory: DefaultProviderFactory,
   ) {}
 
   async createSecret(options: SecretCreateOptions, gateway?: string): Promise<SecretName> {
     if (typeof options.value === 'string') {
       throw new Error('options.value must be a record for Openshell');
     }
-    await this.openshellCli.createProvider(
-      {
-        name: options.name,
-        type: options.type,
-        credentials: options.value.credentials,
-        config: options.value.config,
-        flags: options.value.flags,
-        env: options.value.env,
-      },
-      gateway,
-    );
+    const client = await this.sdkClientManager.getClient(gateway);
+    const factory = this.#resolveFactory(options);
+    await factory.createProvider(client, options);
     return { name: options.name };
   }
 
   async listSecrets(gateway?: string): Promise<SecretInfo[]> {
-    return await this.openshellCli.listProviders(gateway);
+    const client = await this.sdkClientManager.getClient(gateway);
+    const response = await client.raw.listProviders({ workspace: '' });
+    return response.providers.map(p => ({
+      name: p.metadata?.name ?? '',
+      type: p.type,
+    }));
   }
 
   async removeSecret(name: string, gateway?: string): Promise<SecretName> {
-    await this.openshellCli.deleteProvider(name, gateway);
+    const client = await this.sdkClientManager.getClient(gateway);
+    await client.raw.deleteProvider({ name, workspace: '' });
     return { name };
   }
 
   async listServices(): Promise<OpenshellProfile[]> {
-    return this.openshellCli.listProfiles();
+    const client = await this.sdkClientManager.getClient();
+    const response = await client.raw.listProviderProfiles({ workspace: '' });
+    return response.profiles.map(p => ({
+      id: p.id,
+      display_name: p.displayName,
+      description: p.description || undefined,
+      credentials: p.credentials.map(c => ({
+        name: c.name,
+        required: c.required,
+        description: c.description || undefined,
+        env_vars: c.envVars.length > 0 ? c.envVars : undefined,
+      })),
+    }));
+  }
+
+  #resolveFactory(options: SecretCreateOptions): ProviderFactory {
+    return this.providerFactories.find(f => f.supports(options.type)) ?? this.defaultProviderFactory;
   }
 }

@@ -142,20 +142,13 @@ export class SecretManager {
     const secretType = config.get<string>(typeEntry[0]);
     if (!secretType) return undefined;
 
-    const flagsEntry = connectionProperties.find(([fullKey]) => fullKey.endsWith('._flags'));
-    const flagsRaw = flagsEntry ? config.get<string | string[]>(flagsEntry[0]) : undefined;
-    const flagsValue = flagsRaw ? (Array.isArray(flagsRaw) ? flagsRaw : [flagsRaw]) : undefined;
-
     const configKeys = connectionProperties.filter(
-      ([fullKey, _schema]) => !fullKey.endsWith('._type') && !fullKey.endsWith('._flags'),
+      ([fullKey]) => !fullKey.endsWith('._type') && !fullKey.endsWith('._needsInferenceSetup'),
     );
 
     const extensionStorage = this.safeStorageRegistry.getExtensionStorage(provider.extensionId);
 
     const value: SecretValue = { credentials: {} };
-    if (flagsValue) {
-      value.flags = flagsValue;
-    }
     for (const [propertyName, schema] of configKeys) {
       const secretRefName = config.get<string>(propertyName);
       if (!secretRefName) continue;
@@ -164,21 +157,11 @@ export class SecretManager {
       if (!actualValue) continue;
 
       const shortPropertyName = propertyName.split('.').pop()!;
-      if (flagsValue === undefined) {
-        if (schema.format === 'password') {
-          value.credentials[shortPropertyName] = actualValue;
-        } else {
-          value.config ??= {};
-          value.config[shortPropertyName] = actualValue;
-        }
+      if (schema.format === 'password') {
+        value.credentials[shortPropertyName] = actualValue;
       } else {
-        if (schema.format === 'password') {
-          value.env ??= {};
-          value.env[shortPropertyName] = actualValue;
-        } else {
-          value.config ??= {};
-          value.config[shortPropertyName] = actualValue;
-        }
+        value.config ??= {};
+        value.config[shortPropertyName] = actualValue;
       }
     }
 

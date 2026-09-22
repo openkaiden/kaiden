@@ -138,6 +138,8 @@ export interface GatewayAddOptions {
 }
 
 export interface OpenshellGatewayStartOptions {
+  /** Defaults to the Podman driver. */
+  driver?: LocalGatewayDriver;
   port?: number;
   bindAddress?: string;
   disableTls?: boolean;
@@ -151,7 +153,7 @@ export interface CreateLocalGatewayOptions {
   name: string;
   bindAddress: string;
   port: number;
-  /** Overrides the driver inferred from the active gateway. */
+  /** Defaults to the Podman driver. */
   driver?: LocalGatewayDriver;
 }
 
@@ -213,4 +215,34 @@ export interface CreateProviderOptions {
 export interface SetInferenceOptions {
   provider: string;
   model: string;
+}
+
+// ── Gateway metadata (on-disk config folder schema) ───────────────────
+
+export const GatewayMetadataSourceSchema = z.enum(['user', 'system']);
+
+export type GatewayMetadataSource = z.output<typeof GatewayMetadataSourceSchema>;
+
+export const GatewayMetadataSchema = z.looseObject({
+  name: z.string(),
+  gateway_endpoint: z.string(),
+  is_remote: z.boolean().default(false),
+  gateway_port: z.number().default(0),
+  remote_host: z.string().nullish(),
+  resolved_host: z.string().nullish(),
+  auth_mode: z.string().optional(),
+  edge_team_domain: z.string().optional(),
+  edge_auth_url: z.string().optional(),
+  oidc_issuer: z.string().optional(),
+  oidc_client_id: z.string().optional(),
+  oidc_audience: z.string().optional(),
+  oidc_scopes: z.string().optional(),
+  vm_driver_state_dir: z.string().optional(),
+});
+
+export type GatewayMetadata = z.output<typeof GatewayMetadataSchema>;
+
+export interface ListedGateway {
+  metadata: GatewayMetadata;
+  source: GatewayMetadataSource;
 }
