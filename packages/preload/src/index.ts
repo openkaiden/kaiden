@@ -42,7 +42,7 @@ import type {
 } from '@kubernetes/client-node';
 import type * as containerDesktopAPI from '@openkaiden/api';
 import type { DynamicToolUIPart } from 'ai';
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 import type {
   AcpAttachment,
@@ -796,6 +796,17 @@ export function initExposure(): void {
 
   contextBridge.exposeInMainWorld('removeTempFile', async (filePath: string): Promise<void> => {
     return ipcInvoke('temp-file-service:removeTempFile', filePath);
+  });
+
+  contextBridge.exposeInMainWorld(
+    'saveTempAttachment',
+    async (fileName: string, base64Data: string): Promise<string> => {
+      return ipcInvoke('temp-file-service:saveTempAttachment', fileName, base64Data);
+    },
+  );
+
+  contextBridge.exposeInMainWorld('getPathForFile', (file: File): string => {
+    return webUtils.getPathForFile(file);
   });
 
   contextBridge.exposeInMainWorld('stopPod', async (engine: string, podId: string): Promise<void> => {

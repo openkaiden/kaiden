@@ -1235,6 +1235,20 @@ export class PluginSystem {
     });
 
     this.ipcHandle(
+      'temp-file-service:saveTempAttachment',
+      async (_listener, fileName: string, base64Data: string): Promise<string> => {
+        if (typeof fileName !== 'string' || typeof base64Data !== 'string') {
+          throw new Error('Invalid attachment arguments');
+        }
+        const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024;
+        if (Math.floor((base64Data.length * 3) / 4) > MAX_ATTACHMENT_BYTES) {
+          throw new Error('Attachment exceeds maximum allowed size');
+        }
+        return tempFileService.saveTempAttachment(fileName, base64Data);
+      },
+    );
+
+    this.ipcHandle(
       'container-provider-registry:startContainer',
       async (_listener, engine: string, containerId: string): Promise<void> => {
         return containerProviderRegistry.startContainer(engine, containerId);

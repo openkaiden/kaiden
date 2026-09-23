@@ -46,6 +46,9 @@ const COMPLETED_SESSION: AcpSessionInfo = {
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(window.getAcpSessionEvents).mockResolvedValue([]);
+  vi.mocked(window.getConfigurationValue).mockResolvedValue(20);
+  vi.mocked(window.getPathForFile).mockReturnValue('');
+  vi.mocked(window.removeTempFile).mockResolvedValue(undefined);
 });
 
 describe('optimistic input clearing on send', () => {
@@ -432,5 +435,246 @@ describe('permission request focus management', () => {
       expect(document.activeElement?.closest('.permission-actions')).toBeTruthy();
       expect(document.activeElement?.textContent?.trim()).toMatch(/^(Allow|Deny)$/);
     });
+  });
+});
+
+function makeDragEvent(type: string, files: File[]): Event {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'dataTransfer', {
+    value: {
+      types: ['Files'],
+      files: Object.assign(files, { item: (i: number): File | null => files[i] ?? null }),
+    },
+  });
+  return event;
+}
+
+describe('drag-and-drop attachments', () => {
+  test('should attach dropped files using native path without base64', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.getPathForFile).mockReturnValue('/Users/me/screenshots/screenshot.png');
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const dropZone = document.querySelector('[class*="rounded-lg border"]')!;
+    const file = new File(['pixels'], 'screenshot.png', { type: 'image/png' });
+
+    dropZone.dispatchEvent(makeDragEvent('dragenter', [file]));
+    dropZone.dispatchEvent(makeDragEvent('drop', [file]));
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('screenshot.png')).toBeInTheDocument();
+    });
+    expect(window.saveTempAttachment).not.toHaveBeenCalled();
+  });
+
+  test('should reject oversized dropped files', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const dropZone = document.querySelector('[class*="rounded-lg border"]')!;
+    const bigContent = new Uint8Array(21 * 1024 * 1024);
+    const file = new File([bigContent], 'huge.bin', { type: 'application/octet-stream' });
+
+    dropZone.dispatchEvent(makeDragEvent('dragenter', [file]));
+    dropZone.dispatchEvent(makeDragEvent('drop', [file]));
+
+    await vi.waitFor(() => {
+      expect(screen.queryByText('huge.bin')).not.toBeInTheDocument();
+    });
+    expect(window.saveTempAttachment).not.toHaveBeenCalled();
+  });
+});
+
+describe('clipboard paste attachments', () => {
+  function makePasteEvent(data: {
+    items?: Array<{ kind: string; getAsFile?: () => File }>;
+    files?: File[];
+    types?: string[];
+    getData?: (type: string) => string;
+  }): Event {
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', {
+      value: {
+        items: data.items ?? [],
+        files: data.files ?? [],
+        types: data.types ?? [],
+        getData: data.getData ?? ((): string => ''),
+      },
+    });
+    return event;
+  }
+
+  test('should attach pasted image files', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.saveTempAttachment).mockResolvedValue('/tmp/attachment-pasted.png');
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const textarea = screen.getByRole('textbox');
+    const file = new File(['img-data'], 'image.png', { type: 'image/png' });
+
+    textarea.dispatchEvent(
+      makePasteEvent({
+        items: [{ kind: 'file', getAsFile: (): File => file }],
+        files: [file],
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(window.saveTempAttachment).toHaveBeenCalled();
+    });
+  });
+
+  test('should not intercept paste when clipboard has text', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const textarea = screen.getByRole('textbox');
+
+    textarea.dispatchEvent(
+      makePasteEvent({
+        items: [],
+        files: [],
+        types: ['text/plain'],
+        getData: (): string => 'some text',
+      }),
+    );
+
+    expect(window.saveTempAttachment).not.toHaveBeenCalled();
+  });
+});
+
+describe('file size validation for dialog', () => {
+  test('should reject oversized files from dialog', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.openDialog).mockResolvedValue(['/path/to/huge-file.bin']);
+    vi.mocked(window.pathFileSize).mockResolvedValue(25 * 1024 * 1024);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const attachButton = screen.getByTitle('Attach file');
+    await userEvent.click(attachButton);
+
+    await vi.waitFor(() => {
+      expect(screen.queryByText('huge-file.bin')).not.toBeInTheDocument();
+    });
+  });
+
+  test('should accept files within size limit from dialog', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.openDialog).mockResolvedValue(['/path/to/small-file.txt']);
+    vi.mocked(window.pathFileSize).mockResolvedValue(100);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const attachButton = screen.getByTitle('Attach file');
+    await userEvent.click(attachButton);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('small-file.txt')).toBeInTheDocument();
+    });
+  });
+
+  test('should skip duplicate files from dialog', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.openDialog).mockResolvedValue(['/path/to/file.txt']);
+    vi.mocked(window.pathFileSize).mockResolvedValue(100);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const attachButton = screen.getByTitle('Attach file');
+    await userEvent.click(attachButton);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('file.txt')).toBeInTheDocument();
+    });
+
+    vi.mocked(window.openDialog).mockResolvedValue(['/path/to/file.txt']);
+    await userEvent.click(attachButton);
+
+    await vi.waitFor(() => {
+      expect(screen.getAllByText('file.txt')).toHaveLength(1);
+    });
+  });
+
+  test('should respect configured max file size from settings', async () => {
+    vi.mocked(window.getConfigurationValue).mockResolvedValue(5);
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.openDialog).mockResolvedValue(['/path/to/medium-file.bin']);
+    vi.mocked(window.pathFileSize).mockResolvedValue(6 * 1024 * 1024);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    await vi.waitFor(() => {
+      expect(window.getConfigurationValue).toHaveBeenCalled();
+    });
+
+    const attachButton = screen.getByTitle('Attach file');
+    await userEvent.click(attachButton);
+
+    await vi.waitFor(() => {
+      expect(screen.queryByText('medium-file.bin')).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe('cross-method duplicate detection', () => {
+  const FILE_CONTENT = 'pixels';
+
+  test('should skip dialog file already attached via drag-and-drop', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.getPathForFile).mockReturnValue('/Users/me/photos/photo.png');
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const dropZone = document.querySelector('[class*="rounded-lg border"]')!;
+    const file = new File([FILE_CONTENT], 'photo.png', { type: 'image/png' });
+
+    dropZone.dispatchEvent(makeDragEvent('dragenter', [file]));
+    dropZone.dispatchEvent(makeDragEvent('drop', [file]));
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('photo.png')).toBeInTheDocument();
+    });
+
+    vi.mocked(window.openDialog).mockResolvedValue(['/Users/me/photos/photo.png']);
+    vi.mocked(window.pathFileSize).mockResolvedValue(FILE_CONTENT.length);
+
+    const attachButton = screen.getByTitle('Attach file');
+    await userEvent.click(attachButton);
+
+    await vi.waitFor(() => {
+      expect(screen.getAllByText('photo.png')).toHaveLength(1);
+    });
+  });
+
+  test('should skip drag-and-drop file already attached via dialog', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.openDialog).mockResolvedValue(['/Users/me/photos/photo.png']);
+    vi.mocked(window.pathFileSize).mockResolvedValue(FILE_CONTENT.length);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const attachButton = screen.getByTitle('Attach file');
+    await userEvent.click(attachButton);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('photo.png')).toBeInTheDocument();
+    });
+
+    vi.mocked(window.getPathForFile).mockReturnValue('/Users/me/photos/photo.png');
+    const dropZone = document.querySelector('[class*="rounded-lg border"]')!;
+    const file = new File([FILE_CONTENT], 'photo.png', { type: 'image/png' });
+
+    dropZone.dispatchEvent(makeDragEvent('dragenter', [file]));
+    dropZone.dispatchEvent(makeDragEvent('drop', [file]));
+
+    await vi.waitFor(() => {
+      expect(screen.getAllByText('photo.png')).toHaveLength(1);
+    });
+    expect(window.saveTempAttachment).not.toHaveBeenCalled();
   });
 });

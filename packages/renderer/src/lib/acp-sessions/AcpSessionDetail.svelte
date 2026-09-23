@@ -1,6 +1,8 @@
 <script lang="ts">
 import { faPaperclip, faPaperPlane, faSquare, faXmark } from '@fortawesome/free-solid-svg-icons';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
+import { toast } from '@zerodevx/svelte-toast';
+import { untrack } from 'svelte';
 import { router } from 'tinro';
 
 import { acpSessions, acpSessionsEventStoreInfo } from '/@/stores/acp-sessions.svelte';
@@ -14,6 +16,7 @@ import type {
   AcpSessionStatus,
   AcpSlashCommand,
 } from '/@api/acp-session-info';
+import { AcpSettings } from '/@api/acp-settings';
 
 import AcpAtMentionCompletion from './AcpAtMentionCompletion.svelte';
 import AcpSlashCommandCompletion from './AcpSlashCommandCompletion.svelte';
@@ -36,7 +39,13 @@ const isDraft = $derived(sessionId === 'new' && !!draftSandboxName);
 
 let events: AcpFlowEvent[] = $state([]);
 let followUpText = $state('');
-let pendingAttachments: AcpAttachment[] = $state([]);
+interface PendingAttachment extends AcpAttachment {
+  sourceKey?: string;
+  fileSize?: number;
+  isTemp?: boolean;
+}
+
+let pendingAttachments: PendingAttachment[] = $state([]);
 let sendError: string | undefined = $state(undefined);
 let fetchSeq = 0;
 let flowContainer: HTMLElement | undefined = $state(undefined);
@@ -366,10 +375,14 @@ $effect(() => {
   const _id = sessionId;
   inputHistory = new InputHistory();
   followUpText = '';
+  cleanupTempAttachments(untrack(() => pendingAttachments));
   pendingAttachments = [];
   sendError = undefined;
   userScrolledAway = false;
   acpSessionsEventStoreInfo?.fetch()?.catch(() => {});
+  return (): void => {
+    cleanupTempAttachments(untrack(() => pendingAttachments));
+  };
 });
 
 // Pre-populate input history from existing prompt events (sessions loaded from disk)
@@ -426,16 +439,187 @@ function getMimeType(filePath: string): string {
 async function handleAttach(): Promise<void> {
   const result = await window.openDialog({ title: 'Attach files', selectors: ['openFile', 'multiSelections'] });
   if (!result?.length) return;
-  const newAttachments: AcpAttachment[] = result.map((filePath: string) => ({
-    filePath,
-    fileName: filePath.split(/[/\\]/).pop() ?? filePath,
-    mimeType: getMimeType(filePath),
-  }));
-  pendingAttachments = [...pendingAttachments, ...newAttachments];
+  const newAttachments: PendingAttachment[] = [];
+  for (const filePath of result) {
+    if (pendingAttachments.some(a => a.filePath === filePath) || newAttachments.some(a => a.filePath === filePath))
+      continue;
+    const fileSize = await window.pathFileSize(filePath);
+    const fileName = filePath.split(/[/\\]/).pop() ?? filePath;
+    if (fileSize > maxFileSizeBytes) {
+      rejectOversizedFile(fileName);
+      continue;
+    }
+    newAttachments.push({ filePath, fileName, mimeType: getMimeType(filePath), fileSize });
+  }
+  if (newAttachments.length > 0) {
+    pendingAttachments = [...pendingAttachments, ...newAttachments];
+  }
+}
+
+function cleanupTempAttachments(attachments: PendingAttachment[]): void {
+  for (const a of attachments) {
+    if (a.isTemp) window.removeTempFile(a.filePath).catch(console.error);
+  }
 }
 
 function removeAttachment(index: number): void {
+  const removed = pendingAttachments[index];
   pendingAttachments = pendingAttachments.filter((_, i) => i !== index);
+  if (removed) cleanupTempAttachments([removed]);
+}
+
+const DEFAULT_MAX_FILE_SIZE_MB = 20;
+let maxFileSizeMB = $state(DEFAULT_MAX_FILE_SIZE_MB);
+const maxFileSizeBytes = $derived(maxFileSizeMB * 1024 * 1024);
+
+window
+  .getConfigurationValue<number>(`${AcpSettings.SectionName}.${AcpSettings.MaxAttachmentFileSizeMB}`)
+  .then(v => {
+    if (v && v > 0) maxFileSizeMB = v;
+  })
+  .catch(() => {});
+
+// TODO Refactor as part of https://github.com/openkaiden/kaiden/issues/2972
+const ERROR_TOAST_THEME = {
+  '--toastBackground': 'var(--pd-status-dead)',
+  '--toastColor': 'var(--pd-content-header-text)',
+  '--toastBarBackground': 'var(--pd-status-dead)',
+  '--toastPadding': '0.5rem 0.75rem',
+  '--toastMsgPadding': '0',
+};
+
+function rejectOversizedFile(fileName: string): void {
+  toast.push(`${fileName} is too large to attach (max ${maxFileSizeMB} MB).`, { theme: ERROR_TOAST_THEME });
+}
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (): void => {
+      const dataUrl = reader.result as string;
+      resolve(dataUrl.split(',')[1] ?? '');
+    };
+    reader.onerror = (): void => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function addFileAttachment(file: File): Promise<void> {
+  if (file.size > maxFileSizeBytes) {
+    rejectOversizedFile(file.name);
+    return;
+  }
+  const sourceKey = `${file.name}|${file.size}|${file.lastModified}`;
+  if (pendingAttachments.some(a => a.sourceKey === sourceKey)) return;
+  // DnD: dedup by native path (two files can share name+size from different dirs)
+  // Paste: no native path available, fall back to name+size
+  const nativePath = window.getPathForFile(file);
+  if (nativePath) {
+    if (pendingAttachments.some(a => a.filePath === nativePath)) return;
+  } else {
+    if (pendingAttachments.some(a => a.fileName === file.name && a.fileSize === file.size)) return;
+  }
+  let mimeType = file.type;
+  if (!mimeType && file.name) {
+    mimeType = getMimeType(file.name);
+  }
+  mimeType ||= 'application/octet-stream';
+  const fileName = file.name || `pasted-file-${Date.now()}.${mimeType.split('/')[1] ?? 'bin'}`;
+  const originSessionId = sessionId;
+  let filePath: string;
+  let isTemp = false;
+  if (nativePath) {
+    filePath = nativePath;
+  } else {
+    const base64 = await readFileAsBase64(file);
+    filePath = await window.saveTempAttachment(fileName, base64);
+    isTemp = true;
+  }
+  // Discard if the session changed during async work
+  if (sessionId !== originSessionId) {
+    if (isTemp) window.removeTempFile(filePath).catch(() => {});
+    return;
+  }
+  pendingAttachments = [
+    ...pendingAttachments,
+    { filePath, fileName, mimeType, sourceKey, fileSize: file.size, isTemp },
+  ];
+}
+
+let isDragging = $state(false);
+let dragDepth = 0;
+
+function isFileDrag(event: DragEvent): boolean {
+  return event.dataTransfer?.types?.includes('Files') ?? false;
+}
+
+function handleDragEnter(event: DragEvent): void {
+  if (!isFileDrag(event)) return;
+  event.preventDefault();
+  dragDepth++;
+  isDragging = true;
+}
+
+function handleDragOver(event: DragEvent): void {
+  if (!isFileDrag(event)) return;
+  event.preventDefault();
+}
+
+function handleDragLeave(): void {
+  dragDepth--;
+  if (dragDepth <= 0) {
+    dragDepth = 0;
+    isDragging = false;
+  }
+}
+
+async function handleDrop(event: DragEvent): Promise<void> {
+  if (!isFileDrag(event)) return;
+  event.preventDefault();
+  isDragging = false;
+  dragDepth = 0;
+  const files = event.dataTransfer?.files;
+  if (!files?.length) return;
+  // Sequential: addFileAttachment mutates pendingAttachments, parallel would break dedup checks
+  for (const file of Array.from(files)) {
+    try {
+      await addFileAttachment(file);
+    } catch (error: unknown) {
+      console.error('Failed to attach dropped file:', error);
+      toast.push(`Failed to attach ${file.name}.`, { theme: ERROR_TOAST_THEME });
+    }
+  }
+}
+
+function handlePaste(event: ClipboardEvent): void {
+  const clipboardData = event.clipboardData;
+  if (!clipboardData) return;
+  const hasFileItem = Array.from(clipboardData.items ?? []).some(item => item.kind === 'file');
+  if (!hasFileItem && clipboardData.files.length === 0) return;
+  const hasTextData =
+    clipboardData.types.includes('text/plain') && clipboardData.getData('text/plain').trim().length > 0;
+  // If clipboard has text, let the default paste behavior handle it (text wins over file items)
+  if (hasTextData) return;
+  event.preventDefault();
+  const files: File[] = [];
+  for (const item of Array.from(clipboardData.items)) {
+    if (item.kind === 'file') {
+      const file = item.getAsFile();
+      if (file) files.push(file);
+    }
+  }
+  if (files.length === 0 && clipboardData.files.length > 0) {
+    files.push(...Array.from(clipboardData.files));
+  }
+  // Sequential: addFileAttachment mutates pendingAttachments, parallel would break dedup checks
+  (async (): Promise<void> => {
+    for (const f of files) {
+      await addFileAttachment(f);
+    }
+  })().catch((error: unknown) => {
+    console.error('Failed to process pasted files:', error);
+    toast.push('Failed to process pasted files.', { theme: ERROR_TOAST_THEME });
+  });
 }
 
 async function handleSendFollowUp(): Promise<void> {
@@ -456,6 +640,7 @@ async function handleSendFollowUp(): Promise<void> {
         agentId: draftAgentId ?? undefined,
       });
       followUpText = '';
+      cleanupTempAttachments(pendingAttachments);
       pendingAttachments = [];
       router.goto(`/acp-sessions/${encodeURIComponent(newSession.id)}`);
     } catch (err: unknown) {
@@ -475,6 +660,7 @@ async function handleSendFollowUp(): Promise<void> {
     pendingAttachments = [];
     userScrolledAway = false;
     await window.sendAcpFollowUp(sessionId, textToSend, attachmentsToSend);
+    cleanupTempAttachments(savedAttachments);
     if (inputHistory === historyAtSend) {
       inputHistory.push(savedText);
     }
@@ -617,10 +803,17 @@ function handleKeyDown(e: KeyboardEvent): void {
         </div>
       {/if}
 
-      <div class="rounded-lg border border-[var(--pd-input-field-stroke)] bg-[var(--pd-input-field-bg)] focus-within:ring-1 focus-within:ring-[var(--pd-input-field-stroke-highlight)]">
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="rounded-lg border bg-[var(--pd-input-field-bg)] focus-within:ring-1 focus-within:ring-[var(--pd-input-field-stroke-highlight)] {isDragging ? 'border-[var(--pd-button-primary-bg)] border-dashed' : 'border-[var(--pd-input-field-stroke)]'}"
+        ondragenter={handleDragEnter}
+        ondragover={handleDragOver}
+        ondragleave={handleDragLeave}
+        ondrop={(e): void => { handleDrop(e).catch(console.error); }}
+      >
         <!-- Attachment chips -->
         {#if pendingAttachments.length > 0}
-          <div class="flex flex-wrap gap-1.5 px-3 pt-2">
+          <div class="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto px-3 pt-2">
             {#each pendingAttachments as attachment, i (attachment.filePath)}
               <span class="inline-flex items-center gap-1 rounded-full bg-[var(--pd-content-card-hover-bg)] text-xs text-[var(--pd-content-text)] px-2.5 py-1">
                 {attachment.fileName}
@@ -663,6 +856,7 @@ function handleKeyDown(e: KeyboardEvent): void {
             disabled={isWaitingInput}
             onkeydown={handleKeyDown}
             oninput={handleInput}
+            onpaste={handlePaste}
             class="w-full bg-transparent px-3 py-2 text-sm text-[var(--pd-input-field-focused-text)] placeholder-[var(--pd-input-field-placeholder-text)] focus:outline-none resize-none disabled:opacity-40 disabled:cursor-not-allowed"
           ></textarea>
         </div>

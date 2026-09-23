@@ -16,9 +16,9 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { unlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -27,6 +27,8 @@ import { TempFileService } from './temp-file-service.js';
 vi.mock('node:fs/promises', () => ({
   writeFile: vi.fn(),
   unlink: vi.fn(),
+  mkdtemp: vi.fn(),
+  rm: vi.fn(),
 }));
 
 vi.mock('node:os', () => ({
@@ -34,6 +36,7 @@ vi.mock('node:os', () => ({
 }));
 
 vi.mock('node:path', () => ({
+  basename: vi.fn().mockImplementation((p: string) => p.split('/').pop()),
   join: vi.fn().mockImplementation((...args) => args.join('/')),
 }));
 
@@ -50,6 +53,10 @@ class TestTempFileService extends TempFileService {
 
   override async cleanup(): Promise<void> {
     return super.cleanup();
+  }
+
+  override async saveTempAttachment(fileName: string, base64Data: string): Promise<string> {
+    return super.saveTempAttachment(fileName, base64Data);
   }
 
   override getTempFiles(): string[] {
@@ -251,5 +258,56 @@ describe('getTempFiles', () => {
     await tempFileService.createTempFile('content');
     const result = tempFileService.getTempFiles();
     expect(result).toEqual([expectedPath]);
+  });
+});
+
+describe('saveTempAttachment', () => {
+  const ATTACHMENT_DIR = '/tmp/kaiden-attachment-abc123';
+
+  beforeEach(() => {
+    vi.mocked(mkdtemp).mockResolvedValue(ATTACHMENT_DIR);
+  });
+
+  test('writes base64 data as binary to temp file via mkdtemp', async () => {
+    const base64Data = Buffer.from('hello').toString('base64');
+    const result = await tempFileService.saveTempAttachment('photo.png', base64Data);
+
+    expect(vi.mocked(mkdtemp)).toHaveBeenCalledWith('/tmp/kaiden-attachment-');
+    expect(result).toBe(`${ATTACHMENT_DIR}/photo.png`);
+    expect(vi.mocked(writeFile)).toHaveBeenCalledWith(
+      `${ATTACHMENT_DIR}/photo.png`,
+      Buffer.from(base64Data, 'base64'),
+      { flag: 'wx', mode: 0o600 },
+    );
+    expect(tempFileService.getTempFiles()).toContain(result);
+  });
+
+  test('sanitizes file name', async () => {
+    const base64Data = Buffer.from('test').toString('base64');
+    const result = await tempFileService.saveTempAttachment('../../etc/passwd', base64Data);
+
+    expect(vi.mocked(basename)).toHaveBeenCalledWith('../../etc/passwd');
+    expect(result).toBe(`${ATTACHMENT_DIR}/passwd`);
+  });
+
+  test('tracks temp attachment for cleanup', async () => {
+    const base64Data = Buffer.from('data').toString('base64');
+    await tempFileService.saveTempAttachment('file.jpg', base64Data);
+
+    expect(tempFileService.getTempFiles()).toHaveLength(1);
+
+    vi.mocked(unlink).mockResolvedValue(undefined);
+    await tempFileService.cleanup();
+    expect(tempFileService.getTempFiles()).toHaveLength(0);
+  });
+
+  test('cleans up mkdtemp directory on write failure', async () => {
+    const writeError = new Error('disk full');
+    vi.mocked(writeFile).mockRejectedValue(writeError);
+    vi.mocked(rm).mockResolvedValue(undefined);
+
+    await expect(tempFileService.saveTempAttachment('file.png', 'abc')).rejects.toThrow('disk full');
+    expect(vi.mocked(rm)).toHaveBeenCalledWith(ATTACHMENT_DIR, { recursive: true, force: true });
+    expect(tempFileService.getTempFiles()).toHaveLength(0);
   });
 });

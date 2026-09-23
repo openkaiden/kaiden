@@ -16,9 +16,9 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { unlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { injectable, preDestroy } from 'inversify';
 
@@ -55,6 +55,24 @@ export class TempFileService implements IAsyncDisposable {
     return tempFilePath;
   }
 
+  async saveTempAttachment(fileName: string, base64Data: string): Promise<string> {
+    const safeName =
+      basename(fileName)
+        .replace(/[^a-zA-Z0-9._-]/g, '_')
+        .replace(/^\.+$/, '') || 'attachment';
+    const attachmentDir = await mkdtemp(join(tmpdir(), 'kaiden-attachment-'));
+    try {
+      const tempFilePath = join(attachmentDir, safeName);
+      const buffer = Buffer.from(base64Data, 'base64');
+      await writeFile(tempFilePath, buffer, { flag: 'wx', mode: 0o600 });
+      this.tempFiles.add(tempFilePath);
+      return tempFilePath;
+    } catch (err) {
+      await rm(attachmentDir, { recursive: true, force: true }).catch(() => {});
+      throw err;
+    }
+  }
+
   /**
    * Removes a temporary file
    * @param filePath The path to the temporary file to remove
@@ -62,11 +80,15 @@ export class TempFileService implements IAsyncDisposable {
   async removeTempFile(filePath: string): Promise<void> {
     try {
       if (this.tempFiles.has(filePath)) {
+        const parentDir = join(filePath, '..');
         await unlink(filePath);
         this.tempFiles.delete(filePath);
+        // Clean up private attachment directories created by mkdtemp
+        if (basename(parentDir).startsWith('kaiden-attachment-')) {
+          await rm(parentDir, { recursive: true, force: true }).catch(() => {});
+        }
       }
     } catch (error: unknown) {
-      // File might already be deleted, log but don't throw
       console.warn(`Failed to remove temporary file ${filePath}:`, error);
     }
   }
