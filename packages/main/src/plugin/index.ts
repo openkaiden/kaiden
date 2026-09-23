@@ -52,6 +52,7 @@ import type { IpcMainInvokeEvent } from 'electron/main';
 import { Container } from 'inversify';
 import { lookup } from 'mime-types';
 
+import { AcpInit } from '/@/plugin/acp/acp-init.js';
 import { AcpIPCHandler } from '/@/plugin/acp/acp-ipc-handler.js';
 import { AcpSessionManager } from '/@/plugin/acp/acp-session-manager.js';
 import { AgentRegistry } from '/@/plugin/agent-registry.js';
@@ -619,6 +620,7 @@ export class PluginSystem {
     container.bind(SelectableProviderFactoryToken).to(GcloudAdcProviderFactory).inSingletonScope();
     container.bind(DefaultProviderFactory).to(DefaultProviderFactory).inSingletonScope();
     container.bind<OpenshellSecretAdapter>(OpenshellSecretAdapter).toSelf().inSingletonScope();
+    container.bind<AcpInit>(AcpInit).toSelf().inSingletonScope();
     container.bind<AcpSessionManager>(AcpSessionManager).toSelf().inSingletonScope();
     container.bind<AcpIPCHandler>(AcpIPCHandler).toSelf().inSingletonScope();
     container.bind<SecretManager>(SecretManager).toSelf().inSingletonScope();
@@ -942,6 +944,9 @@ export class PluginSystem {
 
     const mcpIPCHandler = container.get<MCPIPCHandler>(MCPIPCHandler);
     mcpIPCHandler.init();
+
+    const acpInit = container.get<AcpInit>(AcpInit);
+    acpInit.init();
 
     const acpSessionManager = container.get<AcpSessionManager>(AcpSessionManager);
     await acpSessionManager.init();
