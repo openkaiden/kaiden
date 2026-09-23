@@ -720,23 +720,6 @@ export class PluginSystem {
     const openshellGatewayStateManager = container.get<OpenshellGatewayStateManager>(OpenshellGatewayStateManager);
     openshellGatewayStateManager.init();
 
-    const openshellGatewayManager = container.get<OpenshellGatewayManager>(OpenshellGatewayManager);
-    this.ipcHandle('openshell-gateway-manager:listGateways', async () => {
-      return openshellGatewayManager.listGateways();
-    });
-    this.ipcHandle('openshell-gateway-manager:getGateway', async (_listener: unknown, name: string) => {
-      return openshellGatewayManager.getGateway(name);
-    });
-    this.ipcHandle('openshell-gateway-manager:getActiveGateway', async () => {
-      return openshellGatewayManager.getActiveGateway();
-    });
-    this.ipcHandle('openshell-gateway-manager:getGatewayInfo', async (_listener: unknown, name?: string) => {
-      return openshellGatewayManager.getGatewayInfo(name);
-    });
-    this.ipcHandle('openshell-gateway-manager:health', async (_listener: unknown, name?: string) => {
-      return openshellGatewayManager.health(name);
-    });
-
     const secretManager = container.get<SecretManager>(SecretManager);
     secretManager.init();
     const onboardingInit = container.get<OnboardingInit>(OnboardingInit);
