@@ -160,6 +160,15 @@ export class OpenshellGateway implements Disposable {
             ) {
               await this.openshellCli.removeGateway(DEFAULT_GATEWAY_NAME).catch(() => {});
             }
+            // Remove stale gateways sharing kaiden-local's port when kaiden-local
+            // is the healthy one — symmetric with the kaiden-local removal above.
+            if (gw.name === DEFAULT_GATEWAY_NAME && hasSamePortDuplicate) {
+              for (const stale of localGateways) {
+                if (stale.name !== DEFAULT_GATEWAY_NAME && this.getEndpointPort(stale.endpoint) === kaidenLocalPort) {
+                  await this.openshellCli.removeGateway(stale.name).catch(() => {});
+                }
+              }
+            }
             console.log(`[openshell-gateway] gateway detected (${gw.endpoint}) and is healthy`);
             this._onDidGatewayStart.fire();
             return;
@@ -184,6 +193,7 @@ export class OpenshellGateway implements Disposable {
         const message = err instanceof Error ? err.message : String(err);
         console.warn(`[openshell-gateway] failed to register with CLI: ${message}`);
       });
+      await this.removeSamePortGateways(this.#port);
       this._onDidGatewayStart.fire();
       return;
     }
@@ -191,6 +201,7 @@ export class OpenshellGateway implements Disposable {
     console.log('[openshell-gateway] no existing gateways found, auto-starting local gateway');
     try {
       await this.start();
+      await this.removeSamePortGateways(this.#port);
       this._onDidGatewayStart.fire();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -210,6 +221,30 @@ export class OpenshellGateway implements Disposable {
   private async isEndpointHealthy(endpoint?: string): Promise<boolean> {
     const target = endpoint ?? `http://${this.#bindAddress}:${this.#port}`;
     return this.openshellCli.checkEndpointStatus(target);
+  }
+
+  /**
+   * Removes local gateway registrations (other than kaiden-local) that share
+   * the given port. This prevents duplicate workspace listings when a stale
+   * gateway registration points to the same port that kaiden-local now owns.
+   */
+  private async removeSamePortGateways(port: number): Promise<void> {
+    try {
+      const gateways = await this.openshellCli.listGateways();
+      for (const gw of gateways) {
+        if (
+          gw.name !== DEFAULT_GATEWAY_NAME &&
+          (gw.type === 'local' || this.isLocalEndpoint(gw.endpoint)) &&
+          this.getEndpointPort(gw.endpoint) === port
+        ) {
+          await this.openshellCli.removeGateway(gw.name).catch(() => {});
+          console.log(`[openshell-gateway] removed stale gateway "${gw.name}" on port ${port}`);
+        }
+      }
+    } catch {
+      // Best-effort cleanup — the gateway state manager will surface any
+      // remaining duplicates on its next refresh cycle.
+    }
   }
 
   private getEndpointPort(endpoint: string): number | undefined {

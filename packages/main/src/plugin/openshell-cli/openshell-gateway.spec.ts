@@ -403,6 +403,56 @@ describe('init', () => {
     expect(spawn).not.toHaveBeenCalled();
   });
 
+  test('removes stale gateway when kaiden-local is healthy on same port', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.mocked(openshellCli.listGateways).mockResolvedValue([
+      { name: 'my-private-gw', endpoint: 'http://localhost:17670', type: 'local', active: false } as GatewayInfo,
+      { name: 'kaiden-local', endpoint: 'http://127.0.0.1:17670', type: 'local', active: true } as GatewayInfo,
+    ]);
+    // my-private-gw (ordered first due to same-port priority) is unreachable,
+    // kaiden-local is healthy
+    vi.mocked(openshellCli.checkEndpointStatus).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    await gateway.init();
+
+    expect(openshellCli.removeGateway).toHaveBeenCalledWith('my-private-gw');
+    expect(openshellCli.selectGateway).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  test('removes stale gateway on same port after auto-starting kaiden-local', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    vi.mocked(openshellCli.listGateways)
+      // init() discovery: only the stale external gateway
+      .mockResolvedValueOnce([
+        { name: 'my-private-gw', endpoint: 'http://127.0.0.1:17670', active: true, type: 'local' } as GatewayInfo,
+      ])
+      // registerWithCli() inside start(): no kaiden-local yet
+      .mockResolvedValueOnce([
+        { name: 'my-private-gw', endpoint: 'http://127.0.0.1:17670', active: true, type: 'local' } as GatewayInfo,
+      ])
+      // removeSamePortGateways(): both exist after registration
+      .mockResolvedValueOnce([
+        { name: 'my-private-gw', endpoint: 'http://127.0.0.1:17670', active: false, type: 'local' } as GatewayInfo,
+        { name: 'kaiden-local', endpoint: 'http://127.0.0.1:17670', active: true, type: 'local' } as GatewayInfo,
+      ]);
+
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(openshellCli.checkEndpointStatus)
+      .mockResolvedValueOnce(false) // stale gateway unreachable
+      .mockResolvedValueOnce(false) // orphan check on default port
+      .mockResolvedValue(true); // waitForReady
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+
+    await gateway.init();
+
+    expect(spawn).toHaveBeenCalled();
+    expect(openshellCli.removeGateway).toHaveBeenCalledWith('my-private-gw');
+  });
+
   test('auto-starts local gateway when no gateways exist and port is free', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
