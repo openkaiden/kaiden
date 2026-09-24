@@ -272,14 +272,6 @@ export class AgentWorkspaceManager implements Disposable {
       }, {});
     const t0 = performance.now();
 
-    const v2Globally = await this.openshellCli.isV2ProviderEnabled();
-    if (!v2Globally) {
-      await this.openshellCli.enableV2Provider();
-    }
-
-    const tV2 = performance.now();
-    console.log(`[workspace-timing] enableV2Provider: ${(tV2 - t0).toFixed(0)}ms`);
-
     const sdkClient = await this.openshellSdkClientManager.getClient(options.gateway);
     await sdkClient.sandbox.create({
       name: sandboxName,
@@ -306,7 +298,7 @@ export class AgentWorkspaceManager implements Disposable {
     this.apiSender.send('agent-workspace-update');
     await sdkClient.sandbox.waitReady(sandboxName, SANDBOX_READY_TIMEOUT_SECONDS);
     const tSandbox = performance.now();
-    console.log(`[workspace-timing] createSandbox: ${(tSandbox - tV2).toFixed(0)}ms`);
+    console.log(`[workspace-timing] createSandbox: ${(tSandbox - t0).toFixed(0)}ms`);
 
     try {
       for (const upload of uploads) {
