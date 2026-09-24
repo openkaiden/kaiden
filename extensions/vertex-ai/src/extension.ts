@@ -16,9 +16,11 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { ExtensionContext } from '@openkaiden/api';
-import { configuration, provider } from '@openkaiden/api';
+import type { ExtensionContext, ProviderProfile } from '@openkaiden/api';
+import { configuration, openshell, provider } from '@openkaiden/api';
+import { load } from 'js-yaml';
 
+import vertexAiProfileYaml from './google-vertex-ai.yaml?raw';
 import { VertexAi } from './vertex-ai';
 
 let vertexAi: VertexAi | undefined;
@@ -30,6 +32,11 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
   extensionContext.subscriptions.push(vertexAi);
 
   await vertexAi.init();
+
+  const profile = load(vertexAiProfileYaml) as ProviderProfile;
+  if (!openshell.getProfiles().some(p => p.id === profile.id)) {
+    extensionContext.subscriptions.push(openshell.registerProfile(profile));
+  }
 }
 
 export function deactivate(): void {

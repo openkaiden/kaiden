@@ -16,14 +16,17 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { AgentWorkspaceContext, Disposable, ExtensionContext } from '@openkaiden/api';
-import { agents, provider } from '@openkaiden/api';
+import type { AgentWorkspaceContext, Disposable, ExtensionContext, ProviderProfile } from '@openkaiden/api';
+import { agents, openshell, provider } from '@openkaiden/api';
 import type { Container } from 'inversify';
+import { load } from 'js-yaml';
 import { z } from 'zod';
 
 import { InversifyBinding } from '/@/inject/inversify-binding';
 import { ClaudeInferenceManager } from '/@/manager/claude-inference-manager';
 import { ClaudeSkillsManager } from '/@/manager/claude-skills-manager';
+
+import anthropicProfileYaml from './anthropic.yaml?raw';
 
 export const PROVIDER_ID = 'claude';
 export const CLAUDE_SETTINGS_PATH = '.claude/settings.json';
@@ -224,6 +227,11 @@ export class ClaudeExtension {
 
     await this.#claudeSkillsManager?.init();
     await this.#claudeInferenceManager?.init();
+
+    const profile = load(anthropicProfileYaml) as ProviderProfile;
+    if (!openshell.getProfiles().some(p => p.id === profile.id)) {
+      this.#extensionContext.subscriptions.push(openshell.registerProfile(profile));
+    }
   }
 
   protected getContainer(): Container | undefined {

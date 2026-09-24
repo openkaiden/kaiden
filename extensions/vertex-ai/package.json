@@ -90,7 +90,8 @@
   },
   "dependencies": {
     "@ai-sdk/google-vertex": "^5.0.26",
-    "@openkaiden/api": "workspace:*"
+    "@openkaiden/api": "workspace:*",
+    "js-yaml": "^4.1.0"
   },
   "devDependencies": {
     "adm-zip": "^0.5.16",

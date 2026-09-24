@@ -20,28 +20,15 @@ import type { ExtensionContext } from '@openkaiden/api';
 import { openshell } from '@openkaiden/api';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { activate, deactivate } from './extension';
-import { VertexAi } from './vertex-ai';
+import { activate } from './extension';
 
 vi.mock(import('@openkaiden/api'));
-vi.mock(import('./vertex-ai'));
-vi.mock('./google-vertex-ai.yaml?raw', () => ({ default: 'id: google-vertex-ai\ndisplay_name: Google Vertex AI\n' }));
+vi.mock(import('./openAI'));
+vi.mock('./openai.yaml?raw', () => ({ default: 'id: openai\ndisplay_name: OpenAI\n' }));
 
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(openshell.getProfiles).mockReturnValue([]);
-});
-
-test('should initialize and activate the VertexAi extension', async () => {
-  const extensionContextMock = {
-    subscriptions: [],
-    secrets: {},
-  } as unknown as ExtensionContext;
-
-  await activate(extensionContextMock);
-
-  expect(VertexAi.prototype.init).toHaveBeenCalled();
-  expect(extensionContextMock.subscriptions).toHaveLength(2);
 });
 
 test('activate registers openshell profile', async () => {
@@ -54,14 +41,14 @@ test('activate registers openshell profile', async () => {
 
   expect(openshell.registerProfile).toHaveBeenCalledWith(
     expect.objectContaining({
-      id: 'google-vertex-ai',
-      display_name: 'Google Vertex AI',
+      id: 'openai',
+      display_name: 'OpenAI',
     }),
   );
 });
 
 test('activate skips openshell profile registration when already registered', async () => {
-  vi.mocked(openshell.getProfiles).mockReturnValue([{ id: 'google-vertex-ai' } as unknown as never]);
+  vi.mocked(openshell.getProfiles).mockReturnValue([{ id: 'openai' } as unknown as never]);
   const extensionContextMock = {
     subscriptions: [],
     secrets: {},
@@ -70,14 +57,4 @@ test('activate skips openshell profile registration when already registered', as
   await activate(extensionContextMock);
 
   expect(openshell.registerProfile).not.toHaveBeenCalled();
-});
-
-test('should call deactivate without errors', async () => {
-  const extensionContextMock = {
-    subscriptions: [],
-    secrets: {},
-  } as unknown as ExtensionContext;
-
-  await activate(extensionContextMock);
-  deactivate();
 });
