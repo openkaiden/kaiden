@@ -147,6 +147,7 @@ export class OpenshellGatewayStateManager implements Disposable {
           return {
             ...gateway,
             ...(driver ? { driver } : {}),
+            ...(runtimeInfo.version ? { version: runtimeInfo.version } : {}),
             gatewayState: {
               reachable: true,
               health: runtimeInfo.status,
