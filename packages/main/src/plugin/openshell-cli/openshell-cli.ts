@@ -21,7 +21,7 @@ import { join } from 'node:path';
 
 import type { RunError, RunOptions } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
-import z from 'zod';
+import { z } from 'zod';
 
 import { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
 import { Exec } from '/@/plugin/util/exec.js';
