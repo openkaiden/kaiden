@@ -237,7 +237,7 @@ export class AgentWorkspaceManager implements Disposable {
     const skillUploads = await this.buildOpenshellSkillUploads(options.skills, agent.destinationSkillsFolder);
 
     if (secretName !== undefined) {
-      const connection = this.providerRegistry.getInferenceConnection(options.model);
+      const connection = this.providerRegistry.getInferenceConnectionLegacy(options.model);
       if (connection) {
         const provider = this.providerRegistry.getProvider(connection?.providerId);
         const { config, connectionProperties } = this.secretManager.getConnectionProperties(
