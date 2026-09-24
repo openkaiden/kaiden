@@ -75,7 +75,7 @@ function createProfile(overrides?: Partial<ProviderProfile>): ProviderProfile {
       },
     ],
     ...overrides,
-  };
+  } as unknown as ProviderProfile;
 }
 
 describe('OpenShellRegistry', () => {

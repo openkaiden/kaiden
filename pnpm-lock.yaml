@@ -914,6 +914,9 @@ importers:
       '@ai-sdk/provider':
         specifier: ^4.0.3
         version: 4.0.3
+      '@nvidia/openshell-sdk':
+        specifier: npm:@openkaiden/opnshll-sdk@0.0.116
+        version: '@openkaiden/opnshll-sdk@0.0.116'
       '@openkaiden/workspace-configuration':
         specifier: ^0.15.0
         version: 0.15.0

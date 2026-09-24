@@ -239,6 +239,7 @@ const openShellRegistry: OpenShellRegistry = {
   registerGateway: vi.fn(),
   registerCLI: vi.fn(),
   registerProfile: vi.fn(),
+  getProfiles: vi.fn(),
   onDidRegisterGateway: vi.fn(),
   onDidUnregisterGateway: vi.fn(),
   onDidUpdateGateway: vi.fn(),
@@ -2210,7 +2211,7 @@ test('registerProfile', async () => {
   expect(api).toBeDefined();
   expect(disposables.length).toBe(0);
 
-  const profile: containerDesktopAPI.ProviderProfile = {
+  const profile = {
     id: 'openai',
     displayName: 'OpenAI',
     description: 'OpenAI API provider',
@@ -2222,7 +2223,7 @@ test('registerProfile', async () => {
         envVars: ['OPENAI_API_KEY'],
       },
     ],
-  };
+  } as unknown as containerDesktopAPI.ProviderProfile;
 
   vi.mocked(openShellRegistry.registerProfile).mockReturnValue(Disposable.create(() => {}));
 
@@ -2230,6 +2231,28 @@ test('registerProfile', async () => {
   expect(disposables.length).toBe(1);
 
   expect(openShellRegistry.registerProfile).toHaveBeenCalledWith(profile);
+});
+
+test('getProfiles', async () => {
+  const disposables: IDisposable[] = [];
+
+  const api = createApi(disposables);
+
+  expect(api).toBeDefined();
+
+  const profiles = [
+    {
+      id: 'openai',
+      displayName: 'OpenAI',
+    } as unknown as containerDesktopAPI.ProviderProfile,
+  ];
+
+  vi.mocked(openShellRegistry.getProfiles).mockReturnValue(profiles);
+
+  const result = api.openshell.getProfiles();
+
+  expect(result).toBe(profiles);
+  expect(openShellRegistry.getProfiles).toHaveBeenCalled();
 });
 
 test('registerImageCheckerProvider ', async () => {

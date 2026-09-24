@@ -1748,6 +1748,9 @@ export class ExtensionLoader implements IAsyncDisposable {
         disposables.push(disposable);
         return disposable;
       },
+      getProfiles(): ReadonlyArray<containerDesktopAPI.ProviderProfile> {
+        return instance.openShellRegistry.getProfiles();
+      },
       onDidRegisterProfile: (listener, thisArg, disposableArr) => {
         return instance.openShellRegistry.onDidRegisterProfile(listener, thisArg, disposableArr);
       },
