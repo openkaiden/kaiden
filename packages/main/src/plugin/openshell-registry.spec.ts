@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { OpenShellCLI, OpenShellGateway, ProviderConnectionStatus } from '@openkaiden/api';
+import type { OpenShellCLI, OpenShellGateway, ProviderConnectionStatus, ProviderProfile } from '@openkaiden/api';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
@@ -57,6 +57,23 @@ function createCLI(overrides?: Partial<OpenShellCLI>): OpenShellCLI {
     inference: {
       set: vi.fn(),
     },
+    ...overrides,
+  };
+}
+
+function createProfile(overrides?: Partial<ProviderProfile>): ProviderProfile {
+  return {
+    id: 'profile-1',
+    displayName: 'Test Profile',
+    description: 'A test profile',
+    credentials: [
+      {
+        name: 'api_key',
+        required: true,
+        description: 'API Key',
+        envVars: ['API_KEY'],
+      },
+    ],
     ...overrides,
   };
 }
@@ -207,6 +224,84 @@ describe('OpenShellRegistry', () => {
   describe('getCLIs', () => {
     test('returns empty array when no CLIs registered', () => {
       expect(registry.getCLIs()).toEqual([]);
+    });
+  });
+
+  describe('registerProfile', () => {
+    test('sends openshell-registry:profile-update event via apiSender', () => {
+      registry.registerProfile(createProfile());
+
+      expect(apiSender.send).toHaveBeenCalledWith('openshell-registry:profile-update');
+    });
+
+    test('fires onDidRegisterProfile event with the profile', () => {
+      const listener = vi.fn();
+      registry.onDidRegisterProfile(listener);
+
+      const profile = createProfile();
+      registry.registerProfile(profile);
+
+      expect(listener).toHaveBeenCalledWith(profile);
+    });
+
+    test('throws when registering duplicate profile id', () => {
+      registry.registerProfile(createProfile());
+
+      expect(() => registry.registerProfile(createProfile())).toThrow(
+        `OpenShell profile with id 'profile-1' is already registered`,
+      );
+    });
+
+    test('returns a Disposable that removes the profile', () => {
+      const disposable = registry.registerProfile(createProfile());
+
+      expect(registry.getProfiles()).toHaveLength(1);
+
+      disposable.dispose();
+
+      expect(registry.getProfiles()).toHaveLength(0);
+    });
+
+    test('dispose sends openshell-registry:profile-update event', () => {
+      const disposable = registry.registerProfile(createProfile());
+
+      disposable.dispose();
+
+      expect(apiSender.send).toHaveBeenCalledTimes(2);
+      expect(apiSender.send).toHaveBeenNthCalledWith(2, 'openshell-registry:profile-update');
+    });
+
+    test('dispose fires onDidUnregisterProfile event', () => {
+      const listener = vi.fn();
+      registry.onDidUnregisterProfile(listener);
+
+      const profile = createProfile();
+      const disposable = registry.registerProfile(profile);
+      disposable.dispose();
+
+      expect(listener).toHaveBeenCalledWith(profile);
+    });
+
+    test('allows registering multiple profiles with different ids', () => {
+      registry.registerProfile(createProfile({ id: 'profile-1' }));
+      registry.registerProfile(createProfile({ id: 'profile-2' }));
+
+      expect(registry.getProfiles()).toHaveLength(2);
+    });
+  });
+
+  describe('getProfiles', () => {
+    test('returns empty array when no profiles registered', () => {
+      expect(registry.getProfiles()).toEqual([]);
+    });
+
+    test('returns registered profiles', () => {
+      const profile = createProfile();
+      registry.registerProfile(profile);
+
+      const profiles = registry.getProfiles();
+      expect(profiles).toHaveLength(1);
+      expect(profiles[0]!.id).toBe('profile-1');
     });
   });
 

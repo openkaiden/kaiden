@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { OpenShellCLI, OpenShellGateway, ProviderConnectionStatus } from '@openkaiden/api';
+import type { OpenShellCLI, OpenShellGateway, ProviderConnectionStatus, ProviderProfile } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
 
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
@@ -37,6 +37,7 @@ export class OpenShellRegistry implements IDisposable {
   private gateways = new Map<string, OpenShellGateway>();
   private gatewayStatuses = new Map<string, ProviderConnectionStatus>();
   private clis: OpenShellCLI[] = [];
+  private profiles = new Map<string, ProviderProfile>();
 
   private readonly _onDidRegisterGateway = new Emitter<OpenShellGateway>();
   readonly onDidRegisterGateway: Event<OpenShellGateway> = this._onDidRegisterGateway.event;
@@ -52,6 +53,15 @@ export class OpenShellRegistry implements IDisposable {
 
   private readonly _onDidUnregisterCLI = new Emitter<OpenShellCLI>();
   readonly onDidUnregisterCLI: Event<OpenShellCLI> = this._onDidUnregisterCLI.event;
+
+  private readonly _onDidRegisterProfile = new Emitter<ProviderProfile>();
+  readonly onDidRegisterProfile: Event<ProviderProfile> = this._onDidRegisterProfile.event;
+
+  private readonly _onDidUnregisterProfile = new Emitter<ProviderProfile>();
+  readonly onDidUnregisterProfile: Event<ProviderProfile> = this._onDidUnregisterProfile.event;
+
+  private readonly _onDidUpdateProfile = new Emitter<ProviderProfile>();
+  readonly onDidUpdateProfile: Event<ProviderProfile> = this._onDidUpdateProfile.event;
 
   registerGateway(gateway: OpenShellGateway): Disposable {
     if (this.gateways.has(gateway.id)) {
@@ -86,12 +96,32 @@ export class OpenShellRegistry implements IDisposable {
     });
   }
 
+  registerProfile(profile: ProviderProfile): Disposable {
+    if (this.profiles.has(profile.id)) {
+      throw new Error(`OpenShell profile with id '${profile.id}' is already registered`);
+    }
+
+    this.profiles.set(profile.id, profile);
+    this.apiSender.send('openshell-registry:profile-update');
+    this._onDidRegisterProfile.fire(profile);
+
+    return Disposable.create(() => {
+      this.profiles.delete(profile.id);
+      this.apiSender.send('openshell-registry:profile-update');
+      this._onDidUnregisterProfile.fire(profile);
+    });
+  }
+
   getGateways(): readonly OpenShellGateway[] {
     return Array.from(this.gateways.values());
   }
 
   getCLIs(): readonly OpenShellCLI[] {
     return Array.from(this.clis);
+  }
+
+  getProfiles(): readonly ProviderProfile[] {
+    return Array.from(this.profiles.values());
   }
 
   startGatewayStatusPolling(): void {

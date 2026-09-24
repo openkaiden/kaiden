@@ -238,11 +238,15 @@ const agentRegistry: AgentRegistry = {
 const openShellRegistry: OpenShellRegistry = {
   registerGateway: vi.fn(),
   registerCLI: vi.fn(),
+  registerProfile: vi.fn(),
   onDidRegisterGateway: vi.fn(),
   onDidUnregisterGateway: vi.fn(),
   onDidUpdateGateway: vi.fn(),
   onDidRegisterCLI: vi.fn(),
   onDidUnregisterCLI: vi.fn(),
+  onDidRegisterProfile: vi.fn(),
+  onDidUnregisterProfile: vi.fn(),
+  onDidUpdateProfile: vi.fn(),
 } as unknown as OpenShellRegistry;
 
 const safeStorageRegistry: SafeStorageRegistry = {
@@ -2196,6 +2200,36 @@ test('registerCLI', async () => {
   expect(disposables.length).toBe(1);
 
   expect(openShellRegistry.registerCLI).toHaveBeenCalledWith(cli);
+});
+
+test('registerProfile', async () => {
+  const disposables: IDisposable[] = [];
+
+  const api = createApi(disposables);
+
+  expect(api).toBeDefined();
+  expect(disposables.length).toBe(0);
+
+  const profile: containerDesktopAPI.ProviderProfile = {
+    id: 'openai',
+    displayName: 'OpenAI',
+    description: 'OpenAI API provider',
+    credentials: [
+      {
+        name: 'api_key',
+        required: true,
+        description: 'API Key',
+        envVars: ['OPENAI_API_KEY'],
+      },
+    ],
+  };
+
+  vi.mocked(openShellRegistry.registerProfile).mockReturnValue(Disposable.create(() => {}));
+
+  api.openshell.registerProfile(profile);
+  expect(disposables.length).toBe(1);
+
+  expect(openShellRegistry.registerProfile).toHaveBeenCalledWith(profile);
 });
 
 test('registerImageCheckerProvider ', async () => {

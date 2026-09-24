@@ -5586,6 +5586,20 @@ declare module '@openkaiden/api' {
     };
   }
 
+  export interface ProviderProfileCredential {
+    readonly name: string;
+    readonly required: boolean;
+    readonly description?: string;
+    readonly envVars?: ReadonlyArray<string>;
+  }
+
+  export interface ProviderProfile {
+    readonly id: string;
+    readonly displayName: string;
+    readonly description?: string;
+    readonly credentials?: ReadonlyArray<ProviderProfileCredential>;
+  }
+
   export namespace openshell {
     export function registerGateway(gateway: OpenShellGateway): Disposable;
     export const onDidRegisterGateway: Event<OpenShellGateway>;
@@ -5594,5 +5608,9 @@ declare module '@openkaiden/api' {
     export function registerCLI(cli: OpenShellCLI): Disposable;
     export const onDidRegisterCLI: Event<OpenShellCLI>;
     export const onDidUnregisterCLI: Event<OpenShellCLI>;
+    export function registerProfile(profile: ProviderProfile): Disposable;
+    export const onDidRegisterProfile: Event<ProviderProfile>;
+    export const onDidUnregisterProfile: Event<ProviderProfile>;
+    export const onDidUpdateProfile: Event<ProviderProfile>;
   }
 }
