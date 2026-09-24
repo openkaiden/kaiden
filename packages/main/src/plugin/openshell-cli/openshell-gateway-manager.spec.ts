@@ -303,10 +303,11 @@ describe('OpenshellGatewayManager', () => {
   describe('addGateway', () => {
     test('creates gateway directory and writes metadata', async () => {
       const { existsSync } = await import('node:fs');
-      const { mkdir, writeFile } = await import('node:fs/promises');
+      const { mkdir, readFile, writeFile } = await import('node:fs/promises');
       vi.mocked(existsSync).mockReturnValue(false);
 
       const metadata = validMetadata({ name: 'new-gw' });
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify(metadata));
       await manager.addGateway('new-gw', metadata);
 
       expect(mkdir).toHaveBeenCalledWith(join(USER_GATEWAYS_DIR, 'new-gw'), { recursive: true, mode: 0o700 });
@@ -328,10 +329,11 @@ describe('OpenshellGatewayManager', () => {
 
     test('allows adding a user gateway that shadows a system gateway', async () => {
       const { existsSync } = await import('node:fs');
-      const { mkdir, writeFile } = await import('node:fs/promises');
+      const { mkdir, readFile, writeFile } = await import('node:fs/promises');
       vi.mocked(existsSync).mockReturnValueOnce(false).mockReturnValueOnce(true);
 
       const metadata = validMetadata({ name: 'system-override' });
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify(metadata));
       await manager.addGateway('system-override', metadata);
 
       expect(mkdir).toHaveBeenCalled();
@@ -346,6 +348,21 @@ describe('OpenshellGatewayManager', () => {
 
     test('rejects invalid gateway names', async () => {
       await expect(manager.addGateway('..', validMetadata())).rejects.toThrow(/Invalid gateway name/);
+    });
+
+    test('auto-selects the newly added gateway as active', async () => {
+      const { existsSync } = await import('node:fs');
+      const { readFile, writeFile } = await import('node:fs/promises');
+      vi.mocked(existsSync).mockReturnValue(false);
+
+      const metadata = validMetadata({ name: 'auto-gw' });
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify(metadata));
+      await manager.addGateway('auto-gw', metadata);
+
+      const writeFileCalls = vi.mocked(writeFile).mock.calls;
+      const activeCalls = writeFileCalls.filter(([path]) => String(path).endsWith('active_gateway'));
+      expect(activeCalls).toHaveLength(1);
+      expect(activeCalls[0]?.[1]).toBe('auto-gw');
     });
   });
 

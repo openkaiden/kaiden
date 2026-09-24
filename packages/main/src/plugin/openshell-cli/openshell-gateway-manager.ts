@@ -121,6 +121,7 @@ export class OpenshellGatewayManager {
     await mkdir(gatewayDir, { recursive: true, mode: 0o700 });
     const metadataPath = join(gatewayDir, METADATA_FILENAME);
     await writeFile(metadataPath, JSON.stringify(parsed, undefined, 2), 'utf-8');
+    await this.setActiveGateway(name);
   }
 
   async removeGateway(name: string): Promise<void> {
