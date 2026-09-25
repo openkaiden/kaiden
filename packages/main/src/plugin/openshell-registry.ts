@@ -16,9 +16,14 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { create } from '@bufbuild/protobuf';
+import { ProviderProfileSchema } from '@nvidia/openshell-sdk/raw';
 import type { OpenShellCLI, OpenShellGateway, ProviderConnectionStatus, ProviderProfile } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
+import { parse as parseYaml } from 'yaml';
+import z from 'zod';
 
+import { Properties } from '/@/plugin/util/properties.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IDisposable } from '/@api/disposable.js';
 import type { Event } from '/@api/event.js';
@@ -26,11 +31,19 @@ import type { Event } from '/@api/event.js';
 import { Emitter } from './events/emitter.js';
 import { Disposable } from './types/disposable.js';
 
+const OpenshellProviderProfileSchema = z.looseObject({
+  id: z.string(),
+  display_name: z.string(),
+});
+
 @injectable()
 export class OpenShellRegistry implements IDisposable {
   private intervalId: NodeJS.Timeout | undefined;
 
-  constructor(@inject(ApiSenderType) private apiSender: ApiSenderType) {
+  constructor(
+    @inject(ApiSenderType) private apiSender: ApiSenderType,
+    @inject(Properties) private properties: Properties,
+  ) {
     this.startGatewayStatusPolling();
   }
 
@@ -96,7 +109,9 @@ export class OpenShellRegistry implements IDisposable {
     });
   }
 
-  registerProfile(profile: ProviderProfile): Disposable {
+  registerProfile(profileOrYaml: string | ProviderProfile): Disposable {
+    const profile = typeof profileOrYaml === 'string' ? this.parseYamlProfile(profileOrYaml) : profileOrYaml;
+
     if (this.profiles.has(profile.id)) {
       throw new Error(`OpenShell profile with id '${profile.id}' is already registered`);
     }
@@ -110,6 +125,12 @@ export class OpenShellRegistry implements IDisposable {
       this.apiSender.send('openshell-registry:profile-update');
       this._onDidUnregisterProfile.fire(profile);
     });
+  }
+
+  private parseYamlProfile(yamlContent: string): ProviderProfile {
+    const raw = parseYaml(yamlContent);
+    const parsed = OpenshellProviderProfileSchema.parse(raw);
+    return create(ProviderProfileSchema, this.properties.renameKeys(parsed));
   }
 
   getGateways(): readonly OpenShellGateway[] {

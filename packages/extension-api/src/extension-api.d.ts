@@ -5600,6 +5600,7 @@ declare module '@openkaiden/api' {
     export const onDidRegisterCLI: Event<OpenShellCLI>;
     export const onDidUnregisterCLI: Event<OpenShellCLI>;
     export function registerProfile(profile: ProviderProfile): Disposable;
+    export function registerProfile(yamlContent: string): Disposable;
     export function getProfiles(): ReadonlyArray<ProviderProfile>;
     export const onDidRegisterProfile: Event<ProviderProfile>;
     export const onDidUnregisterProfile: Event<ProviderProfile>;

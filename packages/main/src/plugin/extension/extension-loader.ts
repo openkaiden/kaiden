@@ -1743,7 +1743,7 @@ export class ExtensionLoader implements IAsyncDisposable {
       onDidUnregisterCLI: (listener, thisArg, disposableArr) => {
         return instance.openShellRegistry.onDidUnregisterCLI(listener, thisArg, disposableArr);
       },
-      registerProfile(profile: containerDesktopAPI.ProviderProfile): containerDesktopAPI.Disposable {
+      registerProfile(profile: string | containerDesktopAPI.ProviderProfile): containerDesktopAPI.Disposable {
         const disposable = instance.openShellRegistry.registerProfile(profile);
         disposables.push(disposable);
         return disposable;

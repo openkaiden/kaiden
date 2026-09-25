@@ -92,6 +92,7 @@ import { SkillManager } from '/@/plugin/skill/skill-manager.js';
 import { TaskManager } from '/@/plugin/tasks/task-manager.js';
 import { Uri } from '/@/plugin/types/uri.js';
 import { Updater } from '/@/plugin/updater.js';
+import { Properties } from '/@/plugin/util/properties.js';
 import { Welcome } from '/@/plugin/welcome.js';
 import { WorkspaceProjectManager } from '/@/plugin/workspace-project/workspace-project-manager.js';
 import type { AgentInfo } from '/@api/agent-info.js';
@@ -607,6 +608,7 @@ export class PluginSystem {
     container.bind<MCPManager>(MCPManager).toSelf().inSingletonScope();
     container.bind<CliToolRegistry>(CliToolRegistry).toSelf().inSingletonScope();
     container.bind<AgentRegistry>(AgentRegistry).toSelf().inSingletonScope();
+    container.bind<Properties>(Properties).toSelf().inSingletonScope();
     container.bind<OpenShellRegistry>(OpenShellRegistry).toSelf().inSingletonScope();
     container.bind<OpenshellCli>(OpenshellCli).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayConfig>(OpenshellGatewayConfig).toSelf();
