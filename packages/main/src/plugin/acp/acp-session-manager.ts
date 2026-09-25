@@ -210,7 +210,7 @@ export class AcpSessionManager {
       id: sessionId,
       sandboxName: sandbox.name,
       sandboxId: sandbox.id,
-      prompt: options.prompt,
+      prompt: options.prompt ?? '',
       status: 'idle',
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -222,11 +222,13 @@ export class AcpSessionManager {
     const pendingRequests = new Map<string, PendingRequest>();
     const stderrLines: string[] = [];
 
-    events.push({
-      kind: 'prompt',
-      text: options.prompt,
-      timestamp: Date.now(),
-    });
+    if (options.prompt) {
+      events.push({
+        kind: 'prompt',
+        text: options.prompt,
+        timestamp: Date.now(),
+      });
+    }
 
     const { input, output } = this.sdkSessionToStreams(execSession, sandbox.name, stderrLines);
     const stream = acp.ndJsonStream(input, output);
@@ -295,7 +297,7 @@ export class AcpSessionManager {
     return info;
   }
 
-  private async startAcpSession(sessionId: string, prompt: string): Promise<void> {
+  private async startAcpSession(sessionId: string, prompt?: string): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) {
       throw new Error(`Session "${sessionId}" not found`);
@@ -332,6 +334,12 @@ export class AcpSessionManager {
       debugProtocol(`configOptions: ${newSession.configOptions.length} options received`);
     }
     this.extractModels(session, newSession);
+
+    if (!prompt) {
+      this.updateSessionStatus(sessionId, 'idle');
+      return;
+    }
+
     this.updateSessionStatus(sessionId, 'running');
 
     debugProtocol(`sending prompt: ${prompt}`);
