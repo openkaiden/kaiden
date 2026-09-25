@@ -977,9 +977,6 @@ importers:
       svelte-exmarkdown:
         specifier: ^5.0.2
         version: 5.0.2(svelte@5.47.0)
-      svelte-sonner:
-        specifier: ^1.0.1
-        version: 1.0.8(svelte@5.47.0)
       tailwind-variants:
         specifier: ^1.0.0
         version: 1.0.0(tailwindcss@4.2.1)
@@ -4377,6 +4374,7 @@ packages:
   eslint@9.39.3:
     resolution: {integrity: sha512-VmQ+sifHUbI/IcSopBCF/HO3YiHQx/AVd3UVyYL6weuwW+HvON9VYn5l6Zl1WZzPWXPNZrSQpxwkkZ/VuvJZzg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -6693,11 +6691,6 @@ packages:
     peerDependencies:
       svelte: ^5.7.0
 
-  runed@0.28.0:
-    resolution: {integrity: sha512-k2xx7RuO9hWcdd9f+8JoBeqWtYrm5CALfgpkg2YDB80ds/QE4w0qqu34A7fqiAwiBBSBQOid7TLxwxVC27ymWQ==}
-    peerDependencies:
-      svelte: ^5.7.0
-
   runed@0.35.1:
     resolution: {integrity: sha512-2F4Q/FZzbeJTFdIS/PuOoPRSm92sA2LhzTnv6FXhCoENb3huf5+fDuNOg1LNvGOouy3u/225qxmuJvcV3IZK5Q==}
     peerDependencies:
@@ -7121,11 +7114,6 @@ packages:
     resolution: {integrity: sha512-85BomCGkTrH8kPDGvb8JrVwq9CqR9foprbKjxemP4Dtg3zPR7OXj5hD0xVYK0C+UCzFI1zooLoK/ndIX6aYXAw==}
     peerDependencies:
       svelte: ^4.0.0 || ^5.0.0
-
-  svelte-sonner@1.0.8:
-    resolution: {integrity: sha512-TjF+MY8RpBSQfker9+mBHbdx8szrXzhLuqFE89WGgTRv1uYFFc/no10kRvSvSQ7zaAv90APq7qpP145ZcsvUwQ==}
-    peerDependencies:
-      svelte: ^5.0.0
 
   svelte-steps@2.4.1:
     resolution: {integrity: sha512-2Xq2lLcGJf3PaEY46f1w5s+/O+tLl4U2V+Z+sCeoUm/kEPFXeZP/aFr2JVKwdzSlXCT+raz75xqXtnZrPWJ0zA==}
@@ -14378,11 +14366,6 @@ snapshots:
       esm-env: 1.2.2
       svelte: 5.47.0
 
-  runed@0.28.0(svelte@5.47.0):
-    dependencies:
-      esm-env: 1.2.2
-      svelte: 5.47.0
-
   runed@0.35.1(svelte@5.47.0):
     dependencies:
       dequal: 2.0.3
@@ -14871,11 +14854,6 @@ snapshots:
 
   svelte-fa@4.0.4(svelte@5.47.0):
     dependencies:
-      svelte: 5.47.0
-
-  svelte-sonner@1.0.8(svelte@5.47.0):
-    dependencies:
-      runed: 0.28.0(svelte@5.47.0)
       svelte: 5.47.0
 
   svelte-steps@2.4.1: {}

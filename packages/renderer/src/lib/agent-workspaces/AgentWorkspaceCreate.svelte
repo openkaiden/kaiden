@@ -2,10 +2,11 @@
 import { faLock } from '@fortawesome/free-solid-svg-icons';
 import { Button } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
+import { toast } from '@zerodevx/svelte-toast';
 import { onMount, untrack } from 'svelte';
-import { toast } from 'svelte-sonner';
 
 import { getModelId } from '/@/lib/models/models-utils';
+import { toastThemes } from '/@/lib/toast/toast-themes';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import WizardStepper from '/@/lib/ui/WizardStepper.svelte';
@@ -391,7 +392,7 @@ async function handleBrowseCustomPath(index: number): Promise<void> {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     error = message;
-    toast.error(`Failed to browse for directory: ${message}`);
+    toast.push(`Failed to browse for directory: ${message}`, { theme: toastThemes.error });
   }
 }
 
@@ -409,7 +410,7 @@ async function handleBrowseSource(): Promise<void> {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     error = message;
-    toast.error(`Failed to browse for directory: ${message}`);
+    toast.push(`Failed to browse for directory: ${message}`, { theme: toastThemes.error });
   }
 }
 

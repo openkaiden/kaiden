@@ -1,8 +1,9 @@
 <script lang="ts">
 import { Checkbox, EmptyScreen, Tab } from '@podman-desktop/ui-svelte';
-import { toast } from 'svelte-sonner';
+import { toast } from '@zerodevx/svelte-toast';
 import { router } from 'tinro';
 
+import { toastThemes } from '/@/lib/toast/toast-themes';
 import DetailsPage from '/@/lib/ui/DetailsPage.svelte';
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
 import { getTabUrl, isTabSelected } from '/@/lib/ui/Util';
@@ -38,13 +39,13 @@ $effect(() => {
         skillContent = contentResult.value;
       } else {
         console.error('Error loading skill instructions:', contentResult.reason);
-        toast.error('Failed to load skill instructions');
+        toast.push('Failed to load skill instructions', { theme: toastThemes.error });
       }
       if (folderResult.status === 'fulfilled') {
         folderContents = folderResult.value;
       } else {
         console.error('Error loading skill resources:', folderResult.reason);
-        toast.error('Failed to load skill resources');
+        toast.push('Failed to load skill resources', { theme: toastThemes.error });
       }
     })
     .catch((err: unknown) => console.error('Unexpected error loading skill details:', err));
@@ -59,7 +60,7 @@ function onToggle(): void {
   promise
     .catch((err: unknown) => {
       console.error('Error toggling skill:', err);
-      toast.error('Failed to toggle skill');
+      toast.push('Failed to toggle skill', { theme: toastThemes.error });
     })
     .finally(() => {
       toggling = false;
