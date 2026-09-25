@@ -147,13 +147,13 @@ describe('buildPolicyObject', () => {
   test('builds network rule for deny mode with hosts', () => {
     const policy = buildPolicyObject({ mode: 'deny', hosts: ['registry.npmjs.org'] });
 
-    expect(policy).toEqual({
+    expect(policy).toMatchObject({
       version: 1,
       networkPolicies: {
         'kdn-network': {
           endpoints: [
-            { host: 'registry.npmjs.org', port: 443, protocol: 'rest', access: 'full', allowEncodedSlash: true },
-            { host: 'registry.npmjs.org', port: 80, protocol: 'rest', access: 'full', allowEncodedSlash: true },
+            { host: 'registry.npmjs.org', port: 443, protocol: 'rest', access: 3, allowEncodedSlash: true },
+            { host: 'registry.npmjs.org', port: 80, protocol: 'rest', access: 3, allowEncodedSlash: true },
           ],
           binaries: [{ path: '/**' }],
         },
@@ -164,8 +164,8 @@ describe('buildPolicyObject', () => {
   test('builds one endpoint for a host with an explicit port', () => {
     const policy = buildPolicyObject({ mode: 'deny', hosts: ['api.example.com:8080'] });
 
-    expect(policy!.networkPolicies!['kdn-network']!.endpoints).toEqual([
-      { host: 'api.example.com', port: 8080, protocol: 'rest', access: 'full', allowEncodedSlash: true },
+    expect(policy!.networkPolicies!['kdn-network']!.endpoints).toMatchObject([
+      { host: 'api.example.com', port: 8080, protocol: 'rest', access: 3, allowEncodedSlash: true },
     ]);
   });
 
@@ -190,13 +190,13 @@ describe('buildPolicyObject', () => {
   test('combines network and model rules', () => {
     const policy = buildPolicyObject({ mode: 'deny', hosts: ['registry.npmjs.org'] }, 'http://localhost:11434/v1');
 
-    expect(policy).toEqual({
+    expect(policy).toMatchObject({
       version: 1,
       networkPolicies: {
         'kdn-network': {
           endpoints: [
-            { host: 'registry.npmjs.org', port: 443, protocol: 'rest', access: 'full', allowEncodedSlash: true },
-            { host: 'registry.npmjs.org', port: 80, protocol: 'rest', access: 'full', allowEncodedSlash: true },
+            { host: 'registry.npmjs.org', port: 443, protocol: 'rest', access: 3, allowEncodedSlash: true },
+            { host: 'registry.npmjs.org', port: 80, protocol: 'rest', access: 3, allowEncodedSlash: true },
           ],
           binaries: [{ path: '/**' }],
         },

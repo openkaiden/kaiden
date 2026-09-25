@@ -351,7 +351,7 @@ describe('init', () => {
 
     expect(writeFile).toHaveBeenCalledWith(
       GATEWAY_CONFIG_PATH,
-      expect.stringContaining('compute_drivers = ["podman"]'),
+      expect.stringContaining('compute_driver = "podman"'),
       'utf-8',
     );
     expect(spawn).toHaveBeenCalledWith(
@@ -1248,7 +1248,7 @@ describe('gateway config generation', () => {
 
     const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
     expect(writtenContent).toContain('[openshell.drivers.podman]');
-    expect(writtenContent).toContain('compute_drivers = ["podman"]');
+    expect(writtenContent).toContain('compute_driver = "podman"');
     expect(writtenContent).not.toContain('[openshell.drivers.vm]');
     expect(writtenContent).not.toContain('[openshell.drivers.docker]');
   });
@@ -1355,7 +1355,7 @@ describe('gateway config generation', () => {
 
     const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
     expect(writtenContent).toContain('enable_bind_mounts = true');
-    expect(writtenContent).toContain(`compute_drivers = ["${driver}"]`);
+    expect(writtenContent).toContain(`compute_driver = "${driver}"`);
   });
 
   test('honors an explicit VM driver and omits container settings even when the active driver is Podman', async () => {
@@ -1368,7 +1368,7 @@ describe('gateway config generation', () => {
     await gateway.start({ driver: 'vm' });
 
     const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
-    expect(writtenContent).toContain('compute_drivers = ["vm"]');
+    expect(writtenContent).toContain('compute_driver = "vm"');
     expect(writtenContent).toContain('[openshell.drivers.vm]');
     expect(writtenContent).not.toContain('enable_bind_mounts');
     expect(writtenContent).not.toContain('supervisor_image');
@@ -1383,7 +1383,7 @@ describe('gateway config generation', () => {
     const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
     expect(writtenContent).toContain('[openshell.drivers.podman]');
     expect(writtenContent).toContain('enable_bind_mounts = true');
-    expect(writtenContent).toContain('compute_drivers = ["podman"]');
+    expect(writtenContent).toContain('compute_driver = "podman"');
     expect(gatewayManager.getGatewayInfo).not.toHaveBeenCalled();
   });
 });

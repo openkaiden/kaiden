@@ -70,6 +70,7 @@ export const SandboxInfoSchema = z.object({
     'Starting',
     'Stopping',
     'Stopped',
+    'Completed',
   ]),
   created_at: z
     .string()
@@ -85,12 +86,19 @@ export const SandboxInfoSchema = z.object({
   resource_version: z.number().optional(),
 });
 
+export const SandboxInfoListSchema = z.looseObject({
+  next_page_token: z.string(),
+  sandboxes: z.array(SandboxInfoSchema),
+});
+
 export type SandboxInfo = z.output<typeof SandboxInfoSchema> & {
   sourcePath?: string;
 };
 
 export const WORKSPACE_LABEL = 'ai.openkaiden.kaiden.workspace';
 export const AGENT_LABEL = 'ai.openkaiden.kaiden.agent';
+export const SECRET_LABEL = 'ai.openkaiden.kaiden.secret';
+export const DEFAULT_WORKSPACE = 'default';
 
 export function decodeWorkspaceLabels(labels: Record<string, string>): string | undefined {
   let encoded: string;
@@ -186,9 +194,14 @@ export interface GatewaySandboxes {
   sandboxes: SandboxInfo[];
 }
 
-export const OpenshellProviderInfoSchema = z.object({
+export const OpenshellProviderInfoSchema = z.looseObject({
   name: z.string(),
   type: z.string(),
+});
+
+export const OpenshellProviderInfoListSchema = z.looseObject({
+  next_page_token: z.string(),
+  providers: z.array(OpenshellProviderInfoSchema),
 });
 
 export type OpenshellProviderInfo = z.output<typeof OpenshellProviderInfoSchema>;
@@ -207,9 +220,16 @@ export const OpenshellProfileSchema = z.looseObject({
   display_name: z.string(),
   description: z.string().optional(),
   credentials: z.array(OpenshellProfileCredentialSchema).optional(),
+  binaries: z.array(z.string()).optional(),
 });
 
 export type OpenshellProfile = z.output<typeof OpenshellProfileSchema>;
+
+export interface CreateProfileOptions {
+  name: string;
+  from: string;
+  binaries: string[];
+}
 
 export interface CreateProviderOptions {
   name: string;

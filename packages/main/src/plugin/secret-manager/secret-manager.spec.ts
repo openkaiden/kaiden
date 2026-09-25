@@ -30,12 +30,13 @@ import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { SafeStorageRegistry } from '/@/plugin/safe-storage/safe-storage-registry.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
+import { DEFAULT_WORKSPACE } from '/@api/openshell-gateway-info.js';
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
 import { DefaultProviderFactory } from './default-provider-factory.js';
 import { GcloudAdcProviderFactory } from './gcloud-adc-provider-factory.js';
 import { OpenshellSecretAdapter } from './openshell-secret-adapter.js';
-import { SecretManager } from './secret-manager.js';
+import { extractBinaryFromCommand, isAgentCommandAllowed, SecretManager } from './secret-manager.js';
 
 vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-client-manager.js'));
 
@@ -52,6 +53,8 @@ const mockRaw = {
   listProviders: vi.fn(),
   deleteProvider: vi.fn(),
   listProviderProfiles: vi.fn(),
+  getProviderProfile: vi.fn(),
+  importProviderProfiles: vi.fn(),
 };
 const mockClient = { raw: mockRaw } as unknown as OpenShellClient;
 const sdkClientManager = new OpenshellSdkClientManager(undefined!, undefined!);
@@ -195,7 +198,12 @@ describe('openshellAdapter', () => {
         credentials: { GH_TOKEN: 'ghp_abc123' },
         config: {},
       },
-      workspace: '',
+      workspaceScope: {
+        selection: {
+          case: 'workspace',
+          value: DEFAULT_WORKSPACE,
+        },
+      },
     });
     expect(result).toEqual({ name: 'my-secret' });
   });
@@ -261,7 +269,15 @@ describe('openshellAdapter', () => {
 
     const result = await manager.remove('my-openai');
 
-    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({ name: 'my-openai', workspace: '' });
+    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({
+      name: 'my-openai',
+      workspaceScope: {
+        selection: {
+          case: 'workspace',
+          value: DEFAULT_WORKSPACE,
+        },
+      },
+    });
     expect(result).toEqual({ name: 'my-openai' });
   });
 
@@ -416,7 +432,12 @@ describe('createSecretForConnection', () => {
         credentials: { token: 'actual-api-key' },
         config: {},
       },
-      workspace: '',
+      workspaceScope: {
+        selection: {
+          case: 'workspace',
+          value: DEFAULT_WORKSPACE,
+        },
+      },
     });
     expect(result).toEqual({ name: 'kaiden.cursor-conn-456', type: 'cursor' });
   });
@@ -515,7 +536,12 @@ describe('ensureSecretForModel', () => {
         credentials: { token: 'actual-api-key' },
         config: {},
       },
-      workspace: '',
+      workspaceScope: {
+        selection: {
+          case: 'workspace',
+          value: DEFAULT_WORKSPACE,
+        },
+      },
     });
     expect(result).toEqual({ name: 'kaiden.cursor-conn-789', type: 'cursor' });
   });
@@ -527,5 +553,327 @@ describe('ensureSecretForModel', () => {
 
     expect(result).toBeUndefined();
     expect(mockRaw.createProvider).not.toHaveBeenCalled();
+  });
+});
+
+describe('extractBinaryFromCommand', () => {
+  test('extracts single-word command', () => {
+    expect(extractBinaryFromCommand('claude')).toBe('claude');
+  });
+
+  test('extracts first word from multi-word command', () => {
+    expect(extractBinaryFromCommand('/usr/bin/agent start')).toBe('/usr/bin/agent');
+  });
+
+  test('trims whitespace', () => {
+    expect(extractBinaryFromCommand('  claude  ')).toBe('claude');
+  });
+});
+
+describe('isAgentCommandAllowed', () => {
+  test('matches exact path when binary has no wildcard', () => {
+    expect(isAgentCommandAllowed('/usr/bin/claude', ['/usr/bin/claude', '/usr/bin/node'])).toBe(true);
+  });
+
+  test('rejects path not equal when binary has no wildcard', () => {
+    expect(isAgentCommandAllowed('/usr/bin/claude', ['/usr/local/bin/claude'])).toBe(false);
+  });
+
+  test('matches bare command exactly when binary has no wildcard', () => {
+    expect(isAgentCommandAllowed('claude', ['claude'])).toBe(true);
+  });
+
+  test('rejects bare command against absolute binary without wildcard', () => {
+    expect(isAgentCommandAllowed('claude', ['/usr/local/bin/claude', '/usr/bin/node'])).toBe(false);
+  });
+
+  test('matches via minimatch glob when binary contains wildcard', () => {
+    expect(isAgentCommandAllowed('/usr/local/bin/claude', ['**/claude'])).toBe(true);
+  });
+
+  test('rejects via minimatch glob when pattern does not match', () => {
+    expect(isAgentCommandAllowed('/usr/bin/node', ['**/claude'])).toBe(false);
+  });
+
+  test('matches bare command via glob pattern', () => {
+    expect(isAgentCommandAllowed('claude', ['**/claude'])).toBe(true);
+  });
+});
+
+describe('ensureSecretForSandbox', () => {
+  const mockConnection: InferenceProviderConnection = {
+    id: 'conn-sandbox',
+    name: 'test-connection',
+    type: 'cloud',
+    sdk: {} as InferenceProviderConnection['sdk'],
+    status: () => 'started',
+    models: [{ label: 'model-1' }],
+    credentials: () => ({ token: 'secret-token' }),
+  };
+
+  test('returns existing secret by sandbox name', async () => {
+    mockRaw.listProviders.mockResolvedValue({
+      providers: [{ metadata: { name: 'my-sandbox-secret' }, type: 'openai' }],
+    });
+
+    const result = await manager.ensureSecretForSandbox('my-sandbox', 'openai::gpt-4::', 'claude', 'kaiden');
+
+    expect(result).toEqual({ name: 'my-sandbox-secret', type: 'openai' });
+    expect(mockRaw.createProvider).not.toHaveBeenCalled();
+  });
+
+  test('creates sandbox-named secret when none exists', async () => {
+    mockRaw.listProviders.mockResolvedValue({ providers: [] });
+    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
+      connection: mockConnection,
+      providerId: 'kaiden.openai',
+    });
+    vi.mocked(providerRegistry.getProvider).mockReturnValue({
+      extensionId: 'kaiden.openai',
+    } as unknown as ProviderImpl);
+    mockRaw.listProviderProfiles.mockResolvedValue({
+      profiles: [{ id: 'openai', displayName: 'OpenAI', credentials: [] }],
+    });
+    mockRaw.getProviderProfile.mockResolvedValue({
+      profile: { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] },
+    });
+    mockRaw.importProviderProfiles.mockResolvedValue({ diagnostics: [] });
+
+    const properties = {
+      'openai.connection._type': {
+        scope: 'InferenceProviderConnection',
+        extension: { id: 'kaiden.openai' },
+      },
+      'openai.connection.token': {
+        scope: 'InferenceProviderConnection',
+        extension: { id: 'kaiden.openai' },
+        format: 'password',
+      },
+    } as Record<string, Record<string, unknown>>;
+    vi.mocked(configurationRegistry.getConfigurationProperties).mockReturnValue(
+      properties as unknown as ReturnType<typeof configurationRegistry.getConfigurationProperties>,
+    );
+    vi.mocked(configurationRegistry.getConfiguration).mockReturnValue({
+      get: vi.fn((key: string) => {
+        if (key === 'openai.connection._type') return 'openai';
+        if (key === 'openai.connection.token') return 'openai:conn-sandbox:token';
+        return undefined;
+      }),
+      has: vi.fn(),
+      update: vi.fn(),
+    } as unknown as ReturnType<typeof configurationRegistry.getConfiguration>);
+    vi.mocked(extensionStorageMock.get).mockResolvedValue('actual-api-key');
+    mockRaw.createProvider.mockResolvedValue({});
+
+    const result = await manager.ensureSecretForSandbox('my-sandbox', 'openai::gpt-4::', 'claude', 'kaiden');
+
+    expect(result).toEqual({ name: 'my-sandbox-secret', type: 'openai-claude' });
+    expect(mockRaw.createProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({ metadata: { name: 'my-sandbox-secret' }, type: 'openai-claude' }),
+      }),
+    );
+  });
+
+  test('returns undefined when no inference connection exists', async () => {
+    mockRaw.listProviders.mockResolvedValue({ providers: [] });
+    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue(undefined);
+
+    const result = await manager.ensureSecretForSandbox('my-sandbox', 'unknown::model::', 'claude');
+
+    expect(result).toBeUndefined();
+  });
+});
+
+describe('resolveProfileForAgent', () => {
+  test('clones profile when no binaries field (absence means no binary authorised)', async () => {
+    mockRaw.listProviderProfiles.mockResolvedValue({
+      profiles: [{ id: 'openai', displayName: 'OpenAI', credentials: [] }],
+    });
+    mockRaw.getProviderProfile.mockResolvedValue({
+      profile: { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] },
+    });
+    mockRaw.importProviderProfiles.mockResolvedValue({ diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude');
+
+    expect(result).toBe('openai-claude');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'openai-claude',
+              binaries: [expect.objectContaining({ path: '/**/claude' })],
+            }),
+          }),
+        ],
+        workspaceScope: {
+          selection: {
+            case: 'workspace',
+            value: DEFAULT_WORKSPACE,
+          },
+        },
+      }),
+    );
+  });
+
+  test('clones profile when binaries is empty (no binary authorised)', async () => {
+    mockRaw.listProviderProfiles.mockResolvedValue({
+      profiles: [{ id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] }],
+    });
+    mockRaw.getProviderProfile.mockResolvedValue({
+      profile: { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] },
+    });
+    mockRaw.importProviderProfiles.mockResolvedValue({ diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude');
+
+    expect(result).toBe('openai-claude');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'openai-claude',
+              binaries: [expect.objectContaining({ path: '/**/claude' })],
+            }),
+          }),
+        ],
+        workspaceScope: {
+          selection: {
+            case: 'workspace',
+            value: DEFAULT_WORKSPACE,
+          },
+        },
+      }),
+    );
+  });
+
+  test('returns original profile when agent command matches glob in binaries', async () => {
+    mockRaw.listProviderProfiles.mockResolvedValue({
+      profiles: [
+        {
+          id: 'openai',
+          displayName: 'OpenAI',
+          credentials: [],
+          binaries: [{ path: '**/claude' }, { path: '/usr/bin/node' }],
+        },
+      ],
+    });
+
+    const result = await manager.resolveProfileForAgent('openai', '/usr/local/bin/claude');
+
+    expect(result).toBe('openai');
+    expect(mockRaw.importProviderProfiles).not.toHaveBeenCalled();
+  });
+
+  test('clones profile when agent command is not in binaries', async () => {
+    mockRaw.listProviderProfiles.mockResolvedValue({
+      profiles: [{ id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [{ path: '/usr/bin/node' }] }],
+    });
+    mockRaw.getProviderProfile.mockResolvedValue({
+      profile: { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] },
+    });
+    mockRaw.importProviderProfiles.mockResolvedValue({ diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude');
+
+    expect(result).toBe('openai-claude');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'openai-claude',
+              binaries: [expect.objectContaining({ path: '/**/claude' })],
+            }),
+          }),
+        ],
+        workspaceScope: {
+          selection: {
+            case: 'workspace',
+            value: DEFAULT_WORKSPACE,
+          },
+        },
+      }),
+    );
+  });
+
+  test('clones profile with absolute agent command', async () => {
+    mockRaw.listProviderProfiles.mockResolvedValue({
+      profiles: [{ id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [{ path: '/usr/bin/node' }] }],
+    });
+    mockRaw.getProviderProfile.mockResolvedValue({
+      profile: { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] },
+    });
+    mockRaw.importProviderProfiles.mockResolvedValue({ diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent('openai', '/usr/local/bin/claude');
+
+    expect(result).toBe('openai-claude');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'openai-claude',
+              binaries: [expect.objectContaining({ path: '/usr/local/bin/claude' })],
+            }),
+          }),
+        ],
+        workspaceScope: {
+          selection: {
+            case: 'workspace',
+            value: DEFAULT_WORKSPACE,
+          },
+        },
+      }),
+    );
+  });
+
+  test('returns existing clone when already created', async () => {
+    mockRaw.listProviderProfiles.mockResolvedValue({
+      profiles: [
+        { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [{ path: '/usr/bin/node' }] },
+        { id: 'openai-claude', displayName: 'OpenAI (claude)', credentials: [] },
+      ],
+    });
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude');
+
+    expect(result).toBe('openai-claude');
+    expect(mockRaw.importProviderProfiles).not.toHaveBeenCalled();
+  });
+
+  test('passes gateway when cloning profile', async () => {
+    mockRaw.listProviderProfiles.mockResolvedValue({
+      profiles: [{ id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [{ path: '/usr/bin/node' }] }],
+    });
+    mockRaw.getProviderProfile.mockResolvedValue({
+      profile: { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] },
+    });
+    mockRaw.importProviderProfiles.mockResolvedValue({ diagnostics: [] });
+
+    await manager.resolveProfileForAgent('openai', 'claude', 'remote-gw');
+
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'openai-claude',
+              binaries: [expect.objectContaining({ path: '/**/claude' })],
+            }),
+          }),
+        ],
+        workspaceScope: {
+          selection: {
+            case: 'workspace',
+            value: DEFAULT_WORKSPACE,
+          },
+        },
+      }),
+    );
   });
 });

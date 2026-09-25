@@ -18,8 +18,13 @@
 
 import { isIPv6 } from 'node:net';
 
-import type { MessageInitShape } from '@bufbuild/protobuf';
-import type { NetworkEndpointSchema, SandboxPolicySchema } from '@nvidia/openshell-sdk/raw';
+import { create, type MessageInitShape } from '@bufbuild/protobuf';
+import {
+  NetworkAccessPreset,
+  type NetworkEndpoint,
+  NetworkEndpointSchema,
+  type SandboxPolicySchema,
+} from '@nvidia/openshell-sdk/raw';
 
 import type { NetworkConfiguration } from '/@api/agent-workspace-info.js';
 
@@ -134,18 +139,20 @@ export function buildPolicyObject(network?: NetworkConfiguration, modelEndpoint?
   const networkPolicies: NonNullable<OpenshellPolicy['networkPolicies']> = {};
 
   if (network && network.mode !== 'allow' && network.hosts?.length) {
-    const endpoints: MessageInitShape<typeof NetworkEndpointSchema>[] = network.hosts.flatMap(destination => {
+    const endpoints: NetworkEndpoint[] = network.hosts.flatMap(destination => {
       const parsed = parseNetworkDestination(destination);
       if (!parsed) return [];
 
       const ports = parsed.port === undefined ? [443, 80] : [parsed.port];
-      return ports.map(port => ({
-        host: parsed.host,
-        port,
-        protocol: 'rest' as const,
-        access: 'full' as const,
-        allowEncodedSlash: true,
-      }));
+      return ports.map(port =>
+        create(NetworkEndpointSchema, {
+          host: parsed.host,
+          port,
+          protocol: 'rest' as const,
+          access: NetworkAccessPreset.FULL,
+          allowEncodedSlash: true,
+        }),
+      );
     });
     if (endpoints.length > 0) {
       networkPolicies[NETWORK_RULE_NAME] = {

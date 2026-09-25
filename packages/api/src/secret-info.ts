@@ -57,5 +57,5 @@ export interface SecretCliBackend {
   createSecret(options: SecretCreateOptions, gateway?: string): Promise<SecretName>;
   listSecrets(gateway?: string): Promise<SecretInfo[]>;
   removeSecret(name: string, gateway?: string): Promise<SecretName>;
-  listServices(): Promise<OpenshellProfile[]>;
+  listServices(gateway?: string): Promise<OpenshellProfile[]>;
 }

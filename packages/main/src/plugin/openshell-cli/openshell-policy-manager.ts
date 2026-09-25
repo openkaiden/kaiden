@@ -19,6 +19,8 @@
 import { PolicyStatus } from '@nvidia/openshell-sdk/raw';
 import { inject, injectable } from 'inversify';
 
+import { DEFAULT_WORKSPACE } from '/@api/openshell-gateway-info.js';
+
 import type { OpenshellPolicy } from './openshell-network-policy.js';
 import { OpenshellSdkClientManager } from './openshell-sdk-client-manager.js';
 
@@ -52,7 +54,16 @@ export class OpenshellPolicyManager {
     const deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
       const { revision } = await client.raw.getSandboxPolicyStatus(
-        { name: sandboxName, version: result.version },
+        {
+          sandbox: sandboxName,
+          version: result.version,
+          workspaceScope: {
+            selection: {
+              case: 'workspace',
+              value: DEFAULT_WORKSPACE,
+            },
+          },
+        },
         { timeoutMs: Math.max(1, deadline - Date.now()) },
       );
       if (revision?.status === PolicyStatus.LOADED) return;
