@@ -2233,6 +2233,24 @@ test('registerProfile', async () => {
   expect(openShellRegistry.registerProfile).toHaveBeenCalledWith(profile);
 });
 
+test('registerProfile with YAML string', async () => {
+  const disposables: IDisposable[] = [];
+
+  const api = createApi(disposables);
+
+  expect(api).toBeDefined();
+  expect(disposables.length).toBe(0);
+
+  const yamlContent = `id: openai\ndisplay_name: OpenAI\n`;
+
+  vi.mocked(openShellRegistry.registerProfile).mockReturnValue(Disposable.create(() => {}));
+
+  api.openshell.registerProfile(yamlContent);
+  expect(disposables.length).toBe(1);
+
+  expect(openShellRegistry.registerProfile).toHaveBeenCalledWith(yamlContent);
+});
+
 test('getProfiles', async () => {
   const disposables: IDisposable[] = [];
 

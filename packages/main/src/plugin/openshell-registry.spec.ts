@@ -288,6 +288,69 @@ describe('OpenShellRegistry', () => {
 
       expect(registry.getProfiles()).toHaveLength(2);
     });
+
+    test('accepts a YAML string and registers the parsed profile', () => {
+      const yaml = `id: my-provider\ndisplay_name: My Provider\n`;
+
+      registry.registerProfile(yaml);
+
+      const profiles = registry.getProfiles();
+      expect(profiles).toHaveLength(1);
+      expect(profiles[0]!.id).toBe('my-provider');
+      expect(profiles[0]!.displayName).toBe('My Provider');
+    });
+
+    test('accepts YAML string with description and credentials', () => {
+      const yaml = [
+        'id: openai',
+        'display_name: OpenAI',
+        'description: OpenAI API provider',
+        'credentials:',
+        '  - name: api_key',
+        '    required: true',
+        '    description: API Key',
+        '    env_vars:',
+        '      - OPENAI_API_KEY',
+      ].join('\n');
+
+      registry.registerProfile(yaml);
+
+      const profiles = registry.getProfiles();
+      expect(profiles).toHaveLength(1);
+      expect(profiles[0]!.id).toBe('openai');
+      expect(profiles[0]!.displayName).toBe('OpenAI');
+      expect(profiles[0]!.description).toBe('OpenAI API provider');
+      expect(profiles[0]!.credentials).toHaveLength(1);
+      expect(profiles[0]!.credentials[0]!.name).toBe('api_key');
+      expect(profiles[0]!.credentials[0]!.required).toBe(true);
+      expect(profiles[0]!.credentials[0]!.envVars).toEqual(['OPENAI_API_KEY']);
+    });
+
+    test('throws when YAML is missing required id field', () => {
+      const yaml = `display_name: My Provider\n`;
+
+      expect(() => registry.registerProfile(yaml)).toThrow();
+    });
+
+    test('throws when YAML is missing required display_name field', () => {
+      const yaml = `id: my-provider\n`;
+
+      expect(() => registry.registerProfile(yaml)).toThrow();
+    });
+
+    test('throws on invalid YAML syntax', () => {
+      const yaml = `{invalid: yaml: [`;
+
+      expect(() => registry.registerProfile(yaml)).toThrow();
+    });
+
+    test('throws when YAML profile has duplicate id', () => {
+      registry.registerProfile(createProfile({ id: 'dup' }));
+
+      const yaml = `id: dup\ndisplay_name: Duplicate\n`;
+
+      expect(() => registry.registerProfile(yaml)).toThrow(`OpenShell profile with id 'dup' is already registered`);
+    });
   });
 
   describe('getProfiles', () => {
