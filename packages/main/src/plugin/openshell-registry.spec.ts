@@ -22,11 +22,14 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 
 import { OpenShellRegistry } from './openshell-registry.js';
+import { Properties } from './util/properties.js';
 
 const apiSender: ApiSenderType = {
   send: vi.fn(),
   receive: vi.fn(),
 };
+
+const properties = new Properties();
 
 let registry: OpenShellRegistry;
 
@@ -81,7 +84,7 @@ function createProfile(overrides?: Partial<ProviderProfile>): ProviderProfile {
 describe('OpenShellRegistry', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    registry = new OpenShellRegistry(apiSender);
+    registry = new OpenShellRegistry(apiSender, properties);
   });
 
   afterEach(() => {
@@ -373,7 +376,7 @@ describe('OpenShellRegistry', () => {
 
     beforeEach(() => {
       vi.useFakeTimers();
-      pollingRegistry = new OpenShellRegistry(apiSender);
+      pollingRegistry = new OpenShellRegistry(apiSender, properties);
     });
 
     afterEach(() => {

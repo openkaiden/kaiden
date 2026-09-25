@@ -218,7 +218,6 @@
     "@ai-sdk/mcp": "^2.0.16",
     "@bufbuild/protobuf": "^2.15.0",
     "@docker/extension-api-client-types": "0.4.2",
-    "@bufbuild/protobuf": "^2.15.0",
     "@expo/sudo-prompt": "^9.3.2",
     "@kubernetes/client-node": "^1.4.0",
     "@modelcontextprotocol/sdk": "^1.29.0",

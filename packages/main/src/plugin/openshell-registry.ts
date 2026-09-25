@@ -23,7 +23,7 @@ import { inject, injectable, preDestroy } from 'inversify';
 import { parse as parseYaml } from 'yaml';
 import z from 'zod';
 
-import { renameKeys } from '/@/plugin/util/properties.js';
+import { Properties } from '/@/plugin/util/properties.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IDisposable } from '/@api/disposable.js';
 import type { Event } from '/@api/event.js';
@@ -40,7 +40,10 @@ const OpenshellProviderProfileSchema = z.looseObject({
 export class OpenShellRegistry implements IDisposable {
   private intervalId: NodeJS.Timeout | undefined;
 
-  constructor(@inject(ApiSenderType) private apiSender: ApiSenderType) {
+  constructor(
+    @inject(ApiSenderType) private apiSender: ApiSenderType,
+    @inject(Properties) private properties: Properties,
+  ) {
     this.startGatewayStatusPolling();
   }
 
@@ -127,7 +130,7 @@ export class OpenShellRegistry implements IDisposable {
   private parseYamlProfile(yamlContent: string): ProviderProfile {
     const raw = parseYaml(yamlContent);
     const parsed = OpenshellProviderProfileSchema.parse(raw);
-    return create(ProviderProfileSchema, renameKeys(parsed));
+    return create(ProviderProfileSchema, this.properties.renameKeys(parsed));
   }
 
   getGateways(): readonly OpenShellGateway[] {

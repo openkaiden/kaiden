@@ -16,12 +16,17 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { injectable } from 'inversify';
+
 const rename = (key: string): string => key.replace(/_(\w)/g, (_, c) => c.toUpperCase());
 
-export function renameKeys(value: object): object {
-  if (Array.isArray(value)) return value.map(v => renameKeys(v));
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [rename(k), renameKeys(v)]));
+@injectable()
+export class Properties {
+  renameKeys(value: object): object {
+    if (Array.isArray(value)) return value.map(v => this.renameKeys(v));
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([k, v]) => [rename(k), this.renameKeys(v)]));
+    }
+    return value;
   }
-  return value;
 }

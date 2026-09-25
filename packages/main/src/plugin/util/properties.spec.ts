@@ -18,42 +18,44 @@
 
 import { describe, expect, test } from 'vitest';
 
-import { renameKeys } from './properties.js';
+import { Properties } from './properties.js';
+
+const properties = new Properties();
 
 describe('renameKeys', () => {
   test('converts snake_case keys to camelCase', () => {
-    expect(renameKeys({ display_name: 'hello' })).toEqual({ displayName: 'hello' });
+    expect(properties.renameKeys({ display_name: 'hello' })).toEqual({ displayName: 'hello' });
   });
 
   test('handles multiple underscores', () => {
-    expect(renameKeys({ my_long_key: 1 })).toEqual({ myLongKey: 1 });
+    expect(properties.renameKeys({ my_long_key: 1 })).toEqual({ myLongKey: 1 });
   });
 
   test('leaves keys without underscores unchanged', () => {
-    expect(renameKeys({ name: 'foo' })).toEqual({ name: 'foo' });
+    expect(properties.renameKeys({ name: 'foo' })).toEqual({ name: 'foo' });
   });
 
   test('recursively renames nested object keys', () => {
     const input = { outer_key: { inner_key: 'value' } };
-    expect(renameKeys(input)).toEqual({ outerKey: { innerKey: 'value' } });
+    expect(properties.renameKeys(input)).toEqual({ outerKey: { innerKey: 'value' } });
   });
 
   test('recursively renames keys inside arrays', () => {
     const input = { items: [{ item_name: 'a' }, { item_name: 'b' }] };
-    expect(renameKeys(input)).toEqual({ items: [{ itemName: 'a' }, { itemName: 'b' }] });
+    expect(properties.renameKeys(input)).toEqual({ items: [{ itemName: 'a' }, { itemName: 'b' }] });
   });
 
   test('handles empty object', () => {
-    expect(renameKeys({})).toEqual({});
+    expect(properties.renameKeys({})).toEqual({});
   });
 
   test('handles empty array', () => {
-    expect(renameKeys([])).toEqual([]);
+    expect(properties.renameKeys([])).toEqual([]);
   });
 
   test('preserves primitive values in arrays', () => {
     const input = { env_vars: ['FOO', 'BAR'] };
-    expect(renameKeys(input)).toEqual({ envVars: ['FOO', 'BAR'] });
+    expect(properties.renameKeys(input)).toEqual({ envVars: ['FOO', 'BAR'] });
   });
 
   test('handles deeply nested structures', () => {
@@ -62,7 +64,7 @@ describe('renameKeys', () => {
         mid_level: [{ deep_key: { leaf_value: true } }],
       },
     };
-    expect(renameKeys(input)).toEqual({
+    expect(properties.renameKeys(input)).toEqual({
       topLevel: {
         midLevel: [{ deepKey: { leafValue: true } }],
       },
@@ -70,6 +72,6 @@ describe('renameKeys', () => {
   });
 
   test('preserves non-object values passed through arrays', () => {
-    expect(renameKeys([1, 'two', true])).toEqual([1, 'two', true]);
+    expect(properties.renameKeys([1, 'two', true])).toEqual([1, 'two', true]);
   });
 });
