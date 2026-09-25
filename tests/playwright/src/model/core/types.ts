@@ -98,15 +98,19 @@ export const resources = {
   ramalama: { displayName: 'RamaLama', hasCreateButton: false },
   mistral: { displayName: 'Mistral', hasCreateButton: true },
   cursor: { displayName: 'Cursor', hasCreateButton: true },
-  milvus: { displayName: 'Milvus Vector Database', hasCreateButton: true },
-  docling: { displayName: 'Docling Chunk Provider', hasCreateButton: true },
+  milvus: { displayName: 'Milvus Vector Database', hasCreateButton: true, requiresContainerEndpoint: true },
+  docling: { displayName: 'Docling Chunk Provider', hasCreateButton: true, requiresContainerEndpoint: true },
 } as const;
 
 export type SettingsResourceId = keyof typeof resources;
 
+const podmanAvailable = !!process.env.PODMAN_ENABLED;
+
 export const featuredResources = Object.keys(resources) as (keyof typeof resources)[];
 export const resourcesWithCreateButton = Object.values(resources)
-  .filter(r => r.hasCreateButton)
+  .filter(
+    r => r.hasCreateButton && (!('requiresContainerEndpoint' in r && r.requiresContainerEndpoint) || podmanAvailable),
+  )
   .map(r => r.displayName);
 
 export interface MCPServerConfig {
