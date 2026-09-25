@@ -18,11 +18,12 @@
 
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
-import type { SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
+import { allOpenshellSandboxes, openshellSandboxes, type SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
 
 import SandboxActions from './SandboxActions.svelte';
 
@@ -40,6 +41,12 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.mocked(withConfirmation).mockImplementation(action => action());
   vi.mocked(window.deleteOpenshellSandbox).mockResolvedValue(undefined);
+  openshellSandboxes.set([
+    {
+      gateway: { name: 'remote-gateway', endpoint: 'http://localhost:18080' },
+      sandboxes: [{ id: 'sandbox-1', name: 'shared-name', phase: 'Ready' }],
+    },
+  ]);
 });
 
 test('deletes the sandbox from its gateway', async () => {
@@ -48,4 +55,34 @@ test('deletes the sandbox from its gateway', async () => {
   await fireEvent.click(screen.getByRole('button', { name: 'Remove workspace' }));
 
   expect(window.deleteOpenshellSandbox).toHaveBeenCalledWith('shared-name', 'remote-gateway');
+});
+
+test('should display error message when actionError is set on the object', async () => {
+  const sandboxWithError: SandboxInfoWithGateway = { ...sandbox, actionError: 'network timeout' };
+
+  render(SandboxActions, { object: sandboxWithError });
+
+  const tooltipTrigger = screen.getByTestId('tooltip-trigger');
+  await fireEvent.mouseEnter(tooltipTrigger);
+
+  const error = await screen.findByText('network timeout');
+  expect(error).toBeInTheDocument();
+});
+
+test('should set actionError via store when deleteOpenshellSandbox fails', async () => {
+  vi.mocked(window.deleteOpenshellSandbox).mockRejectedValue(new Error('sandbox is busy'));
+
+  render(SandboxActions, { object: sandbox });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Remove workspace' }));
+
+  await waitFor(() => {
+    expect(window.deleteOpenshellSandbox).toHaveBeenCalledWith('shared-name', 'remote-gateway');
+  });
+
+  await vi.advanceTimersByTimeAsync(100);
+
+  const sandboxes = get(allOpenshellSandboxes);
+  const failedSandbox = sandboxes.find(s => s.id === sandbox.id);
+  expect(failedSandbox?.actionError).toBe('Error: sandbox is busy');
 });
