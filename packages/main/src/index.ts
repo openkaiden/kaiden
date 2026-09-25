@@ -29,6 +29,7 @@ import { PluginSystem } from './plugin/index.js';
 import { ZoomLevelHandler } from './plugin/zoom-level-handler.js';
 import { StartupInstall } from './system/startup-install.js';
 import { WindowHandler } from './system/window/window-handler.js';
+import { AnimatedDevTray } from './tray-animate-dev-icon.js';
 import { AnimatedTray } from './tray-animate-icon.js';
 import { TrayMenu } from './tray-menu.js';
 import { isMac, isWindows, stoppedExtensions } from './util.js';
@@ -94,7 +95,7 @@ app.on('will-finish-launching', () => {
 app.whenReady().then(
   async () => {
     // Setup the default tray icon + menu items
-    const animatedTray = new AnimatedTray();
+    const animatedTray = import.meta.env.DEV ? new AnimatedDevTray() : new AnimatedTray();
     tray = new Tray(animatedTray.getDefaultImage());
     animatedTray.setTray(tray);
     const trayMenu = new TrayMenu(tray, animatedTray);

@@ -78,6 +78,7 @@ const extensionLoader = {
   getConfigurationRegistry: vi.fn(),
 } as unknown as ExtensionLoader;
 
+vi.mock(import('/@/plugin/app-ready/app-identity-plugin.js'));
 vi.mock(import('./plugin/index.js'));
 vi.mock(import('./util.js'), () => ({
   isWindows: vi.fn().mockReturnValue(false),

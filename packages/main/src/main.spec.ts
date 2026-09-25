@@ -28,6 +28,8 @@ import { Main } from './main.js';
 
 // mock electron
 vi.mock('electron');
+vi.mock(import('/@/plugin/app-ready/app-identity-plugin.js'));
+vi.mock(import('/@/plugin/app-ready/dev-icon-builder.js'));
 vi.mock('/@/util.js');
 vi.mock('/@/security-restrictions.js');
 vi.mock(import('electron-context-menu'), () => ({
@@ -40,6 +42,7 @@ vi.mock(import('/@/plugin/app-ready/window-plugin.js'));
 
 const ELECTRON_APP_MOCK: ElectronApp = {
   name: 'dummy-electron-mock',
+  getAppPath: vi.fn().mockReturnValue('/mock/app'),
   disableHardwareAcceleration: vi.fn(),
   requestSingleInstanceLock: vi.fn(),
   setAppUserModelId: vi.fn(),
