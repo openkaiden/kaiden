@@ -18,6 +18,8 @@ extensions-extra/
 kdn-binary/
 extensions/openshell/assets/
 .claude
+# Dev instance data (created by dev identity plugin)
+.electron-user-data/
 output/
 __mocks__/@openkaiden/api.ts
 .agents/skills/svelte-code-writer/
