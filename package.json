@@ -216,6 +216,7 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.3.0",
     "@ai-sdk/mcp": "^2.0.16",
+    "@bufbuild/protobuf": "^2.15.0",
     "@docker/extension-api-client-types": "0.4.2",
     "@expo/sudo-prompt": "^9.3.2",
     "@kubernetes/client-node": "^1.4.0",

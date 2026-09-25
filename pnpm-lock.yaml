@@ -42,6 +42,9 @@ importers:
       '@ai-sdk/mcp':
         specifier: ^2.0.16
         version: 2.0.16(zod@4.3.6)
+      '@bufbuild/protobuf':
+        specifier: ^2.15.0
+        version: 2.15.0
       '@docker/extension-api-client-types':
         specifier: 0.4.2
         version: 0.4.2
@@ -1338,8 +1341,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@bufbuild/protobuf@2.14.0':
-    resolution: {integrity: sha512-C3UGsiCwSprE2NKIIFA3hCDlpXTMCAXRZuEVp88L1GY36Y41+rYL5fryE+nOFhp4p4JPQvdV8PQ4DWgHgeTE+w==}
+  '@bufbuild/protobuf@2.15.0':
+    resolution: {integrity: sha512-DAheWUkVr/SJTWCc+lg9dhY0eN4SaWlf4+bG1KzHeXbnqt0AfB/NX0Z+VunGlM1ki1B4zVvye27MpKh/svySUA==}
 
   '@colors/colors@1.6.0':
     resolution: {integrity: sha512-Ir+AOibqzrIsL6ajt3Rz3LskB7OiMVHqltZmspbW/TJuTVuyOMirVqAkjfY6JISiLHgyNqicAC8AyHHGzNd/dA==}
@@ -8064,7 +8067,7 @@ snapshots:
   '@biomejs/cli-win32-x64@2.4.5':
     optional: true
 
-  '@bufbuild/protobuf@2.14.0': {}
+  '@bufbuild/protobuf@2.15.0': {}
 
   '@colors/colors@1.6.0': {}
 
@@ -8177,14 +8180,14 @@ snapshots:
       conventional-commits-parser: 6.3.0
       picocolors: 1.1.1
 
-  '@connectrpc/connect-node@2.1.2(@bufbuild/protobuf@2.14.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.14.0))':
+  '@connectrpc/connect-node@2.1.2(@bufbuild/protobuf@2.15.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.15.0))':
     dependencies:
-      '@bufbuild/protobuf': 2.14.0
-      '@connectrpc/connect': 2.1.2(@bufbuild/protobuf@2.14.0)
+      '@bufbuild/protobuf': 2.15.0
+      '@connectrpc/connect': 2.1.2(@bufbuild/protobuf@2.15.0)
 
-  '@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.14.0)':
+  '@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.15.0)':
     dependencies:
-      '@bufbuild/protobuf': 2.14.0
+      '@bufbuild/protobuf': 2.15.0
 
   '@csstools/color-helpers@6.0.2': {}
 
@@ -8963,9 +8966,9 @@ snapshots:
 
   '@openkaiden/opnshll-sdk@0.0.116':
     dependencies:
-      '@bufbuild/protobuf': 2.14.0
-      '@connectrpc/connect': 2.1.2(@bufbuild/protobuf@2.14.0)
-      '@connectrpc/connect-node': 2.1.2(@bufbuild/protobuf@2.14.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.14.0))
+      '@bufbuild/protobuf': 2.15.0
+      '@connectrpc/connect': 2.1.2(@bufbuild/protobuf@2.15.0)
+      '@connectrpc/connect-node': 2.1.2(@bufbuild/protobuf@2.15.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.15.0))
 
   '@openkaiden/workspace-configuration@0.15.0': {}
 
