@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import type { AgentConfigurationFile, AgentWorkspaceContext, ExtensionContext } from '@openkaiden/api';
-import { agents } from '@openkaiden/api';
+import { agents, openshell } from '@openkaiden/api';
 import type { Container } from 'inversify';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -28,6 +28,7 @@ import { ClaudeSkillsManager } from '/@/manager/claude-skills-manager';
 vi.mock(import('@openkaiden/api'));
 vi.mock(import('/@/manager/claude-skills-manager'));
 vi.mock(import('/@/manager/claude-inference-manager'));
+vi.mock('./anthropic.yaml?raw', () => ({ default: 'id: anthropic\ndisplay_name: Anthropic\n' }));
 
 class TestClaudeExtension extends ClaudeExtension {
   getContainer(): Container | undefined {
@@ -43,6 +44,7 @@ describe('ClaudeExtension', () => {
     vi.resetAllMocks();
     extensionContext = { subscriptions: [] } as unknown as ExtensionContext;
     claudeExtension = new TestClaudeExtension(extensionContext);
+    vi.mocked(openshell.getProfiles).mockReturnValue([]);
   });
 
   test('activate', async () => {
@@ -110,6 +112,22 @@ describe('ClaudeExtension', () => {
     expect(agent.configurationFiles).toHaveLength(2);
     expect(agent.configurationFiles[0]!.path).toBe(CLAUDE_SETTINGS_PATH);
     expect(agent.configurationFiles[1]!.path).toBe(CLAUDE_JSON_PATH);
+  });
+
+  test('activate registers openshell profile', async () => {
+    await claudeExtension.activate();
+    expect(openshell.registerProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'anthropic',
+        display_name: 'Anthropic',
+      }),
+    );
+  });
+
+  test('activate skips openshell profile registration when already registered', async () => {
+    vi.mocked(openshell.getProfiles).mockReturnValue([{ id: 'anthropic' } as unknown as never]);
+    await claudeExtension.activate();
+    expect(openshell.registerProfile).not.toHaveBeenCalled();
   });
 
   describe('preWorkspaceStart', () => {

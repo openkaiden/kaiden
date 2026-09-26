@@ -24,10 +24,12 @@ import type {
   ExtensionContext,
   LLMMetadata,
 } from '@openkaiden/api';
-import { agents } from '@openkaiden/api';
+import { agents, openshell } from '@openkaiden/api';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { activate, buildCopilotCommand, COPILOT_MCP_CONFIG_PATH, COPILOT_SETTINGS_PATH } from './extension';
+
+vi.mock('./copilot.yaml?raw', () => ({ default: 'id: copilot\ndisplay_name: GitHub Copilot\n' }));
 
 const AGENT_DISPOSABLE_MOCK: Disposable = { dispose: vi.fn() };
 
@@ -41,6 +43,7 @@ beforeEach(() => {
   } as unknown as ExtensionContext;
 
   vi.mocked(agents.registerAgent).mockReturnValue(AGENT_DISPOSABLE_MOCK);
+  vi.mocked(openshell.getProfiles).mockReturnValue([]);
 });
 
 function getRegisteredAgent(): Agent {
@@ -146,6 +149,23 @@ describe('activate', () => {
     await activate(extensionContextMock);
 
     expect(extensionContextMock.subscriptions).toContain(AGENT_DISPOSABLE_MOCK);
+  });
+
+  test('registers openshell profile', async () => {
+    await activate(extensionContextMock);
+
+    expect(openshell.registerProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'copilot',
+        display_name: 'GitHub Copilot',
+      }),
+    );
+  });
+
+  test('skips openshell profile registration when already registered', async () => {
+    vi.mocked(openshell.getProfiles).mockReturnValue([{ id: 'copilot' } as unknown as never]);
+    await activate(extensionContextMock);
+    expect(openshell.registerProfile).not.toHaveBeenCalled();
   });
 
   test('registered agent supports all model types except vertexai', async () => {

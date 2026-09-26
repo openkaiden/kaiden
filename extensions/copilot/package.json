@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@openkaiden/api": "workspace:*",
+    "js-yaml": "^5.4.2",
     "zod": "^4.3.5"
   },
   "devDependencies": {

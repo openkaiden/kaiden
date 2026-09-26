@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import type { AgentConfigurationFile, AgentWorkspaceContext, Disposable, ExtensionContext } from '@openkaiden/api';
-import { agents } from '@openkaiden/api';
+import { agents, openshell } from '@openkaiden/api';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { CursorExtension } from './cursor-extension';
@@ -25,6 +25,7 @@ import { activate, CURSOR_CLI_CONFIG_PATH } from './extension';
 
 vi.mock(import('@openkaiden/api'));
 vi.mock(import('./cursor-extension'));
+vi.mock('./cursor.yaml?raw', () => ({ default: 'id: cursor\ndisplay_name: Cursor\n' }));
 
 const AGENT_DISPOSABLE_MOCK: Disposable = { dispose: vi.fn() };
 
@@ -38,6 +39,7 @@ beforeEach(() => {
   } as unknown as ExtensionContext;
 
   vi.mocked(agents.registerAgent).mockReturnValue(AGENT_DISPOSABLE_MOCK);
+  vi.mocked(openshell.getProfiles).mockReturnValue([]);
 });
 
 describe('activate', () => {
@@ -70,6 +72,23 @@ describe('activate', () => {
     await activate(extensionContextMock);
 
     expect(extensionContextMock.subscriptions).toContain(AGENT_DISPOSABLE_MOCK);
+  });
+
+  test('registers openshell profile', async () => {
+    await activate(extensionContextMock);
+
+    expect(openshell.registerProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'cursor',
+        display_name: 'Cursor',
+      }),
+    );
+  });
+
+  test('skips openshell profile registration when already registered', async () => {
+    vi.mocked(openshell.getProfiles).mockReturnValue([{ id: 'cursor' } as unknown as never]);
+    await activate(extensionContextMock);
+    expect(openshell.registerProfile).not.toHaveBeenCalled();
   });
 
   test('registered agent supports only cursor model type', async () => {
