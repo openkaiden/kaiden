@@ -94,11 +94,12 @@ test('Expect Overview tab is present', async () => {
   });
 });
 
-test('Expect Terminal tab is present', async () => {
+test(`Expect Agent's Terminal and Shell Terminal tabs are present`, async () => {
   render(AgentWorkspaceDetails, { workspaceId: 'ws-1' });
 
   await waitFor(() => {
-    expect(screen.getByText('Terminal')).toBeInTheDocument();
+    expect(screen.getByText(`Agent's Terminal`)).toBeInTheDocument();
+    expect(screen.getByText('Shell Terminal')).toBeInTheDocument();
   });
 });
 
@@ -197,7 +198,7 @@ test('Expect clicking terminal button navigates to terminal tab', async () => {
   const terminalButton = screen.getByRole('button', { name: 'Open Terminal' });
   await fireEvent.click(terminalButton);
 
-  expect(router.goto).toHaveBeenCalledWith('/agent-workspaces/ws-1/terminal');
+  expect(router.goto).toHaveBeenCalledWith('/agent-workspaces/ws-1/terminal-agent');
 });
 
 test('Expect clicking terminal redirects to terminal', async () => {
@@ -210,7 +211,7 @@ test('Expect clicking terminal redirects to terminal', async () => {
   const terminalButton = screen.getByRole('button', { name: 'Open Terminal' });
   await fireEvent.click(terminalButton);
 
-  expect(router.goto).toHaveBeenCalledWith('/agent-workspaces/ws-1/terminal');
+  expect(router.goto).toHaveBeenCalledWith('/agent-workspaces/ws-1/terminal-agent');
 });
 
 test('Expect navigation even when removal fails', async () => {

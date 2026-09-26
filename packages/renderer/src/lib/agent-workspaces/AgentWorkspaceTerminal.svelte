@@ -17,6 +17,8 @@ const MAX_RECONNECT_ATTEMPTS = 30;
 
 interface Props {
   workspaceId: string;
+  // agent: the agent session of the workspace, shell: a plain shell of the workspace (both kept when the terminal closes)
+  kind?: 'agent' | 'shell';
   screenReaderMode?: boolean;
   reconnectExhausted?: boolean;
   reconnect?: () => void;
@@ -24,6 +26,7 @@ interface Props {
 
 let {
   workspaceId,
+  kind = 'agent',
   screenReaderMode = false,
   reconnectExhausted = $bindable(false),
   reconnect = $bindable(),
@@ -126,7 +129,7 @@ router.subscribe(route => {
 });
 
 function handleResize(): void {
-  if (currentRouterPath.includes(`/agent-workspaces/${encodeURIComponent(workspaceId)}/terminal`)) {
+  if (currentRouterPath === `/agent-workspaces/${encodeURIComponent(workspaceId)}/terminal-${kind}`) {
     fitAddon.fit();
     if (sendCallbackId) {
       window
@@ -190,6 +193,7 @@ async function executeShellInWorkspace(): Promise<void> {
     createDataCallback(),
     () => {},
     receiveEndCallback,
+    kind,
   );
   if (destroyed) {
     // the component went away while attaching: do not keep a callback bound to a disposed terminal

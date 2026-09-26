@@ -2088,7 +2088,12 @@ describe('agent session lifecycle', () => {
     return vi.mocked(ipcHandle).mock.calls.find(call => call[0] === channel)![1] as unknown as T;
   }
 
-  function getTerminalHandler(): (_listener: unknown, id: string, onDataId: number) => Promise<number> {
+  function getTerminalHandler(): (
+    _listener: unknown,
+    id: string,
+    onDataId: number,
+    kind?: 'agent' | 'shell',
+  ) => Promise<number> {
     return getIpcHandler('agent-workspace:terminal');
   }
 
@@ -2161,6 +2166,67 @@ describe('agent session lifecycle', () => {
       expect(webContents.send).toHaveBeenCalledWith('agent-workspace:terminal-onData', 10, 'agent ready');
       expect(mock.session.write).toHaveBeenCalledTimes(1);
     });
+  });
+
+  test('shell terminal opens a plain shell without starting the agent', async () => {
+    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
+    vi.mocked(agentRegistry.getAgent).mockResolvedValue(testAgent);
+    const mock = createMockExecSession();
+    sdkSandbox.execInteractive.mockResolvedValue(mock.session);
+
+    await getTerminalHandler()({}, 'ws-agent', 10, 'shell');
+    mock.pushEvent({ stream: 'stdout', data: Buffer.from('$ ') });
+
+    await vi.waitFor(() => expect(webContents.send).toHaveBeenCalledWith('agent-workspace:terminal-onData', 10, '$ '));
+    expect(sdkSandbox.execInteractive).toHaveBeenCalledWith('agent-workspace', ['/bin/sh'], expect.anything());
+    expect(mock.session.write).not.toHaveBeenCalled();
+
+    await getIpcHandler<(_l: unknown, id: number, content: string) => Promise<void>>('agent-workspace:terminalSend')(
+      {},
+      10,
+      'ls\n',
+    );
+    expect(mock.session.write).toHaveBeenCalledWith(Buffer.from('ls\n'));
+  });
+
+  test('reopening a shell terminal reattaches to the same shell and replays its output', async () => {
+    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
+    const mock = createMockExecSession();
+    sdkSandbox.execInteractive.mockResolvedValue(mock.session);
+
+    await getTerminalHandler()({}, 'ws-agent', 10, 'shell');
+    mock.pushEvent({ stream: 'stdout', data: Buffer.from('$ ls') });
+    await vi.waitFor(() =>
+      expect(webContents.send).toHaveBeenCalledWith('agent-workspace:terminal-onData', 10, '$ ls'),
+    );
+    await getIpcHandler<(_l: unknown, id: number) => Promise<void>>('agent-workspace:terminalClose')({}, 10);
+
+    await getTerminalHandler()({}, 'ws-agent', 11, 'shell');
+
+    expect(mock.session.close).not.toHaveBeenCalled();
+    expect(sdkSandbox.execInteractive).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() =>
+      expect(webContents.send).toHaveBeenCalledWith(
+        'agent-workspace:terminal-onData',
+        11,
+        expect.stringContaining('$ ls'),
+      ),
+    );
+  });
+
+  test('a new agent terminal after a shell terminal still starts the agent session', async () => {
+    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
+    vi.mocked(agentRegistry.getAgent).mockResolvedValue(testAgent);
+    const shell = createMockExecSession();
+    const agent = createMockExecSession();
+    sdkSandbox.execInteractive.mockResolvedValueOnce(shell.session).mockResolvedValueOnce(agent.session);
+
+    await getTerminalHandler()({}, 'ws-agent', 10, 'shell');
+    await getTerminalHandler()({}, 'ws-agent', 11);
+    agent.pushEvent({ stream: 'stdout', data: Buffer.from('$ ') });
+
+    await vi.waitFor(() => expect(agent.session.write).toHaveBeenCalledWith(Buffer.from('/usr/bin/agent start\n')));
+    expect(shell.session.write).not.toHaveBeenCalled();
   });
 
   test('starts the agent when no session exists (e.g. after a restart)', async () => {

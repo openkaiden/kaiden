@@ -421,10 +421,11 @@ export function initExposure(): void {
       onData: (data: string) => void,
       onError: (error: string) => void,
       onEnd: () => void,
+      kind: 'agent' | 'shell' = 'agent',
     ): Promise<number> => {
       onDataCallbacksShellInAgentWorkspaceId++;
       onDataCallbacksShellInAgentWorkspace.set(onDataCallbacksShellInAgentWorkspaceId, { onData, onError, onEnd });
-      return ipcInvoke('agent-workspace:terminal', id, onDataCallbacksShellInAgentWorkspaceId);
+      return ipcInvoke('agent-workspace:terminal', id, onDataCallbacksShellInAgentWorkspaceId, kind);
     },
   );
 

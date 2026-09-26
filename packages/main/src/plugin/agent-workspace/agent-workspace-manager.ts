@@ -1112,7 +1112,7 @@ export class AgentWorkspaceManager implements Disposable {
 
     this.ipcHandle(
       'agent-workspace:terminal',
-      async (_listener: unknown, id: string, onDataId: number): Promise<number> => {
+      async (_listener: unknown, id: string, onDataId: number, kind: 'agent' | 'shell' = 'agent'): Promise<number> => {
         const generation = this.rendererGeneration;
         const workspaces = await this.listOpenshellSandboxes();
         let workspace: SandboxInfo | undefined;
@@ -1127,6 +1127,18 @@ export class AgentWorkspaceManager implements Disposable {
         }
         if (!workspace || !gatewayName) {
           throw new Error(`workspace "${id}" not found. Use "workspace list" to see available workspaces.`);
+        }
+
+        if (kind === 'shell') {
+          // a plain shell kept alongside the agent session (no agent command): it survives the terminal closing
+          const shell = await this.ensureAgentSession(
+            `${id}:shell`,
+            workspace.name,
+            gatewayName,
+            async () => undefined,
+          );
+          this.attachRendererTerminal(shell, onDataId, generation);
+          return onDataId;
         }
 
         // no running session (app restarted before the gateway was up or the shell exited): start the agent again

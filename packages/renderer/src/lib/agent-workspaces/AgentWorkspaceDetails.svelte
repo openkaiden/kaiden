@@ -28,9 +28,16 @@ const status = $derived(workspaceSummary?.phase ?? 'Unknown');
 const isRunning = $derived(status === 'Ready' || status === 'Deleting');
 const inProgress = $derived(status === 'Provisioning' || status === 'Deleting');
 
-let terminalReconnectExhausted = $state(false);
-let terminalReconnect: (() => void) | undefined = $state(undefined);
-const isOnTerminalTab = $derived(isTabSelected($router.path, 'terminal'));
+let agentTerminalReconnectExhausted = $state(false);
+let agentTerminalReconnect: (() => void) | undefined = $state(undefined);
+let shellTerminalReconnectExhausted = $state(false);
+let shellTerminalReconnect: (() => void) | undefined = $state(undefined);
+// the reconnect action of the terminal tab currently shown, if its reconnect attempts are exhausted
+const terminalReconnect = $derived.by(() => {
+  if (isTabSelected($router.path, 'terminal-agent') && agentTerminalReconnectExhausted) return agentTerminalReconnect;
+  if (isTabSelected($router.path, 'terminal-shell') && shellTerminalReconnectExhausted) return shellTerminalReconnect;
+  return undefined;
+});
 
 let wasFound = false;
 $effect(() => {
@@ -66,7 +73,7 @@ async function handleTerminal(): Promise<void> {
       buttons: ['OK'],
     });
   }
-  router.goto(`/agent-workspaces/${encodeURIComponent(workspaceId)}/terminal`);
+  router.goto(`/agent-workspaces/${encodeURIComponent(workspaceId)}/terminal-agent`);
 }
 
 function handleRemove(): void {
@@ -86,7 +93,7 @@ function handleRemove(): void {
 
 <DetailsPage title={workspaceSummary?.name ?? ''}>
   {#snippet actionsSnippet()}
-    {#if isOnTerminalTab && isRunning && terminalReconnectExhausted && terminalReconnect}
+    {#if isRunning && terminalReconnect}
       <ListItemButtonIcon
         title="Reconnect"
         onClick={terminalReconnect}
@@ -103,7 +110,14 @@ function handleRemove(): void {
   {/snippet}
   {#snippet tabsSnippet()}
     <Tab title="Overview" selected={isTabSelected($router.path, 'overview')} url={getTabUrl($router.path, 'overview')} />
-    <Tab title="Terminal" selected={isTabSelected($router.path, 'terminal')} url={getTabUrl($router.path, 'terminal')} />
+    <Tab
+      title="Agent's Terminal"
+      selected={isTabSelected($router.path, 'terminal-agent')}
+      url={getTabUrl($router.path, 'terminal-agent')} />
+    <Tab
+      title="Shell Terminal"
+      selected={isTabSelected($router.path, 'terminal-shell')}
+      url={getTabUrl($router.path, 'terminal-shell')} />
     <!-- <Tab title="Files" selected={isTabSelected($router.path, 'files')} url={getTabUrl($router.path, 'files')} /> -->
     <Tab title="Settings" selected={isTabSelected($router.path, 'settings')} url={getTabUrl($router.path, 'settings')} />
   {/snippet}
@@ -114,11 +128,18 @@ function handleRemove(): void {
       {/if}
       <AgentWorkspaceDetailsOverview {workspaceSummary} {configuration} />
     </Route>
-    <Route path="/terminal" breadcrumb="Terminal" navigationHint="tab">
+    <Route path="/terminal-agent" breadcrumb="Agent's Terminal" navigationHint="tab">
       <AgentWorkspaceTerminal
         workspaceId={workspaceId}
-        bind:reconnectExhausted={terminalReconnectExhausted}
-        bind:reconnect={terminalReconnect} />
+        bind:reconnectExhausted={agentTerminalReconnectExhausted}
+        bind:reconnect={agentTerminalReconnect} />
+    </Route>
+    <Route path="/terminal-shell" breadcrumb="Shell Terminal" navigationHint="tab">
+      <AgentWorkspaceTerminal
+        workspaceId={workspaceId}
+        kind="shell"
+        bind:reconnectExhausted={shellTerminalReconnectExhausted}
+        bind:reconnect={shellTerminalReconnect} />
     </Route>
     <!-- <Route path="/files" breadcrumb="Files" navigationHint="tab">
       <AgentWorkspaceDetailsFiles />

@@ -82,7 +82,7 @@ export enum PreferenceOption {
   ONBOARDING = 'Onboarding',
   TASKS = 'Tasks',
   TELEMETRY = 'Telemetry',
-  TERMINAL = 'Terminal',
+  AGENT_TERMINAL = 'Terminal',
   USER_CONFIRMATION = 'User Confirmation',
   WINDOW = 'Window',
 }

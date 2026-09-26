@@ -48,8 +48,8 @@ const workspace: GatewaySandboxes = {
 vi.mock(import('tinro'));
 
 const routerStore = writable({
-  path: '/agent-workspaces/ws-1/terminal',
-  url: '/agent-workspaces/ws-1/terminal',
+  path: '/agent-workspaces/ws-1/terminal-agent',
+  url: '/agent-workspaces/ws-1/terminal-agent',
   from: '/',
   query: {} as Record<string, string>,
   hash: '',
@@ -57,8 +57,13 @@ const routerStore = writable({
 
 let shellInAgentWorkspaceMock = vi.fn();
 
+function setRoute(path: string): void {
+  routerStore.update(route => ({ ...route, path, url: path }));
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
+  setRoute('/agent-workspaces/ws-1/terminal-agent');
   vi.mocked(router).subscribe.mockImplementation(routerStore.subscribe);
   vi.mocked(window.getConfigurationValue).mockImplementation(async (key: string) => {
     if (key === 'terminal.integrated.scrollback') {
@@ -114,7 +119,48 @@ test('calls shellInAgentWorkspace when workspace is running', async () => {
     expect.any(Function),
     expect.any(Function),
     expect.any(Function),
+    'agent',
   );
+});
+
+test('requests a plain shell when kind is shell and resizes it on its own route', async () => {
+  setRoute('/agent-workspaces/ws-1/terminal-shell');
+  openshellSandboxes.set([getWorkspace('Ready')]);
+  shellInAgentWorkspaceMock.mockResolvedValue(42);
+
+  render(AgentWorkspaceTerminal, { workspaceId: 'ws-1', kind: 'shell', screenReaderMode: true });
+
+  await waitFor(() =>
+    expect(shellInAgentWorkspaceMock).toHaveBeenCalledWith(
+      'ws-1',
+      expect.any(Function),
+      expect.any(Function),
+      expect.any(Function),
+      'shell',
+    ),
+  );
+  await waitFor(() => expect(window.shellInAgentWorkspaceResize).toHaveBeenCalled());
+  vi.mocked(window.shellInAgentWorkspaceResize).mockClear();
+
+  window.dispatchEvent(new Event('resize'));
+
+  await waitFor(() =>
+    expect(window.shellInAgentWorkspaceResize).toHaveBeenCalledWith(42, expect.anything(), expect.anything()),
+  );
+});
+
+test('does not resize a shell terminal while the agent terminal route is shown', async () => {
+  openshellSandboxes.set([getWorkspace('Ready')]);
+  shellInAgentWorkspaceMock.mockResolvedValue(42);
+
+  render(AgentWorkspaceTerminal, { workspaceId: 'ws-1', kind: 'shell', screenReaderMode: true });
+
+  await waitFor(() => expect(window.shellInAgentWorkspaceResize).toHaveBeenCalled());
+  vi.mocked(window.shellInAgentWorkspaceResize).mockClear();
+
+  window.dispatchEvent(new Event('resize'));
+
+  expect(window.shellInAgentWorkspaceResize).not.toHaveBeenCalled();
 });
 
 test('writes received data to xterm terminal', async () => {

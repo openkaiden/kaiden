@@ -33,7 +33,7 @@ export class AgentWorkspaceDetailsPage extends BasePage {
     super(page);
     this.header = this.page.getByRole('region', { name: 'header' });
     this.pageTabsRegion = this.page.getByRole('region', { name: 'Tabs' });
-    this.terminalTabLink = this.pageTabsRegion.getByRole('link', { name: 'Terminal' });
+    this.terminalTabLink = this.pageTabsRegion.getByRole('link', { name: `Agent's Terminal`, exact: true });
     this.removeButton = this.header.getByRole('button', { name: 'Remove Workspace' });
   }
 
