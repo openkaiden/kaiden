@@ -640,34 +640,50 @@ describe('create – OpenShell mode', () => {
     );
   });
 
-  test('persists effective image in workspace config when user specifies image', async () => {
+  test('persists user-specified image in workspace.json and uses it for sandbox', async () => {
     vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({
       ...mockAgent,
       baseImage: 'registry.example.com/agent-base:v1',
     });
-    const spy = vi.spyOn(configWriter, 'writeWorkspaceConfig');
 
     await manager.create({ ...defaultOptions, image: 'custom-registry.io/my-image:latest' });
 
-    expect(spy).toHaveBeenCalledWith(
+    const workspaceJsonCall = vi.mocked(writeFile).mock.calls.find(c => String(c[0]).endsWith('workspace.json'));
+    expect(workspaceJsonCall).toBeDefined();
+    const parsed = JSON.parse(workspaceJsonCall![1] as string);
+    expect(parsed.image).toBe('custom-registry.io/my-image:latest');
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({ image: 'custom-registry.io/my-image:latest' }),
-      undefined,
     );
   });
 
-  test('persists agent baseImage in workspace config when no user image specified', async () => {
+  test('does not write image to workspace.json and falls back to agent baseImage for sandbox when no user image', async () => {
     vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({
       ...mockAgent,
       baseImage: 'registry.example.com/agent-base:v1',
     });
-    const spy = vi.spyOn(configWriter, 'writeWorkspaceConfig');
 
     await manager.create({ ...defaultOptions, image: undefined });
 
-    expect(spy).toHaveBeenCalledWith(
+    const workspaceJsonCall = vi.mocked(writeFile).mock.calls.find(c => String(c[0]).endsWith('workspace.json'));
+    expect(workspaceJsonCall).toBeDefined();
+    const parsed = JSON.parse(workspaceJsonCall![1] as string);
+    expect(parsed.image).toBeUndefined();
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({ image: 'registry.example.com/agent-base:v1' }),
-      undefined,
     );
+  });
+
+  test('uses image from existing workspace.json for sandbox when no user image specified', async () => {
+    vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({
+      ...mockAgent,
+      baseImage: 'registry.example.com/agent-base:v1',
+    });
+    vi.mocked(readFile).mockResolvedValue(JSON.stringify({ image: 'existing-image:latest' }));
+
+    await manager.create({ ...defaultOptions, image: undefined });
+
+    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.objectContaining({ image: 'existing-image:latest' }));
   });
 
   test('calls agent.preWorkspaceStart with correct context', async () => {

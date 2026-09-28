@@ -245,8 +245,8 @@ export class AgentWorkspaceManager implements Disposable {
     if (!agent) {
       throw new Error(`Unable to create workspace: agent ${options.agent} not registered`);
     }
-    const effectiveImage = options.image ?? agent.baseImage;
-    const workspace = await writeWorkspaceConfig({ ...options, image: effectiveImage }, configDir);
+    const workspace = await writeWorkspaceConfig(options, configDir);
+    const effectiveImage = options.image ?? workspace.image ?? agent.baseImage;
     const configurationUploads: OpenshellUpload[] = [];
     const supportsMounts = await this.openshellGateway.supportsMounts(gateway);
 
