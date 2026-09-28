@@ -19,7 +19,7 @@
 import { PolicyStatus } from '@nvidia/openshell-sdk/raw';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { buildPolicyObject } from './openshell-network-policy.js';
+import { OpenshellNetworkPolicy } from './openshell-network-policy.js';
 import { OpenshellPolicyManager } from './openshell-policy-manager.js';
 import { OpenshellSdkClientManager } from './openshell-sdk-client-manager.js';
 
@@ -30,7 +30,11 @@ const manager = new OpenshellPolicyManager(sdkClientManager);
 const getConfig = vi.fn();
 const setPolicy = vi.fn();
 const getSandboxPolicyStatus = vi.fn();
-const policy = buildPolicyObject({ mode: 'deny', hosts: ['registry.npmjs.org'] }, 'https://inference.example.com')!;
+const openshellNetworkPolicy = new OpenshellNetworkPolicy();
+const policy = openshellNetworkPolicy.buildPolicyObject(
+  { mode: 'deny', hosts: ['registry.npmjs.org'] },
+  'https://inference.example.com',
+)!;
 
 beforeEach(() => {
   vi.resetAllMocks();

@@ -20,6 +20,7 @@ import { isIPv6 } from 'node:net';
 
 import type { MessageInitShape } from '@bufbuild/protobuf';
 import type { NetworkEndpointSchema, SandboxPolicySchema } from '@nvidia/openshell-sdk/raw';
+import { injectable } from 'inversify';
 
 import type { NetworkConfiguration } from '/@api/agent-workspace-info.js';
 
@@ -46,128 +47,131 @@ export interface NetworkDestination {
   port?: number;
 }
 
-/**
- * Parses a network destination stored as either `host` or `host:port`.
- * IPv6 destinations are not supported by this workspace configuration.
- */
-export function parseNetworkDestination(destination: string): NetworkDestination | undefined {
-  const value = destination.trim();
-  if (!value || value.endsWith(':')) return undefined;
+@injectable()
+export class OpenshellNetworkPolicy {
+  /**
+   * Parses a network destination stored as either `host` or `host:port`.
+   * IPv6 destinations are not supported by this workspace configuration.
+   */
+  parseNetworkDestination(destination: string): NetworkDestination | undefined {
+    const value = destination.trim();
+    if (!value || value.endsWith(':')) return undefined;
 
-  let parsed: URL;
-  try {
-    // A non-special scheme preserves explicit default ports such as 80 and 443.
-    parsed = new URL(`kdn://${value}`);
-  } catch {
-    return undefined;
-  }
-
-  if (parsed.username || parsed.password || parsed.pathname || parsed.search || parsed.hash) return undefined;
-
-  const host = parsed.hostname;
-  const unbracketedHost = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
-  if (!host || isIPv6(unbracketedHost)) return undefined;
-
-  if (!parsed.port) return { host };
-
-  const port = Number(parsed.port);
-  return port > 0 ? { host, port } : undefined;
-}
-
-/**
- * Rewrites localhost URLs to {@link OPENSHELL_CONTAINER_HOST} so the
- * sandbox can reach host-local model servers (e.g. Ollama).
- */
-export function rewriteLocalhostUrl(rawUrl: string): string {
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    return rawUrl;
-  }
-
-  if (!LOCALHOST_ALIASES.includes(parsed.hostname.toLowerCase())) {
-    return rawUrl;
-  }
-
-  parsed.hostname = OPENSHELL_CONTAINER_HOST;
-  return parsed.toString();
-}
-
-/**
- * Extracts host and port from an inference endpoint URL. Localhost
- * aliases are rewritten to {@link OPENSHELL_CONTAINER_HOST}.
- */
-export function parseModelEndpoint(endpoint: string): ModelEndpoint | undefined {
-  const rewritten = rewriteLocalhostUrl(endpoint);
-  let parsed: URL;
-  try {
-    parsed = new URL(rewritten);
-  } catch {
-    return undefined;
-  }
-
-  if (!parsed.hostname) {
-    return undefined;
-  }
-
-  let port: number;
-  if (parsed.port) {
-    port = Number(parsed.port);
-    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    let parsed: URL;
+    try {
+      // A non-special scheme preserves explicit default ports such as 80 and 443.
+      parsed = new URL(`kdn://${value}`);
+    } catch {
       return undefined;
     }
-  } else {
-    if (parsed.protocol === 'https:') {
-      port = 443;
-    } else if (parsed.protocol === 'http:') {
-      port = 80;
+
+    if (parsed.username || parsed.password || parsed.pathname || parsed.search || parsed.hash) return undefined;
+
+    const host = parsed.hostname;
+    const unbracketedHost = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+    if (!host || isIPv6(unbracketedHost)) return undefined;
+
+    if (!parsed.port) return { host };
+
+    const port = Number(parsed.port);
+    return port > 0 ? { host, port } : undefined;
+  }
+
+  /**
+   * Rewrites localhost URLs to {@link OPENSHELL_CONTAINER_HOST} so the
+   * sandbox can reach host-local model servers (e.g. Ollama).
+   */
+  rewriteLocalhostUrl(rawUrl: string): string {
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return rawUrl;
+    }
+
+    if (!LOCALHOST_ALIASES.includes(parsed.hostname.toLowerCase())) {
+      return rawUrl;
+    }
+
+    parsed.hostname = OPENSHELL_CONTAINER_HOST;
+    return parsed.toString();
+  }
+
+  /**
+   * Extracts host and port from an inference endpoint URL. Localhost
+   * aliases are rewritten to {@link OPENSHELL_CONTAINER_HOST}.
+   */
+  parseModelEndpoint(endpoint: string): ModelEndpoint | undefined {
+    const rewritten = this.rewriteLocalhostUrl(endpoint);
+    let parsed: URL;
+    try {
+      parsed = new URL(rewritten);
+    } catch {
+      return undefined;
+    }
+
+    if (!parsed.hostname) {
+      return undefined;
+    }
+
+    let port: number;
+    if (parsed.port) {
+      port = Number(parsed.port);
+      if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+        return undefined;
+      }
     } else {
+      if (parsed.protocol === 'https:') {
+        port = 443;
+      } else if (parsed.protocol === 'http:') {
+        port = 80;
+      } else {
+        return undefined;
+      }
+    }
+
+    return { host: parsed.hostname, port };
+  }
+
+  buildPolicyObject(network?: NetworkConfiguration, modelEndpoint?: string): OpenshellPolicy | undefined {
+    const networkPolicies: NonNullable<OpenshellPolicy['networkPolicies']> = {};
+
+    if (network && network.mode !== 'allow' && network.hosts?.length) {
+      const endpoints: MessageInitShape<typeof NetworkEndpointSchema>[] = network.hosts.flatMap(destination => {
+        const parsed = this.parseNetworkDestination(destination);
+        if (!parsed) return [];
+
+        const ports = parsed.port === undefined ? [443, 80] : [parsed.port];
+        return ports.map(port => ({
+          host: parsed.host,
+          port,
+          protocol: 'rest' as const,
+          access: 'full' as const,
+          allowEncodedSlash: true,
+        }));
+      });
+      if (endpoints.length > 0) {
+        networkPolicies[NETWORK_RULE_NAME] = {
+          endpoints,
+          binaries: [{ path: '/**' }],
+        };
+      }
+    }
+
+    if (modelEndpoint) {
+      const parsed = this.parseModelEndpoint(modelEndpoint);
+      if (parsed) {
+        networkPolicies[MODEL_RULE_NAME] = {
+          endpoints: [{ host: parsed.host, port: parsed.port }],
+          binaries: [{ path: '/**' }],
+        };
+      }
+    }
+
+    if (Object.keys(networkPolicies).length === 0) {
       return undefined;
     }
+
+    return { version: 1, networkPolicies };
   }
-
-  return { host: parsed.hostname, port };
-}
-
-export function buildPolicyObject(network?: NetworkConfiguration, modelEndpoint?: string): OpenshellPolicy | undefined {
-  const networkPolicies: NonNullable<OpenshellPolicy['networkPolicies']> = {};
-
-  if (network && network.mode !== 'allow' && network.hosts?.length) {
-    const endpoints: MessageInitShape<typeof NetworkEndpointSchema>[] = network.hosts.flatMap(destination => {
-      const parsed = parseNetworkDestination(destination);
-      if (!parsed) return [];
-
-      const ports = parsed.port === undefined ? [443, 80] : [parsed.port];
-      return ports.map(port => ({
-        host: parsed.host,
-        port,
-        protocol: 'rest' as const,
-        access: 'full' as const,
-        allowEncodedSlash: true,
-      }));
-    });
-    if (endpoints.length > 0) {
-      networkPolicies[NETWORK_RULE_NAME] = {
-        endpoints,
-        binaries: [{ path: '/**' }],
-      };
-    }
-  }
-
-  if (modelEndpoint) {
-    const parsed = parseModelEndpoint(modelEndpoint);
-    if (parsed) {
-      networkPolicies[MODEL_RULE_NAME] = {
-        endpoints: [{ host: parsed.host, port: parsed.port }],
-        binaries: [{ path: '/**' }],
-      };
-    }
-  }
-
-  if (Object.keys(networkPolicies).length === 0) {
-    return undefined;
-  }
-
-  return { version: 1, networkPolicies };
 }

@@ -77,6 +77,7 @@ import { OpenshellGatewayConfig } from '/@/plugin/openshell-cli/openshell-gatewa
 import { OpenshellGatewayManager } from '/@/plugin/openshell-cli/openshell-gateway-manager.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
 import { OpenshellImageBuilder } from '/@/plugin/openshell-cli/openshell-image-builder.js';
+import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
@@ -612,6 +613,7 @@ export class PluginSystem {
     container.bind<OpenShellRegistry>(OpenShellRegistry).toSelf().inSingletonScope();
     container.bind<OpenshellCli>(OpenshellCli).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayConfig>(OpenshellGatewayConfig).toSelf();
+    container.bind<OpenshellNetworkPolicy>(OpenshellNetworkPolicy).toSelf().inSingletonScope();
     container.bind<OpenshellPolicyManager>(OpenshellPolicyManager).toSelf();
     container.bind<OpenshellGatewayManager>(OpenshellGatewayManager).toSelf().inSingletonScope();
     container.bind<OpenshellSdkClientManager>(OpenshellSdkClientManager).toSelf().inSingletonScope();

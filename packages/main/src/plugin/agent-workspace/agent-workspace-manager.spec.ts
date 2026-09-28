@@ -41,7 +41,7 @@ import type { Directories } from '/@/plugin/directories.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
-import { buildPolicyObject } from '/@/plugin/openshell-cli/openshell-network-policy.js';
+import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import type { ProviderImpl } from '/@/plugin/provider-impl.js';
@@ -66,6 +66,7 @@ vi.mock(import('yaml'));
 vi.mock(import('/@/plugin/openshell-cli/openshell-cli.js'));
 vi.mock(import('/@/plugin/openshell-cli/openshell-policy-manager.js'));
 
+const openshellNetworkPolicy = new OpenshellNetworkPolicy();
 const openshellPolicyManager = new OpenshellPolicyManager({} as never);
 
 const TEST_SDK_REFS: {
@@ -293,6 +294,7 @@ beforeEach(() => {
     openshellGatewayStateManager,
     directories,
     openshellPolicyManager,
+    openshellNetworkPolicy,
   );
   manager.init();
 });
@@ -963,7 +965,7 @@ describe('create – OpenShell mode', () => {
     expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellPolicyManager.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
-      buildPolicyObject(options.network),
+      openshellNetworkPolicy.buildPolicyObject(options.network),
       'kaiden',
     );
   });
@@ -1188,7 +1190,7 @@ describe('create – OpenShell mode', () => {
 
     expect(openshellPolicyManager.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
-      buildPolicyObject(undefined, 'https://api.example.com/v1'),
+      openshellNetworkPolicy.buildPolicyObject(undefined, 'https://api.example.com/v1'),
       'kaiden',
     );
   });
@@ -1214,7 +1216,7 @@ describe('create – OpenShell mode', () => {
     );
     expect(openshellPolicyManager.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
-      buildPolicyObject(undefined, 'http://localhost:11434/v1'),
+      openshellNetworkPolicy.buildPolicyObject(undefined, 'http://localhost:11434/v1'),
       'kaiden',
     );
   });
@@ -1240,7 +1242,7 @@ describe('create – OpenShell mode', () => {
 
     expect(openshellPolicyManager.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
-      buildPolicyObject(undefined, 'http://localhost:11434/v1'),
+      openshellNetworkPolicy.buildPolicyObject(undefined, 'http://localhost:11434/v1'),
       'kaiden',
     );
   });
@@ -1263,7 +1265,7 @@ describe('create – OpenShell mode', () => {
 
     expect(openshellPolicyManager.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
-      buildPolicyObject(options.network, 'https://api.openai.com/v1'),
+      openshellNetworkPolicy.buildPolicyObject(options.network, 'https://api.openai.com/v1'),
       'kaiden',
     );
   });

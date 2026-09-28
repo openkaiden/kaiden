@@ -35,7 +35,7 @@ import { Directories } from '/@/plugin/directories.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
-import { buildPolicyObject, rewriteLocalhostUrl } from '/@/plugin/openshell-cli/openshell-network-policy.js';
+import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { mapSdkSandboxRef } from '/@/plugin/openshell-cli/openshell-sdk-sandbox-mapper.js';
@@ -165,6 +165,8 @@ export class AgentWorkspaceManager implements Disposable {
     private readonly directories: Directories,
     @inject(OpenshellPolicyManager)
     private readonly openshellPolicyManager: OpenshellPolicyManager,
+    @inject(OpenshellNetworkPolicy)
+    private readonly openshellNetworkPolicy: OpenshellNetworkPolicy,
   ) {}
 
   private getGlobalConfigDir(gateway: string, sandboxName: string): string {
@@ -227,7 +229,7 @@ export class AgentWorkspaceManager implements Disposable {
 
     const modelName = options.model.split('::')[1] ?? '';
     const rawEndpoint = connectionInfo?.endpoint ?? options.model.split('::')[2] ?? undefined;
-    const endpoint = rawEndpoint ? rewriteLocalhostUrl(rawEndpoint) : undefined;
+    const endpoint = rawEndpoint ? this.openshellNetworkPolicy.rewriteLocalhostUrl(rawEndpoint) : undefined;
 
     const sandboxName = options.name ?? (options.sourcePath ? basename(options.sourcePath) : undefined);
     if (!sandboxName) {
@@ -348,7 +350,7 @@ export class AgentWorkspaceManager implements Disposable {
         await this.openshellCli.uploadToSandbox(sandboxName, upload.local, upload.remote, options.gateway);
       }
 
-      const networkPolicy = buildPolicyObject(workspace.network, endpoint);
+      const networkPolicy = this.openshellNetworkPolicy.buildPolicyObject(workspace.network, endpoint);
       if (networkPolicy) {
         await this.openshellPolicyManager.updatePolicy(sandboxName, networkPolicy, options.gateway);
       }
