@@ -37,7 +37,7 @@ permissions:
 jobs:
   tag:
     name: Tagging
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # do not run on forks
     if: github.event.repository.fork == false
     outputs:
@@ -131,9 +131,7 @@ jobs:
         include:
           - os: windows-2022
             windows_arch: x64
-          - os: windows-11-arm
-            windows_arch: arm64
-          - os: ubuntu-24.04
+          - os: ubuntu-26.04
             windows_arch: ''
           - os: macos-26
             windows_arch: ''
@@ -174,8 +172,7 @@ jobs:
         run: |
           if [ -n "${{ matrix.windows_arch }}" ]; then
             pnpm exec cross-env MODE=production pnpm run build
-            # Target list is required: --x64 alone still builds both archs from config and
-            # lets windows-11-arm clobber setup-x64.exe on the shared GitHub release.
+            # Target list is required: --x64 alone still builds both archs from config.
             pnpm exec electron-builder build --publish always --config .electron-builder.config.cjs \
               --win nsis:${{ matrix.windows_arch }} portable:${{ matrix.windows_arch }}
           else
@@ -208,7 +205,7 @@ jobs:
   release:
     needs: [tag, build]
     name: Release
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # do not run on forks and once all the builds are completed (no matter the status)
     if: github.event.repository.fork == false && always()
     steps:
