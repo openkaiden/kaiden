@@ -29,7 +29,6 @@ vi.mock('./google-vertex-ai.yaml?raw', () => ({ default: 'id: google-vertex-ai\n
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(openshell.getProfiles).mockReturnValue([]);
 });
 
 test('should initialize and activate the VertexAi extension', async () => {
@@ -52,24 +51,7 @@ test('activate registers openshell profile', async () => {
 
   await activate(extensionContextMock);
 
-  expect(openshell.registerProfile).toHaveBeenCalledWith(
-    expect.objectContaining({
-      id: 'google-vertex-ai',
-      display_name: 'Google Vertex AI',
-    }),
-  );
-});
-
-test('activate skips openshell profile registration when already registered', async () => {
-  vi.mocked(openshell.getProfiles).mockReturnValue([{ id: 'google-vertex-ai' } as unknown as never]);
-  const extensionContextMock = {
-    subscriptions: [],
-    secrets: {},
-  } as unknown as ExtensionContext;
-
-  await activate(extensionContextMock);
-
-  expect(openshell.registerProfile).not.toHaveBeenCalled();
+  expect(openshell.registerProfile).toHaveBeenCalledWith(expect.any(String));
 });
 
 test('should call deactivate without errors', async () => {

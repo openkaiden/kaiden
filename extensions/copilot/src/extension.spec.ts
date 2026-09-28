@@ -43,7 +43,6 @@ beforeEach(() => {
   } as unknown as ExtensionContext;
 
   vi.mocked(agents.registerAgent).mockReturnValue(AGENT_DISPOSABLE_MOCK);
-  vi.mocked(openshell.getProfiles).mockReturnValue([]);
 });
 
 function getRegisteredAgent(): Agent {
@@ -154,18 +153,7 @@ describe('activate', () => {
   test('registers openshell profile', async () => {
     await activate(extensionContextMock);
 
-    expect(openshell.registerProfile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'copilot',
-        display_name: 'GitHub Copilot',
-      }),
-    );
-  });
-
-  test('skips openshell profile registration when already registered', async () => {
-    vi.mocked(openshell.getProfiles).mockReturnValue([{ id: 'copilot' } as unknown as never]);
-    await activate(extensionContextMock);
-    expect(openshell.registerProfile).not.toHaveBeenCalled();
+    expect(openshell.registerProfile).toHaveBeenCalledWith(expect.any(String));
   });
 
   test('registered agent supports all model types except vertexai', async () => {

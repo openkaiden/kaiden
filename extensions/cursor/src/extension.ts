@@ -16,9 +16,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { AgentWorkspaceContext, ExtensionContext, ProviderProfile } from '@openkaiden/api';
+import type { AgentWorkspaceContext, ExtensionContext } from '@openkaiden/api';
 import { agents, openshell } from '@openkaiden/api';
-import { load } from 'js-yaml';
 import { z } from 'zod';
 
 import cursorProfileYaml from './cursor.yaml?raw';
@@ -89,10 +88,7 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
   });
   extensionContext.subscriptions.push(disposable);
 
-  const profile = load(cursorProfileYaml) as ProviderProfile;
-  if (!openshell.getProfiles().some(p => p.id === profile.id)) {
-    extensionContext.subscriptions.push(openshell.registerProfile(profile));
-  }
+  extensionContext.subscriptions.push(openshell.registerProfile(cursorProfileYaml));
 }
 
 export async function deactivate(): Promise<void> {

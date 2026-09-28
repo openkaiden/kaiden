@@ -44,7 +44,6 @@ describe('ClaudeExtension', () => {
     vi.resetAllMocks();
     extensionContext = { subscriptions: [] } as unknown as ExtensionContext;
     claudeExtension = new TestClaudeExtension(extensionContext);
-    vi.mocked(openshell.getProfiles).mockReturnValue([]);
   });
 
   test('activate', async () => {
@@ -116,18 +115,7 @@ describe('ClaudeExtension', () => {
 
   test('activate registers openshell profile', async () => {
     await claudeExtension.activate();
-    expect(openshell.registerProfile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'anthropic',
-        display_name: 'Anthropic',
-      }),
-    );
-  });
-
-  test('activate skips openshell profile registration when already registered', async () => {
-    vi.mocked(openshell.getProfiles).mockReturnValue([{ id: 'anthropic' } as unknown as never]);
-    await claudeExtension.activate();
-    expect(openshell.registerProfile).not.toHaveBeenCalled();
+    expect(openshell.registerProfile).toHaveBeenCalledWith(expect.any(String));
   });
 
   describe('preWorkspaceStart', () => {

@@ -39,7 +39,6 @@ beforeEach(() => {
   } as unknown as ExtensionContext;
 
   vi.mocked(agents.registerAgent).mockReturnValue(AGENT_DISPOSABLE_MOCK);
-  vi.mocked(openshell.getProfiles).mockReturnValue([]);
 });
 
 describe('activate', () => {
@@ -77,18 +76,7 @@ describe('activate', () => {
   test('registers openshell profile', async () => {
     await activate(extensionContextMock);
 
-    expect(openshell.registerProfile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'cursor',
-        display_name: 'Cursor',
-      }),
-    );
-  });
-
-  test('skips openshell profile registration when already registered', async () => {
-    vi.mocked(openshell.getProfiles).mockReturnValue([{ id: 'cursor' } as unknown as never]);
-    await activate(extensionContextMock);
-    expect(openshell.registerProfile).not.toHaveBeenCalled();
+    expect(openshell.registerProfile).toHaveBeenCalledWith(expect.any(String));
   });
 
   test('registered agent supports only cursor model type', async () => {

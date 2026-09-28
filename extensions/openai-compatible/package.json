@@ -49,8 +49,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.13",
-    "@openkaiden/api": "workspace:*",
-    "js-yaml": "^4.1.0"
+    "@openkaiden/api": "workspace:*"
   },
   "devDependencies": {
     "mkdirp": "^3.0.1",

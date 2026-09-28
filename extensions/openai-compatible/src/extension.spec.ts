@@ -28,7 +28,6 @@ vi.mock('./openai.yaml?raw', () => ({ default: 'id: openai\ndisplay_name: OpenAI
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(openshell.getProfiles).mockReturnValue([]);
 });
 
 test('activate registers openshell profile', async () => {
@@ -39,22 +38,5 @@ test('activate registers openshell profile', async () => {
 
   await activate(extensionContextMock);
 
-  expect(openshell.registerProfile).toHaveBeenCalledWith(
-    expect.objectContaining({
-      id: 'openai',
-      display_name: 'OpenAI',
-    }),
-  );
-});
-
-test('activate skips openshell profile registration when already registered', async () => {
-  vi.mocked(openshell.getProfiles).mockReturnValue([{ id: 'openai' } as unknown as never]);
-  const extensionContextMock = {
-    subscriptions: [],
-    secrets: {},
-  } as unknown as ExtensionContext;
-
-  await activate(extensionContextMock);
-
-  expect(openshell.registerProfile).not.toHaveBeenCalled();
+  expect(openshell.registerProfile).toHaveBeenCalledWith(expect.any(String));
 });
