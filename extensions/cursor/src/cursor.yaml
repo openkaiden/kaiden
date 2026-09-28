@@ -16,3 +16,4 @@ endpoints:
     port: 443
   - host: cursor.download.prss.microsoft.com
     port: 443
+binaries: [/**]

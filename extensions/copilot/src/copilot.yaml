@@ -68,3 +68,4 @@ endpoints:
   - host: default.exp-tas.com
     port: 443
     allow_uninspected_credentials: true
+binaries: [/**]

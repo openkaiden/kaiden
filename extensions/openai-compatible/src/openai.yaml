@@ -40,3 +40,4 @@ endpoints:
     protocol: rest
     access: read-write
     enforcement: enforce
+binaries: [/**]
