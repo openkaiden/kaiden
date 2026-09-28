@@ -640,6 +640,36 @@ describe('create – OpenShell mode', () => {
     );
   });
 
+  test('persists effective image in workspace config when user specifies image', async () => {
+    vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({
+      ...mockAgent,
+      baseImage: 'registry.example.com/agent-base:v1',
+    });
+    const spy = vi.spyOn(configWriter, 'writeWorkspaceConfig');
+
+    await manager.create({ ...defaultOptions, image: 'custom-registry.io/my-image:latest' });
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ image: 'custom-registry.io/my-image:latest' }),
+      undefined,
+    );
+  });
+
+  test('persists agent baseImage in workspace config when no user image specified', async () => {
+    vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({
+      ...mockAgent,
+      baseImage: 'registry.example.com/agent-base:v1',
+    });
+    const spy = vi.spyOn(configWriter, 'writeWorkspaceConfig');
+
+    await manager.create({ ...defaultOptions, image: undefined });
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ image: 'registry.example.com/agent-base:v1' }),
+      undefined,
+    );
+  });
+
   test('calls agent.preWorkspaceStart with correct context', async () => {
     const preWorkspaceStart = vi.fn();
     vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({ ...mockAgent, preWorkspaceStart });
