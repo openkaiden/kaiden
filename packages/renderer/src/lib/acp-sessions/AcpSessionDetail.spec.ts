@@ -751,6 +751,19 @@ describe('draft mode sandbox/agent selection', () => {
     expect(screen.getByText('No ready sandboxes available. Create a workspace first.')).toBeInTheDocument();
   });
 
+  test('falls back when draftSandboxName is not ready', () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([]);
+    vi.mocked(openshellSandboxesStore).allOpenshellSandboxes = writable<SandboxInfoWithGateway[]>([
+      SANDBOX_WITHOUT_LABEL,
+    ]);
+    vi.mocked(agentsStore).agentInfos = writable<AgentInfo[]>([ACP_AGENT]);
+
+    render(AcpSessionDetail, { sessionId: 'new', draftSandboxName: 'removed-sandbox' });
+
+    const sandboxSelect = screen.getByLabelText('Sandbox');
+    expect(sandboxSelect).toHaveValue('plain-sandbox');
+  });
+
   test('auto-selects first ready sandbox', () => {
     vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([]);
     vi.mocked(openshellSandboxesStore).allOpenshellSandboxes = writable<SandboxInfoWithGateway[]>([

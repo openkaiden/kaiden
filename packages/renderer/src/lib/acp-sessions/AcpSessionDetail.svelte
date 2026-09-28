@@ -47,15 +47,15 @@ let selectedSandboxName = $state('');
 let selectedAgentId = $state('');
 
 $effect(() => {
-  if (draftSandboxName) {
+  if (draftSandboxName && readySandboxes.some(s => s.name === draftSandboxName)) {
     selectedSandboxName = draftSandboxName;
-  } else if (readySandboxes.length === 1 && !selectedSandboxName) {
-    selectedSandboxName = readySandboxes[0]!.name;
+  } else if (!selectedSandboxName || !readySandboxes.some(s => s.name === selectedSandboxName)) {
+    selectedSandboxName = readySandboxes.length === 1 ? readySandboxes[0]!.name : '';
   }
 });
 
 $effect(() => {
-  if (draftAgentId) {
+  if (draftAgentId && acpAgents.some(a => a.id === draftAgentId)) {
     selectedAgentId = draftAgentId;
   } else if (draftNeedsAgentSelection && acpAgents.length > 0 && !selectedAgentId) {
     selectedAgentId = acpAgents[0]!.id;
