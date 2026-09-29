@@ -65,7 +65,7 @@ function handleModelSelect(model: CatalogModelInfo): void {
 function selectAgent(value: string): void {
   if (selectedAgent === value) return;
   selectedAgent = value;
-  customImage = filteredAgents.find(a => a.id === value)?.baseImage ?? '';
+  customImage = '';
 }
 
 function toggleCustomImageField(): void {
@@ -140,7 +140,7 @@ $effect(() => {
       class="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-[var(--pd-modal-text)] hover:bg-[var(--pd-content-card-inset-bg)]/50 transition-colors cursor-pointer"
       onclick={toggleCustomImageField}>
       <span>
-        Container image <span class="text-xs font-normal opacity-50">(optional)</span>
+        Container image override
       </span>
       <span
         class="transition-transform duration-150 {customImageFieldOpen ? 'rotate-180' : ''}"
@@ -151,7 +151,7 @@ $effect(() => {
     {#if customImageFieldOpen}
       <div class="px-4 pb-4">
         <label for="workspace-custom-image" class="block text-xs text-[var(--pd-content-card-text)] opacity-60 mb-1.5">
-          Override the base container image for the workspace.
+          Leave empty to use the agent's default image.
         </label>
         <Input
           id="workspace-custom-image"

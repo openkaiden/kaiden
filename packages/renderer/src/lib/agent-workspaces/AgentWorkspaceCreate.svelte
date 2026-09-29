@@ -126,8 +126,7 @@ function clearProject(): void {
   wizard.draft.selectedNetwork = 'registries';
   wizard.draft.customMounts = [{ host: '', target: '', ro: false }];
   wizard.draft.hostsByMode = { registries: ['registry.npmjs.org', 'pypi.python.org'], blocked: [''] };
-  const agentInfo = $agentInfos.find(a => a.id === wizard.draft.selectedAgent);
-  wizard.draft.customImage = agentInfo?.baseImage ?? '';
+  wizard.draft.customImage = '';
 }
 
 function handleProjectSelect(project: WorkspaceProjectInfo | undefined): void {
@@ -201,9 +200,7 @@ onMount(async () => {
       }
     }
 
-    const agentInfo = $agentInfos.find(a => a.id === wizard.draft.selectedAgent);
-    wizard.draft.customImage = agentInfo?.baseImage ?? '';
-
+    wizard.draft.customImage = '';
     wizard.draft.initialized = true;
   }
 });
