@@ -122,7 +122,7 @@ async function handleDeleteSession(e: MouseEvent, id: string): Promise<void> {
 
 <div class="flex h-full w-full bg-[var(--pd-content-bg)]">
   <!-- Session list sidebar -->
-  <div class="w-64 shrink-0 flex flex-col border-r border-[var(--pd-content-divider)] bg-[var(--pd-content-card-bg)]">
+  <div data-testid="acp-session-sidebar" class="w-64 shrink-0 flex flex-col border-r border-[var(--pd-content-divider)] bg-[var(--pd-content-card-bg)]">
     <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--pd-content-divider)]">
       <span class="text-xs font-semibold uppercase tracking-wider text-[var(--pd-content-header-text)]">Sessions</span>
       <Button icon={faPlus} type="link" padding="p-0.5" disabled={!hasReadySandboxes} onclick={(): void => { showCreateDialog = true; }} title="New Session" />

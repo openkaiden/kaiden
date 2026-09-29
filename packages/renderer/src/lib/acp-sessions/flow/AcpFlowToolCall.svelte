@@ -74,7 +74,7 @@ async function handleOption(optionId: string): Promise<void> {
 }
 </script>
 
-<div class="group/toolcall rounded-lg border bg-[var(--pd-content-card-bg)] overflow-hidden {pendingPermission ? 'tool-call-pending-permission border-[var(--pd-status-waiting)] animate-pulse' : 'border-[var(--pd-content-divider)]'}">
+<div data-testid={pendingPermission ? 'acp-pending-permission' : undefined} class="group/toolcall rounded-lg border bg-[var(--pd-content-card-bg)] overflow-hidden {pendingPermission ? 'tool-call-pending-permission border-[var(--pd-status-waiting)] animate-pulse' : 'border-[var(--pd-content-divider)]'}">
   <!-- Header: status icon + tool name badge + description -->
   <div class="flex items-center gap-2 px-4 py-2.5">
     <Icon icon={statusIcon} class="{statusColor} text-xs" />
