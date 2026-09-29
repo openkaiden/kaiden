@@ -136,7 +136,7 @@ test('Expect gateway filter dropdown is not shown when there is only one connect
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   await tick();
@@ -150,13 +150,13 @@ test('Expect gateway filter dropdown is shown when there are multiple connected 
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ];
 
@@ -186,13 +186,13 @@ test('Expect selecting a gateway filters the workspace list', async () => {
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   openshellSandboxes.set(workspaces);
@@ -228,13 +228,13 @@ test('Expect "All" option shows all workspaces', async () => {
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   openshellSandboxes.set(workspaces);

@@ -32,6 +32,7 @@ export type GatewayProcessState = z.output<typeof GatewayProcessStateSchema>;
 export const GatewayStateSchema = z.object({
   reachable: z.boolean(),
   health: GatewayHealthSchema,
+  compatible: z.boolean(),
   process: GatewayProcessStateSchema.optional(),
 });
 
@@ -55,6 +56,7 @@ export const GatewayInfoSchema = z.object({
   resolved_host: z.string().nullable().optional(),
   gatewayState: GatewayStateSchema.optional(),
   driver: z.enum(['vm', 'podman', 'docker']).optional(),
+  version: z.string().optional(),
 });
 
 export type GatewayInfo = z.output<typeof GatewayInfoSchema>;
@@ -171,6 +173,7 @@ export const GATEWAY_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 
 export const GatewayRuntimeInfoSchema = z.looseObject({
   status: GatewayHealthSchema,
+  gateway_version: z.string().optional(),
   compute_drivers: z.array(
     z.looseObject({
       capabilities: z.looseObject({
@@ -182,6 +185,20 @@ export const GatewayRuntimeInfoSchema = z.looseObject({
 });
 
 export type GatewayRuntimeInfo = z.output<typeof GatewayRuntimeInfoSchema>;
+
+/**
+ * Minimum gateway version required for compatibility with this Kaiden release.
+ * Gateways reporting a version below this are treated as unusable.
+ *
+ * Note: `extensions/openshell/package.json` declares `openshellVersion` for the
+ * bundled CLI binary version. There's strictly no need to keep these versions in
+ * sync, Kaiden could support an older version than what is embedded.
+ */
+export const MIN_GATEWAY_VERSION = '0.0.116';
+
+export function isUsableGateway(gateway: GatewayInfo): boolean {
+  return gateway.gatewayState?.reachable === true && gateway.gatewayState.compatible;
+}
 
 export interface GatewaySandboxes {
   gateway: GatewayInfo;
