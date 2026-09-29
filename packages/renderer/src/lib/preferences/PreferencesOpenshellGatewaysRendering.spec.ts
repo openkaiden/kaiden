@@ -174,7 +174,7 @@ test('displays active gateway in the Active Gateway section', () => {
     endpoint: 'http://127.0.0.1:17670',
     active: true,
     type: 'local',
-    gatewayState: { reachable: true, health: 'healthy' },
+    gatewayState: { reachable: true, health: 'healthy', compatible: true },
   };
   openshellGateways.set([activeGateway]);
   render(PreferencesOpenshellGatewaysRendering);
@@ -303,7 +303,7 @@ test('shows disconnected state text and stopped color when gateway is unreachabl
       canStop: false,
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: false, health: 'unknown' },
+      gatewayState: { reachable: false, health: 'unknown', compatible: true },
     },
   ]);
   render(PreferencesOpenshellGatewaysRendering);
@@ -321,7 +321,7 @@ test('shows degraded state text and color for degraded gateway', () => {
       canStop: false,
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'degraded' },
+      gatewayState: { reachable: true, health: 'degraded', compatible: true },
     },
   ]);
   render(PreferencesOpenshellGatewaysRendering);
@@ -339,7 +339,7 @@ test('shows unhealthy state text and terminated color for unhealthy gateway', ()
       canStop: false,
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'unhealthy' },
+      gatewayState: { reachable: true, health: 'unhealthy', compatible: true },
     },
   ]);
   render(PreferencesOpenshellGatewaysRendering);
@@ -357,7 +357,7 @@ test('shows connected state text and running color for healthy gateway', () => {
       canStop: false,
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   render(PreferencesOpenshellGatewaysRendering);
@@ -365,4 +365,40 @@ test('shows connected state text and running color for healthy gateway', () => {
   expect(screen.getByText('http://localhost:17670 · Connected')).toBeInTheDocument();
   const statusDot = screen.getByLabelText('Gateway state');
   expect(statusDot).toHaveClass('bg-(--pd-status-running)');
+});
+
+test('displays version in gateway details when available', () => {
+  setOpenshellStarted();
+  openshellGateways.set([
+    {
+      name: 'versioned-gw',
+      endpoint: 'http://localhost:17670',
+      canStop: false,
+      active: true,
+      version: '0.5.0',
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
+    },
+  ]);
+  render(PreferencesOpenshellGatewaysRendering);
+
+  expect(screen.getByText('http://localhost:17670 · 0.5.0 · Connected')).toBeInTheDocument();
+});
+
+test('shows incompatible status and terminated color for version-incompatible gateway', () => {
+  setOpenshellStarted();
+  openshellGateways.set([
+    {
+      name: 'old-gw',
+      endpoint: 'http://localhost:17670',
+      canStop: false,
+      active: true,
+      version: '0.0.100',
+      gatewayState: { reachable: true, health: 'healthy', compatible: false },
+    },
+  ]);
+  render(PreferencesOpenshellGatewaysRendering);
+
+  expect(screen.getByText('http://localhost:17670 · 0.0.100 · Incompatible')).toBeInTheDocument();
+  const statusDot = screen.getByLabelText('Gateway state');
+  expect(statusDot).toHaveClass('bg-(--pd-status-terminated)');
 });

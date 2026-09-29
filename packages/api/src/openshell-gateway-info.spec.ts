@@ -18,7 +18,8 @@
 
 import { describe, expect, test } from 'vitest';
 
-import { SandboxInfoSchema } from './openshell-gateway-info.js';
+import type { GatewayInfo } from './openshell-gateway-info.js';
+import { isUsableGateway, SandboxInfoSchema } from './openshell-gateway-info.js';
 
 describe('SandboxInfoSchema created_at transform', () => {
   const baseSandbox = { id: 's1', name: 'test', phase: 'Ready' as const };
@@ -56,5 +57,30 @@ describe('SandboxInfoSchema created_at transform', () => {
   test('should append Z to space-separated timestamp from openshell', () => {
     const result = SandboxInfoSchema.parse({ ...baseSandbox, created_at: '2026-07-17 14:07:58' });
     expect(result.created_at).toBe('2026-07-17T14:07:58Z');
+  });
+});
+
+describe('isUsableGateway', () => {
+  const gateway = (state?: GatewayInfo['gatewayState']): GatewayInfo => ({
+    name: 'gw',
+    endpoint: 'http://localhost',
+    canStop: false,
+    gatewayState: state,
+  });
+
+  test('returns true when reachable and compatible', () => {
+    expect(isUsableGateway(gateway({ reachable: true, health: 'healthy', compatible: true }))).toBe(true);
+  });
+
+  test('returns false when reachable but incompatible', () => {
+    expect(isUsableGateway(gateway({ reachable: true, health: 'healthy', compatible: false }))).toBe(false);
+  });
+
+  test('returns false when unreachable', () => {
+    expect(isUsableGateway(gateway({ reachable: false, health: 'unknown', compatible: true }))).toBe(false);
+  });
+
+  test('returns false when gatewayState is undefined', () => {
+    expect(isUsableGateway(gateway())).toBe(false);
   });
 });
