@@ -81,7 +81,7 @@ test('Expect gateway filter dropdown is not shown when there is only one connect
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   await tick();
@@ -95,13 +95,13 @@ test('Expect gateway filter dropdown is shown when there are multiple connected 
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ];
 
@@ -120,13 +120,13 @@ test('Expect selecting a gateway filters the secrets list', async () => {
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   secretVaultInfos.set([localSecret, remoteSecret]);
@@ -151,13 +151,13 @@ test('Expect "All" option shows all secrets', async () => {
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   secretVaultInfos.set([localSecret, remoteSecret]);
@@ -185,13 +185,13 @@ test('Expect combined gateway and search filters are applied together', async ()
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   secretVaultInfos.set([localSecret, remoteSecret]);
@@ -219,13 +219,13 @@ test('Expect empty screen when selected gateway has no secrets', async () => {
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   secretVaultInfos.set([localSecret]);
@@ -247,13 +247,13 @@ test('Expect "Show all gateways" restores the full secrets list', async () => {
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   secretVaultInfos.set([localSecret]);
