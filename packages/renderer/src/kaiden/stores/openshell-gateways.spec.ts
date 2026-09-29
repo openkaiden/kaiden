@@ -65,7 +65,7 @@ test('populates gateways when extensions are started', async () => {
       auth: 'plaintext',
       type: 'local',
       source: 'user',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ];
   vi.mocked(window.listOpenshellGateways).mockResolvedValue(gateways);
@@ -139,7 +139,7 @@ test('refreshes gateways on OpenShell registry gateway updates after startup', a
       name: 'local',
       endpoint: 'http://127.0.0.1:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ];
   const updatedGateways: GatewayInfo[] = [
@@ -155,7 +155,7 @@ test('refreshes gateways on OpenShell registry gateway updates after startup', a
       is_remote: true,
       remote_host: 'user@gateway.example.com',
       resolved_host: '10.0.0.5',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ];
   vi.mocked(window.listOpenshellGateways).mockResolvedValueOnce(initialGateways).mockResolvedValueOnce(updatedGateways);
@@ -179,7 +179,7 @@ test('refreshes gateways on agent gateway updates after startup', async () => {
       name: 'local',
       endpoint: 'http://127.0.0.1:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ];
   const updatedGateways: GatewayInfo[] = [
@@ -190,7 +190,7 @@ test('refreshes gateways on agent gateway updates after startup', async () => {
       active: true,
       auth: 'plaintext',
       type: 'local',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ];
   vi.mocked(window.listOpenshellGateways).mockResolvedValueOnce(initialGateways).mockResolvedValueOnce(updatedGateways);
