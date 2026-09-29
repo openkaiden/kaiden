@@ -678,3 +678,78 @@ describe('cross-method duplicate detection', () => {
     expect(window.saveTempAttachment).not.toHaveBeenCalled();
   });
 });
+
+describe('config option labels', () => {
+  test('config option dropdowns display visible labels', async () => {
+    const sessionWithConfig: AcpSessionInfo = {
+      ...COMPLETED_SESSION,
+      configOptions: [
+        {
+          id: 'cfg-1',
+          name: 'Temperature',
+          type: 'select' as const,
+          currentValue: '0.7',
+          options: [
+            { value: '0.5', name: '0.5' },
+            { value: '0.7', name: '0.7' },
+            { value: '1.0', name: '1.0' },
+          ],
+        },
+        {
+          id: 'cfg-2',
+          name: 'Output Format',
+          type: 'select' as const,
+          currentValue: 'json',
+          options: [
+            { value: 'json', name: 'JSON' },
+            { value: 'text', name: 'Text' },
+          ],
+        },
+      ],
+    };
+
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([sessionWithConfig]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    // Labels should be visible in the DOM, not just in title attributes
+    expect(screen.getByText('Temperature')).toBeInTheDocument();
+    expect(screen.getByText('Output Format')).toBeInTheDocument();
+  });
+
+  test('config options with mode category are excluded from toolbar', async () => {
+    const sessionWithModeConfig: AcpSessionInfo = {
+      ...COMPLETED_SESSION,
+      configOptions: [
+        {
+          id: 'cfg-mode',
+          name: 'Mode Setting',
+          type: 'select' as const,
+          category: 'mode',
+          currentValue: 'auto',
+          options: [
+            { value: 'auto', name: 'Auto' },
+            { value: 'manual', name: 'Manual' },
+          ],
+        },
+        {
+          id: 'cfg-visible',
+          name: 'Visible Setting',
+          type: 'select' as const,
+          currentValue: 'on',
+          options: [
+            { value: 'on', name: 'On' },
+            { value: 'off', name: 'Off' },
+          ],
+        },
+      ],
+    };
+
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([sessionWithModeConfig]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    expect(screen.queryByText('Mode Setting')).not.toBeInTheDocument();
+    expect(screen.getByText('Visible Setting')).toBeInTheDocument();
+  });
+});
