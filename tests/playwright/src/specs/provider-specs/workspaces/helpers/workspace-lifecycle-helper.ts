@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Shared lifecycle for Coding Agent Workspace provider E2E tests.
- * See .agents/skills/playwright-testing/workspace-provider-e2e.md
+ * See .agents/skills/playwright-testing/scenario-lifecycle-e2e.md
  ***********************************************************************/
 
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -31,7 +31,6 @@ import {
   FILE_ACCESS_LEVEL,
   type FileAccessLevel,
   type NetworkAccessLevel,
-  PROVIDERS,
   type ResourceId,
   TIMEOUTS,
   WIZARD_STEP,
@@ -39,7 +38,15 @@ import {
   type WorkspaceCustomMount,
 } from '/@/model/core/types';
 import type { AgentWorkspaceCreatePage } from '/@/model/pages/agent-workspace-create-page';
-import { waitForNavigationReady } from '/@/utils/app-ready';
+
+import {
+  createRequiredResource,
+  deleteRequiredResource,
+  type EngineWorkerFixtures,
+  registerScenarioLifecycleTests,
+  type ScenarioStep,
+  skipUnlessPlatformSupported,
+} from './scenario-lifecycle-engine';
 
 export interface WorkspaceSandboxOptions {
   fileAccess: FileAccessLevel;
@@ -73,23 +80,40 @@ export interface WorkspaceLifecycleConfig {
   noProjectFolder?: boolean;
 }
 
-const SANDBOX_STEP_TITLES: Record<string, string> = {
-  '01': '[01] creation',
-  '02': '[02] running status check',
-  '03': '[03] terminal navigation',
-  '04': '[04] terminal prompt response',
-  '05': '[05] removal',
-};
-
-function sandboxStepTitle(step: string): string {
-  return SANDBOX_STEP_TITLES[step] ?? `[${step}] ${step}`;
+interface WorkspaceCtx {
+  workingDir?: string;
+  mountDirs: string[];
+  countsBefore?: { activeSessions: number; totalSessions: number; configuredAgents: number };
 }
 
-function lifecycleStepTitle(config: WorkspaceLifecycleConfig, step: string, legacyTitle: string): string {
+const SANDBOX_STEP_LABELS: Record<string, string> = {
+  '01': 'creation',
+  '02': 'running status check',
+  '03': 'terminal navigation',
+  '04': 'terminal prompt response',
+  '05': 'removal',
+};
+
+/** Mirrors the original lifecycleStepTitle/sandboxStepTitle split: sandbox-matrix runs get
+ * short numeric IDs with fixed labels; standalone provider suites get testIdPrefix-based IDs. */
+function stepIdAndTitle(
+  config: WorkspaceLifecycleConfig,
+  step: string,
+  legacyTitle: string,
+): { id: string; title: string } {
   if (config.sandbox && config.scenarioId) {
-    return sandboxStepTitle(step);
+    return { id: step, title: SANDBOX_STEP_LABELS[step] ?? step };
   }
-  return `[${config.testIdPrefix}-${step}] ${legacyTitle}`;
+  return { id: `${config.testIdPrefix}-${step}`, title: legacyTitle };
+}
+
+function buildStep(
+  config: WorkspaceLifecycleConfig,
+  step: string,
+  legacyTitle: string,
+  run: ScenarioStep<WorkspaceCtx>['run'],
+): ScenarioStep<WorkspaceCtx> {
+  return { ...stepIdAndTitle(config, step, legacyTitle), run };
 }
 
 export function registerWorkspaceLifecycleTests(
@@ -97,43 +121,31 @@ export function registerWorkspaceLifecycleTests(
   expect: Expect,
   config: WorkspaceLifecycleConfig,
 ): void {
-  const podmanAvailable = !!process.env.PODMAN_ENABLED;
   const hasSandbox = config.sandbox !== undefined;
 
-  test.skip(
-    process.platform !== 'linux' && !podmanAvailable,
+  skipUnlessPlatformSupported(
+    test,
     'Workspace tests require Podman (set PODMAN_ENABLED=true on non-Linux)',
+    config.requiredResource,
   );
 
-  if (config.requiredResource) {
-    const envVar = PROVIDERS[config.requiredResource].envVarName;
-    test.skip(!process.env[envVar], `${envVar} not set`);
-  }
-
-  let workingDir: string | undefined;
-  let mountDirs: string[] = [];
-  let countsBefore: { activeSessions: number; totalSessions: number; configuredAgents: number };
-
-  const steps = hasSandbox
+  const stepNumbers = hasSandbox
     ? { terminal: '03', prompt: '04', remove: '05' }
     : { statAfterCreate: '03', terminal: '04', prompt: '05', remove: '06', statAfterRemove: '07' };
 
   const manageResource = config.manageResource !== false;
 
-  test.beforeAll(async ({ workerNavigationBar }) => {
-    await workerNavigationBar.ensureExtensionsRunning();
+  const setup = async (fixtures: EngineWorkerFixtures): Promise<WorkspaceCtx> => {
+    await fixtures.workerNavigationBar.ensureExtensionsRunning();
 
     if (manageResource && config.requiredResource) {
-      const provider = PROVIDERS[config.requiredResource];
-      if (!('autoDetected' in provider && provider.autoDetected)) {
-        const settingsPage = await workerNavigationBar.navigateToSettingsPage();
-        await settingsPage.createResource(config.requiredResource, process.env[provider.envVarName]!);
-        await workerNavigationBar.navigateToWorkspacesPage();
-      }
+      await createRequiredResource(fixtures, config.requiredResource);
     }
 
+    const ctx: WorkspaceCtx = { mountDirs: [] };
+
     if (!config.noProjectFolder) {
-      workingDir = mkdtempSync(join(homedir(), '.kdn-e2e-'));
+      ctx.workingDir = mkdtempSync(join(homedir(), '.kdn-e2e-'));
     }
 
     if (
@@ -141,47 +153,38 @@ export function registerWorkspaceLifecycleTests(
       config.sandbox!.fileAccess === FILE_ACCESS_LEVEL.CUSTOM_PATHS &&
       config.sandbox!.customMounts?.length
     ) {
-      mountDirs = config.sandbox!.customMounts.map(mount =>
+      ctx.mountDirs = config.sandbox!.customMounts.map(mount =>
         mount.host === '' ? mkdtempSync(join(homedir(), '.kdn-e2e-mount-')) : '',
       );
 
       for (const mount of config.sandbox!.customMounts) {
         if (mount.host.startsWith('$SOURCES/')) {
-          mkdirSync(join(workingDir!, mount.host.slice('$SOURCES/'.length)), { recursive: true });
+          mkdirSync(join(ctx.workingDir!, mount.host.slice('$SOURCES/'.length)), { recursive: true });
         }
       }
     }
-  });
 
-  test.afterAll(async ({ workerNavigationBar }) => {
-    for (const mountDir of mountDirs) {
+    return ctx;
+  };
+
+  const teardown = async (ctx: WorkspaceCtx, fixtures: EngineWorkerFixtures): Promise<void> => {
+    for (const mountDir of ctx.mountDirs) {
       if (mountDir) {
         rmSync(mountDir, { recursive: true, force: true });
       }
     }
-    if (workingDir) {
-      rmSync(workingDir, { recursive: true, force: true });
+    if (ctx.workingDir) {
+      rmSync(ctx.workingDir, { recursive: true, force: true });
     }
     if (manageResource && config.requiredResource) {
-      const provider = PROVIDERS[config.requiredResource];
-      if (!('autoDetected' in provider && provider.autoDetected)) {
-        try {
-          const settingsPage = await workerNavigationBar.navigateToSettingsPage();
-          await settingsPage.deleteResource(config.requiredResource);
-        } catch (error) {
-          console.error(`Failed to delete ${config.requiredResource} resource:`, error);
-        }
-      }
+      await deleteRequiredResource(fixtures, config.requiredResource);
     }
-  });
-
-  test.beforeEach(async ({ page }) => {
-    await waitForNavigationReady(page);
-  });
+  };
 
   const createStepTitle = hasSandbox ? `Creates a workspace with ${config.sandbox!.summary}` : 'Creates a workspace';
 
-  test(lifecycleStepTitle(config, '01', createStepTitle), async ({ navigationBar, agentWorkspacesPage }) => {
+  const createStep = buildStep(config, '01', createStepTitle, async (fixtures, ctx) => {
+    const { navigationBar, agentWorkspacesPage } = fixtures;
     if (hasSandbox) {
       await navigationBar.navigateToWorkspacesPage();
       await agentWorkspacesPage.removeWorkspaceIfPresent(config.workspaceName);
@@ -190,14 +193,14 @@ export function registerWorkspaceLifecycleTests(
       await navigationBar.navigateToSettingsPage();
       await navigationBar.navigateToWorkspacesPage();
       await agentWorkspacesPage.removeWorkspaceIfPresent(config.workspaceName);
-      countsBefore = await agentWorkspacesPage.getStatCounts();
+      ctx.countsBefore = await agentWorkspacesPage.getStatCounts();
     }
 
     const createPage = await agentWorkspacesPage.openCreatePage();
 
     await createPage.sessionNameInput.fill(config.workspaceName);
     if (!config.noProjectFolder) {
-      await createPage.workingDirInput.fill(workingDir!);
+      await createPage.workingDirInput.fill(ctx.workingDir!);
     }
     await createPage.continueToStep(WIZARD_STEP.AGENT_MODEL);
 
@@ -207,9 +210,9 @@ export function registerWorkspaceLifecycleTests(
 
     if (hasSandbox) {
       const customMounts =
-        config.sandbox!.fileAccess === FILE_ACCESS_LEVEL.CUSTOM_PATHS && mountDirs.length
+        config.sandbox!.fileAccess === FILE_ACCESS_LEVEL.CUSTOM_PATHS && ctx.mountDirs.length
           ? config.sandbox!.customMounts!.map((mount, index) =>
-              mount.host === '' ? { ...mount, host: mountDirs[index]! } : mount,
+              mount.host === '' ? { ...mount, host: ctx.mountDirs[index]! } : mount,
             )
           : config.sandbox!.customMounts;
 
@@ -231,8 +234,10 @@ export function registerWorkspaceLifecycleTests(
     }
   });
 
-  test(
-    lifecycleStepTitle(config, '02', 'Workspace appears with Running status'),
+  const runningStatusStep = buildStep(
+    config,
+    '02',
+    'Workspace appears with Running status',
     async ({ navigationBar, agentWorkspacesPage }) => {
       await navigationBar.navigateToWorkspacesPage();
       await agentWorkspacesPage.ensureRowExists(config.workspaceName, TIMEOUTS.WORKSPACE_READY);
@@ -244,23 +249,10 @@ export function registerWorkspaceLifecycleTests(
     },
   );
 
-  if (!hasSandbox) {
-    test(`[${config.testIdPrefix}-${steps.statAfterCreate}] Stat cards reflect the new workspace`, async ({
-      navigationBar,
-      agentWorkspacesPage,
-    }) => {
-      await navigationBar.navigateToWorkspacesPage();
-      await agentWorkspacesPage.waitForStatCounts({
-        totalSessions: countsBefore.totalSessions + 1,
-        activeSessions: countsBefore.activeSessions + 1,
-      });
-      const countsAfter = await agentWorkspacesPage.getStatCounts();
-      expect(countsAfter.configuredAgents).toBeGreaterThanOrEqual(countsBefore.configuredAgents);
-    });
-  }
-
-  test(
-    lifecycleStepTitle(config, steps.terminal, 'Terminal shows agent is loaded'),
+  const terminalStep = buildStep(
+    config,
+    stepNumbers.terminal,
+    'Terminal shows agent is loaded',
     async ({ navigationBar, agentWorkspacesPage }) => {
       await navigationBar.navigateToWorkspacesPage();
       const detailsPage = await agentWorkspacesPage.openWorkspaceTerminal(config.workspaceName);
@@ -271,8 +263,10 @@ export function registerWorkspaceLifecycleTests(
     },
   );
 
-  test(
-    lifecycleStepTitle(config, steps.prompt, 'Sends a prompt and receives a response'),
+  const promptStep = buildStep(
+    config,
+    stepNumbers.prompt,
+    'Sends a prompt and receives a response',
     async ({ navigationBar, agentWorkspacesPage }) => {
       const promptTimeout = config.promptTimeout ?? TIMEOUTS.MODEL_RESPONSE;
       await navigationBar.navigateToWorkspacesPage();
@@ -299,8 +293,10 @@ export function registerWorkspaceLifecycleTests(
     },
   );
 
-  test(
-    lifecycleStepTitle(config, steps.remove, 'Removes the workspace'),
+  const removeStep = buildStep(
+    config,
+    stepNumbers.remove,
+    'Removes the workspace',
     async ({ navigationBar, agentWorkspacesPage }) => {
       await navigationBar.navigateToWorkspacesPage();
       await agentWorkspacesPage.removeWorkspace(config.workspaceName);
@@ -308,16 +304,39 @@ export function registerWorkspaceLifecycleTests(
     },
   );
 
+  const steps: ScenarioStep<WorkspaceCtx>[] = [createStep, runningStatusStep];
+
   if (!hasSandbox) {
-    test(`[${config.testIdPrefix}-${steps.statAfterRemove}] Stat cards reflect workspace removal`, async ({
-      navigationBar,
-      agentWorkspacesPage,
-    }) => {
-      await navigationBar.navigateToWorkspacesPage();
-      await agentWorkspacesPage.waitForStatCounts({
-        totalSessions: countsBefore.totalSessions,
-        activeSessions: countsBefore.activeSessions,
-      });
+    steps.push({
+      id: `${config.testIdPrefix}-${stepNumbers.statAfterCreate}`,
+      title: 'Stat cards reflect the new workspace',
+      run: async ({ navigationBar, agentWorkspacesPage }, ctx): Promise<void> => {
+        await navigationBar.navigateToWorkspacesPage();
+        await agentWorkspacesPage.waitForStatCounts({
+          totalSessions: ctx.countsBefore!.totalSessions + 1,
+          activeSessions: ctx.countsBefore!.activeSessions + 1,
+        });
+        const countsAfter = await agentWorkspacesPage.getStatCounts();
+        expect(countsAfter.configuredAgents).toBeGreaterThanOrEqual(ctx.countsBefore!.configuredAgents);
+      },
     });
   }
+
+  steps.push(terminalStep, promptStep, removeStep);
+
+  if (!hasSandbox) {
+    steps.push({
+      id: `${config.testIdPrefix}-${stepNumbers.statAfterRemove}`,
+      title: 'Stat cards reflect workspace removal',
+      run: async ({ navigationBar, agentWorkspacesPage }, ctx): Promise<void> => {
+        await navigationBar.navigateToWorkspacesPage();
+        await agentWorkspacesPage.waitForStatCounts({
+          totalSessions: ctx.countsBefore!.totalSessions,
+          activeSessions: ctx.countsBefore!.activeSessions,
+        });
+      },
+    });
+  }
+
+  registerScenarioLifecycleTests(test, { setup, teardown, steps });
 }

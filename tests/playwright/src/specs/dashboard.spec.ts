@@ -27,7 +27,6 @@ test.describe
 
     test('[APP-01] Navigation bar is visible and contains all expected navigation links', async ({ navigationBar }) => {
       await expect(navigationBar.navigationLocator).toBeVisible({ timeout: TIMEOUTS.DEFAULT });
-
       const allLinks = navigationBar.getAllLinks();
 
       for (const link of allLinks) {
