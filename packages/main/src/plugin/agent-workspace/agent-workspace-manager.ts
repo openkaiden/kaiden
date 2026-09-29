@@ -67,6 +67,7 @@ import type {
 import {
   AGENT_LABEL,
   decodeWorkspaceLabels,
+  MIN_GATEWAY_VERSION,
   PROFILE_LABEL,
   SECRET_LABEL,
   WORKSPACE_LABEL,
@@ -205,6 +206,12 @@ export class AgentWorkspaceManager implements Disposable {
         .find(candidate => candidate.name === options.gateway);
       if (!gateway?.gatewayState?.reachable) {
         throw new Error(`gateway "${options.gateway}" is unreachable`);
+      }
+      if (!gateway.gatewayState.compatible) {
+        const reported = gateway.version ? ` (version ${gateway.version})` : '';
+        throw new Error(
+          `gateway "${options.gateway}"${reported} does not meet the minimum required version ${MIN_GATEWAY_VERSION}`,
+        );
       }
 
       if (options.replaceConfig) {

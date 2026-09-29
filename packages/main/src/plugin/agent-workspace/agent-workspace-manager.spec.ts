@@ -51,6 +51,7 @@ import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
 import {
   AGENT_LABEL,
   decodeWorkspaceLabels,
+  MIN_GATEWAY_VERSION,
   PROFILE_LABEL,
   SECRET_LABEL,
   WORKSPACE_LABEL,
@@ -268,7 +269,7 @@ beforeEach(() => {
       canStop: false,
       name: 'kaiden',
       endpoint: 'http://127.0.0.1:17670',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   vi.mocked(readFile).mockResolvedValue('{}');
@@ -479,13 +480,48 @@ describe('create – OpenShell mode', () => {
         canStop: false,
         name: 'kaiden',
         endpoint: 'http://127.0.0.1:17670',
-        gatewayState: { reachable: false, health: 'unknown' },
+        gatewayState: { reachable: false, health: 'unknown', compatible: true },
       },
     ]);
 
     await expect(manager.create(defaultOptions)).rejects.toThrow('gateway "kaiden" is unreachable');
 
     expect(sdkSandbox.create).not.toHaveBeenCalled();
+  });
+
+  test('rejects a gateway below the minimum required version', async () => {
+    vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
+      {
+        name: 'kaiden',
+        endpoint: 'http://127.0.0.1:17670',
+        canStop: false,
+        version: '0.0.100',
+        gatewayState: { reachable: true, health: 'healthy', compatible: false },
+      },
+    ]);
+
+    await expect(manager.create(defaultOptions)).rejects.toThrow(
+      `gateway "kaiden" (version 0.0.100) does not meet the minimum required version ${MIN_GATEWAY_VERSION}`,
+    );
+
+    expect(openshellSdkClientManager.getClient).not.toHaveBeenCalled();
+  });
+
+  test('rejects a gateway that does not report a version', async () => {
+    vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
+      {
+        name: 'kaiden',
+        endpoint: 'http://127.0.0.1:17670',
+        canStop: false,
+        gatewayState: { reachable: true, health: 'healthy', compatible: false },
+      },
+    ]);
+
+    await expect(manager.create(defaultOptions)).rejects.toThrow(
+      `gateway "kaiden" does not meet the minimum required version ${MIN_GATEWAY_VERSION}`,
+    );
+
+    expect(openshellSdkClientManager.getClient).not.toHaveBeenCalled();
   });
 
   test('waits for the gateway cache before checking reachability', async () => {
@@ -855,7 +891,7 @@ describe('create – OpenShell mode', () => {
           endpoint: 'http://127.0.0.1:17670',
           type: 'local',
           driver: 'podman',
-          gatewayState: { reachable: true, health: 'healthy' },
+          gatewayState: { reachable: true, health: 'healthy', compatible: true },
         },
       ]);
     });
@@ -871,7 +907,7 @@ describe('create – OpenShell mode', () => {
           endpoint: 'http://127.0.0.1:17670',
           type: 'local',
           driver,
-          gatewayState: { reachable: true, health: 'healthy' },
+          gatewayState: { reachable: true, health: 'healthy', compatible: true },
         },
       ]);
       vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({
@@ -932,7 +968,7 @@ describe('create – OpenShell mode', () => {
           name: 'kaiden',
           endpoint: 'http://127.0.0.1:17670',
           driver,
-          gatewayState: { reachable: true, health: 'healthy' },
+          gatewayState: { reachable: true, health: 'healthy', compatible: true },
         },
       ]);
 
@@ -1605,7 +1641,7 @@ describe('listOpenshellGateways', () => {
       auth: 'plaintext',
       type: 'local',
       source: 'user',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
@@ -1618,7 +1654,7 @@ describe('listOpenshellGateways', () => {
       is_remote: true,
       remote_host: 'user@gateway-alias',
       resolved_host: '10.0.0.5',
-      gatewayState: { reachable: false, health: 'unknown' },
+      gatewayState: { reachable: false, health: 'unknown', compatible: true },
     },
   ];
 
