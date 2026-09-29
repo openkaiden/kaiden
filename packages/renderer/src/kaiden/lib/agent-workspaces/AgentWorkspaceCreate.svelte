@@ -36,6 +36,7 @@ import { getSandboxNameValidationError, sanitizeDns1123Label } from '/@api/agent
 import type { ModelInfo } from '/@api/model-registry-info';
 import { NavigationPage } from '/@api/navigation-page';
 import type { DefaultWorkspaceSettings } from '/@api/onboarding-settings-info';
+import { isUsableGateway } from '/@api/openshell-gateway-info';
 import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';
 
 import AgentWorkspaceCreateStepAgentModel from './AgentWorkspaceCreateStepAgentModel.svelte';
@@ -156,7 +157,7 @@ onMount(async () => {
   }
 });
 let customHosts = $derived(wizard.draft.hostsByMode[wizard.draft.selectedNetwork] ?? []);
-let reachableGateways = $derived($openshellGateways.filter(gateway => gateway.gatewayState?.reachable === true));
+let reachableGateways = $derived($openshellGateways.filter(isUsableGateway));
 
 $effect.pre(() => {
   const gateways = reachableGateways;

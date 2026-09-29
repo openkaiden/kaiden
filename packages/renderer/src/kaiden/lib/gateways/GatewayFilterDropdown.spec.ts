@@ -39,7 +39,7 @@ test('should not render when there is only one connected gateway', async () => {
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
 
@@ -61,13 +61,13 @@ test('should render when there are multiple connected gateways', async () => {
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ];
   openshellGateways.set(gateways);
@@ -84,13 +84,13 @@ test('should include All option and each connected gateway name', async () => {
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ];
   openshellGateways.set(gateways);
@@ -112,13 +112,13 @@ test('should not render when multiple gateways exist but only one is connected',
       canStop: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
-      gatewayState: { reachable: false, health: 'unhealthy' },
+      gatewayState: { reachable: false, health: 'unhealthy', compatible: true },
     },
   ];
   openshellGateways.set(gateways);
@@ -131,14 +131,24 @@ test('should not render when multiple gateways exist but only one is connected',
 
 test('should exclude disconnected gateways from dropdown options', async () => {
   const gateways: GatewayInfo[] = [
-    { canStop: false, name: 'gw-a', endpoint: 'http://a:18080', gatewayState: { reachable: true, health: 'healthy' } },
+    {
+      canStop: false,
+      name: 'gw-a',
+      endpoint: 'http://a:18080',
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
+    },
     {
       canStop: false,
       name: 'gw-b',
       endpoint: 'http://b:18080',
-      gatewayState: { reachable: false, health: 'unhealthy' },
+      gatewayState: { reachable: false, health: 'unhealthy', compatible: true },
     },
-    { canStop: false, name: 'gw-c', endpoint: 'http://c:18080', gatewayState: { reachable: true, health: 'healthy' } },
+    {
+      canStop: false,
+      name: 'gw-c',
+      endpoint: 'http://c:18080',
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
+    },
   ];
   openshellGateways.set(gateways);
 

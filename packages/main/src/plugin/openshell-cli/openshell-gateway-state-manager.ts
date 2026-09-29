@@ -20,6 +20,7 @@ import { isDeepStrictEqual } from 'node:util';
 
 import type { Disposable } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
+import { gte, valid } from 'semver';
 
 import { Emitter } from '/@/plugin/events/emitter.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
@@ -27,6 +28,7 @@ import { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { IDisposable } from '/@api/disposable.js';
 import type { Event } from '/@api/event.js';
 import type { GatewayInfo, GatewayProcessState, LocalGatewayDriver } from '/@api/openshell-gateway-info.js';
+import { MIN_GATEWAY_VERSION } from '/@api/openshell-gateway-info.js';
 
 import { OpenshellGatewayManager } from './openshell-gateway-manager.js';
 
@@ -46,6 +48,7 @@ export class OpenshellGatewayStateManager implements Disposable {
   #refreshPromise: Promise<void> | undefined;
   #refreshQueued = false;
   #configurationChangeDisposable: IDisposable | undefined;
+  #warnedGateways = new Set<string>();
 
   readonly #onDidUpdateGateways = new Emitter<readonly GatewayInfo[]>();
   readonly onDidUpdateGateways: Event<readonly GatewayInfo[]> = this.#onDidUpdateGateways.event;
@@ -158,9 +161,11 @@ export class OpenshellGatewayStateManager implements Disposable {
           return {
             ...base,
             ...(driver ? { driver } : {}),
+            ...(runtimeInfo.gateway_version ? { version: runtimeInfo.gateway_version } : {}),
             gatewayState: {
               reachable: true,
               health: runtimeInfo.status,
+              compatible: this.isVersionCompatible(listed.metadata.name, runtimeInfo.gateway_version),
               ...(processState ? { process: processState } : {}),
             },
           };
@@ -171,6 +176,7 @@ export class OpenshellGatewayStateManager implements Disposable {
             gatewayState: {
               reachable: false,
               health: 'unknown' as const,
+              compatible: true,
               ...(processState ? { process: processState } : {}),
             },
           };
@@ -182,6 +188,19 @@ export class OpenshellGatewayStateManager implements Disposable {
       this.#gateways = nextGateways;
       this.#onDidUpdateGateways.fire(this.listGateways());
     }
+  }
+
+  private isVersionCompatible(name: string, version: string | undefined): boolean {
+    if (!version) return false;
+    const parsed = valid(version);
+    if (!parsed) {
+      if (!this.#warnedGateways.has(name)) {
+        this.#warnedGateways.add(name);
+        console.warn(`[openshell-gateway-state] gateway "${name}" reported unparseable version: ${version}`);
+      }
+      return false;
+    }
+    return gte(parsed, MIN_GATEWAY_VERSION);
   }
 
   private deriveProcessState(pid: number | undefined, reachable: boolean): GatewayProcessState | undefined {
@@ -218,6 +237,7 @@ export class OpenshellGatewayStateManager implements Disposable {
     }
     this.#configurationChangeDisposable?.dispose();
     this.#configurationChangeDisposable = undefined;
+    this.#warnedGateways.clear();
     this.#onDidUpdateGateways.dispose();
   }
 }
