@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, assert, beforeEach, expect, test, vi } from 'vitest';
 
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { ListedGateway } from '/@api/openshell-gateway-info.js';
@@ -109,7 +109,7 @@ test('builds a cached snapshot from registrations and runtime information', asyn
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       name: 'remote',
@@ -120,9 +120,65 @@ test('builds a cached snapshot from registrations and runtime information', asyn
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
-      gatewayState: { reachable: true, health: 'degraded' },
+      gatewayState: { reachable: true, health: 'degraded', compatible: true },
     },
   ]);
+});
+
+test('extracts version from runtime info when present', async () => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValueOnce({
+    status: 'healthy',
+    gateway_version: '1.2.0',
+    compute_drivers: [],
+  });
+
+  await manager.refresh();
+
+  const [gw] = manager.listGateways();
+  assert(gw);
+  expect(gw.version).toBe('1.2.0');
+  expect(gw.gatewayState?.compatible).toBe(true);
+});
+
+test('omits version from gateway when runtime info does not include it', async () => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValueOnce({
+    status: 'healthy',
+    compute_drivers: [],
+  });
+
+  await manager.refresh();
+
+  const [gw] = manager.listGateways();
+  assert(gw);
+  expect(gw).not.toHaveProperty('version');
+  expect(gw.gatewayState?.compatible).toBe(true);
+});
+
+test.each([
+  ['undefined', undefined, true],
+  ['equal to minimum', '0.0.116', true],
+  ['above minimum', '1.0.0', true],
+  ['below minimum', '0.0.100', false],
+  ['v-prefixed and compatible', 'v0.0.116', true],
+  ['v-prefixed and incompatible', 'v0.0.100', false],
+  ['prerelease of minimum', '0.0.116-rc.1', false],
+  ['prerelease above minimum', '0.0.117-rc.1', true],
+  ['unparseable', 'not-a-version', true],
+])('marks gateway compatible=%s when version is %s', async (_label, version, expected) => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValueOnce({
+    status: 'healthy',
+    ...(version !== undefined ? { gateway_version: version } : {}),
+    compute_drivers: [],
+  });
+
+  await manager.refresh();
+
+  const [gw] = manager.listGateways();
+  assert(gw);
+  expect(gw.gatewayState?.compatible).toBe(expected);
 });
 
 test('marks a gateway unreachable when runtime information cannot be retrieved', async () => {
@@ -141,7 +197,7 @@ test('marks a gateway unreachable when runtime information cannot be retrieved',
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
-      gatewayState: { reachable: false, health: 'unknown', process: { status: 'not-running' } },
+      gatewayState: { reachable: false, health: 'unknown', compatible: true, process: { status: 'not-running' } },
     },
   ]);
 });
@@ -215,7 +271,7 @@ test('fires an update when active selection or gateway state changes', async () 
   expect(manager.listGateways()[0]).toEqual(
     expect.objectContaining({
       active: true,
-      gatewayState: { reachable: true, health: 'unhealthy' },
+      gatewayState: { reachable: true, health: 'unhealthy', compatible: true },
     }),
   );
 });
@@ -325,7 +381,12 @@ test('includes process state with running pid when gateway is reachable', async 
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
-      gatewayState: { reachable: true, health: 'healthy', process: { pid: 12345, status: 'running' } },
+      gatewayState: {
+        reachable: true,
+        health: 'healthy',
+        compatible: true,
+        process: { pid: 12345, status: 'running' },
+      },
     },
   ]);
 });
@@ -348,7 +409,12 @@ test('includes process state with running pid when gateway is unreachable', asyn
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
-      gatewayState: { reachable: false, health: 'unknown', process: { pid: 12345, status: 'running' } },
+      gatewayState: {
+        reachable: false,
+        health: 'unknown',
+        compatible: true,
+        process: { pid: 12345, status: 'running' },
+      },
     },
   ]);
 });
@@ -372,7 +438,7 @@ test('includes not-running process state when gateway is unreachable and no pid'
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
-      gatewayState: { reachable: false, health: 'unknown', process: { status: 'not-running' } },
+      gatewayState: { reachable: false, health: 'unknown', compatible: true, process: { status: 'not-running' } },
     },
   ]);
 });
@@ -396,7 +462,7 @@ test('omits process state when gateway is reachable and no pid', async () => {
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
 });

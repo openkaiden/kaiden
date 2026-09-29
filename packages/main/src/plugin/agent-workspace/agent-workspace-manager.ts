@@ -55,15 +55,18 @@ import { getSandboxNameValidationError } from '/@api/agent-workspace-info.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationNode } from '/@api/configuration/models.js';
 import { IConfigurationRegistry } from '/@api/configuration/models.js';
-import type {
-  CreateLocalGatewayOptions,
-  GatewayInfo,
-  GatewaySandboxes,
-  OpenshellBindMount,
-  OpenshellUpload,
-  SandboxInfo,
+import {
+  AGENT_LABEL,
+  type CreateLocalGatewayOptions,
+  decodeWorkspaceLabels,
+  type GatewayInfo,
+  type GatewaySandboxes,
+  MIN_GATEWAY_VERSION,
+  type OpenshellBindMount,
+  type OpenshellUpload,
+  type SandboxInfo,
+  WORKSPACE_LABEL,
 } from '/@api/openshell-gateway-info.js';
-import { AGENT_LABEL, decodeWorkspaceLabels, WORKSPACE_LABEL } from '/@api/openshell-gateway-info.js';
 import { TerminalSettings } from '/@api/terminal/terminal-settings.js';
 
 import { dedupeOpenshellMounts, partitionOpenshellUploads, resolveOpenshellMountTarget } from './openshell-mounts.js';
@@ -198,6 +201,12 @@ export class AgentWorkspaceManager implements Disposable {
         .find(candidate => candidate.name === options.gateway);
       if (!gateway?.gatewayState?.reachable) {
         throw new Error(`gateway "${options.gateway}" is unreachable`);
+      }
+      if (!gateway.gatewayState.compatible) {
+        // if compatible is false, version is guaranteed to be set
+        throw new Error(
+          `gateway "${options.gateway}" version ${gateway.version} is below the minimum required version ${MIN_GATEWAY_VERSION}`,
+        );
       }
 
       if (options.replaceConfig) {
