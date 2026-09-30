@@ -27,7 +27,7 @@ import { agents } from '@openkaiden/api';
 import { parse, stringify } from 'smol-toml';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { activate, CODEX_CONFIG_PATH } from './extension';
+import { activate, CODEX_AUTH_PATH, CODEX_CONFIG_PATH } from './extension';
 
 const AGENT_DISPOSABLE_MOCK: Disposable = { dispose: vi.fn() };
 
@@ -79,6 +79,16 @@ function createConfigFile(content = ''): AgentConfigurationFile & { updateMock: 
   return Object.assign(file, { updateMock });
 }
 
+function createAuthFile(): AgentConfigurationFile & { updateMock: ReturnType<typeof vi.fn> } {
+  const updateMock = vi.fn();
+  const file: AgentConfigurationFile = {
+    path: CODEX_AUTH_PATH,
+    read: vi.fn().mockResolvedValue(''),
+    update: updateMock,
+  };
+  return Object.assign(file, { updateMock });
+}
+
 function parseWrittenToml(updateMock: ReturnType<typeof vi.fn>): Record<string, unknown> {
   return parse(updateMock.mock.calls[0]![0] as string);
 }
@@ -114,12 +124,14 @@ describe('activate', () => {
     expect(agent.isSupportedModelType!({ name: 'vertexai' })).toBe(false);
   });
 
-  test('registers agent with config.toml configuration file', async () => {
+  test('registers agent with config.toml and auth.json configuration files', async () => {
     await activate(extensionContextMock);
 
     const agent = getRegisteredAgent();
-    expect(agent.configurationFiles).toHaveLength(1);
-    expect(agent.configurationFiles[0]!.path).toBe(CODEX_CONFIG_PATH);
+    expect(agent.configurationFiles).toHaveLength(2);
+    const paths = agent.configurationFiles.map(f => f.path);
+    expect(paths).toContain(CODEX_CONFIG_PATH);
+    expect(paths).toContain(CODEX_AUTH_PATH);
   });
 
   describe('preWorkspaceStart', () => {
@@ -389,6 +401,28 @@ describe('activate', () => {
         model: 'gpt-4o',
         openai_base_url: 'https://my-custom-host.local/v1',
       });
+    });
+
+    test('writes auth_mode apikey to auth.json', async () => {
+      await activate(extensionContextMock);
+      const agent = getRegisteredAgent();
+
+      const configFile = createConfigFile();
+      const authFile = createAuthFile();
+      await agent.preWorkspaceStart(createContext([configFile, authFile]));
+
+      expect(authFile.updateMock).toHaveBeenCalledOnce();
+      expect(JSON.parse(authFile.updateMock.mock.calls[0]![0] as string)).toEqual({ auth_mode: 'apikey' });
+    });
+
+    test('does not fail when auth file is not in context', async () => {
+      await activate(extensionContextMock);
+      const agent = getRegisteredAgent();
+
+      const configFile = createConfigFile();
+      await agent.preWorkspaceStart(createContext([configFile]));
+
+      expect(configFile.updateMock).toHaveBeenCalledOnce();
     });
 
     test('does not write openai_base_url when no endpoint is provided', async () => {
