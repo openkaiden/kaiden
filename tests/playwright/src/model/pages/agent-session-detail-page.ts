@@ -117,7 +117,8 @@ export class AgentSessionDetailPage extends BasePage {
         if (win.__acpTurnSent !== true) return false;
         const stop = document.querySelector('button[title="Stop"]');
         const send = document.querySelector('button[title="Send"]');
-        if (!stop && send) {
+        if (stop) win.__acpSawStop = true;
+        if (win.__acpSawStop && !stop && send) {
           const obs = win.__acpTurnObserver as MutationObserver | undefined;
           if (obs) obs.disconnect();
           win.__acpTurnObserver = undefined;
