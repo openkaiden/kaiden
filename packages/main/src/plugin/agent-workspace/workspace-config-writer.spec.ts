@@ -16,6 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { strict as assert } from 'node:assert';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -530,7 +531,6 @@ describe('writeWorkspaceConfig', () => {
   });
 
   test('writes image to workspace.json when provided', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.mocked(readFile).mockRejectedValue(mockEnoent());
 
     await writeWorkspaceConfig({
@@ -538,31 +538,35 @@ describe('writeWorkspaceConfig', () => {
       image: 'ghcr.io/my-org/my-custom-agent:1.0.0',
     });
 
-    const writtenContent = vi.mocked(writeFile).mock.calls[0]![1] as string;
-    const parsed = JSON.parse(writtenContent);
+    const call = vi.mocked(writeFile).mock.calls[0];
+    assert(call, 'writeFile was not called');
+    assert(typeof call[1] === 'string');
+    const parsed = JSON.parse(call[1]);
     expect(parsed.image).toBe('ghcr.io/my-org/my-custom-agent:1.0.0');
   });
 
   test('omits image from workspace.json when not provided', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.mocked(readFile).mockRejectedValue(mockEnoent());
 
     await writeWorkspaceConfig(defaultOptions);
 
-    const writtenContent = vi.mocked(writeFile).mock.calls[0]![1] as string;
-    const parsed = JSON.parse(writtenContent);
+    const call = vi.mocked(writeFile).mock.calls[0];
+    assert(call, 'writeFile was not called');
+    assert(typeof call[1] === 'string');
+    const parsed = JSON.parse(call[1]);
     expect(parsed.image).toBeUndefined();
   });
 
-  test('preserves existing image when not provided in options', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  test('clears existing image when not provided in options', async () => {
     vi.mocked(readFile).mockResolvedValue(JSON.stringify({ image: 'existing-image:latest' }));
 
     await writeWorkspaceConfig(defaultOptions);
 
-    const writtenContent = vi.mocked(writeFile).mock.calls[0]![1] as string;
-    const parsed = JSON.parse(writtenContent);
-    expect(parsed.image).toBe('existing-image:latest');
+    const call = vi.mocked(writeFile).mock.calls[0];
+    assert(call, 'writeFile was not called');
+    assert(typeof call[1] === 'string');
+    const parsed = JSON.parse(call[1]);
+    expect(parsed.image).toBeUndefined();
   });
 });
 

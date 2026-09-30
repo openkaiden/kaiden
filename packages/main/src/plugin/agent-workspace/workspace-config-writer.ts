@@ -84,6 +84,8 @@ export async function writeWorkspaceConfig(
 
   if (options.image !== undefined) {
     existing.image = options.image;
+  } else {
+    delete existing.image;
   }
 
   if (hasSkills) {

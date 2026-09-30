@@ -16,6 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { strict as assert } from 'node:assert';
 import type { Stats } from 'node:fs';
 import { access, lstat, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
@@ -649,8 +650,9 @@ describe('create – OpenShell mode', () => {
     await manager.create({ ...defaultOptions, image: 'custom-registry.io/my-image:latest' });
 
     const workspaceJsonCall = vi.mocked(writeFile).mock.calls.find(c => String(c[0]).endsWith('workspace.json'));
-    expect(workspaceJsonCall).toBeDefined();
-    const parsed = JSON.parse(workspaceJsonCall![1] as string);
+    assert(workspaceJsonCall, 'workspace.json write call not found');
+    assert(typeof workspaceJsonCall[1] === 'string');
+    const parsed = JSON.parse(workspaceJsonCall[1]);
     expect(parsed.image).toBe('custom-registry.io/my-image:latest');
     expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({ image: 'custom-registry.io/my-image:latest' }),
@@ -666,15 +668,16 @@ describe('create – OpenShell mode', () => {
     await manager.create({ ...defaultOptions, image: undefined });
 
     const workspaceJsonCall = vi.mocked(writeFile).mock.calls.find(c => String(c[0]).endsWith('workspace.json'));
-    expect(workspaceJsonCall).toBeDefined();
-    const parsed = JSON.parse(workspaceJsonCall![1] as string);
+    assert(workspaceJsonCall, 'workspace.json write call not found');
+    assert(typeof workspaceJsonCall[1] === 'string');
+    const parsed = JSON.parse(workspaceJsonCall[1]);
     expect(parsed.image).toBeUndefined();
     expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({ image: 'registry.example.com/agent-base:v1' }),
     );
   });
 
-  test('uses image from existing workspace.json for sandbox when no user image specified', async () => {
+  test('clears stale image from workspace.json and falls back to agent baseImage when no user image specified', async () => {
     vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({
       ...mockAgent,
       baseImage: 'registry.example.com/agent-base:v1',
@@ -683,7 +686,14 @@ describe('create – OpenShell mode', () => {
 
     await manager.create({ ...defaultOptions, image: undefined });
 
-    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.objectContaining({ image: 'existing-image:latest' }));
+    const workspaceJsonCall = vi.mocked(writeFile).mock.calls.find(c => String(c[0]).endsWith('workspace.json'));
+    assert(workspaceJsonCall, 'workspace.json write call not found');
+    assert(typeof workspaceJsonCall[1] === 'string');
+    const parsed = JSON.parse(workspaceJsonCall[1]);
+    expect(parsed.image).toBeUndefined();
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
+      expect.objectContaining({ image: 'registry.example.com/agent-base:v1' }),
+    );
   });
 
   test('calls agent.preWorkspaceStart with correct context', async () => {
@@ -992,12 +1002,14 @@ describe('create – OpenShell mode', () => {
     );
   });
 
-  test('throws when agent is not found in registry', async () => {
+  test('throws when agent is not found in registry and does not write workspace.json', async () => {
     vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue(undefined);
 
     await expect(manager.create(defaultOptions)).rejects.toThrow('agent claude not registered');
 
     expect(sdkSandbox.create).not.toHaveBeenCalled();
+    const workspaceJsonCall = vi.mocked(writeFile).mock.calls.find(c => String(c[0]).endsWith('workspace.json'));
+    expect(workspaceJsonCall).toBeUndefined();
   });
 
   test('updates policy with structured endpoints after sandbox creation for deny mode with hosts', async () => {
