@@ -52,6 +52,7 @@ import { createAcpDebug } from './acp-debug.js';
 
 const MAX_STDERR_LINES = 100;
 const PTY_COLS = 65_535;
+const PROMPT_TIMEOUT_MS = 300_000; // 5 minutes
 
 // eslint-disable-next-line sonarjs/publicly-writable-directories
 const ATTACHMENT_UPLOAD_DIR = '/sandbox/.kaiden-attachments';
@@ -295,6 +296,39 @@ export class AcpSessionManager {
     return info;
   }
 
+  private promptWithTimeout(
+    session: AcpSession,
+    sessionId: string,
+    params: { sessionId: string; prompt: acp.ContentBlock[] },
+  ): ReturnType<acp.ClientSideConnection['prompt']> {
+    type PromptResult = Awaited<ReturnType<acp.ClientSideConnection['prompt']>>;
+    return new Promise<PromptResult>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        session.connection.cancel({ sessionId: params.sessionId }).catch((cancelErr: unknown) => {
+          debugProtocol(
+            `cancel after timeout failed: ${cancelErr instanceof Error ? cancelErr.message : String(cancelErr)}`,
+          );
+        });
+
+        this.updateSessionStatus(sessionId, 'error');
+        session.info.error = `Prompt timed out after ${PROMPT_TIMEOUT_MS / 1_000} seconds with no response from the agent`;
+
+        reject(new Error(session.info.error));
+      }, PROMPT_TIMEOUT_MS);
+
+      session.connection
+        .prompt(params)
+        .then(result => {
+          clearTimeout(timer);
+          resolve(result);
+        })
+        .catch((err: unknown) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+    });
+  }
+
   private async startAcpSession(sessionId: string, prompt: string): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session) {
@@ -335,7 +369,7 @@ export class AcpSessionManager {
     this.updateSessionStatus(sessionId, 'running');
 
     debugProtocol(`sending prompt: ${prompt}`);
-    const result = await session.connection.prompt({
+    const result = await this.promptWithTimeout(session, sessionId, {
       sessionId: newSession.sessionId,
       prompt: [{ type: 'text', text: prompt }],
     });
@@ -829,7 +863,7 @@ export class AcpSessionManager {
     }
 
     try {
-      const result = await session.connection.prompt({
+      const result = await this.promptWithTimeout(session, sessionId, {
         sessionId: session.acpSessionId,
         prompt: contentBlocks,
       });
@@ -841,7 +875,7 @@ export class AcpSessionManager {
       if (err instanceof Error && err.message.toLowerCase().includes('connection closed')) {
         debugLifecycle(`${session.info.sandboxName} connection died during prompt, reconnecting...`);
         await this.reconnectSession(sessionId);
-        const result = await session.connection.prompt({
+        const result = await this.promptWithTimeout(session, sessionId, {
           sessionId: session.acpSessionId!,
           prompt: contentBlocks,
         });
