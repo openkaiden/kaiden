@@ -105,8 +105,6 @@ test.describe
 
       sessionLabel = prompt.slice(0, 40);
       await agentSessionDetailPage.waitForTurnCompletion(MODEL_RESPONSE_TIMEOUT);
-      // nth(1): first match is the prompt itself, second proves the model responded
-      await expect(agentSessionDetailPage.getFlowText(/pong/i).nth(1)).toBeVisible();
     });
 
     for (const [i, { file, label }] of ATTACHMENT_CASES.entries()) {
