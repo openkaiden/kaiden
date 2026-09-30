@@ -16,6 +16,7 @@
       "properties": {
         "openai.factory.baseURL": {
           "type": "string",
+          "default": "https://api.openai.com/v1",
           "scope": "InferenceProviderConnectionFactory",
           "description": "baseURL"
         },

@@ -31,7 +31,7 @@ import type {
 } from '@openkaiden/api';
 import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { OpenAI, PROVIDER_ID, type StoredConnection, TOKENS_KEY } from './openAI';
+import { DEFAULT_BASE_URL, OpenAI, PROVIDER_ID, type StoredConnection, TOKENS_KEY } from './openAI';
 
 vi.mock(import('node:crypto'));
 
@@ -159,10 +159,24 @@ describe('factory', () => {
     }).rejects.toThrowError('invalid apiKey');
   });
 
-  test('calling create without baseURL should throw invalid baseURL', async () => {
-    await expect(() => {
-      return create({ 'openai.factory.apiKey': 'dummyKey' });
-    }).rejects.toThrowError('invalid baseURL');
+  test('calling create without baseURL should default to OpenAI API URL', async () => {
+    await create({ 'openai.factory.apiKey': 'dummyKey' });
+
+    expect(fetchMock).toHaveBeenCalledWith(`${DEFAULT_BASE_URL}/models`, {
+      headers: { Authorization: 'Bearer dummyKey' },
+    });
+
+    expect(createOpenAICompatible).toHaveBeenCalledWith({
+      baseURL: DEFAULT_BASE_URL,
+      apiKey: 'dummyKey',
+      name: DEFAULT_BASE_URL,
+    });
+
+    expect(PROVIDER_MOCK.registerInferenceProviderConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        endpoint: DEFAULT_BASE_URL,
+      }),
+    );
   });
 
   test('calling create with proper params should save connection as JSON', async () => {

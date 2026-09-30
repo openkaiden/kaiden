@@ -31,6 +31,7 @@ import type {
 
 export const TOKENS_KEY = 'openai:infos';
 export const PROVIDER_ID = 'openai';
+export const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 
 export interface StoredConnection {
   id: string;
@@ -221,8 +222,8 @@ export class OpenAI implements Disposable {
     const apiKey = params['openai.factory.apiKey'];
     if (!apiKey || typeof apiKey !== 'string') throw new Error('invalid apiKey');
 
-    const baseURL = params['openai.factory.baseURL'];
-    if (!baseURL || typeof baseURL !== 'string') throw new Error('invalid baseURL');
+    const rawBaseURL = params['openai.factory.baseURL'];
+    const baseURL = typeof rawBaseURL === 'string' && rawBaseURL ? rawBaseURL : DEFAULT_BASE_URL;
 
     const stored = await this.getStoredConnections();
     if (stored.some(c => c.apiKey === apiKey && c.baseURL === baseURL)) {
