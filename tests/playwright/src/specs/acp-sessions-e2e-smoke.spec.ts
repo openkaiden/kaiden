@@ -105,6 +105,7 @@ test.describe
 
       sessionLabel = prompt.slice(0, 40);
       await agentSessionDetailPage.waitForTurnCompletion(MODEL_RESPONSE_TIMEOUT);
+      await expect(agentSessionDetailPage.agentMessage.first()).toBeVisible();
     });
 
     for (const [i, { file, label }] of ATTACHMENT_CASES.entries()) {
