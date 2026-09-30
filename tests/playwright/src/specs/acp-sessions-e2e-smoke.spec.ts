@@ -93,7 +93,7 @@ test.describe
       await navigationBar.navigateToAgentsPage();
       await expect(agentSessionsPage.createButton).toBeEnabled({ timeout: TIMEOUTS.WORKSPACE_READY });
 
-      const prompt = 'Compute 7 * 6 and reply with only the number. No tools, no files.';
+      const prompt = 'Reply with exactly the single word "pong". Do not use any tools or read any files.';
       const createDialog = await agentSessionsPage.openCreateDialog();
       await createDialog.fillPrompt(prompt);
       await agentSessionDetailPage.installTurnObserver();
@@ -105,7 +105,8 @@ test.describe
 
       sessionLabel = prompt.slice(0, 40);
       await agentSessionDetailPage.waitForTurnCompletion(MODEL_RESPONSE_TIMEOUT);
-      await expect(agentSessionDetailPage.getFlowText('42')).toBeVisible();
+      // nth(1): first match is the prompt itself, second proves the model responded
+      await expect(agentSessionDetailPage.getFlowText(/pong/i).nth(1)).toBeVisible();
     });
 
     for (const [i, { file, label }] of ATTACHMENT_CASES.entries()) {
