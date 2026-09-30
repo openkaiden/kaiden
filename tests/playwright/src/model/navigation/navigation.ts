@@ -44,9 +44,9 @@ export class NavigationBar {
     this.workspacesLink = this.navigationLocator.getByRole('link', { name: 'Workspaces', exact: true });
     this.settingsLink = this.navigationLocator.getByRole('link', { name: 'Settings', exact: true });
     this.agentsLink = this.navigationLocator.getByRole('link', { name: 'Agents', exact: true });
-    // Knowledges link is conditionally hidden when no RAG/chunk providers exist,
-    // so it is excluded from the always-visible links list.
-    this.links = [this.extensionsLink, this.agentsLink, this.workspacesLink, this.settingsLink];
+    // Knowledges and Agents links are conditionally hidden when their providers
+    // are unavailable, so they are excluded from the always-visible links list.
+    this.links = [this.extensionsLink, this.workspacesLink, this.settingsLink];
   }
 
   getAllLinks(): Locator[] {
