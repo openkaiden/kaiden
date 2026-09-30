@@ -30,10 +30,12 @@ export class AgentSessionDetailPage extends BasePage {
   readonly stopButton: Locator;
   readonly attachButton: Locator;
   readonly staleSandboxBanner: Locator;
+  readonly agentMessage: Locator;
 
   constructor(page: Page) {
     super(page);
     this.flowContainer = page.getByTestId('acp-session-flow');
+    this.agentMessage = this.flowContainer.getByTestId('acp-agent-message');
     this.followUpTextarea = page.getByLabel('Follow-up message');
     this.sendButton = page.getByRole('button', { name: 'Send' });
     this.stopButton = page.getByRole('button', { name: 'Stop' });
