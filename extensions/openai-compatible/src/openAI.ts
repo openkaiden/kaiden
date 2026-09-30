@@ -31,6 +31,7 @@ import type {
 
 export const TOKENS_KEY = 'openai:infos';
 export const PROVIDER_ID = 'openai';
+export const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 
 export interface StoredConnection {
   id: string;
@@ -168,12 +169,10 @@ export class OpenAI implements Disposable {
     let models: InferenceModel[] = [];
     let status: ProviderConnectionStatus = 'unknown';
 
-    if (baseURL) {
-      try {
-        models = await this.listModels(baseURL, token);
-      } catch (err: unknown) {
-        status = 'stopped';
-      }
+    try {
+      models = await this.listModels(baseURL ?? DEFAULT_BASE_URL, token);
+    } catch (err: unknown) {
+      status = 'stopped';
     }
 
     const connectionName = baseURL ?? PROVIDER_ID;
