@@ -18,17 +18,21 @@
 
 import { isDeepStrictEqual } from 'node:util';
 
-import type { Disposable } from '@openkaiden/api';
+import { create } from '@bufbuild/protobuf';
+import { ProviderProfileImportItemSchema } from '@nvidia/openshell-sdk/raw';
+import type { Disposable, ProviderProfile } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
 
 import { Emitter } from '/@/plugin/events/emitter.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
+import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
 import { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { IDisposable } from '/@api/disposable.js';
 import type { Event } from '/@api/event.js';
 import type { GatewayInfo, GatewayProcessState, LocalGatewayDriver } from '/@api/openshell-gateway-info.js';
 
 import { OpenshellGatewayManager } from './openshell-gateway-manager.js';
+import { OpenshellSdkClientManager } from './openshell-sdk-client-manager.js';
 
 const OPENSHELL_CONFIGURATION_SECTION = 'openshell';
 const GATEWAY_POLL_INTERVAL_CONFIGURATION = 'gateway.pollInterval';
@@ -46,6 +50,7 @@ export class OpenshellGatewayStateManager implements Disposable {
   #refreshPromise: Promise<void> | undefined;
   #refreshQueued = false;
   #configurationChangeDisposable: IDisposable | undefined;
+  #disposables: IDisposable[] = [];
 
   readonly #onDidUpdateGateways = new Emitter<readonly GatewayInfo[]>();
   readonly onDidUpdateGateways: Event<readonly GatewayInfo[]> = this.#onDidUpdateGateways.event;
@@ -57,6 +62,10 @@ export class OpenshellGatewayStateManager implements Disposable {
     private readonly configurationRegistry: IConfigurationRegistry,
     @inject(OpenshellGateway)
     private readonly openshellGateway: OpenshellGateway,
+    @inject(OpenShellRegistry)
+    private readonly registry: OpenShellRegistry,
+    @inject(OpenshellSdkClientManager)
+    private readonly sdkClientManager: OpenshellSdkClientManager,
   ) {}
 
   init(): void {
@@ -64,6 +73,32 @@ export class OpenshellGatewayStateManager implements Disposable {
       return;
     }
     this.#initialized = true;
+
+    this.#disposables.push(
+      this.registry.onDidRegisterProfile((profile: ProviderProfile) => {
+        for (const gw of this.listGateways()) {
+          if (gw.gatewayState?.reachable && !(gw.importedProfiles ?? []).includes(profile.id)) {
+            this.importProfiles(gw, [profile])
+              .then(importedProfiles => {
+                const current = this.#gateways.get(gw.name);
+                if (current) {
+                  this.#gateways.set(gw.name, {
+                    ...current,
+                    importedProfiles: [...new Set([...importedProfiles, ...(current.importedProfiles ?? [])])],
+                  });
+                  this.#onDidUpdateGateways.fire(this.listGateways());
+                }
+              })
+              .catch((err: unknown) => {
+                console.warn(
+                  `[openshell-gateway-state] failed to sync profile "${profile.id}" to gateway "${gw.name}": ${err instanceof Error ? err.message : String(err)}`,
+                );
+              });
+          }
+        }
+      }),
+    );
+
     this.refresh().catch((err: unknown) => this.logRefreshError(err));
     this.schedulePolling();
     this.#configurationChangeDisposable = this.configurationRegistry.onDidChangeConfiguration(event => {
@@ -154,19 +189,30 @@ export class OpenshellGatewayStateManager implements Disposable {
               ? reportedDriver
               : undefined;
           const processState: GatewayProcessState | undefined = this.deriveProcessState(pid, true);
-          return {
+          const gateway: GatewayInfo = {
             ...base,
             ...(driver ? { driver } : {}),
+            importedProfiles: this.#gateways.get(listed.metadata.name)?.importedProfiles ?? [],
             gatewayState: {
               reachable: true,
               health: runtimeInfo.status,
               ...(processState ? { process: processState } : {}),
             },
           };
+          gateway.importedProfiles = await this.importProfiles(gateway, this.registry.getProfiles()).catch(
+            (err: unknown) => {
+              console.warn(
+                `[openshell-gateway-state] failed to import profiles on gateway "${gateway.name}": ${err instanceof Error ? err.message : String(err)}`,
+              );
+              return gateway.importedProfiles;
+            },
+          );
+          return gateway;
         } catch {
           const processState: GatewayProcessState | undefined = this.deriveProcessState(pid, false);
           return {
             ...base,
+            importedProfiles: [],
             gatewayState: {
               reachable: false,
               health: 'unknown' as const,
@@ -181,6 +227,39 @@ export class OpenshellGatewayStateManager implements Disposable {
       this.#gateways = nextGateways;
       this.#onDidUpdateGateways.fire(this.listGateways());
     }
+  }
+
+  private async importProfiles(gateway: GatewayInfo, profiles: readonly ProviderProfile[]): Promise<string[]> {
+    const imported = new Set(gateway.importedProfiles ?? []);
+    const missing = profiles.filter(p => !imported.has(p.id));
+
+    if (missing.length === 0) {
+      return Array.from(imported);
+    }
+
+    const client = await this.sdkClientManager.getClient(gateway.name);
+    const { profiles: existingProfiles } = await client.raw.listProviderProfiles({ workspace: 'default' });
+    const existingIds = new Set(existingProfiles.map(p => p.id));
+
+    const toImport = missing.filter(p => !existingIds.has(p.id));
+    if (toImport.length > 0) {
+      const importItems = toImport.map(profile =>
+        create(ProviderProfileImportItemSchema, { profile, source: 'kaiden' }),
+      );
+      const response = await client.raw.importProviderProfiles({ profiles: importItems, workspace: 'default' });
+      if (!response.imported) {
+        throw new Error(`Error while importing provider profiles on gateway: ${gateway.name}`);
+      }
+      for (const d of response.diagnostics) {
+        console.warn(`[openshell-gateway-state] import diagnostic for "${d.profileId}": ${d.message}`);
+      }
+      console.log(`[openshell-gateway-state] synced ${toImport.length} profile(s) to gateway "${gateway.name}"`);
+    }
+
+    for (const p of missing) {
+      imported.add(p.id);
+    }
+    return Array.from(imported);
   }
 
   private deriveProcessState(pid: number | undefined, reachable: boolean): GatewayProcessState | undefined {
@@ -217,6 +296,10 @@ export class OpenshellGatewayStateManager implements Disposable {
     }
     this.#configurationChangeDisposable?.dispose();
     this.#configurationChangeDisposable = undefined;
+    for (const d of this.#disposables) {
+      d.dispose();
+    }
+    this.#disposables = [];
     this.#onDidUpdateGateways.dispose();
   }
 }

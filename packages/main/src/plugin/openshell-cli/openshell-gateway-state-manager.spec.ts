@@ -16,14 +16,23 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import type { ProviderProfile } from '@openkaiden/api';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
+import { OpenshellGatewayConfig } from '/@/plugin/openshell-cli/openshell-gateway-config.js';
+import { Properties } from '/@/plugin/util/properties.js';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { ListedGateway } from '/@api/openshell-gateway-info.js';
 
+import { OpenShellRegistry } from '../openshell-registry.js';
 import type { OpenshellGateway } from './openshell-gateway.js';
 import type { OpenshellGatewayManager } from './openshell-gateway-manager.js';
 import { OpenshellGatewayStateManager } from './openshell-gateway-state-manager.js';
+import { OpenshellSdkClientManager } from './openshell-sdk-client-manager.js';
+
+vi.mock(import('../openshell-registry.js'));
+vi.mock(import('./openshell-sdk-client-manager.js'));
+vi.mock(import('./openshell-gateway-config.js'));
 
 function listed(name: string, endpoint: string): ListedGateway {
   return {
@@ -50,12 +59,32 @@ const configurationRegistry = {
   }),
 } as unknown as IConfigurationRegistry;
 
+const listProviderProfiles = vi.fn();
+const importProviderProfiles = vi.fn();
+
+let profileRegisterCallback: ((profile: ProviderProfile) => void) | undefined;
+const apiSendMock = {
+  send: vi.fn(),
+  receive: vi.fn(),
+};
+const registry = new OpenShellRegistry(apiSendMock, new Properties());
+const gatewayConfig = new OpenshellGatewayConfig();
+const sdkClientManager = new OpenshellSdkClientManager(gatewayManager, gatewayConfig);
+
 let manager: OpenshellGatewayStateManager;
 
 beforeEach(() => {
   vi.resetAllMocks();
   pollInterval = 5;
   configurationChangeCallback = undefined;
+  profileRegisterCallback = undefined;
+  Object.defineProperty(registry, 'onDidRegisterProfile', {
+    value: vi.fn(cb => {
+      profileRegisterCallback = cb;
+      return { dispose: vi.fn() };
+    }),
+    writable: true,
+  });
   vi.mocked(configurationRegistry.getConfiguration).mockReturnValue({
     get: vi.fn(() => pollInterval),
   } as unknown as ReturnType<IConfigurationRegistry['getConfiguration']>);
@@ -65,7 +94,23 @@ beforeEach(() => {
   });
   vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(undefined);
   vi.mocked(gatewayManager.getActiveGateway).mockResolvedValue(undefined);
-  manager = new OpenshellGatewayStateManager(gatewayManager, configurationRegistry, openshellGateway);
+  vi.mocked(registry.getProfiles).mockReturnValue([]);
+  vi.mocked(registry.onDidRegisterProfile).mockImplementation((cb: (profile: ProviderProfile) => void) => {
+    profileRegisterCallback = cb;
+    return { dispose: vi.fn() };
+  });
+  listProviderProfiles.mockResolvedValue({ profiles: [] });
+  importProviderProfiles.mockResolvedValue({ diagnostics: [], profiles: [], imported: true });
+  vi.mocked(sdkClientManager.getClient).mockResolvedValue({
+    raw: { listProviderProfiles, importProviderProfiles },
+  } as never);
+  manager = new OpenshellGatewayStateManager(
+    gatewayManager,
+    configurationRegistry,
+    openshellGateway,
+    registry,
+    sdkClientManager,
+  );
 });
 
 afterEach(() => {
@@ -96,6 +141,7 @@ test('builds a cached snapshot from registrations and runtime information', asyn
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
+      importedProfiles: [],
       gatewayState: { reachable: true, health: 'healthy' },
     },
     {
@@ -106,6 +152,7 @@ test('builds a cached snapshot from registrations and runtime information', asyn
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
+      importedProfiles: [],
       gatewayState: { reachable: true, health: 'degraded' },
     },
   ]);
@@ -126,6 +173,7 @@ test('marks a gateway unreachable when runtime information cannot be retrieved',
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
+      importedProfiles: [],
       gatewayState: { reachable: false, health: 'unknown', process: { status: 'not-running' } },
     },
   ]);
@@ -309,6 +357,7 @@ test('includes process state with running pid when gateway is reachable', async 
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
+      importedProfiles: [],
       gatewayState: { reachable: true, health: 'healthy', process: { pid: 12345, status: 'running' } },
     },
   ]);
@@ -331,6 +380,7 @@ test('includes process state with running pid when gateway is unreachable', asyn
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
+      importedProfiles: [],
       gatewayState: { reachable: false, health: 'unknown', process: { pid: 12345, status: 'running' } },
     },
   ]);
@@ -353,6 +403,7 @@ test('includes not-running process state when gateway is unreachable and no pid'
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
+      importedProfiles: [],
       gatewayState: { reachable: false, health: 'unknown', process: { status: 'not-running' } },
     },
   ]);
@@ -375,7 +426,123 @@ test('omits process state when gateway is reachable and no pid', async () => {
       is_remote: false,
       remote_host: undefined,
       resolved_host: undefined,
+      importedProfiles: [],
       gatewayState: { reachable: true, health: 'healthy' },
     },
   ]);
+});
+
+// ── Profile sync tests ──────────────────────────────────────────────────
+
+const profileA = { id: 'anthropic' } as ProviderProfile;
+const profileB = { id: 'openai' } as ProviderProfile;
+
+test('imports missing profiles when a gateway becomes reachable', async () => {
+  vi.mocked(registry.getProfiles).mockReturnValue([profileA, profileB]);
+  listProviderProfiles.mockResolvedValue({ profiles: [{ id: 'openai' }] });
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+
+  await manager.refresh();
+
+  expect(importProviderProfiles).toHaveBeenCalledWith(
+    expect.objectContaining({
+      profiles: expect.arrayContaining([
+        expect.objectContaining({
+          profile: expect.objectContaining({ id: 'anthropic' }),
+          source: 'kaiden',
+        }),
+      ]),
+    }),
+  );
+  expect(manager.listGateways()[0]!.importedProfiles).toEqual(expect.arrayContaining(['anthropic', 'openai']));
+});
+
+test('does not import when all profiles already exist on gateway', async () => {
+  vi.mocked(registry.getProfiles).mockReturnValue([profileA]);
+  listProviderProfiles.mockResolvedValue({ profiles: [{ id: 'anthropic' }] });
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+
+  await manager.refresh();
+
+  expect(importProviderProfiles).not.toHaveBeenCalled();
+  expect(manager.listGateways()[0]!.importedProfiles).toEqual(['anthropic']);
+});
+
+test('does not call SDK when no profiles are registered', async () => {
+  vi.mocked(registry.getProfiles).mockReturnValue([]);
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+
+  await manager.refresh();
+
+  expect(sdkClientManager.getClient).not.toHaveBeenCalled();
+});
+
+test('catches and logs error when profile import fails', async () => {
+  vi.mocked(registry.getProfiles).mockReturnValue([profileA]);
+  vi.mocked(sdkClientManager.getClient).mockRejectedValue(new Error('gateway unreachable'));
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+  await manager.refresh();
+
+  expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('gateway unreachable'));
+  expect(manager.listGateways()[0]!.importedProfiles).toEqual([]);
+  warnSpy.mockRestore();
+});
+
+test('imports single profile when a new profile is registered on a reachable gateway', async () => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+  listProviderProfiles.mockResolvedValue({ profiles: [] });
+
+  manager.init();
+  await manager.whenReady();
+
+  vi.mocked(registry.getProfiles).mockReturnValue([profileA]);
+  profileRegisterCallback!(profileA);
+  await vi.waitFor(() => expect(importProviderProfiles).toHaveBeenCalled());
+
+  expect(sdkClientManager.getClient).toHaveBeenCalledWith('local');
+  expect(importProviderProfiles).toHaveBeenCalledWith(
+    expect.objectContaining({
+      profiles: expect.arrayContaining([
+        expect.objectContaining({
+          profile: expect.objectContaining({ id: 'anthropic' }),
+          source: 'kaiden',
+        }),
+      ]),
+    }),
+  );
+});
+
+test('does not import already-existing profile when registered', async () => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+
+  manager.init();
+  await manager.whenReady();
+
+  vi.mocked(registry.getProfiles).mockReturnValue([profileA]);
+  listProviderProfiles.mockResolvedValue({ profiles: [{ id: 'anthropic' }] });
+  profileRegisterCallback!(profileA);
+  await vi.waitFor(() => expect(listProviderProfiles).toHaveBeenCalled());
+
+  expect(importProviderProfiles).not.toHaveBeenCalled();
+});
+
+test('does not sync profile to unreachable gateway', async () => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockRejectedValue(new Error('connection refused'));
+
+  manager.init();
+  await vi.waitFor(() => expect(gatewayManager.listGateways).toHaveBeenCalled());
+
+  vi.mocked(registry.getProfiles).mockReturnValue([profileA]);
+  profileRegisterCallback!(profileA);
+
+  expect(sdkClientManager.getClient).not.toHaveBeenCalled();
 });
