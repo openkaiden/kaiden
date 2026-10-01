@@ -80,6 +80,7 @@ export class OpenshellGateway implements Disposable {
   #port: number = DEFAULT_PORT;
   #bindAddress: string = DEFAULT_BIND_ADDRESS;
   #migrationRetryInProgress = new Set<string>();
+  #startAbortControllers = new Map<string, AbortController>();
 
   private readonly _onDidGatewayStart = new Emitter<void>();
   readonly onDidGatewayStart: Event<void> = this._onDidGatewayStart.event;
@@ -384,6 +385,8 @@ export class OpenshellGateway implements Disposable {
   }
 
   private async startCreatedGateway(name: string, endpoint: string): Promise<void> {
+    const ac = new AbortController();
+    this.#startAbortControllers.set(name, ac);
     const binaryPath = this.getGatewayBinaryPath();
     if (!binaryPath) {
       throw new Error('openshell-gateway binary not registered in CLI tool registry');
@@ -428,9 +431,12 @@ export class OpenshellGateway implements Disposable {
         if (!this.#migrationRetryInProgress.has(name)) {
           this.#migrationRetryInProgress.add(name);
           try {
-            console.log(`[openshell-gateway] retrying start for "${name}" after migration error recovery`);
-            await this.startCreatedGateway(name, endpoint);
-            return;
+            if (!ac.signal.aborted) {
+              console.log(`[openshell-gateway] retrying start for "${name}" after migration error recovery`);
+              await this.startCreatedGateway(name, endpoint);
+              return;
+            }
+            console.log(`[openshell-gateway] migration recovery cancelled for "${name}" — gateway was stopped`);
           } catch (retryErr: unknown) {
             const retryMessage = retryErr instanceof Error ? retryErr.message : String(retryErr);
             console.error(`[openshell-gateway] retry after migration error for "${name}" also failed: ${retryMessage}`);
@@ -485,6 +491,9 @@ export class OpenshellGateway implements Disposable {
       console.log('[openshell-gateway] already running, skipping start');
       return;
     }
+
+    const ac = new AbortController();
+    this.#startAbortControllers.set(DEFAULT_GATEWAY_NAME, ac);
 
     const binaryPath = this.getGatewayBinaryPath();
     if (!binaryPath) {
@@ -541,7 +550,7 @@ export class OpenshellGateway implements Disposable {
       try {
         await this.registerGateway();
       } catch (err: unknown) {
-        await this.stop().catch((stopErr: unknown) => {
+        await this.stopGateway(DEFAULT_GATEWAY_NAME).catch((stopErr: unknown) => {
           console.warn('[openshell-gateway] failed to stop after registration error:', stopErr);
         });
         this.#port = previousPort;
@@ -553,7 +562,7 @@ export class OpenshellGateway implements Disposable {
     try {
       await this.waitForReady();
     } catch (err: unknown) {
-      await this.stop().catch((stopErr: unknown) => {
+      await this.stopGateway(DEFAULT_GATEWAY_NAME).catch((stopErr: unknown) => {
         console.warn('[openshell-gateway] failed to stop after startup error:', stopErr);
       });
       this.#port = previousPort;
@@ -573,9 +582,12 @@ export class OpenshellGateway implements Disposable {
         if (!this.#migrationRetryInProgress.has(DEFAULT_GATEWAY_NAME)) {
           this.#migrationRetryInProgress.add(DEFAULT_GATEWAY_NAME);
           try {
-            console.log('[openshell-gateway] retrying start after migration error recovery');
-            await this.start(options);
-            return;
+            if (!ac.signal.aborted) {
+              console.log('[openshell-gateway] retrying start after migration error recovery');
+              await this.start(options);
+              return;
+            }
+            console.log('[openshell-gateway] migration recovery cancelled — gateway was stopped');
           } catch (retryErr: unknown) {
             const retryMessage = retryErr instanceof Error ? retryErr.message : String(retryErr);
             console.error(`[openshell-gateway] retry after migration error also failed: ${retryMessage}`);
@@ -592,6 +604,7 @@ export class OpenshellGateway implements Disposable {
 
   async stop(): Promise<void> {
     console.log('[openshell-gateway] stopping');
+    this.#startAbortControllers.get(DEFAULT_GATEWAY_NAME)?.abort();
     await this.stopGateway(DEFAULT_GATEWAY_NAME);
   }
 
@@ -602,6 +615,10 @@ export class OpenshellGateway implements Disposable {
 
   @preDestroy()
   dispose(): void {
+    for (const ac of this.#startAbortControllers.values()) {
+      ac.abort();
+    }
+    this.#startAbortControllers.clear();
     Promise.all([...this.#gatewayProcesses.keys()].map(name => this.stopGateway(name)))
       .catch((err: unknown) => console.error('[openshell-gateway] failed to stop: ', err))
       .finally(() => {
@@ -674,8 +691,11 @@ export class OpenshellGateway implements Disposable {
         if (typeof proc.exitCode !== 'number') {
           console.warn(`[openshell-gateway] ${name} did not exit after SIGTERM, sending SIGKILL`);
           proc.kill('SIGKILL');
+          // The already-registered 'exit' listener resolves the promise
+          // once the process actually terminates.
+        } else {
+          resolve();
         }
-        resolve();
       }, STOP_TIMEOUT_MS);
       proc.once('exit', () => {
         clearTimeout(timeout);

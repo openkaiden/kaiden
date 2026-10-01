@@ -591,6 +591,37 @@ describe('stop', () => {
   test('is a no-op when not running', async () => {
     await gateway.stop();
   });
+
+  test('does not resolve until process exits after SIGKILL', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+
+    await gateway.start();
+
+    let resolved = false;
+    const stopPromise = gateway.stop().then(() => {
+      resolved = true;
+    });
+
+    // Advance past the SIGTERM timeout (5000ms)
+    await vi.advanceTimersByTimeAsync(5000);
+
+    // SIGKILL was sent but the promise must not resolve until exit fires
+    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(resolved).toBe(false);
+
+    // Process finally exits after SIGKILL
+    proc.emit('exit', undefined, 'SIGKILL');
+    await stopPromise;
+    expect(resolved).toBe(true);
+
+    vi.useRealTimers();
+  });
 });
 
 describe('isRunning', () => {
@@ -1084,6 +1115,49 @@ describe('migration backup in start()', () => {
     expect(rename).not.toHaveBeenCalled();
     expect(notificationRegistry.addNotification).not.toHaveBeenCalled();
   });
+
+  test('stop cancels migration recovery restart', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const failProc = createMockChildProcess();
+    vi.mocked(spawn).mockImplementationOnce(() => {
+      setTimeout(() => {
+        failProc._stderr.emit(
+          'data',
+          Buffer.from('migration error: migration 7 was previously applied but is missing'),
+        );
+        Object.defineProperty(failProc, 'exitCode', { value: 1, configurable: true });
+        failProc.emit('exit', 1, undefined);
+      }, 0);
+      return failProc;
+    });
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    vi.mocked(gatewayManager.health).mockRejectedValue(new Error('not ready'));
+
+    // Trigger stop() during the database backup to cancel migration recovery
+    let stopped = false;
+    vi.mocked(rename).mockImplementation(async () => {
+      if (!stopped) {
+        stopped = true;
+        await gateway.stop();
+      }
+    });
+
+    await expect(gateway.start()).rejects.toThrow('Gateway process exited before becoming ready');
+
+    // Only one spawn — the migration recovery retry was cancelled
+    expect(spawn).toHaveBeenCalledTimes(1);
+    // Database was still backed up
+    expect(rename).toHaveBeenCalled();
+    // Notification was still sent
+    expect(notificationRegistry.addNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'OpenShell Gateway database migration error',
+      }),
+    );
+  });
 });
 
 describe('migration backup in startCreatedGateway via init()', () => {
@@ -1163,6 +1237,35 @@ describe('migration backup in startCreatedGateway via init()', () => {
 
     // rename should not have been called since the error is not a migration error
     expect(rename).not.toHaveBeenCalled();
+  });
+
+  test('dispose cancels migration recovery for created gateway', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const failProc = createMockChildProcess();
+    Object.defineProperty(failProc, 'exitCode', { value: 1, configurable: true });
+    vi.mocked(spawn).mockReturnValue(failProc);
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local-dev', 'http://127.0.0.1:17675')]);
+    vi.mocked(gatewayManager.health)
+      .mockRejectedValueOnce(new Error('not ready'))
+      .mockResolvedValue({ status: 'healthy', version: '1.0.0' });
+    vi.mocked(readFile).mockResolvedValueOnce('migration error: migration 7 was previously applied but is missing');
+
+    // Trigger dispose() during the database backup to cancel migration recovery
+    let disposed = false;
+    vi.mocked(rename).mockImplementation(async () => {
+      if (!disposed) {
+        disposed = true;
+        gateway.dispose();
+      }
+    });
+
+    await gateway.init();
+
+    // Only one spawn — the migration recovery retry was cancelled
+    expect(spawn).toHaveBeenCalledTimes(1);
   });
 });
 
