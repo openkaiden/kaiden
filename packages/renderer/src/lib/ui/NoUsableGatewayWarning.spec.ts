@@ -68,7 +68,7 @@ test('shows a warning when all discoverable gateways are unreachable', () => {
       canStop: false,
       name: 'stale-local',
       endpoint: 'http://127.0.0.1:17670',
-      gatewayState: { reachable: false, health: 'unknown' },
+      gatewayState: { reachable: false, health: 'unknown', compatible: true },
     },
   ]);
   openshellGatewaysReady.set(true);
@@ -114,9 +114,61 @@ test('hides the warning when a gateway becomes available', async () => {
       canStop: false,
       name: 'local',
       endpoint: 'http://127.0.0.1:17670',
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
 
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+});
+
+test('shows a warning with minimum version when all gateways are below the minimum version', () => {
+  openshellGateways.set([
+    {
+      name: 'gw1',
+      endpoint: 'http://127.0.0.1:17670',
+      canStop: false,
+      version: '0.0.100',
+      gatewayState: { reachable: true, health: 'healthy', compatible: false },
+    },
+  ]);
+  openshellGatewaysReady.set(true);
+
+  render(NoUsableGatewayWarning);
+
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'No usable OpenShell gateways available. Minimum required version: 0.0.116.',
+  );
+});
+
+test('hides the warning when a compatible gateway exists', () => {
+  openshellGateways.set([
+    {
+      name: 'gw1',
+      endpoint: 'http://127.0.0.1:17670',
+      canStop: false,
+      version: '0.0.116',
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
+    },
+  ]);
+  openshellGatewaysReady.set(true);
+
+  render(NoUsableGatewayWarning);
+
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+test('treats a gateway without a version as compatible when flagged', () => {
+  openshellGateways.set([
+    {
+      name: 'gw1',
+      endpoint: 'http://127.0.0.1:17670',
+      canStop: false,
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
+    },
+  ]);
+  openshellGatewaysReady.set(true);
+
+  render(NoUsableGatewayWarning);
+
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
