@@ -1,12 +1,14 @@
 <script lang="ts">
 import { faPlus } from '@fortawesome/free-solid-svg-icons';
-import { Button, EmptyScreen } from '@podman-desktop/ui-svelte';
+import { Button, EmptyScreen, ErrorMessage } from '@podman-desktop/ui-svelte';
 
 import EngineIcon from '/@/lib/ui/EngineIcon.svelte';
 import { extensionInfos } from '/@/stores/extensions';
 import { openshellGateways } from '/@/stores/openshell-gateways';
 import { type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME } from '/@api/openshell-gateway-info';
 
+import { GatewayStopAction } from './gateway-stop-action.svelte';
+import GatewayStopButton from './GatewayStopButton.svelte';
 import PreferencesOpenshellGatewayCreate from './PreferencesOpenshellGatewayCreate.svelte';
 import SettingsPage from './SettingsPage.svelte';
 
@@ -18,6 +20,7 @@ let openshellStarted: boolean = $derived(
 let activeGateway: GatewayInfo | undefined = $derived($openshellGateways.find(g => g.active));
 let otherGateways: GatewayInfo[] = $derived($openshellGateways.filter(g => !g.active));
 let showCreateGateway = $state(false);
+const stopAction = new GatewayStopAction();
 
 function openCreateGateway(): void {
   showCreateGateway = true;
@@ -87,11 +90,14 @@ function getDetails(gateway: GatewayInfo): string {
 }
 </script>
 
+
+
 <SettingsPage title="Gateways">
   {#snippet subtitle()}
     <span>The runtime that provisions sandboxes, enforces policy, and routes inference traffic.</span>
   {/snippet}
   <div class="h-full" role="region" aria-label="Gateways">
+    {#if stopAction.error}<ErrorMessage error={stopAction.error} />{/if}
     {#if !openshellStarted}
       <EmptyScreen
         icon={EngineIcon}
@@ -130,6 +136,7 @@ function getDetails(gateway: GatewayInfo): string {
               {getTypeBadge(activeGateway)}
             </span>
             <span class="text-sm text-(--pd-content-card-text) opacity-70">{getDetails(activeGateway)}</span>
+            <GatewayStopButton gateway={activeGateway} {stopAction} />
           </div>
         </div>
       </div>
@@ -156,6 +163,7 @@ function getDetails(gateway: GatewayInfo): string {
                   {getTypeBadge(gateway)}
                 </span>
                 <span class="text-sm text-(--pd-content-card-text) opacity-70">{getDetails(gateway)}</span>
+                <GatewayStopButton {gateway} {stopAction} />
               </div>
             </div>
           {/each}

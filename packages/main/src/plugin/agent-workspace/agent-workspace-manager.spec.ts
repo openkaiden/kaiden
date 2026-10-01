@@ -31,7 +31,7 @@ import type {
 } from '@openkaiden/api';
 import { Terminal as HeadlessTerminal } from '@xterm/headless';
 import type { IpcMainInvokeEvent, WebContents } from 'electron';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { AgentRegistry } from '/@/plugin/agent-registry.js';
 import * as configWriter from '/@/plugin/agent-workspace/workspace-config-writer.js';
@@ -94,10 +94,7 @@ const TEST_SDK_REFS: {
   },
 ];
 
-const TEST_GATEWAY: GatewayInfo = {
-  name: 'kaiden',
-  endpoint: 'http://localhost:10080',
-};
+const TEST_GATEWAY: GatewayInfo = { canStop: false, name: 'kaiden', endpoint: 'http://localhost:10080' };
 
 function mockSdkListSandboxes(
   refs: {
@@ -183,15 +180,10 @@ let gatewayStateUpdateCallback: (() => void) | undefined;
 
 const openshellGateway = {
   createLocalGateway: vi.fn(),
+  stopManagedGateway: vi.fn(),
   supportsMounts: vi.fn(),
-  onDidGatewayStart: vi.fn((cb: () => void) => {
-    gatewayStartCallback = cb;
-    return { dispose: vi.fn() };
-  }),
-  onDidGatewayInitFailed: vi.fn((cb: (message: string) => void) => {
-    gatewayInitFailedCallback = cb;
-    return { dispose: vi.fn() };
-  }),
+  onDidGatewayStart: vi.fn(),
+  onDidGatewayInitFailed: vi.fn(),
 } as unknown as OpenshellGateway;
 
 const openshellGatewayStateManager = {
@@ -235,6 +227,15 @@ function getSandboxUploads(): Array<{ local: string; remote: string }> {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(openshellGateway.stopManagedGateway).mockResolvedValue(undefined);
+  vi.mocked(openshellGateway.onDidGatewayStart).mockImplementation(callback => {
+    gatewayStartCallback = callback;
+    return { dispose: vi.fn() };
+  });
+  vi.mocked(openshellGateway.onDidGatewayInitFailed).mockImplementation(callback => {
+    gatewayInitFailedCallback = callback;
+    return { dispose: vi.fn() };
+  });
   vi.mocked(openshellSdkClientManager.getClient).mockResolvedValue({ sandbox: sdkSandbox } as never);
   sdkSandbox.waitReady.mockResolvedValue({ id: 'ws-created', name: 'my-sandbox' });
   sdkSandbox.execInteractive.mockImplementation(async () => createMockExecSession().session);
@@ -249,6 +250,7 @@ beforeEach(() => {
   vi.mocked(openshellGateway.supportsMounts).mockResolvedValue(false);
   vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
     {
+      canStop: false,
       name: 'kaiden',
       endpoint: 'http://127.0.0.1:17670',
       gatewayState: { reachable: true, health: 'healthy' },
@@ -327,8 +329,12 @@ describe('init', () => {
     expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:listOpenshellGateways', expect.any(Function));
   });
 
+  test('registers IPC handler for stopOpenshellGateway', () => {
+    expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:stopOpenshellGateway', expect.any(Function));
+  });
+
   test('refreshes gateway state before returning a newly created gateway', async () => {
-    const createdGateway = { name: 'local-dev', endpoint: 'https://127.0.0.1:17675' } as GatewayInfo;
+    const createdGateway = { canStop: false, name: 'local-dev', endpoint: 'https://127.0.0.1:17675' } as GatewayInfo;
     vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([createdGateway]);
     const options = {
       name: 'local-dev',
@@ -455,6 +461,7 @@ describe('create – OpenShell mode', () => {
   test('rejects an unreachable gateway before creating a sandbox', async () => {
     vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
       {
+        canStop: false,
         name: 'kaiden',
         endpoint: 'http://127.0.0.1:17670',
         gatewayState: { reachable: false, health: 'unknown' },
@@ -768,6 +775,7 @@ describe('create – OpenShell mode', () => {
       vi.mocked(openshellGateway.supportsMounts).mockResolvedValue(true);
       vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
         {
+          canStop: false,
           name: 'kaiden',
           endpoint: 'http://127.0.0.1:17670',
           type: 'local',
@@ -783,6 +791,7 @@ describe('create – OpenShell mode', () => {
     ] as const)('mounts project and skills but uploads mutable agent config using %s', async driver => {
       vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
         {
+          canStop: false,
           name: 'kaiden',
           endpoint: 'http://127.0.0.1:17670',
           type: 'local',
@@ -844,6 +853,7 @@ describe('create – OpenShell mode', () => {
       vi.mocked(openshellGateway.supportsMounts).mockResolvedValue(false);
       vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
         {
+          canStop: false,
           name: 'kaiden',
           endpoint: 'http://127.0.0.1:17670',
           driver,
@@ -1499,6 +1509,7 @@ describe('list', () => {
 describe('listOpenshellGateways', () => {
   const TEST_GATEWAYS: GatewayInfo[] = [
     {
+      canStop: false,
       name: 'kaiden-local',
       endpoint: 'http://127.0.0.1:17670',
       active: true,
@@ -1508,6 +1519,7 @@ describe('listOpenshellGateways', () => {
       gatewayState: { reachable: true, health: 'healthy' },
     },
     {
+      canStop: false,
       name: 'remote-vm',
       endpoint: 'https://127.0.0.1:17670',
       active: false,
@@ -2685,5 +2697,82 @@ describe('decodeWorkspaceLabels', () => {
         'ai.openkaiden.kaiden.workspace.2': 'def',
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('stopOpenshellGateway', () => {
+  test('refreshes workspace rows only after the gateway state refresh completes', async () => {
+    const refresh = Promise.withResolvers<void>();
+    vi.mocked(openshellGatewayStateManager.refresh).mockReturnValue(refresh.promise);
+    const stopping = manager.stopOpenshellGateway('local-dev');
+    await vi.waitFor(() => expect(openshellGatewayStateManager.refresh).toHaveBeenCalledOnce());
+    expect(apiSender.send).not.toHaveBeenCalledWith('agent-workspace-update');
+    refresh.resolve();
+    await stopping;
+    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+  });
+
+  test('workspace refresh excludes inaccessible sandboxes without removing other gateways sandboxes', async () => {
+    const stoppedGateway: GatewayInfo = { ...TEST_GATEWAY, name: 'stopped' };
+    vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([stoppedGateway, TEST_GATEWAY]);
+    vi.mocked(openshellSdkClientManager.getClient).mockRejectedValueOnce(new Error('connection refused'));
+    vi.mocked(sdkSandbox.list).mockResolvedValue(TEST_SDK_REFS);
+    await manager.stopOpenshellGateway('stopped');
+    const result = await manager.listOpenshellSandboxes();
+    expect(result.map(({ gateway, sandboxes }) => ({ name: gateway.name, ids: sandboxes.map(s => s.id) }))).toEqual([
+      { name: 'stopped', ids: [] },
+      { name: 'kaiden', ids: ['ws-1', 'ws-2'] },
+    ]);
+    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+  });
+
+  test('stops a gateway and refreshes its state', async () => {
+    await manager.stopOpenshellGateway('local-dev');
+    expect(openshellGateway.stopManagedGateway).toHaveBeenCalledWith('local-dev');
+    expect(openshellGatewayStateManager.refresh).toHaveBeenCalledOnce();
+    expect(mockTask.status).toBe('success');
+    expect(mockTask.state).toBe('completed');
+  });
+
+  test('reports gateway stop failures', async () => {
+    const cause = new Error('stop failed');
+    vi.mocked(openshellGateway.stopManagedGateway).mockRejectedValue(cause);
+    await expect(manager.stopOpenshellGateway('local-dev')).rejects.toMatchObject({
+      message: 'stop failed',
+      cause,
+    });
+    expect(mockTask.status).toBe('failure');
+    expect(mockTask.error).toBe('Failed to stop gateway "local-dev": stop failed');
+    expect(mockTask.state).toBe('completed');
+    expect(apiSender.send).not.toHaveBeenCalledWith('agent-workspace-update');
+  });
+
+  test('stop IPC handler forwards the gateway name', async () => {
+    const handler = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(([channel]) => channel === 'agent-workspace:stopOpenshellGateway')?.[1];
+    assert(handler);
+    const event: IpcMainInvokeEvent = {
+      sender: webContents,
+      senderFrame: webContents.mainFrame,
+      processId: 1,
+      frameId: 1,
+      type: 'frame',
+      defaultPrevented: false,
+      preventDefault: vi.fn(),
+    };
+    await handler(event, 'local-dev');
+    expect(openshellGateway.stopManagedGateway).toHaveBeenCalledWith('local-dev');
+    expect(mockTask.status).toBe('success');
+    expect(mockTask.state).toBe('completed');
+  });
+
+  test('reports refresh failure after successfully stopping a gateway', async () => {
+    vi.mocked(openshellGatewayStateManager.refresh).mockRejectedValue(new Error('refresh failed'));
+    await expect(manager.stopOpenshellGateway('local-dev')).rejects.toThrow('refresh failed');
+    expect(openshellGateway.stopManagedGateway).toHaveBeenCalledWith('local-dev');
+    expect(mockTask.status).toBe('failure');
+    expect(mockTask.error).toBe('Failed to stop gateway "local-dev": refresh failed');
+    expect(mockTask.state).toBe('completed');
   });
 });

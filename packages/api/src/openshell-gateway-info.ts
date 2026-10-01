@@ -45,6 +45,8 @@ export const GatewayInfoSchema = z.object({
   name: z.string(),
   endpoint: z.string(),
   active: z.boolean().optional(),
+  /** True when this Kaiden instance spawned the gateway process and it is still running. */
+  canStop: z.boolean(),
   auth: z.string().optional(),
   type: z.string().optional(),
   source: z.string().optional(),

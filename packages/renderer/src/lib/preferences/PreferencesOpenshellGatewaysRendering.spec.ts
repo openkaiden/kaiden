@@ -53,6 +53,54 @@ beforeEach(() => {
   vi.mocked(window.createLocalGateway).mockResolvedValue([]);
 });
 
+test.each([true, false])('stops a managed gateway (active: %s)', async active => {
+  setOpenshellStarted();
+  const gateway: GatewayInfo = { name: 'local-dev', endpoint: 'http://localhost:17675', active, canStop: true };
+  openshellGateways.set([gateway]);
+  const pending = Promise.withResolvers<void>();
+  vi.mocked(window.stopOpenshellGateway).mockReturnValue(pending.promise);
+  render(PreferencesOpenshellGatewaysRendering);
+  const button = screen.getByRole('button', { name: 'Stop gateway local-dev' });
+  expect(button).toHaveAttribute('title', 'Stop gateway local-dev');
+  expect(button).not.toHaveTextContent('Stop');
+  await fireEvent.click(button);
+  expect(button).toBeDisabled();
+  expect(button).toHaveClass('disabled');
+  await fireEvent.click(button);
+  expect(window.stopOpenshellGateway).toHaveBeenCalledExactlyOnceWith('local-dev');
+  openshellGateways.set([{ ...gateway, canStop: false }]);
+  pending.resolve();
+  await vi.waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Stop gateway local-dev' })).not.toBeInTheDocument(),
+  );
+  expect(screen.getByText('local-dev')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /restart|start gateway/i })).not.toBeInTheDocument();
+});
+
+test('does not offer stopping an unowned or stopped gateway', () => {
+  setOpenshellStarted();
+  openshellGateways.set([
+    { canStop: false, name: 'remote', endpoint: 'https://example.com', is_remote: true },
+    { name: 'stopped', endpoint: 'http://localhost:17675', canStop: false },
+  ]);
+  render(PreferencesOpenshellGatewaysRendering);
+  expect(screen.queryByRole('button', { name: /Stop gateway/ })).not.toBeInTheDocument();
+});
+
+test('shows stop errors and permits retry', async () => {
+  setOpenshellStarted();
+  openshellGateways.set([{ name: 'local-dev', endpoint: 'http://localhost:17675', canStop: true }]);
+  vi.mocked(window.stopOpenshellGateway).mockRejectedValueOnce(new Error('Permission denied'));
+  render(PreferencesOpenshellGatewaysRendering);
+  const button = screen.getByRole('button', { name: 'Stop gateway local-dev' });
+  await fireEvent.click(button);
+  expect(await screen.findByText(/Permission denied/)).toBeInTheDocument();
+  expect(button).toBeEnabled();
+  vi.mocked(window.stopOpenshellGateway).mockResolvedValue(undefined);
+  await fireEvent.click(button);
+  expect(window.stopOpenshellGateway).toHaveBeenCalledTimes(2);
+});
+
 test('creates a gateway after confirming the selected port is available', async () => {
   setOpenshellStarted();
   render(PreferencesOpenshellGatewaysRendering);
@@ -122,6 +170,7 @@ test('create gateway button is visible inside empty screen when no gateways exis
 test('displays active gateway in the Active Gateway section', () => {
   setOpenshellStarted();
   const activeGateway: GatewayInfo = {
+    canStop: false,
     name: 'kaiden-local',
     endpoint: 'http://127.0.0.1:17670',
     active: true,
@@ -145,13 +194,9 @@ test('displays active gateway in the Active Gateway section', () => {
 test('displays non-active gateways in Other Gateways section', () => {
   setOpenshellStarted();
   const gateways: GatewayInfo[] = [
+    { canStop: false, name: 'kaiden-local', endpoint: 'http://127.0.0.1:17670', active: true, type: 'local' },
     {
-      name: 'kaiden-local',
-      endpoint: 'http://127.0.0.1:17670',
-      active: true,
-      type: 'local',
-    },
-    {
+      canStop: false,
       name: 'production',
       endpoint: 'https://gateway.example.com',
       active: false,
@@ -173,12 +218,7 @@ test('displays non-active gateways in Other Gateways section', () => {
 test('shows Referenced badge for non-local gateways', () => {
   setOpenshellStarted();
   const gateways: GatewayInfo[] = [
-    {
-      name: 'remote-gw',
-      endpoint: 'https://remote.example.com',
-      active: false,
-      type: 'remote',
-    },
+    { canStop: false, name: 'remote-gw', endpoint: 'https://remote.example.com', active: false, type: 'remote' },
   ];
   openshellGateways.set(gateways);
   render(PreferencesOpenshellGatewaysRendering);
@@ -189,12 +229,7 @@ test('shows Referenced badge for non-local gateways', () => {
 test('shows Referenced badge for a local gateway not managed by Kaiden', () => {
   setOpenshellStarted();
   const gateways: GatewayInfo[] = [
-    {
-      name: 'local-gw',
-      endpoint: 'http://localhost:17670',
-      active: true,
-      type: 'local',
-    },
+    { canStop: false, name: 'local-gw', endpoint: 'http://localhost:17670', active: true, type: 'local' },
   ];
   openshellGateways.set(gateways);
   render(PreferencesOpenshellGatewaysRendering);
@@ -204,7 +239,7 @@ test('shows Referenced badge for a local gateway not managed by Kaiden', () => {
 
 test('hides empty screen when gateways exist', () => {
   setOpenshellStarted();
-  openshellGateways.set([{ name: 'gw', endpoint: 'http://localhost:17670', active: true }]);
+  openshellGateways.set([{ canStop: false, name: 'gw', endpoint: 'http://localhost:17670', active: true }]);
   render(PreferencesOpenshellGatewaysRendering);
 
   const emptyTitle = screen.queryByText('No gateways found');
@@ -215,9 +250,16 @@ test('hides empty screen when gateways exist', () => {
 test('renders multiple non-active gateways', () => {
   setOpenshellStarted();
   const gateways: GatewayInfo[] = [
-    { name: 'active-gw', endpoint: 'http://localhost:17670', active: true, type: 'local' },
-    { name: 'team-shared', endpoint: 'https://team.example.com', active: false, type: 'remote', is_remote: true },
-    { name: 'dev-remote', endpoint: 'https://dev.example.com', active: false, type: 'remote' },
+    { canStop: false, name: 'active-gw', endpoint: 'http://localhost:17670', active: true, type: 'local' },
+    {
+      canStop: false,
+      name: 'team-shared',
+      endpoint: 'https://team.example.com',
+      active: false,
+      type: 'remote',
+      is_remote: true,
+    },
+    { canStop: false, name: 'dev-remote', endpoint: 'https://dev.example.com', active: false, type: 'remote' },
   ];
   openshellGateways.set(gateways);
   render(PreferencesOpenshellGatewaysRendering);
@@ -228,7 +270,7 @@ test('renders multiple non-active gateways', () => {
 
 test('shows unknown state text and color when gatewayState is undefined', () => {
   setOpenshellStarted();
-  openshellGateways.set([{ name: 'no-state-gw', endpoint: 'http://localhost:17670', active: true }]);
+  openshellGateways.set([{ canStop: false, name: 'no-state-gw', endpoint: 'http://localhost:17670', active: true }]);
   render(PreferencesOpenshellGatewaysRendering);
 
   expect(screen.getByText('http://localhost:17670 · Unknown')).toBeInTheDocument();
@@ -240,6 +282,7 @@ test('shows disconnected state text and stopped color when gateway is unreachabl
   setOpenshellStarted();
   openshellGateways.set([
     {
+      canStop: false,
       name: 'unreachable-gw',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -257,6 +300,7 @@ test('shows degraded state text and color for degraded gateway', () => {
   setOpenshellStarted();
   openshellGateways.set([
     {
+      canStop: false,
       name: 'degraded-gw',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -274,6 +318,7 @@ test('shows unhealthy state text and terminated color for unhealthy gateway', ()
   setOpenshellStarted();
   openshellGateways.set([
     {
+      canStop: false,
       name: 'unhealthy-gw',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -291,6 +336,7 @@ test('shows connected state text and running color for healthy gateway', () => {
   setOpenshellStarted();
   openshellGateways.set([
     {
+      canStop: false,
       name: 'healthy-gw',
       endpoint: 'http://localhost:17670',
       active: true,

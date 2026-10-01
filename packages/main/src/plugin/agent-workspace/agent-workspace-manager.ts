@@ -720,6 +720,26 @@ export class AgentWorkspaceManager implements Disposable {
     }
   }
 
+  async stopOpenshellGateway(name: string): Promise<void> {
+    const task = this.taskManager.createTask({ title: `Stopping gateway "${name}"` });
+    task.state = 'running';
+    task.status = 'in-progress';
+    try {
+      await this.openshellGateway.stopManagedGateway(name);
+      await this.openshellGatewayStateManager.refresh();
+      this.apiSender.send('agent-workspace-update');
+      task.status = 'success';
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : String(err);
+      task.status = 'failure';
+      task.error = `Failed to stop gateway "${name}": ${detail}`;
+      console.error(task.error);
+      throw new Error(detail, { cause: err });
+    } finally {
+      task.state = 'completed';
+    }
+  }
+
   async deleteOpenshellSandbox(name: string, gateway: string): Promise<void> {
     await this.deleteWorkspace(name, gateway);
   }
@@ -1099,6 +1119,10 @@ export class AgentWorkspaceManager implements Disposable {
 
     this.ipcHandle('agent-workspace:listOpenshellGateways', async (): Promise<GatewayInfo[]> => {
       return this.listOpenshellGateways();
+    });
+
+    this.ipcHandle('agent-workspace:stopOpenshellGateway', async (_listener, name: string): Promise<void> => {
+      return this.stopOpenshellGateway(name);
     });
 
     this.ipcHandle(

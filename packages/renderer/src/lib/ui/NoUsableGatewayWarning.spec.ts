@@ -65,6 +65,7 @@ test('opens gateway settings from the warning', async () => {
 test('shows a warning when all discoverable gateways are unreachable', () => {
   openshellGateways.set([
     {
+      canStop: false,
       name: 'stale-local',
       endpoint: 'http://127.0.0.1:17670',
       gatewayState: { reachable: false, health: 'unknown' },
@@ -78,12 +79,7 @@ test('shows a warning when all discoverable gateways are unreachable', () => {
 });
 
 test('shows a warning when a gateway reachability state is unavailable', () => {
-  openshellGateways.set([
-    {
-      name: 'loading-local',
-      endpoint: 'http://127.0.0.1:17670',
-    },
-  ]);
+  openshellGateways.set([{ canStop: false, name: 'loading-local', endpoint: 'http://127.0.0.1:17670' }]);
   openshellGatewaysReady.set(true);
 
   render(NoUsableGatewayWarning);
@@ -115,6 +111,7 @@ test('hides the warning when a gateway becomes available', async () => {
 
   openshellGateways.set([
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://127.0.0.1:17670',
       gatewayState: { reachable: true, health: 'healthy' },

@@ -142,6 +142,7 @@ export class OpenshellGatewayStateManager implements Disposable {
           active: listed.metadata.name === activeGatewayName,
           source: listed.source,
           is_remote: listed.metadata.is_remote,
+          canStop: this.openshellGateway.canStopGateway(listed.metadata.name),
           remote_host: listed.metadata.remote_host ?? undefined,
           resolved_host: listed.metadata.resolved_host ?? undefined,
         };

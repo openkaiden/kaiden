@@ -90,7 +90,7 @@ const openshellGateway = {
 
 const openshellGatewayStateManager = {
   whenReady: vi.fn().mockResolvedValue(undefined),
-  listGateways: vi.fn().mockReturnValue([{ name: 'kaiden', endpoint: 'http://localhost' }]),
+  listGateways: vi.fn().mockReturnValue([{ canStop: false, name: 'kaiden', endpoint: 'http://localhost' }]),
 } as unknown as OpenshellGatewayStateManager;
 
 const mockWatcher = {
@@ -110,7 +110,7 @@ beforeEach(() => {
   vi.mocked(safeStorageRegistry.getExtensionStorage).mockReturnValue(extensionStorageMock);
   vi.mocked(openshellGatewayStateManager.whenReady).mockResolvedValue(undefined);
   vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
-    { name: 'kaiden', endpoint: 'http://localhost' },
+    { canStop: false, name: 'kaiden', endpoint: 'http://localhost' },
   ]);
   vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
   manager = new SecretManager(
@@ -167,7 +167,7 @@ describe('openshellAdapter', () => {
     vi.mocked(safeStorageRegistry.getExtensionStorage).mockReturnValue(extensionStorageMock);
     vi.mocked(openshellGatewayStateManager.whenReady).mockResolvedValue(undefined);
     vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
-      { name: 'kaiden', endpoint: 'http://localhost' },
+      { canStop: false, name: 'kaiden', endpoint: 'http://localhost' },
     ]);
     vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
     manager = new SecretManager(
@@ -217,8 +217,8 @@ describe('openshellAdapter', () => {
 
   test('lists providers from every gateway and records their owning gateway', async () => {
     vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
-      { name: 'local', endpoint: 'http://local' },
-      { name: 'remote', endpoint: 'http://remote' },
+      { canStop: false, name: 'local', endpoint: 'http://local' },
+      { canStop: false, name: 'remote', endpoint: 'http://remote' },
     ]);
     mockRaw.listProviders.mockResolvedValue({
       providers: [{ metadata: { name: 'shared-provider' }, type: 'openai' }],
@@ -246,8 +246,8 @@ describe('openshellAdapter', () => {
   test('keeps providers from reachable gateways when another gateway fails', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
-      { name: 'offline', endpoint: 'http://offline' },
-      { name: 'online', endpoint: 'http://online' },
+      { canStop: false, name: 'offline', endpoint: 'http://offline' },
+      { canStop: false, name: 'online', endpoint: 'http://online' },
     ]);
     mockRaw.listProviders
       .mockRejectedValueOnce(new Error('connection refused'))

@@ -178,6 +178,7 @@ beforeEach(() => {
   vi.mocked(workspaceProjectsStore).workspaceProjectInfos = writable<readonly WorkspaceProjectInfo[]>([]);
   vi.mocked(openshellGatewaysStore).openshellGateways = writable([
     {
+      canStop: false,
       name: 'kaiden',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -261,12 +262,14 @@ test('Expect gateway selector hidden when only one gateway is available', () => 
 test('Expect gateway selector defaults to the active OpenShell gateway when multiple gateways are available', async () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: false,
       gatewayState: { reachable: true, health: 'healthy' },
     },
     {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: true,
@@ -293,12 +296,14 @@ test('Expect gateway selector defaults to the active OpenShell gateway when mult
 test('Expect selected gateway included when creating a workspace', async () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
       gatewayState: { reachable: true, health: 'healthy' },
     },
     {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
@@ -318,8 +323,8 @@ test('Expect selected gateway included when creating a workspace', async () => {
 
 test('does not offer gateways while their reachability state is unavailable', () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
-    { name: 'local', endpoint: 'http://localhost:17670', active: true },
-    { name: 'remote', endpoint: 'https://remote.example.com', active: false },
+    { canStop: false, name: 'local', endpoint: 'http://localhost:17670', active: true },
+    { canStop: false, name: 'remote', endpoint: 'https://remote.example.com', active: false },
   ]);
 
   render(AgentWorkspaceCreate);
@@ -331,18 +336,21 @@ test('does not offer gateways while their reachability state is unavailable', ()
 test('does not offer unreachable gateways for workspace creation', () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
       gatewayState: { reachable: true, health: 'healthy' },
     },
     {
+      canStop: false,
       name: 'stopped',
       endpoint: 'http://localhost:17671',
       active: false,
       gatewayState: { reachable: false, health: 'unknown' },
     },
     {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
@@ -360,12 +368,14 @@ test('does not offer unreachable gateways for workspace creation', () => {
 test('user-selected gateway is preserved across store updates', async () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
       gatewayState: { reachable: true, health: 'healthy' },
     },
     {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
@@ -382,12 +392,14 @@ test('user-selected gateway is preserved across store updates', async () => {
 
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
       gatewayState: { reachable: true, health: 'healthy' },
     },
     {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
@@ -403,18 +415,21 @@ test('user-selected gateway is preserved across store updates', async () => {
 test('falls back to active gateway when selected gateway becomes unreachable', async () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
       gatewayState: { reachable: true, health: 'healthy' },
     },
     {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
       gatewayState: { reachable: true, health: 'healthy' },
     },
     {
+      canStop: false,
       name: 'extra',
       endpoint: 'https://extra.example.com',
       active: false,
@@ -428,18 +443,21 @@ test('falls back to active gateway when selected gateway becomes unreachable', a
 
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
       gatewayState: { reachable: true, health: 'healthy' },
     },
     {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
       gatewayState: { reachable: false, health: 'unknown' },
     },
     {
+      canStop: false,
       name: 'extra',
       endpoint: 'https://extra.example.com',
       active: false,
@@ -455,6 +473,7 @@ test('falls back to active gateway when selected gateway becomes unreachable', a
 test('clears selected gateway when all gateways become unreachable', async () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -467,6 +486,7 @@ test('clears selected gateway when all gateways become unreachable', async () =>
 
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -685,12 +705,14 @@ test('Expect secrets empty state shown when vault is empty', async () => {
 test('Expect secrets listed from the selected gateway', async () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
       gatewayState: { reachable: true, health: 'healthy' },
     },
     {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,

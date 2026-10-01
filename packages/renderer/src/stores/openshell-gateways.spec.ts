@@ -44,7 +44,9 @@ beforeEach(() => {
 test('does not fetch gateways before extensions are started', async () => {
   const { openshellGateways } = await import('./openshell-gateways');
 
-  vi.mocked(window.listOpenshellGateways).mockResolvedValue([{ name: 'local', endpoint: 'http://127.0.0.1:17670' }]);
+  vi.mocked(window.listOpenshellGateways).mockResolvedValue([
+    { canStop: false, name: 'local', endpoint: 'http://127.0.0.1:17670' },
+  ]);
 
   await callbacks.get('openshell-registry:gateway-update')?.();
 
@@ -56,6 +58,7 @@ test('populates gateways when extensions are started', async () => {
   const { openshellGateways, openshellGatewaysReady } = await import('./openshell-gateways');
   const gateways: GatewayInfo[] = [
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://127.0.0.1:17670',
       active: true,
@@ -92,7 +95,7 @@ test('marks gateways ready after an authoritative empty response', async () => {
 
 test('updates an initially empty gateway snapshot when a gateway becomes available', async () => {
   const { openshellGateways, openshellGatewaysReady } = await import('./openshell-gateways');
-  const gateway: GatewayInfo = { name: 'local', endpoint: 'http://127.0.0.1:17670' };
+  const gateway: GatewayInfo = { canStop: false, name: 'local', endpoint: 'http://127.0.0.1:17670' };
   vi.mocked(window.listOpenshellGateways).mockResolvedValueOnce([]).mockResolvedValueOnce([gateway]);
 
   await callbacks.get('extensions-already-started')?.();
@@ -132,6 +135,7 @@ test('refreshes gateways on OpenShell registry gateway updates after startup', a
   const { openshellGateways } = await import('./openshell-gateways');
   const initialGateways: GatewayInfo[] = [
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://127.0.0.1:17670',
       active: true,
@@ -141,6 +145,7 @@ test('refreshes gateways on OpenShell registry gateway updates after startup', a
   const updatedGateways: GatewayInfo[] = [
     ...initialGateways,
     {
+      canStop: false,
       name: 'production',
       endpoint: 'https://gateway.example.com',
       active: false,
@@ -170,6 +175,7 @@ test('refreshes gateways on agent gateway updates after startup', async () => {
   const { openshellGateways } = await import('./openshell-gateways');
   const initialGateways: GatewayInfo[] = [
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://127.0.0.1:17670',
       active: true,
@@ -178,6 +184,7 @@ test('refreshes gateways on agent gateway updates after startup', async () => {
   ];
   const updatedGateways: GatewayInfo[] = [
     {
+      canStop: false,
       name: 'local',
       endpoint: 'http://127.0.0.1:17670',
       active: true,

@@ -115,6 +115,7 @@ const notificationRegistry = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.useRealTimers();
   gatewayLogStream.removeAllListeners();
   vi.mocked(directories.getDataDirectory).mockReturnValue(KAIDEN_DATA_DIRECTORY);
   vi.mocked(cliToolRegistry.getCliToolInfos).mockReturnValue([
@@ -573,6 +574,110 @@ describe('start', () => {
 });
 
 describe('stop', () => {
+  test('stopping one managed gateway leaves another running', async () => {
+    const local = createMockChildProcess();
+    const other = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValueOnce(local).mockReturnValueOnce(other);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    await gateway.start();
+    await gateway.createLocalGateway({ name: 'other', bindAddress: '127.0.0.1', port: 17675 });
+    const stopping = gateway.stopManagedGateway('other');
+    other.emit('exit', 0, undefined);
+    await stopping;
+    expect(other.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(local.kill).not.toHaveBeenCalled();
+    await expect(gateway.stopManagedGateway('other')).rejects.toThrow('not a running gateway managed');
+    expect(gateway.isRunning()).toBe(true);
+  });
+  test('only stops a process owned by this instance', async () => {
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    await gateway.start();
+    expect(gateway.isRunning()).toBe(true);
+    await expect(gateway.stopManagedGateway('external')).rejects.toThrow('not a running gateway managed');
+    expect(proc.kill).not.toHaveBeenCalled();
+    const stopping = gateway.stopManagedGateway('kaiden-local');
+    proc.emit('exit', 0, undefined);
+    await stopping;
+    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(gateway.isRunning()).toBe(false);
+  });
+
+  test('rejects stopping an untracked gateway', async () => {
+    await expect(gateway.stopManagedGateway('external')).rejects.toThrow('not a running gateway managed');
+  });
+
+  test('falls back to SIGKILL when the managed gateway does not exit', async () => {
+    vi.useFakeTimers();
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    await gateway.start();
+    const stopping = gateway.stopManagedGateway('kaiden-local');
+    let completed = false;
+    const completion = (async (): Promise<void> => {
+      await stopping;
+      completed = true;
+    })();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(completed).toBe(false);
+    expect(gateway.isRunning()).toBe(true);
+    expect(proc.kill).toHaveBeenNthCalledWith(1, 'SIGTERM');
+    expect(proc.kill).toHaveBeenNthCalledWith(2, 'SIGKILL');
+    proc.emit('exit', undefined, 'SIGKILL');
+    await completion;
+    expect(gateway.isRunning()).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test('rejects when the gateway does not exit after SIGKILL and retains ownership', async () => {
+    vi.useFakeTimers();
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    await gateway.start();
+    const listeners = proc.listenerCount('exit');
+    const stopping = gateway.stopManagedGateway('kaiden-local');
+    const assertion = expect(stopping).rejects.toThrow('did not exit after SIGKILL');
+    await vi.advanceTimersByTimeAsync(10000);
+    await assertion;
+    expect(gateway.isRunning()).toBe(true);
+    expect(proc.listenerCount('exit')).toBe(listeners);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test('rejects and cleans up when SIGKILL throws', async () => {
+    vi.useFakeTimers();
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    await gateway.start();
+    const listeners = proc.listenerCount('exit');
+    vi.mocked(proc.kill)
+      .mockReturnValueOnce(true)
+      .mockImplementationOnce(() => {
+        throw new Error('kill failed');
+      });
+    const stopping = gateway.stopManagedGateway('kaiden-local');
+    const assertion = expect(stopping).rejects.toThrow('kill failed');
+    await vi.advanceTimersByTimeAsync(5000);
+    await assertion;
+    expect(gateway.isRunning()).toBe(true);
+    expect(proc.listenerCount('exit')).toBe(listeners);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test('preserves ownership when signalling the process fails', async () => {
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+    await gateway.start();
+    vi.mocked(proc.kill).mockImplementation(() => {
+      throw new Error('Permission denied');
+    });
+    await expect(gateway.stopManagedGateway('kaiden-local')).rejects.toThrow('Permission denied');
+    expect(gateway.isRunning()).toBe(true);
+  });
+
   test('sends SIGTERM to running process', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const proc = createMockChildProcess();
@@ -641,6 +746,7 @@ describe('supportsMounts', () => {
     });
     await expect(
       gateway.supportsMounts({
+        canStop: false,
         name: 'discovered',
         endpoint: 'http://127.0.0.1:17671',
         type: 'local',
@@ -656,6 +762,7 @@ describe('supportsMounts', () => {
 
     await expect(
       gateway.supportsMounts({
+        canStop: false,
         name: 'kaiden-local',
         endpoint: 'http://127.0.0.1:17670',
         type: 'local',
@@ -670,6 +777,7 @@ describe('supportsMounts', () => {
 
     await expect(
       gateway.supportsMounts({
+        canStop: false,
         name: 'kaiden-local',
         endpoint: 'http://127.0.0.1:17670',
         type: 'local',
@@ -681,6 +789,7 @@ describe('supportsMounts', () => {
   test('falls back to runtime check when the managed gateway exits', async () => {
     vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true\n');
     const info = {
+      canStop: false,
       name: 'kaiden-local',
       endpoint: 'http://127.0.0.1:17670',
       type: 'local' as const,
@@ -703,6 +812,7 @@ describe('supportsMounts', () => {
     await expect(
       gateway.supportsMounts({
         name: 'kaiden-local',
+        canStop: false,
         ...registration,
         driver: 'podman',
       }),
@@ -723,6 +833,7 @@ describe('supportsMounts (non-managed gateways)', () => {
 
     await expect(
       gateway.supportsMounts({
+        canStop: false,
         name: 'external-gw',
         endpoint: 'http://127.0.0.1:17671',
         type: 'local',
@@ -740,6 +851,7 @@ describe('supportsMounts (non-managed gateways)', () => {
 
     await expect(
       gateway.supportsMounts({
+        canStop: false,
         name: 'external-gw',
         endpoint: 'http://127.0.0.1:17671',
         type: 'local',
@@ -753,6 +865,7 @@ describe('supportsMounts (non-managed gateways)', () => {
 
     await expect(
       gateway.supportsMounts({
+        canStop: false,
         name: 'external-gw',
         endpoint: 'http://127.0.0.1:17671',
         type: 'local',
@@ -769,6 +882,7 @@ describe('supportsMounts (non-managed gateways)', () => {
 
     await expect(
       gateway.supportsMounts({
+        canStop: false,
         name: 'external-gw',
         endpoint: 'http://127.0.0.1:17671',
         type: 'local',
@@ -780,6 +894,7 @@ describe('supportsMounts (non-managed gateways)', () => {
   test('returns false for a non-managed remote gateway with podman driver', async () => {
     await expect(
       gateway.supportsMounts({
+        canStop: false,
         name: 'remote-gw',
         endpoint: 'https://gateway.example.com',
         type: 'local',
@@ -793,6 +908,7 @@ describe('supportsMounts (non-managed gateways)', () => {
   test('returns false for a non-managed gateway on a non-local endpoint', async () => {
     await expect(
       gateway.supportsMounts({
+        canStop: false,
         name: 'external-gw',
         endpoint: 'http://10.0.0.5:17671',
         type: 'local',
@@ -810,6 +926,7 @@ describe('supportsMounts (non-managed gateways)', () => {
 
     await expect(
       gateway.supportsMounts({
+        canStop: false,
         name: 'ipv6-gw',
         endpoint: 'http://[::1]:17671',
         type: 'local',
@@ -1468,10 +1585,7 @@ describe('gateway.pid persistence', () => {
     vi.mocked(readFile).mockResolvedValue('12345');
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
 
-    const pid = await gateway.getGatewayPid({
-      name: 'local-dev',
-      endpoint: 'http://127.0.0.1:17675',
-    });
+    const pid = await gateway.getGatewayPid({ canStop: false, name: 'local-dev', endpoint: 'http://127.0.0.1:17675' });
 
     expect(pid).toBe(12345);
     killSpy.mockRestore();
@@ -1485,10 +1599,7 @@ describe('gateway.pid persistence', () => {
       throw err;
     });
 
-    const pid = await gateway.getGatewayPid({
-      name: 'local-dev',
-      endpoint: 'http://127.0.0.1:17675',
-    });
+    const pid = await gateway.getGatewayPid({ canStop: false, name: 'local-dev', endpoint: 'http://127.0.0.1:17675' });
 
     expect(pid).toBeUndefined();
     killSpy.mockRestore();
@@ -1497,11 +1608,93 @@ describe('gateway.pid persistence', () => {
   test('getGatewayPid returns undefined when no pid file exists', async () => {
     vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
 
-    const pid = await gateway.getGatewayPid({
-      name: 'local-dev',
-      endpoint: 'http://127.0.0.1:17675',
-    });
+    const pid = await gateway.getGatewayPid({ canStop: false, name: 'local-dev', endpoint: 'http://127.0.0.1:17675' });
 
     expect(pid).toBeUndefined();
   });
+});
+
+describe('explicit stop cancels startup recovery', () => {
+  test('does not recover from migration output after stopping a pending default startup', async () => {
+    const proc = createMockChildProcess();
+    const health = Promise.withResolvers<{ status: string; version: string }>();
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(gatewayManager.health).mockReturnValue(health.promise);
+    vi.mocked(proc.kill).mockImplementation(() => {
+      Object.defineProperty(proc, 'exitCode', { value: 0, configurable: true });
+      proc.emit('exit', 0);
+      return true;
+    });
+    const starting = gateway.start();
+    const rejected = expect(starting).rejects.toThrow('startup cancelled by Stop');
+    await vi.waitFor(() => expect(gatewayManager.health).toHaveBeenCalled());
+    proc._stderr.emit('data', Buffer.from('migration error'));
+    await gateway.stopManagedGateway('kaiden-local');
+    health.resolve({ status: 'healthy', version: '1.0.0' });
+    await rejected;
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(rename).not.toHaveBeenCalled();
+    expect(notificationRegistry.addNotification).not.toHaveBeenCalled();
+    expect(gateway.isRunning()).toBe(false);
+  });
+
+  test('cancels while configuration is pending and permits a later deliberate start', async () => {
+    const writing = Promise.withResolvers<void>();
+    vi.mocked(writeFile).mockReturnValueOnce(writing.promise);
+    const starting = gateway.start();
+    const rejected = expect(starting).rejects.toThrow('startup cancelled by Stop');
+    await vi.waitFor(() => expect(writeFile).toHaveBeenCalled());
+    await gateway.stopManagedGateway('kaiden-local');
+    writing.resolve();
+    await rejected;
+    expect(spawn).not.toHaveBeenCalled();
+    vi.mocked(spawn).mockReturnValue(createMockChildProcess());
+    await gateway.start();
+    expect(spawn).toHaveBeenCalledOnce();
+  });
+
+  test('cancels named migration recovery while its log read is pending', async () => {
+    const proc = createMockChildProcess();
+    Object.defineProperty(proc, 'exitCode', { value: 1, configurable: true });
+    vi.mocked(spawn).mockReturnValue(proc);
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local-dev', 'http://127.0.0.1:17675')]);
+    vi.mocked(gatewayManager.health).mockRejectedValueOnce(new Error('not ready'));
+    const log = Promise.withResolvers<string>();
+    vi.mocked(readFile).mockReturnValueOnce(log.promise);
+    const starting = gateway.init();
+    await vi.waitFor(() => expect(readFile).toHaveBeenCalled());
+    await gateway.stopManagedGateway('local-dev');
+    log.resolve('migration error');
+    await starting;
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(rename).not.toHaveBeenCalled();
+    expect(notificationRegistry.addNotification).not.toHaveBeenCalled();
+  });
+});
+
+test('stopping during named replacement log opening prevents a replacement spawn', async () => {
+  const proc = createMockChildProcess();
+  Object.defineProperty(proc, 'exitCode', { value: 1, configurable: true });
+  vi.mocked(spawn).mockReturnValue(proc);
+  vi.mocked(existsSync).mockReturnValue(true);
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local-dev', 'http://127.0.0.1:17675')]);
+  vi.mocked(gatewayManager.health).mockRejectedValueOnce(new Error('not ready'));
+  vi.mocked(readFile).mockResolvedValue('migration error');
+  const opening = Promise.withResolvers<void>();
+  const logFile = await open('unused', 'a');
+  vi.mocked(open).mockClear();
+  vi.mocked(open)
+    .mockResolvedValueOnce(logFile)
+    .mockImplementationOnce(async () => {
+      await opening.promise;
+      return logFile;
+    });
+  const starting = gateway.init();
+  await vi.waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+  await gateway.stopManagedGateway('local-dev');
+  opening.resolve();
+  await starting;
+  expect(spawn).toHaveBeenCalledOnce();
+  expect(closeLogFile).toHaveBeenCalledTimes(2);
 });

@@ -77,7 +77,12 @@ test('Expect secrets table when secrets exist', () => {
 test('Expect gateway filter dropdown is not shown when there is only one connected gateway', async () => {
   render(SecretVaultList);
   openshellGateways.set([
-    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
+    {
+      canStop: false,
+      name: 'local',
+      endpoint: 'http://localhost:18080',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
   ]);
   await tick();
 
@@ -86,8 +91,14 @@ test('Expect gateway filter dropdown is not shown when there is only one connect
 
 test('Expect gateway filter dropdown is shown when there are multiple connected gateways', async () => {
   const gateways: GatewayInfo[] = [
-    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
     {
+      canStop: false,
+      name: 'local',
+      endpoint: 'http://localhost:18080',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+    {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy' },
@@ -105,8 +116,14 @@ test('Expect gateway filter dropdown is shown when there are multiple connected 
 test('Expect selecting a gateway filters the secrets list', async () => {
   render(SecretVaultList);
   openshellGateways.set([
-    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
     {
+      canStop: false,
+      name: 'local',
+      endpoint: 'http://localhost:18080',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+    {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy' },
@@ -130,8 +147,14 @@ test('Expect selecting a gateway filters the secrets list', async () => {
 test('Expect "All" option shows all secrets', async () => {
   render(SecretVaultList);
   openshellGateways.set([
-    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
     {
+      canStop: false,
+      name: 'local',
+      endpoint: 'http://localhost:18080',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+    {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy' },
@@ -158,8 +181,14 @@ test('Expect "All" option shows all secrets', async () => {
 test('Expect combined gateway and search filters are applied together', async () => {
   render(SecretVaultList);
   openshellGateways.set([
-    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
     {
+      canStop: false,
+      name: 'local',
+      endpoint: 'http://localhost:18080',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+    {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy' },
@@ -186,8 +215,14 @@ test('Expect combined gateway and search filters are applied together', async ()
 test('Expect empty screen when selected gateway has no secrets', async () => {
   render(SecretVaultList);
   openshellGateways.set([
-    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
     {
+      canStop: false,
+      name: 'local',
+      endpoint: 'http://localhost:18080',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+    {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy' },
@@ -208,8 +243,14 @@ test('Expect empty screen when selected gateway has no secrets', async () => {
 test('Expect "Show all gateways" restores the full secrets list', async () => {
   render(SecretVaultList);
   openshellGateways.set([
-    { name: 'local', endpoint: 'http://localhost:18080', gatewayState: { reachable: true, health: 'healthy' } },
     {
+      canStop: false,
+      name: 'local',
+      endpoint: 'http://localhost:18080',
+      gatewayState: { reachable: true, health: 'healthy' },
+    },
+    {
+      canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy' },

@@ -28,12 +28,7 @@ vi.mock(import('node:fs/promises'));
 vi.mock(import('node:os'));
 
 function gateway(overrides: Partial<GatewayInfo> = {}): GatewayInfo {
-  return {
-    name: 'kaiden-local',
-    endpoint: 'http://127.0.0.1:17670',
-    active: true,
-    ...overrides,
-  };
+  return { canStop: false, name: 'kaiden-local', endpoint: 'http://127.0.0.1:17670', active: true, ...overrides };
 }
 
 beforeEach(() => {

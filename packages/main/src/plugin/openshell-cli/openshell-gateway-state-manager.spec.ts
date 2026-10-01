@@ -21,7 +21,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { ListedGateway } from '/@api/openshell-gateway-info.js';
 
-import type { OpenshellGateway } from './openshell-gateway.js';
+import { OpenshellGateway } from './openshell-gateway.js';
 import type { OpenshellGatewayManager } from './openshell-gateway-manager.js';
 import { OpenshellGatewayStateManager } from './openshell-gateway-state-manager.js';
 
@@ -37,9 +37,8 @@ const gatewayManager = {
   getGatewayInfo: vi.fn(),
   getActiveGateway: vi.fn(),
 } as unknown as OpenshellGatewayManager;
-const openshellGateway = {
-  getGatewayPid: vi.fn(),
-} as unknown as OpenshellGateway;
+vi.mock(import('./openshell-gateway.js'));
+let openshellGateway: OpenshellGateway;
 let pollInterval = 5;
 let configurationChangeCallback: ((event: { key: string }) => void) | undefined;
 const configurationRegistry = {
@@ -54,6 +53,7 @@ let manager: OpenshellGatewayStateManager;
 
 beforeEach(() => {
   vi.resetAllMocks();
+  openshellGateway = OpenshellGateway.prototype;
   pollInterval = 5;
   configurationChangeCallback = undefined;
   vi.mocked(configurationRegistry.getConfiguration).mockReturnValue({
@@ -64,6 +64,7 @@ beforeEach(() => {
     return { dispose: vi.fn() };
   });
   vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(undefined);
+  vi.mocked(openshellGateway.canStopGateway).mockReturnValue(false);
   vi.mocked(gatewayManager.getActiveGateway).mockResolvedValue(undefined);
   manager = new OpenshellGatewayStateManager(gatewayManager, configurationRegistry, openshellGateway);
 });
@@ -71,6 +72,17 @@ beforeEach(() => {
 afterEach(() => {
   manager.dispose();
   vi.useRealTimers();
+});
+
+test('publishes stop capability changes independently of gateway health', async () => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://localhost:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockRejectedValue(new Error('unreachable'));
+  vi.mocked(openshellGateway.canStopGateway).mockReturnValue(true);
+  await manager.refresh();
+  expect(manager.listGateways()).toEqual([expect.objectContaining({ canStop: true })]);
+  vi.mocked(openshellGateway.canStopGateway).mockReturnValue(false);
+  await manager.refresh();
+  expect(manager.listGateways()).toEqual([expect.objectContaining({ canStop: false })]);
 });
 
 test('builds a cached snapshot from registrations and runtime information', async () => {
@@ -90,6 +102,7 @@ test('builds a cached snapshot from registrations and runtime information', asyn
   expect(manager.listGateways()).toEqual([
     {
       name: 'local',
+      canStop: false,
       endpoint: 'http://127.0.0.1:17670',
       active: true,
       source: 'user',
@@ -100,6 +113,7 @@ test('builds a cached snapshot from registrations and runtime information', asyn
     },
     {
       name: 'remote',
+      canStop: false,
       endpoint: 'https://gateway.example.com',
       active: false,
       source: 'user',
@@ -120,6 +134,7 @@ test('marks a gateway unreachable when runtime information cannot be retrieved',
   expect(manager.listGateways()).toEqual([
     {
       name: 'stopped',
+      canStop: false,
       endpoint: 'http://127.0.0.1:17671',
       active: false,
       source: 'user',
@@ -303,6 +318,7 @@ test('includes process state with running pid when gateway is reachable', async 
   expect(manager.listGateways()).toEqual([
     {
       name: 'local',
+      canStop: false,
       endpoint: 'http://127.0.0.1:17670',
       active: true,
       source: 'user',
@@ -325,6 +341,7 @@ test('includes process state with running pid when gateway is unreachable', asyn
   expect(manager.listGateways()).toEqual([
     {
       name: 'local',
+      canStop: false,
       endpoint: 'http://127.0.0.1:17670',
       active: true,
       source: 'user',
@@ -341,12 +358,14 @@ test('includes not-running process state when gateway is unreachable and no pid'
   vi.mocked(gatewayManager.getActiveGateway).mockResolvedValue('local');
   vi.mocked(gatewayManager.getGatewayInfo).mockRejectedValue(new Error('connection refused'));
   vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(undefined);
+  vi.mocked(openshellGateway.canStopGateway).mockReturnValue(false);
 
   await manager.refresh();
 
   expect(manager.listGateways()).toEqual([
     {
       name: 'local',
+      canStop: false,
       endpoint: 'http://127.0.0.1:17670',
       active: true,
       source: 'user',
@@ -363,12 +382,14 @@ test('omits process state when gateway is reachable and no pid', async () => {
   vi.mocked(gatewayManager.getActiveGateway).mockResolvedValue('remote');
   vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
   vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(undefined);
+  vi.mocked(openshellGateway.canStopGateway).mockReturnValue(false);
 
   await manager.refresh();
 
   expect(manager.listGateways()).toEqual([
     {
       name: 'remote',
+      canStop: false,
       endpoint: 'https://gateway.example.com',
       active: true,
       source: 'user',

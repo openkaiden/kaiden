@@ -31,7 +31,7 @@ import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
  */
 @injectable()
 export class OpenshellGatewayConfig {
-  async buildConnectOptions(gateway: GatewayInfo): Promise<ConnectOptions> {
+  async buildConnectOptions(gateway: Pick<GatewayInfo, 'name' | 'endpoint'>): Promise<ConnectOptions> {
     const isHttps = gateway.endpoint.startsWith('https://');
 
     if (!isHttps) {

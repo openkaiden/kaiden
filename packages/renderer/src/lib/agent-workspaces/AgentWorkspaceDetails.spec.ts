@@ -45,10 +45,7 @@ const configuration: AgentWorkspaceConfiguration = {
 };
 
 const workspaceSummary: GatewaySandboxes = {
-  gateway: {
-    name: 'kaiden',
-    endpoint: 'http://localhost:18080',
-  },
+  gateway: { canStop: false, name: 'kaiden', endpoint: 'http://localhost:18080' },
   sandboxes: [
     {
       id: 'ws-1',
