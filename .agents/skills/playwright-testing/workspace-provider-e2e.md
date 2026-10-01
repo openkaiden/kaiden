@@ -137,13 +137,17 @@ Provider workspace tests are **heavy**: they need a built Kaiden binary, Podman 
 ```
 tests/playwright/src/specs/provider-specs/workspaces/
 ├── helpers/
-│   ├── workspace-lifecycle-helper.ts    # Shared lifecycle: create → run → terminal → prompt → remove
-│   └── workspace-sandbox-matrix.ts      # Matrix tags, mounts, scenario registration
+│   ├── scenario-lifecycle-engine.ts     # Shared step-runner engine (workspace + session)
+│   ├── workspace-lifecycle-helper.ts    # Workspace lifecycle: create → run → terminal → prompt → remove
+│   ├── workspace-sandbox-matrix.ts      # Matrix tags, mounts, scenario registration
+│   ├── session-lifecycle-helper.ts      # ACP session lifecycle: provision workspace → session steps → cleanup
+│   └── session-steps.ts                 # Composable ACP session steps (create/attach/stop/permission/...)
 ├── workspace-opencode-smoke.spec.ts     # OpenCode × multiple inference providers
 ├── workspace-claude-smoke.spec.ts       # Claude Code × Anthropic
 ├── workspace-goose-smoke.spec.ts        # Goose × providers
 ├── workspace-openclaw-smoke.spec.ts     # OpenClaw × providers
-└── workspace-filesystem-network-smoke.spec.ts  # Sandbox FS × network matrix (16 scenarios × 2 agents)
+├── workspace-filesystem-network-smoke.spec.ts  # Sandbox FS × network matrix (16 scenarios × 2 agents)
+└── agent-sessions-smoke.spec.ts         # ACP session lifecycle on an OpenCode+Ollama sandbox
 ```
 
 ### Page objects
@@ -158,7 +162,10 @@ tests/playwright/src/specs/provider-specs/workspaces/
 
 ### Lifecycle helper design
 
-`registerWorkspaceLifecycleTests(test, expect, config)` registers a **serial** describe block:
+`registerWorkspaceLifecycleTests(test, expect, config)` builds an ordered step list and runs it via
+the shared `registerScenarioLifecycleTests` engine (also used by ACP session lifecycle tests) — see
+[scenario-lifecycle-e2e.md](./scenario-lifecycle-e2e.md) for the engine itself. This helper's own
+config shape (below) is unchanged; the caller still wraps it in `test.describe.serial(...)`.
 
 | Step | Sandbox mode                                       | Default mode                  |
 | ---- | -------------------------------------------------- | ----------------------------- |

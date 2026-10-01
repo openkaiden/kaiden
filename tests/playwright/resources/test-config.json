@@ -1,0 +1,5 @@
+{
+  "name": "kaiden-smoke-test",
+  "version": "1.0.0",
+  "description": "Sample JSON configuration used by Kaiden e2e tests to verify JSON file attachments."
+}

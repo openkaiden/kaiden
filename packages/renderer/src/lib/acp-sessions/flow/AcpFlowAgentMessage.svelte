@@ -14,7 +14,7 @@ interface Props {
 let { event }: Props = $props();
 </script>
 
-<div class="group/message">
+<div class="group/message" data-testid="acp-agent-message">
   <div class="rounded-lg bg-[var(--pd-content-card-bg)] border border-[var(--pd-content-divider)] px-4 py-3 text-sm text-[var(--pd-content-text)]" use:codeCopyButtons>
     <Markdown markdown={event.text} />
   </div>

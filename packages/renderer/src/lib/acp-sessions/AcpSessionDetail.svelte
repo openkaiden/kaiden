@@ -736,7 +736,7 @@ function handleKeyDown(e: KeyboardEvent): void {
 </div>
 
 <!-- Events flow -->
-<div class="flex-1 min-h-0 overflow-auto p-4" bind:this={flowContainer}>
+<div class="flex-1 min-h-0 overflow-auto p-4" data-testid="acp-session-flow" bind:this={flowContainer}>
   <div class="flex flex-col gap-3 max-w-4xl mx-auto">
     {#each events as event, i (i)}
       {#if event.kind === 'prompt'}
@@ -850,6 +850,7 @@ function handleKeyDown(e: KeyboardEvent): void {
           {/if}
           <textarea
             bind:this={textareaEl}
+            aria-label="Follow-up message"
             bind:value={followUpText}
             rows={3}
             placeholder={isWaitingInput ? 'Respond to the pending request above to continue…' : isDraft ? 'Describe your goal to start a new session…' : 'Describe your goal...'}
