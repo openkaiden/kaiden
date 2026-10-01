@@ -38,6 +38,14 @@ export class AcpInit {
           minimum: 1,
           maximum: 100,
         },
+        [`${AcpSettings.SectionName}.${AcpSettings.PromptTimeoutSeconds}`]: {
+          description:
+            'Inactivity timeout (in seconds) for ACP prompt calls. The session is cancelled if the agent produces no activity within this period. Set to 0 to disable.',
+          type: 'number',
+          default: 300,
+          minimum: 0,
+          maximum: 3600,
+        },
       },
     };
 
