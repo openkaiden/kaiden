@@ -51,4 +51,22 @@ describe('init', () => {
       }),
     ]);
   });
+
+  test('registers acp.promptTimeoutSeconds configuration', () => {
+    acpInit.init();
+
+    expect(configurationRegistry.registerConfigurations).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'preferences.acp',
+        properties: expect.objectContaining({
+          'acp.promptTimeoutSeconds': expect.objectContaining({
+            type: 'number',
+            default: 300,
+            minimum: 0,
+            maximum: 3600,
+          }),
+        }),
+      }),
+    ]);
+  });
 });
