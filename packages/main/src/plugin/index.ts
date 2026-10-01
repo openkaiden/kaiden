@@ -58,6 +58,7 @@ import { AcpSessionManager } from '/@/plugin/acp/acp-session-manager.js';
 import { AgentRegistry } from '/@/plugin/agent-registry.js';
 import { AgentWorkspaceManager } from '/@/plugin/agent-workspace/agent-workspace-manager.js';
 import { IPCHandle, IPCMainOn, WebContentsType } from '/@/plugin/api.js';
+import { ApiServer } from '/@/plugin/api-server/api-server.js';
 import { ContainerfileParser } from '/@/plugin/containerfile-parser.js';
 import { ExtensionApiVersion } from '/@/plugin/extension/extension-api-version.js';
 import { ExtensionLoader } from '/@/plugin/extension/extension-loader.js';
@@ -623,6 +624,7 @@ export class PluginSystem {
     container.bind<OpenshellGatewayStateManager>(OpenshellGatewayStateManager).toSelf().inSingletonScope();
     container.bind<OpenshellImageBuilder>(OpenshellImageBuilder).toSelf().inSingletonScope();
     container.bind<AgentWorkspaceManager>(AgentWorkspaceManager).toSelf().inSingletonScope();
+    container.bind<ApiServer>(ApiServer).toSelf().inSingletonScope();
     container.bind(SelectableProviderFactoryToken).to(GcloudAdcProviderFactory).inSingletonScope();
     container.bind(DefaultProviderFactory).to(DefaultProviderFactory).inSingletonScope();
     container.bind<OpenshellSecretAdapter>(OpenshellSecretAdapter).toSelf().inSingletonScope();
@@ -844,6 +846,10 @@ export class PluginSystem {
 
     const webviewRegistry = container.get<WebviewRegistry>(WebviewRegistry);
     await webviewRegistry.start();
+
+    const apiServer = container.get<ApiServer>(ApiServer);
+    // optional feature: a failure (port file clash, listen error) must not abort startup
+    apiServer.init().catch((err: unknown) => console.error('Unable to start the API server', err));
 
     container
       .bind<PromiseWithResolvers<BrowserWindow>>(Promise.withResolvers<BrowserWindow>)
