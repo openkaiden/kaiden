@@ -19,4 +19,5 @@
 export enum AcpSettings {
   SectionName = 'acp',
   MaxAttachmentFileSizeMB = 'maxAttachmentFileSize',
+  PromptTimeoutSeconds = 'promptTimeoutSeconds',
 }
