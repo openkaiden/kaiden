@@ -25,9 +25,9 @@ import type {
 } from '@openkaiden/api';
 import { agents } from '@openkaiden/api';
 import { parse, stringify } from 'smol-toml';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { activate, CODEX_CONFIG_PATH } from './extension';
+import { activate, CODEX_AUTH_PATH, CODEX_CONFIG_PATH } from './extension';
 
 const AGENT_DISPOSABLE_MOCK: Disposable = { dispose: vi.fn() };
 
@@ -69,10 +69,13 @@ function createContext(
   };
 }
 
-function createConfigFile(content = ''): AgentConfigurationFile & { updateMock: ReturnType<typeof vi.fn> } {
+function createConfigFile(
+  content = '',
+  path = CODEX_CONFIG_PATH,
+): AgentConfigurationFile & { updateMock: ReturnType<typeof vi.fn> } {
   const updateMock = vi.fn();
   const file: AgentConfigurationFile = {
-    path: CODEX_CONFIG_PATH,
+    path,
     read: vi.fn().mockResolvedValue(content),
     update: updateMock,
   };
@@ -114,12 +117,14 @@ describe('activate', () => {
     expect(agent.isSupportedModelType!({ name: 'vertexai' })).toBe(false);
   });
 
-  test('registers agent with config.toml configuration file', async () => {
+  test('registers agent with config.toml and auth.json configuration files', async () => {
     await activate(extensionContextMock);
 
     const agent = getRegisteredAgent();
-    expect(agent.configurationFiles).toHaveLength(1);
-    expect(agent.configurationFiles[0]!.path).toBe(CODEX_CONFIG_PATH);
+    expect(agent.configurationFiles).toHaveLength(2);
+    const paths = agent.configurationFiles.map(f => f.path);
+    expect(paths).toContain(CODEX_CONFIG_PATH);
+    expect(paths).toContain(CODEX_AUTH_PATH);
   });
 
   describe('preWorkspaceStart', () => {
@@ -389,6 +394,15 @@ describe('activate', () => {
         model: 'gpt-4o',
         openai_base_url: 'https://my-custom-host.local/v1',
       });
+    });
+
+    test('auth.json read returns auth_mode apikey', async () => {
+      await activate(extensionContextMock);
+      const agent = getRegisteredAgent();
+
+      const authConfig = agent.configurationFiles.find(f => f.path === CODEX_AUTH_PATH);
+      assert(authConfig);
+      await expect(authConfig.read()).resolves.toBe(JSON.stringify({ auth_mode: 'apikey' }));
     });
 
     test('does not write openai_base_url when no endpoint is provided', async () => {

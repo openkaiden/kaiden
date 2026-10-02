@@ -22,6 +22,7 @@ import { parse, stringify } from 'smol-toml';
 import { z } from 'zod';
 
 export const CODEX_CONFIG_PATH = '.codex/config.toml';
+export const CODEX_AUTH_PATH = '.codex/auth.json';
 
 const McpServerEntrySchema = z.looseObject({
   command: z.string().optional(),
@@ -54,6 +55,12 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
           return '';
         },
       },
+      {
+        path: CODEX_AUTH_PATH,
+        async read(): Promise<string> {
+          return JSON.stringify({ auth_mode: 'apikey' });
+        },
+      },
     ],
     destinationSkillsFolder: '${HOME}/.agents/skills',
     isSupportedModelType(type): boolean {
@@ -61,49 +68,47 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
     },
     async preWorkspaceStart(context: AgentWorkspaceContext): Promise<void> {
       const configFile = context.configurationFiles.find(f => f.path === CODEX_CONFIG_PATH);
-      if (!configFile) {
-        return;
-      }
+      if (configFile) {
+        const raw = await configFile.read();
+        const config = CodexConfigSchema.parse(raw ? parse(raw) : {});
 
-      const raw = await configFile.read();
-      const config = CodexConfigSchema.parse(raw ? parse(raw) : {});
+        config.model = context.model.model.label;
 
-      config.model = context.model.model.label;
-
-      const endpoint = context.model.endpoint;
-      if (endpoint) {
-        config.openai_base_url = endpoint;
-      }
-
-      const mcpServers = context.workspace.mcp?.servers;
-      const mcpCommands = context.workspace.mcp?.commands;
-
-      if (mcpServers?.length || mcpCommands?.length) {
-        const servers = config.mcp_servers ?? {};
-
-        for (const cmd of mcpCommands ?? []) {
-          const entry: Record<string, unknown> = {
-            command: cmd.command,
-            args: cmd.args ?? [],
-          };
-          if (cmd.env && Object.keys(cmd.env).length > 0) {
-            entry['env'] = cmd.env;
-          }
-          servers[cmd.name] = entry;
+        const endpoint = context.model.endpoint;
+        if (endpoint) {
+          config.openai_base_url = endpoint;
         }
 
-        for (const srv of mcpServers ?? []) {
-          const entry: Record<string, unknown> = { url: srv.url };
-          if (srv.headers && Object.keys(srv.headers).length > 0) {
-            entry['http_headers'] = srv.headers;
+        const mcpServers = context.workspace.mcp?.servers;
+        const mcpCommands = context.workspace.mcp?.commands;
+
+        if (mcpServers?.length || mcpCommands?.length) {
+          const servers = config.mcp_servers ?? {};
+
+          for (const cmd of mcpCommands ?? []) {
+            const entry: Record<string, unknown> = {
+              command: cmd.command,
+              args: cmd.args ?? [],
+            };
+            if (cmd.env && Object.keys(cmd.env).length > 0) {
+              entry['env'] = cmd.env;
+            }
+            servers[cmd.name] = entry;
           }
-          servers[srv.name] = entry;
+
+          for (const srv of mcpServers ?? []) {
+            const entry: Record<string, unknown> = { url: srv.url };
+            if (srv.headers && Object.keys(srv.headers).length > 0) {
+              entry['http_headers'] = srv.headers;
+            }
+            servers[srv.name] = entry;
+          }
+
+          config.mcp_servers = servers;
         }
 
-        config.mcp_servers = servers;
+        await configFile.update(stringify(config));
       }
-
-      await configFile.update(stringify(config));
     },
   });
   extensionContext.subscriptions.push(disposable);
