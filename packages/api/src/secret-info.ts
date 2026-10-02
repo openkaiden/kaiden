@@ -26,9 +26,14 @@ import type { OpenshellProfile } from './openshell-gateway-info.js';
 export type SecretName = components['schemas']['SecretName'];
 
 /**
- * Secret metadata returned by `kdn secret list`.
+ * Secret metadata`.
  */
-export type SecretInfo = components['schemas']['SecretInfo'];
+export type SecretInfo = {
+  type: string;
+  parentType?: string;
+  name: string;
+  description?: string;
+};
 
 /** Secret metadata together with the OpenShell gateway that owns it. */
 export interface GatewaySecretInfo extends SecretInfo {
@@ -57,5 +62,5 @@ export interface SecretCliBackend {
   createSecret(options: SecretCreateOptions, gateway?: string): Promise<SecretName>;
   listSecrets(gateway?: string): Promise<SecretInfo[]>;
   removeSecret(name: string, gateway?: string): Promise<SecretName>;
-  listServices(): Promise<OpenshellProfile[]>;
+  listServices(gateway?: string): Promise<OpenshellProfile[]>;
 }

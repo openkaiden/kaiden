@@ -46,7 +46,7 @@ import type {
 import type { AgentInfo } from '/@api/agent-info.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { SandboxInfo } from '/@api/openshell-gateway-info.js';
-import { AGENT_LABEL } from '/@api/openshell-gateway-info.js';
+import { AGENT_LABEL, DEFAULT_WORKSPACE } from '/@api/openshell-gateway-info.js';
 
 import { createAcpDebug } from './acp-debug.js';
 
@@ -1284,7 +1284,7 @@ export class AcpSessionManager {
 
   async #listSandboxes(): Promise<SandboxInfo[]> {
     const client = await this.sdkClientManager.getClient();
-    const refs = await client.sandbox.list();
-    return refs.map(mapSdkSandboxRef);
+    const refs = client.sandbox.list({ workspace: DEFAULT_WORKSPACE });
+    return (await refs.all()).map(mapSdkSandboxRef);
   }
 }

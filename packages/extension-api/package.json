@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@ai-sdk/provider": "^4.0.3",
-    "@nvidia/openshell-sdk": "npm:@openkaiden/opnshll-sdk@0.0.116",
+    "@nvidia/openshell-sdk": "npm:@openkaiden/opnshll-sdk@0.1.2",
     "@openkaiden/workspace-configuration": "^0.16.0"
   }
 }

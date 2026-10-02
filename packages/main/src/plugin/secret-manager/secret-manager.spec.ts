@@ -16,6 +16,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { randomUUID } from 'node:crypto';
+
 import type { OpenShellClient } from '@nvidia/openshell-sdk';
 import type { FileSystemWatcher, InferenceProviderConnection } from '@openkaiden/api';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -24,18 +26,23 @@ import type { IPCHandle } from '/@/plugin/api.js';
 import type { FilesystemMonitoring } from '/@/plugin/filesystem-monitoring.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
+import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
+import type { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
 import type { ProviderImpl } from '/@/plugin/provider-impl.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { SafeStorageRegistry } from '/@/plugin/safe-storage/safe-storage-registry.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
+import { DEFAULT_WORKSPACE, WORKSPACE_SCOPE } from '/@api/openshell-gateway-info.js';
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
 import { DefaultProviderFactory } from './default-provider-factory.js';
 import { GcloudAdcProviderFactory } from './gcloud-adc-provider-factory.js';
 import { OpenshellSecretAdapter } from './openshell-secret-adapter.js';
 import { SecretManager } from './secret-manager.js';
+
+vi.mock(import('node:crypto'));
 
 vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-client-manager.js'));
 
@@ -52,13 +59,21 @@ const mockRaw = {
   listProviders: vi.fn(),
   deleteProvider: vi.fn(),
   listProviderProfiles: vi.fn(),
+  importProviderProfiles: vi.fn(),
+  deleteProviderProfile: vi.fn(),
 };
 const mockClient = { raw: mockRaw } as unknown as OpenShellClient;
 const sdkClientManager = new OpenshellSdkClientManager(undefined!, undefined!);
+const openshellNetworkPolicy = new OpenshellNetworkPolicy();
+const openshellRegistry = {
+  getProfiles: vi.fn().mockReturnValue([]),
+} as unknown as OpenShellRegistry;
 const openshellAdapter = new OpenshellSecretAdapter(
   sdkClientManager,
   [new GcloudAdcProviderFactory()],
   new DefaultProviderFactory(),
+  openshellNetworkPolicy,
+  openshellRegistry,
 );
 
 let gatewayStartCallback: (() => void) | undefined;
@@ -113,6 +128,7 @@ beforeEach(() => {
     { canStop: false, name: 'kaiden', endpoint: 'http://localhost' },
   ]);
   vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
+  vi.mocked(randomUUID).mockReturnValue('00-01-02-03-04');
   manager = new SecretManager(
     apiSender,
     ipcHandle,
@@ -122,6 +138,8 @@ beforeEach(() => {
     safeStorageRegistry,
     openshellGateway,
     openshellGatewayStateManager,
+    openshellNetworkPolicy,
+    openshellRegistry,
   );
   manager.init();
 });
@@ -179,6 +197,8 @@ describe('openshellAdapter', () => {
       safeStorageRegistry,
       openshellGateway,
       openshellGatewayStateManager,
+      openshellNetworkPolicy,
+      openshellRegistry,
     );
     manager.init();
   });
@@ -191,11 +211,17 @@ describe('openshellAdapter', () => {
     expect(mockRaw.createProvider).toHaveBeenCalledWith({
       provider: {
         metadata: { name: 'my-secret' },
+        profileWorkspace: DEFAULT_WORKSPACE,
         type: 'github',
         credentials: { GH_TOKEN: 'ghp_abc123' },
         config: {},
       },
-      workspace: '',
+      workspaceScope: {
+        selection: {
+          case: WORKSPACE_SCOPE,
+          value: DEFAULT_WORKSPACE,
+        },
+      },
     });
     expect(result).toEqual({ name: 'my-secret' });
   });
@@ -261,7 +287,15 @@ describe('openshellAdapter', () => {
 
     const result = await manager.remove('my-openai');
 
-    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({ name: 'my-openai', workspace: '' });
+    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({
+      name: 'my-openai',
+      workspaceScope: {
+        selection: {
+          case: WORKSPACE_SCOPE,
+          value: DEFAULT_WORKSPACE,
+        },
+      },
+    });
     expect(result).toEqual({ name: 'my-openai' });
   });
 
@@ -330,7 +364,7 @@ describe('inference connection lifecycle', () => {
     });
 
     const secret = await manager.getSecretForModel('cursor::model-1::', 'remote');
-    expect(secret).toEqual({ name: 'kaiden.cursor-conn-123', type: 'cursor' });
+    expect(secret).toMatchObject({ name: 'kaiden.cursor-conn-123', type: 'cursor' });
     expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
   });
 
@@ -351,7 +385,7 @@ describe('inference connection lifecycle', () => {
     });
 
     const secret = await manager.getSecretForModel('vertexai::model-1::');
-    expect(secret).toEqual({ name: 'kaiden.vertex-ai-conn-123', type: 'vertex-ai' });
+    expect(secret).toMatchObject({ name: 'kaiden.vertex-ai-conn-123', type: 'vertex-ai' });
   });
 });
 
@@ -413,10 +447,16 @@ describe('createSecretForConnection', () => {
       provider: {
         metadata: { name: 'kaiden.cursor-conn-456' },
         type: 'cursor',
+        profileWorkspace: DEFAULT_WORKSPACE,
         credentials: { token: 'actual-api-key' },
         config: {},
       },
-      workspace: '',
+      workspaceScope: {
+        selection: {
+          case: WORKSPACE_SCOPE,
+          value: DEFAULT_WORKSPACE,
+        },
+      },
     });
     expect(result).toEqual({ name: 'kaiden.cursor-conn-456', type: 'cursor' });
   });
@@ -461,7 +501,7 @@ describe('ensureSecretForModel', () => {
 
     const result = await manager.ensureSecretForModel('cursor::model-1::', 'remote');
 
-    expect(result).toEqual({ name: 'kaiden.cursor-conn-789', type: 'cursor' });
+    expect(result).toMatchObject({ name: 'kaiden.cursor-conn-789', type: 'cursor' });
     expect(mockRaw.createProvider).not.toHaveBeenCalled();
     expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
   });
@@ -512,10 +552,16 @@ describe('ensureSecretForModel', () => {
       provider: {
         metadata: { name: 'kaiden.cursor-conn-789' },
         type: 'cursor',
+        profileWorkspace: DEFAULT_WORKSPACE,
         credentials: { token: 'actual-api-key' },
         config: {},
       },
-      workspace: '',
+      workspaceScope: {
+        selection: {
+          case: WORKSPACE_SCOPE,
+          value: DEFAULT_WORKSPACE,
+        },
+      },
     });
     expect(result).toEqual({ name: 'kaiden.cursor-conn-789', type: 'cursor' });
   });
@@ -527,5 +573,389 @@ describe('ensureSecretForModel', () => {
 
     expect(result).toBeUndefined();
     expect(mockRaw.createProvider).not.toHaveBeenCalled();
+  });
+});
+
+describe('extractBinaryFromCommand', () => {
+  test('extracts single-word command', () => {
+    expect(openshellNetworkPolicy.extractBinaryFromCommand('claude')).toBe('claude');
+  });
+
+  test('extracts first word from multi-word command', () => {
+    expect(openshellNetworkPolicy.extractBinaryFromCommand('/usr/bin/agent start')).toBe('/usr/bin/agent');
+  });
+
+  test('trims whitespace', () => {
+    expect(openshellNetworkPolicy.extractBinaryFromCommand('  claude  ')).toBe('claude');
+  });
+});
+
+describe('isAgentCommandAllowed', () => {
+  test('matches exact path when binary has no wildcard', () => {
+    expect(openshellNetworkPolicy.isAgentCommandAllowed('/usr/bin/claude', ['/usr/bin/claude', '/usr/bin/node'])).toBe(
+      true,
+    );
+  });
+
+  test('rejects path not equal when binary has no wildcard', () => {
+    expect(openshellNetworkPolicy.isAgentCommandAllowed('/usr/bin/claude', ['/usr/local/bin/claude'])).toBe(false);
+  });
+
+  test('matches bare command exactly when binary has no wildcard', () => {
+    expect(openshellNetworkPolicy.isAgentCommandAllowed('claude', ['claude'])).toBe(true);
+  });
+
+  test('rejects bare command against absolute binary without wildcard', () => {
+    expect(openshellNetworkPolicy.isAgentCommandAllowed('claude', ['/usr/local/bin/claude', '/usr/bin/node'])).toBe(
+      false,
+    );
+  });
+
+  test('matches via minimatch glob when binary contains wildcard', () => {
+    expect(openshellNetworkPolicy.isAgentCommandAllowed('/usr/local/bin/claude', ['**/claude'])).toBe(true);
+  });
+
+  test('rejects via minimatch glob when pattern does not match', () => {
+    expect(openshellNetworkPolicy.isAgentCommandAllowed('/usr/bin/node', ['**/claude'])).toBe(false);
+  });
+
+  test('matches bare command via glob pattern', () => {
+    expect(openshellNetworkPolicy.isAgentCommandAllowed('claude', ['**/claude'])).toBe(true);
+  });
+});
+
+describe('ensureSecretForSandbox', () => {
+  const mockConnection: InferenceProviderConnection = {
+    id: 'conn-sandbox',
+    name: 'test-connection',
+    type: 'cloud',
+    sdk: {} as InferenceProviderConnection['sdk'],
+    status: () => 'started',
+    models: [{ label: 'model-1' }],
+    credentials: () => ({ token: 'secret-token' }),
+  };
+
+  test('creates sandbox-named secret when none exists', async () => {
+    mockRaw.listProviders.mockResolvedValue({ providers: [] });
+    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
+      connection: mockConnection,
+      providerId: 'kaiden.openai',
+    });
+    vi.mocked(providerRegistry.getProvider).mockReturnValue({
+      extensionId: 'kaiden.openai',
+    } as unknown as ProviderImpl);
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] },
+    ] as never);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const properties = {
+      'openai.connection._type': {
+        scope: 'InferenceProviderConnection',
+        extension: { id: 'kaiden.openai' },
+      },
+      'openai.connection.token': {
+        scope: 'InferenceProviderConnection',
+        extension: { id: 'kaiden.openai' },
+        format: 'password',
+      },
+    } as Record<string, Record<string, unknown>>;
+    vi.mocked(configurationRegistry.getConfigurationProperties).mockReturnValue(
+      properties as unknown as ReturnType<typeof configurationRegistry.getConfigurationProperties>,
+    );
+    vi.mocked(configurationRegistry.getConfiguration).mockReturnValue({
+      get: vi.fn((key: string) => {
+        if (key === 'openai.connection._type') return 'openai';
+        if (key === 'openai.connection.token') return 'openai:conn-sandbox:token';
+        return undefined;
+      }),
+      has: vi.fn(),
+      update: vi.fn(),
+    } as unknown as ReturnType<typeof configurationRegistry.getConfiguration>);
+    vi.mocked(extensionStorageMock.get).mockResolvedValue('actual-api-key');
+    mockRaw.createProvider.mockResolvedValue({});
+
+    const result = await manager.ensureSecretForSandbox('my-sandbox', 'openai::gpt-4::', 'claude', 'kaiden');
+
+    expect(result).toEqual({ name: 'my-sandbox-00-01-02-03-04', type: 'my-sandbox-00-01-02-03-04' });
+    expect(mockRaw.createProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({
+          metadata: { name: 'my-sandbox-00-01-02-03-04' },
+          type: 'my-sandbox-00-01-02-03-04',
+        }),
+      }),
+    );
+  });
+
+  test('returns undefined when no inference connection exists', async () => {
+    mockRaw.listProviders.mockResolvedValue({ providers: [] });
+    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue(undefined);
+
+    const result = await manager.ensureSecretForSandbox('my-sandbox', 'unknown::model::', 'claude');
+
+    expect(result).toBeUndefined();
+  });
+});
+
+describe('resolveProfileForAgent', () => {
+  test('clones profile when no binaries field (absence means no binary authorised)', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      { id: 'openai', displayName: 'OpenAI', credentials: [] },
+    ] as never);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude', 'test-sandbox', 'test-uuid-1234');
+
+    expect(result).toBe('test-sandbox-test-uuid-1234');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'test-sandbox-test-uuid-1234',
+              binaries: [expect.objectContaining({ path: '/**/claude' })],
+            }),
+          }),
+        ],
+        workspaceScope: {
+          selection: {
+            case: WORKSPACE_SCOPE,
+            value: DEFAULT_WORKSPACE,
+          },
+        },
+      }),
+    );
+  });
+
+  test('clones profile when binaries is empty (no binary authorised)', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] },
+    ] as never);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude', 'test-sandbox', 'test-uuid-1234');
+
+    expect(result).toBe('test-sandbox-test-uuid-1234');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'test-sandbox-test-uuid-1234',
+              binaries: [expect.objectContaining({ path: '/**/claude' })],
+            }),
+          }),
+        ],
+        workspaceScope: {
+          selection: {
+            case: WORKSPACE_SCOPE,
+            value: DEFAULT_WORKSPACE,
+          },
+        },
+      }),
+    );
+  });
+
+  test('clones profile with existing binaries when agent command already matches', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      {
+        id: 'openai',
+        displayName: 'OpenAI',
+        credentials: [],
+        binaries: [{ path: '**/claude' }, { path: '/usr/bin/node' }],
+      },
+    ] as never);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent(
+      'openai',
+      '/usr/local/bin/claude',
+      'test-sandbox',
+      'test-uuid-1234',
+    );
+
+    expect(result).toBe('test-sandbox-test-uuid-1234');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'test-sandbox-test-uuid-1234',
+              binaries: [
+                expect.objectContaining({ path: '**/claude' }),
+                expect.objectContaining({ path: '/usr/bin/node' }),
+              ],
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  test('clones profile when agent command is not in binaries', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [{ path: '/usr/bin/node' }] },
+    ] as never);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude', 'test-sandbox', 'test-uuid-1234');
+
+    expect(result).toBe('test-sandbox-test-uuid-1234');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'test-sandbox-test-uuid-1234',
+              binaries: [
+                expect.objectContaining({ path: '/usr/bin/node' }),
+                expect.objectContaining({ path: '/**/claude' }),
+              ],
+            }),
+          }),
+        ],
+        workspaceScope: {
+          selection: {
+            case: WORKSPACE_SCOPE,
+            value: DEFAULT_WORKSPACE,
+          },
+        },
+      }),
+    );
+  });
+
+  test('clones profile with absolute agent command', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [{ path: '/usr/bin/node' }] },
+    ] as never);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent(
+      'openai',
+      '/usr/local/bin/claude',
+      'test-sandbox',
+      'test-uuid-1234',
+    );
+
+    expect(result).toBe('test-sandbox-test-uuid-1234');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'test-sandbox-test-uuid-1234',
+              binaries: [
+                expect.objectContaining({ path: '/usr/bin/node' }),
+                expect.objectContaining({ path: '/usr/local/bin/claude' }),
+              ],
+            }),
+          }),
+        ],
+        workspaceScope: {
+          selection: {
+            case: WORKSPACE_SCOPE,
+            value: DEFAULT_WORKSPACE,
+          },
+        },
+      }),
+    );
+  });
+
+  test('passes gateway when cloning profile', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [{ path: '/usr/bin/node' }] },
+    ] as never);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    await manager.resolveProfileForAgent('openai', 'claude', 'test-sandbox', 'test-uuid-1234', 'remote-gw');
+
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'test-sandbox-test-uuid-1234',
+              binaries: [
+                expect.objectContaining({ path: '/usr/bin/node' }),
+                expect.objectContaining({ path: '/**/claude' }),
+              ],
+            }),
+          }),
+        ],
+        workspaceScope: {
+          selection: {
+            case: WORKSPACE_SCOPE,
+            value: DEFAULT_WORKSPACE,
+          },
+        },
+      }),
+    );
+  });
+
+  test('uses sandbox name in cloned profile name regardless of endpoint', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] },
+    ] as never);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const endpoint = 'http://localhost:11434/v1';
+    const result = await manager.resolveProfileForAgent(
+      'openai',
+      'claude',
+      'my-sandbox',
+      'test-uuid-1234',
+      undefined,
+      endpoint,
+    );
+
+    expect(result).toBe('my-sandbox-test-uuid-1234');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({ id: 'my-sandbox-test-uuid-1234' }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  test('uses sandbox name without endpoint', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] },
+    ] as never);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent('openai', 'claude', 'test-sandbox', 'test-uuid-1234');
+
+    expect(result).toBe('test-sandbox-test-uuid-1234');
+  });
+
+  test('passes endpoint to createProfile when cloning', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [], endpoints: [] },
+    ] as never);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const endpoint = 'http://localhost:11434/v1';
+    await manager.resolveProfileForAgent('openai', 'claude', 'test-sandbox', 'test-uuid-1234', undefined, endpoint);
+
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              endpoints: expect.arrayContaining([
+                expect.objectContaining({
+                  host: 'host.openshell.internal',
+                  port: 11434,
+                }),
+              ]),
+            }),
+          }),
+        ],
+      }),
+    );
   });
 });

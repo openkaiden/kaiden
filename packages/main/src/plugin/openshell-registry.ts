@@ -31,9 +31,58 @@ import type { Event } from '/@api/event.js';
 import { Emitter } from './events/emitter.js';
 import { Disposable } from './types/disposable.js';
 
+const categories = new Map<string, number>([
+  ['unspecified', 0],
+  ['other', 1],
+  ['inference', 2],
+  ['agent', 3],
+  ['sourcecontrol', 4],
+  ['messaging', 5],
+  ['data', 6],
+  ['knowledge', 7],
+]);
+
+const strategies = new Map<string, number>([
+  ['unspecified', 0],
+  ['static', 1],
+  ['external', 2],
+  ['oauth2_refresh_token', 3],
+  ['oauth2_client_credentials', 4],
+  ['google_service_account_jwt', 5],
+  ['aws_sts_assume_role', 6],
+]);
+const enforcements = new Map<string, number>([
+  ['unspecified', 0],
+  ['enforce', 1],
+  ['audit', 2],
+]);
+const accesses = new Map<string, number>([
+  ['unspecified', 0],
+  ['read-only', 1],
+  ['read-write', 2],
+  ['full', 3],
+]);
+const EndpointsProviderSchema = z.looseObject({
+  enforcement: z.string().transform((str, _) => enforcements.get(str.toLowerCase()) ?? 0),
+  access: z.string().transform((str, _) => accesses.get(str.toLowerCase()) ?? 0),
+});
+const CredentialsRefreshProviderSchema = z.looseObject({
+  strategy: z.string().transform((str, _) => strategies.get(str.toLowerCase()) ?? 0),
+});
+const CredentialsProviderSchema = z.looseObject({
+  refresh: CredentialsRefreshProviderSchema.optional(),
+});
+
 const OpenshellProviderProfileSchema = z.looseObject({
   id: z.string(),
   display_name: z.string(),
+  binaries: z.array(z.string().transform((str, _) => ({ path: str }))).optional(),
+  category: z
+    .string()
+    .transform((str, _) => categories.get(str.toLowerCase()) ?? 0)
+    .optional(),
+  credentials: z.array(CredentialsProviderSchema).optional(),
+  endpoints: z.array(EndpointsProviderSchema).optional(),
 });
 
 @injectable()
