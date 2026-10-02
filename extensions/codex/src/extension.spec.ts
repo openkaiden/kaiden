@@ -25,7 +25,7 @@ import type {
 } from '@openkaiden/api';
 import { agents } from '@openkaiden/api';
 import { parse, stringify } from 'smol-toml';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { activate, CODEX_AUTH_PATH, CODEX_CONFIG_PATH } from './extension';
 
@@ -69,21 +69,14 @@ function createContext(
   };
 }
 
-function createConfigFile(content = ''): AgentConfigurationFile & { updateMock: ReturnType<typeof vi.fn> } {
+function createConfigFile(
+  content = '',
+  path = CODEX_CONFIG_PATH,
+): AgentConfigurationFile & { updateMock: ReturnType<typeof vi.fn> } {
   const updateMock = vi.fn();
   const file: AgentConfigurationFile = {
-    path: CODEX_CONFIG_PATH,
+    path,
     read: vi.fn().mockResolvedValue(content),
-    update: updateMock,
-  };
-  return Object.assign(file, { updateMock });
-}
-
-function createAuthFile(): AgentConfigurationFile & { updateMock: ReturnType<typeof vi.fn> } {
-  const updateMock = vi.fn();
-  const file: AgentConfigurationFile = {
-    path: CODEX_AUTH_PATH,
-    read: vi.fn().mockResolvedValue(''),
     update: updateMock,
   };
   return Object.assign(file, { updateMock });
@@ -403,26 +396,13 @@ describe('activate', () => {
       });
     });
 
-    test('writes auth_mode apikey to auth.json', async () => {
+    test('auth.json read returns auth_mode apikey', async () => {
       await activate(extensionContextMock);
       const agent = getRegisteredAgent();
 
-      const configFile = createConfigFile();
-      const authFile = createAuthFile();
-      await agent.preWorkspaceStart(createContext([configFile, authFile]));
-
-      expect(authFile.updateMock).toHaveBeenCalledOnce();
-      expect(JSON.parse(authFile.updateMock.mock.calls[0]![0] as string)).toEqual({ auth_mode: 'apikey' });
-    });
-
-    test('does not fail when auth file is not in context', async () => {
-      await activate(extensionContextMock);
-      const agent = getRegisteredAgent();
-
-      const configFile = createConfigFile();
-      await agent.preWorkspaceStart(createContext([configFile]));
-
-      expect(configFile.updateMock).toHaveBeenCalledOnce();
+      const authConfig = agent.configurationFiles.find(f => f.path === CODEX_AUTH_PATH);
+      assert(authConfig);
+      await expect(authConfig.read()).resolves.toBe(JSON.stringify({ auth_mode: 'apikey' }));
     });
 
     test('does not write openai_base_url when no endpoint is provided', async () => {
