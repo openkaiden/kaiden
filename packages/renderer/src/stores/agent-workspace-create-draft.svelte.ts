@@ -153,6 +153,13 @@ export function applyProjectToDraft(project: WorkspaceProjectInfo): void {
   applyNetworkFromProject(project.network);
 }
 
+/** Opens the project in the wizard while preserving workspace-only choices in the existing draft. */
+export function initializeDraftFromProject(project: WorkspaceProjectInfo): void {
+  applyProjectToDraft(project);
+  wizard.draft.currentStepIndex = 0;
+  wizard.draft.projectOpen = true;
+}
+
 let prevSkills: Set<string> | undefined;
 skillInfos.subscribe(skills => {
   const available = new Set(skills.filter(s => s.enabled).map(s => s.name));

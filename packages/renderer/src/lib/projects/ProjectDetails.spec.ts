@@ -23,12 +23,17 @@ import { writable } from 'svelte/store';
 import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import { handleNavigation } from '/@/navigation';
+import { initializeDraftFromProject } from '/@/stores/agent-workspace-create-draft.svelte';
 import { workspaceProjectInfos } from '/@/stores/workspace-projects';
+import { NavigationPage } from '/@api/navigation-page';
 import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';
 
 import ProjectDetails from './ProjectDetails.svelte';
 
 vi.mock(import('tinro'));
+vi.mock(import('/@/navigation'));
+vi.mock(import('/@/stores/agent-workspace-create-draft.svelte'));
 
 const routerStore = writable({
   path: '/projects/my-project/overview',
@@ -68,6 +73,25 @@ test('Expect remove button is rendered', () => {
   render(ProjectDetails, { projectId: 'my-project' });
 
   expect(screen.getByRole('button', { name: 'Remove Project' })).toBeInTheDocument();
+});
+
+test('create workspace initializes the displayed project before navigating', async () => {
+  render(ProjectDetails, { projectId: sampleProject.id });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+
+  expect(initializeDraftFromProject).toHaveBeenCalledExactlyOnceWith(sampleProject);
+  expect(initializeDraftFromProject).toHaveBeenCalledBefore(vi.mocked(handleNavigation));
+  expect(handleNavigation).toHaveBeenCalledExactlyOnceWith({
+    page: NavigationPage.AGENT_WORKSPACE_CREATE,
+  });
+});
+
+test('create workspace action is hidden when the project is missing', () => {
+  workspaceProjectInfos.set([]);
+  render(ProjectDetails, { projectId: 'missing-project' });
+
+  expect(screen.queryByRole('button', { name: 'Create workspace' })).not.toBeInTheDocument();
 });
 
 test('Expect confirmation dialog shown when remove button clicked', async () => {

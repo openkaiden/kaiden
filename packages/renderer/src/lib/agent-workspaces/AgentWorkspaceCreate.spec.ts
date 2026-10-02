@@ -23,7 +23,7 @@ import userEvent from '@testing-library/user-event';
 import { writable } from 'svelte/store';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { resetDraft, wizard } from '/@/stores/agent-workspace-create-draft.svelte';
+import { initializeDraftFromProject, resetDraft, wizard } from '/@/stores/agent-workspace-create-draft.svelte';
 import * as agentsStore from '/@/stores/agents';
 import * as mcpStore from '/@/stores/mcp-remote-servers';
 import * as modelCatalogStore from '/@/stores/model-catalog';
@@ -2024,6 +2024,23 @@ describe('when projects exist', () => {
     render(AgentWorkspaceCreate);
 
     expect(screen.getByText(/Step 1 of 5/)).toBeInTheDocument();
+  });
+
+  test('project handoff shows the selection and preserves edits when project data changes', async () => {
+    initializeDraftFromProject(sampleProject);
+    render(AgentWorkspaceCreate);
+
+    expect(screen.getByRole('option', { name: /My App/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByPlaceholderText('/path/to/project')).toHaveValue(sampleProject.folder);
+    await fireEvent.input(screen.getByPlaceholderText('e.g., front-refactor'), { target: { value: 'edited-name' } });
+    workspaceProjectsStore.workspaceProjectInfos.set([
+      { ...sampleProject, name: 'Updated project', folder: '/updated' },
+    ]);
+
+    await waitFor(() => expect(screen.getByRole('option', { name: /Updated project/ })).toBeVisible());
+    expect(screen.getByPlaceholderText('e.g., front-refactor')).toHaveValue('edited-name');
+    expect(screen.getByPlaceholderText('/path/to/project')).toHaveValue(sampleProject.folder);
+    expect(wizard.draft.selectedProjectId).toBe(sampleProject.id);
   });
 
   test('Expect Saved project accordion visible on workspace step', () => {

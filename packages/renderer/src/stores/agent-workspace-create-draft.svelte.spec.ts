@@ -31,12 +31,26 @@ import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';
 
 import {
   applyProjectToDraft,
+  initializeDraftFromProject,
   resetDraft,
   wizard,
   WORKSPACE_REGISTRY_HOSTS,
 } from './agent-workspace-create-draft.svelte';
 
+let project: WorkspaceProjectInfo;
+
 beforeEach(() => {
+  project = {
+    id: 'project',
+    name: 'My Project',
+    folder: '/projects/app',
+    skills: ['skill'],
+    mcpServers: ['mcp'],
+    secrets: ['secret'],
+    knowledges: ['knowledge'],
+    filesystem: { mode: 'custom', mounts: [{ host: '/data', target: '/data', ro: true }] },
+    network: { mode: 'deny', hosts: ['example.com'] },
+  };
   skillInfos.set([]);
   mcpRemoteServerInfos.set([]);
   secretVaultInfos.set([]);
@@ -91,22 +105,6 @@ describe('wizard.draft initial state', () => {
 });
 
 describe('applyProjectToDraft', () => {
-  let project: WorkspaceProjectInfo;
-
-  beforeEach(() => {
-    project = {
-      id: 'project',
-      name: 'My Project',
-      folder: '/projects/app',
-      skills: ['skill'],
-      mcpServers: ['mcp'],
-      secrets: ['secret'],
-      knowledges: ['knowledge'],
-      filesystem: { mode: 'custom', mounts: [{ host: '/data', target: '/data', ro: true }] },
-      network: { mode: 'deny', hosts: ['example.com'] },
-    };
-  });
-
   test('copies project configuration without overwriting runtime selections', () => {
     const model: ModelInfo = {
       providerId: 'provider',
@@ -181,6 +179,44 @@ describe('applyProjectToDraft', () => {
     expect(wizard.draft.selectedNetwork).toBe(mode);
     expect(wizard.draft.hostsByMode[mode]).toEqual(hosts);
   });
+});
+
+test('initializeDraftFromProject replaces project settings but preserves workspace-only choices', () => {
+  wizard.draft.currentStepIndex = 4;
+  wizard.draft.initialized = true;
+  wizard.draft.description = 'My workspace';
+  wizard.draft.selectedAgent = 'claude';
+  wizard.draft.selectedGateway = 'my-gateway';
+  wizard.draft.customImage = 'my-image:latest';
+  wizard.draft.selectedMcpIds = ['old-mcp'];
+  const model: ModelInfo = {
+    providerId: 'provider',
+    connectionId: 'connection',
+    connectionName: 'My connection',
+    type: 'cloud',
+    label: 'My model',
+  };
+  wizard.draft.selectedModel = model;
+  initializeDraftFromProject({ ...project, filesystem: { mode: 'project', mounts: [] } });
+  expect(wizard.draft).toMatchObject({
+    currentStepIndex: 0,
+    initialized: true,
+    description: 'My workspace',
+    selectedAgent: 'claude',
+    selectedGateway: 'my-gateway',
+    customImage: 'my-image:latest',
+    selectedMcpIds: project.mcpServers,
+    selectedProjectId: project.id,
+    projectOpen: true,
+    selectedFileAccess: 'workspace',
+    customMounts: [{ host: '', target: '', ro: false }],
+  });
+  expect(wizard.draft.selectedModel).toEqual(model);
+});
+
+test('initializeDraftFromProject leaves a new draft ready for normal runtime initialization', () => {
+  initializeDraftFromProject(project);
+  expect(wizard.draft.initialized).toBe(false);
 });
 
 describe('resetDraft', () => {

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faRocket, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { EmptyScreen } from '@podman-desktop/ui-svelte';
 import { router } from 'tinro';
 
@@ -7,8 +7,12 @@ import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import DetailsPage from '/@/lib/ui/DetailsPage.svelte';
 import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
+import { handleNavigation } from '/@/navigation';
 import Route from '/@/Route.svelte';
+import { initializeDraftFromProject } from '/@/stores/agent-workspace-create-draft.svelte';
 import { workspaceProjectInfos } from '/@/stores/workspace-projects';
+import { NavigationPage } from '/@api/navigation-page';
+import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';
 
 import ProjectDetailsOverview from './ProjectDetailsOverview.svelte';
 
@@ -28,6 +32,11 @@ $effect(() => {
   }
 });
 
+function handleCreateWorkspace(current: WorkspaceProjectInfo): void {
+  initializeDraftFromProject(current);
+  handleNavigation({ page: NavigationPage.AGENT_WORKSPACE_CREATE });
+}
+
 function handleRemove(): void {
   withConfirmation(
     async () => {
@@ -45,6 +54,10 @@ function handleRemove(): void {
 
 <DetailsPage title={project?.name ?? ''} bind:this={detailsPage}>
   {#snippet actionsSnippet()}
+    {#if project}
+      {@const current = project}
+      <ListItemButtonIcon title="Create workspace" icon={faRocket} onClick={(): void => handleCreateWorkspace(current)} />
+    {/if}
     <ListItemButtonIcon
       title="Remove Project"
       onClick={handleRemove}

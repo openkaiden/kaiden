@@ -50,7 +50,7 @@ const resourcesColumn = new TableColumn<ProjectSelectable>('Resources', {
 
 const actionsColumn = new TableColumn<ProjectSelectable>('', {
   align: 'right',
-  width: '40px',
+  width: '80px',
   renderer: ProjectActions,
   overflow: true,
 });
