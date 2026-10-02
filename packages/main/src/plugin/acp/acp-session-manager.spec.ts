@@ -1691,6 +1691,71 @@ describe('AcpSessionManager', () => {
         expect(updated.error).toContain('timed out');
       });
     });
+
+    test('sendFollowUp transitions to error on timeout', async () => {
+      const { sessionId } = await setupSessionWithConnection({ promptResult: { stopReason: 'end_turn' } });
+      await vi.advanceTimersByTimeAsync(0);
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const session = sessions.find(s => s.id === sessionId);
+        assert(session);
+        expect(session.status).toBe('completed');
+      });
+
+      vi.mocked(acp.ClientSideConnection.prototype.prompt).mockReturnValue(neverResolve() as never);
+
+      const followUpPromise = manager.sendFollowUp(sessionId, 'follow up question');
+      await vi.advanceTimersByTimeAsync(0);
+
+      vi.advanceTimersByTime(TIMEOUT_MS);
+
+      await expect(followUpPromise).rejects.toThrow('timed out');
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const session = sessions.find(s => s.id === sessionId);
+        assert(session);
+        expect(session.status).toBe('error');
+        assert(session.error);
+        expect(session.error).toContain('timed out');
+        expect(session.error).toContain(String(PROMPT_TIMEOUT_SECONDS));
+      });
+
+      expect(acp.ClientSideConnection.prototype.cancel).toHaveBeenCalledWith({ sessionId: 'acp-1' });
+    });
+
+    test('reconnect-retry path transitions to error on timeout after reconnection', async () => {
+      const { sessionId } = await setupSessionWithConnection({ promptResult: { stopReason: 'end_turn' } });
+      await vi.advanceTimersByTimeAsync(0);
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const session = sessions.find(s => s.id === sessionId);
+        assert(session);
+        expect(session.status).toBe('completed');
+      });
+
+      vi.mocked(acp.ClientSideConnection.prototype.prompt)
+        .mockRejectedValueOnce(new Error('connection closed'))
+        .mockReturnValue(neverResolve() as never);
+
+      const followUpPromise = manager.sendFollowUp(sessionId, 'follow up question');
+      await vi.advanceTimersByTimeAsync(0);
+
+      vi.advanceTimersByTime(TIMEOUT_MS);
+
+      await expect(followUpPromise).rejects.toThrow('timed out');
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const session = sessions.find(s => s.id === sessionId);
+        assert(session);
+        expect(session.status).toBe('error');
+        assert(session.error);
+        expect(session.error).toContain('timed out');
+      });
+    });
   });
 
   describe('ANSI code stripping in error messages', () => {

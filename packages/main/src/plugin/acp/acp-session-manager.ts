@@ -934,14 +934,26 @@ export class AcpSessionManager {
       if (err instanceof Error && err.message.toLowerCase().includes('connection closed')) {
         debugLifecycle(`${session.info.sandboxName} connection died during prompt, reconnecting...`);
         await this.reconnectSession(sessionId);
-        const result = await this.promptWithTimeout(session, {
-          sessionId: session.acpSessionId!,
-          prompt: contentBlocks,
-        });
-        if (result.stopReason === 'end_turn' || result.stopReason === 'cancelled') {
-          this.updateSessionStatus(sessionId, 'completed');
+        try {
+          const result = await this.promptWithTimeout(session, {
+            sessionId: session.acpSessionId!,
+            prompt: contentBlocks,
+          });
+          if (result.stopReason === 'end_turn' || result.stopReason === 'cancelled') {
+            this.updateSessionStatus(sessionId, 'completed');
+          }
+          return;
+        } catch (retryErr: unknown) {
+          console.error(`[ACP ${session.info.sandboxName}] follow-up after reconnect failed:`, retryErr);
+          this.updateSessionStatus(sessionId, 'error');
+          if (retryErr instanceof PromptTimeoutError) {
+            session.info.error = retryErr.message;
+          } else {
+            const stderrMsg = session.stderrLines.join(' ').trim();
+            session.info.error = stderrMsg || (retryErr instanceof Error ? retryErr.message : String(retryErr));
+          }
+          throw retryErr;
         }
-        return;
       }
       console.error(`[ACP ${session.info.sandboxName}] follow-up failed:`, err);
       this.updateSessionStatus(sessionId, 'error');
