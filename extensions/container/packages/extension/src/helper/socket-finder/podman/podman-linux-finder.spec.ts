@@ -30,6 +30,7 @@ let originalXdgRuntimeDir: string | undefined;
 
 beforeEach(() => {
   vi.resetAllMocks();
+  console.warn = vi.fn();
   originalXdgRuntimeDir = process.env.XDG_RUNTIME_DIR;
 });
 
@@ -121,4 +122,43 @@ test('findPaths falls back to /run/user/$UID when XDG_RUNTIME_DIR is unset', asy
   if (uid !== undefined) {
     expect(result).toContain(expectedSocket);
   }
+});
+
+test('findPaths reports a missing socket only once across repeated polls', async () => {
+  const finder = new PodmanSocketLinuxFinder();
+  vi.mocked(existsSync).mockReturnValue(false);
+
+  expect(await finder.findPaths()).toEqual([]);
+  expect(await finder.findPaths()).toEqual([]);
+
+  expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+    'No active podman socket found. Enable it with "systemctl --user enable --now podman.socket".',
+  );
+});
+
+test('findPaths reports again when a discovered socket disappears', async () => {
+  const finder = new PodmanSocketLinuxFinder();
+  vi.mocked(existsSync).mockReturnValue(false);
+  await finder.findPaths();
+
+  vi.mocked(existsSync).mockReturnValue(true);
+  expect(await finder.findPaths()).not.toEqual([]);
+  expect(console.warn).toHaveBeenCalledTimes(1);
+
+  vi.mocked(existsSync).mockReturnValue(false);
+  expect(await finder.findPaths()).toEqual([]);
+  await finder.findPaths();
+
+  expect(console.warn).toHaveBeenCalledTimes(2);
+  expect(console.warn).toHaveBeenLastCalledWith(
+    'No active podman socket found. Enable it with "systemctl --user enable --now podman.socket".',
+  );
+});
+
+test('findPaths does not report a missing socket when one is available', async () => {
+  const finder = new PodmanSocketLinuxFinder();
+  vi.mocked(existsSync).mockReturnValue(true);
+
+  expect(await finder.findPaths()).not.toEqual([]);
+  expect(console.warn).not.toHaveBeenCalled();
 });

@@ -25,6 +25,8 @@ import type { SocketFinder } from '/@/api/socket-finder';
 
 @injectable()
 export class PodmanSocketLinuxFinder implements SocketFinder {
+  #reported = false;
+
   async findPaths(): Promise<string[]> {
     const paths: string[] = [];
 
@@ -44,6 +46,12 @@ export class PodmanSocketLinuxFinder implements SocketFinder {
     if (existsSync(rootfulSocket)) {
       paths.push(rootfulSocket);
     }
+
+    // Discovery polls every 30 seconds; report once until a socket is found again.
+    if (paths.length === 0 && !this.#reported) {
+      console.warn('No active podman socket found. Enable it with "systemctl --user enable --now podman.socket".');
+    }
+    this.#reported = paths.length === 0;
 
     return paths;
   }

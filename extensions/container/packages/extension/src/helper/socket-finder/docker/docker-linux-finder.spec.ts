@@ -26,6 +26,7 @@ vi.mock(import('node:fs'));
 
 beforeEach(() => {
   vi.resetAllMocks();
+  console.warn = vi.fn();
 });
 
 test('findPaths returns empty array when socket does not exist', async () => {
@@ -47,4 +48,39 @@ test('findPaths returns socket path when socket exists', async () => {
   const result = await finder.findPaths();
 
   expect(result).toEqual(['/var/run/docker.sock']);
+});
+
+test('findPaths reports a missing socket only once across repeated polls', async () => {
+  const finder = new DockerSocketLinuxFinder();
+  vi.mocked(existsSync).mockReturnValue(false);
+
+  expect(await finder.findPaths()).toEqual([]);
+  expect(await finder.findPaths()).toEqual([]);
+
+  expect(console.warn).toHaveBeenCalledExactlyOnceWith('No active docker socket found.');
+});
+
+test('findPaths reports again when a discovered socket disappears', async () => {
+  const finder = new DockerSocketLinuxFinder();
+  vi.mocked(existsSync).mockReturnValue(false);
+  await finder.findPaths();
+
+  vi.mocked(existsSync).mockReturnValue(true);
+  expect(await finder.findPaths()).not.toEqual([]);
+  expect(console.warn).toHaveBeenCalledTimes(1);
+
+  vi.mocked(existsSync).mockReturnValue(false);
+  expect(await finder.findPaths()).toEqual([]);
+  await finder.findPaths();
+
+  expect(console.warn).toHaveBeenCalledTimes(2);
+  expect(console.warn).toHaveBeenLastCalledWith('No active docker socket found.');
+});
+
+test('findPaths does not report a missing socket when one is available', async () => {
+  const finder = new DockerSocketLinuxFinder();
+  vi.mocked(existsSync).mockReturnValue(true);
+
+  expect(await finder.findPaths()).not.toEqual([]);
+  expect(console.warn).not.toHaveBeenCalled();
 });
