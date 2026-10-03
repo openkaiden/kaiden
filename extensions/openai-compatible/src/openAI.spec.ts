@@ -31,7 +31,7 @@ import type {
 } from '@openkaiden/api';
 import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { OpenAI, PROVIDER_ID, type StoredConnection, TOKENS_KEY } from './openAI';
+import { DEFAULT_BASE_URL, OpenAI, PROVIDER_ID, type StoredConnection, TOKENS_KEY } from './openAI';
 
 vi.mock(import('node:crypto'));
 
@@ -159,10 +159,26 @@ describe('factory', () => {
     }).rejects.toThrowError('invalid apiKey');
   });
 
-  test('calling create without baseURL should throw invalid baseURL', async () => {
-    await expect(() => {
-      return create({ 'openai.factory.apiKey': 'dummyKey' });
-    }).rejects.toThrowError('invalid baseURL');
+  test('calling create without baseURL should use the default OpenAI endpoint for listing models', async () => {
+    await create({ 'openai.factory.apiKey': 'dummyKey' });
+
+    // listModels should fetch from the default endpoint
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(`${DEFAULT_BASE_URL}/models`, {
+      headers: { Authorization: 'Bearer dummyKey' },
+    });
+
+    // SDK should not receive baseURL
+    expect(createOpenAICompatible).toHaveBeenCalledWith({
+      apiKey: 'dummyKey',
+      name: PROVIDER_ID,
+    });
+
+    // connection should have models from the default endpoint and no endpoint field
+    const call = vi.mocked(PROVIDER_MOCK.registerInferenceProviderConnection).mock.calls[0][0];
+    expect(call.name).toBe(PROVIDER_ID);
+    expect(call.endpoint).toBeUndefined();
+    expect(call.models).toEqual([{ label: 'gpt-4o' }, { label: 'gpt-4.1' }]);
   });
 
   test('calling create with proper params should save connection as JSON', async () => {

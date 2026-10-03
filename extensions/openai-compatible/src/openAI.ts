@@ -31,11 +31,12 @@ import type {
 
 export const TOKENS_KEY = 'openai:infos';
 export const PROVIDER_ID = 'openai';
+export const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 
 export interface StoredConnection {
   id: string;
   apiKey: string;
-  baseURL: string;
+  baseURL?: string;
 }
 
 export class OpenAI implements Disposable {
@@ -161,7 +162,7 @@ export class OpenAI implements Disposable {
   }: {
     id: string;
     token: string;
-    baseURL: string;
+    baseURL?: string;
   }): Promise<void> {
     if (!this.provider) throw new Error('cannot create MCP provider connection: provider is not initialized');
 
@@ -169,20 +170,21 @@ export class OpenAI implements Disposable {
     let status: ProviderConnectionStatus = 'unknown';
 
     try {
-      models = await this.listModels(baseURL, token);
+      models = await this.listModels(baseURL ?? DEFAULT_BASE_URL, token);
     } catch (err: unknown) {
       status = 'stopped';
     }
 
+    const connectionName = baseURL ?? PROVIDER_ID;
     const openai = createOpenAICompatible({
-      baseURL: baseURL,
+      ...(baseURL !== undefined ? { baseURL } : {}),
       apiKey: token,
-      name: baseURL,
-    });
+      name: connectionName,
+    } as Parameters<typeof createOpenAICompatible>[0]);
 
     const connection: InferenceProviderConnection = {
       id,
-      name: baseURL,
+      name: connectionName,
       type: 'cloud',
       llmMetadata: { name: 'openai' },
       endpoint: baseURL,
@@ -221,8 +223,8 @@ export class OpenAI implements Disposable {
     const apiKey = params['openai.factory.apiKey'];
     if (!apiKey || typeof apiKey !== 'string') throw new Error('invalid apiKey');
 
-    const baseURL = params['openai.factory.baseURL'];
-    if (!baseURL || typeof baseURL !== 'string') throw new Error('invalid baseURL');
+    const rawBaseURL = params['openai.factory.baseURL'];
+    const baseURL = typeof rawBaseURL === 'string' && rawBaseURL ? rawBaseURL : undefined;
 
     const stored = await this.getStoredConnections();
     if (stored.some(c => c.apiKey === apiKey && c.baseURL === baseURL)) {
