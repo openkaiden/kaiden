@@ -1,0 +1,44 @@
+{
+  "name": "llmman",
+  "displayName": "llmman",
+  "description": "Register llmman models to Kaiden.",
+  "version": "0.4.0-next",
+  "icon": "icon.png",
+  "publisher": "kaiden",
+  "license": "Apache-2.0",
+  "engines": {
+    "kaiden": "^0.0.1"
+  },
+  "main": "./dist/extension.js",
+  "source": "./src/extension.ts",
+  "contributes": {
+    "configuration": {
+      "title": "llmman",
+      "properties": {
+        "llmman.endpoint": {
+          "type": "string",
+          "scope": "DEFAULT",
+          "default": "http://localhost:17434",
+          "description": "Base URL of the llmman daemon (llmman serve). Change it if the daemon listens on a non-default LLMMAN_HOST."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "vite build && node ./scripts/build.js",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest watch --coverage",
+    "watch": "vite build --watch"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.13"
+  },
+  "devDependencies": {
+    "@openkaiden/api": "workspace:*",
+    "adm-zip": "^0.5.16",
+    "mkdirp": "^3.0.1",
+    "msw": "^2.12.2",
+    "vite": "^7.1.2",
+    "vitest": "^4.0.10"
+  }
+}

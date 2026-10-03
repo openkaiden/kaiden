@@ -22,6 +22,7 @@ import type { ResourceId } from './src/model/core/types';
 // Locally: Assumes Ollama is not available unless OLLAMA_ENABLED is explicitly set
 const ollamaAvailable = !!process.env.OLLAMA_ENABLED;
 const ramaLamaAvailable = !!process.env.RAMALAMA_ENABLED;
+const llmmanAvailable = !!process.env.LLMMAN_ENABLED;
 const podmanAvailable = !!process.env.PODMAN_ENABLED;
 
 if (ollamaAvailable) {
@@ -30,6 +31,10 @@ if (ollamaAvailable) {
 
 if (ramaLamaAvailable) {
   console.log('RamaLama enabled - running RamaLama-Provider tests');
+}
+
+if (llmmanAvailable) {
+  console.log('llmman enabled - running llmman-Provider tests');
 }
 
 if (podmanAvailable) {
@@ -120,6 +125,14 @@ const config: PlaywrightTestConfig & {
         resource: 'ramalama',
       },
       testIgnore: ramaLamaAvailable ? [] : ['**/*'], // Skip all if RamaLama is not running
+    },
+    {
+      name: 'llmman-Provider',
+      testMatch: ['**/provider-specs/*.spec.ts'],
+      use: {
+        resource: 'llmman',
+      },
+      testIgnore: llmmanAvailable ? [] : ['**/*'], // Skip all if llmman is not running
     },
     {
       name: 'Knowledge-Database',
