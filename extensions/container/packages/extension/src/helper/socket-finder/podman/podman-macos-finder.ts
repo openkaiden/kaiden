@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { existsSync } from 'node:fs';
+import { access } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
@@ -36,13 +36,8 @@ export class PodmanSocketMacOSFinder implements SocketFinder {
   private readonly versionDetector: PodmanVersionDetector;
 
   async findPaths(): Promise<string[]> {
-    // socket path is at $HOME/.local/share/containers/podman/machine/podman.sock
+    // Podman creates this shared socket symlink when the macOS helper is installed.
     const socketPath = resolve(homedir(), '.local/share/containers/podman/machine/podman.sock');
-
-    // exists ?
-    if (!existsSync(socketPath)) {
-      return [];
-    }
 
     try {
       const majorVersion = await this.versionDetector.getMajorVersion();
@@ -58,13 +53,45 @@ export class PodmanSocketMacOSFinder implements SocketFinder {
 
       // filter the machines to keep only the running ones
       const runningMachines = machines.filter(m => m.Running);
-      if (runningMachines.length > 0) {
+      if (runningMachines.length === 0) {
+        return [];
+      }
+
+      if (await this.socketExists(socketPath)) {
         return [socketPath];
       }
+
+      const paths = new Set<string>();
+      for (const machine of runningMachines) {
+        try {
+          const { stdout: socketOutput } = await process.exec(
+            'podman',
+            ['machine', 'inspect', '--format', '{{.ConnectionInfo.PodmanSocket.Path}}', machine.Name],
+            { env: { CONTAINERS_MACHINE_PROVIDER: machine.VMType } },
+          );
+          const machineSocketPath = socketOutput.trim();
+          if (machineSocketPath && (await this.socketExists(machineSocketPath))) {
+            paths.add(machineSocketPath);
+          }
+        } catch (error: unknown) {
+          console.debug(`PodmanSocketMacOSFinder: unable to inspect podman machine ${machine.Name}`, error);
+        }
+      }
+      return [...paths];
     } catch (error: unknown) {
       console.debug('PodmanSocketMacOSFinder: unable to list podman machines', error);
     }
 
     return [];
+  }
+
+  private async socketExists(socketPath: string): Promise<boolean> {
+    try {
+      await access(socketPath);
+      return true;
+    } catch (error: unknown) {
+      console.debug(`PodmanSocketMacOSFinder: unable to access socket ${socketPath}`, error);
+      return false;
+    }
   }
 }
