@@ -56,7 +56,7 @@
     "watch": "vite build --watch"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^3.0.13",
+    "@ai-sdk/openai-compatible": "^3.0.62",
     "@openkaiden/api": "workspace:*",
     "@kubernetes/client-node": "^1.3.0"
   },
