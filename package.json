@@ -219,7 +219,7 @@
     "@docker/extension-api-client-types": "0.4.2",
     "@expo/sudo-prompt": "^9.3.2",
     "@kubernetes/client-node": "^1.4.0",
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@nvidia/openshell-sdk": "npm:@openkaiden/opnshll-sdk@0.0.116",
     "@segment/analytics-node": "^2.3.0",
     "@types/semver": "^7.7.1",
