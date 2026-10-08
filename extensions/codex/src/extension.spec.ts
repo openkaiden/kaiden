@@ -69,13 +69,10 @@ function createContext(
   };
 }
 
-function createConfigFile(
-  content = '',
-  path = CODEX_CONFIG_PATH,
-): AgentConfigurationFile & { updateMock: ReturnType<typeof vi.fn> } {
+function createConfigFile(content = ''): AgentConfigurationFile & { updateMock: ReturnType<typeof vi.fn> } {
   const updateMock = vi.fn();
   const file: AgentConfigurationFile = {
-    path,
+    path: CODEX_CONFIG_PATH,
     read: vi.fn().mockResolvedValue(content),
     update: updateMock,
   };
@@ -102,6 +99,15 @@ describe('activate', () => {
     );
   });
 
+  test('auth.json read returns auth_mode apikey', async () => {
+    await activate(extensionContextMock);
+    const agent = getRegisteredAgent();
+
+    const authConfig = agent.configurationFiles.find(f => f.path === CODEX_AUTH_PATH);
+    assert(authConfig);
+    await expect(authConfig.read()).resolves.toBe(JSON.stringify({ auth_mode: 'apikey' }));
+  });
+
   test('pushes agent disposable to subscriptions', async () => {
     await activate(extensionContextMock);
 
@@ -121,10 +127,8 @@ describe('activate', () => {
     await activate(extensionContextMock);
 
     const agent = getRegisteredAgent();
-    expect(agent.configurationFiles).toHaveLength(2);
     const paths = agent.configurationFiles.map(f => f.path);
-    expect(paths).toContain(CODEX_CONFIG_PATH);
-    expect(paths).toContain(CODEX_AUTH_PATH);
+    expect(paths).toEqual([CODEX_CONFIG_PATH, CODEX_AUTH_PATH]);
   });
 
   describe('preWorkspaceStart', () => {
@@ -394,15 +398,6 @@ describe('activate', () => {
         model: 'gpt-4o',
         openai_base_url: 'https://my-custom-host.local/v1',
       });
-    });
-
-    test('auth.json read returns auth_mode apikey', async () => {
-      await activate(extensionContextMock);
-      const agent = getRegisteredAgent();
-
-      const authConfig = agent.configurationFiles.find(f => f.path === CODEX_AUTH_PATH);
-      assert(authConfig);
-      await expect(authConfig.read()).resolves.toBe(JSON.stringify({ auth_mode: 'apikey' }));
     });
 
     test('does not write openai_base_url when no endpoint is provided', async () => {
