@@ -299,4 +299,175 @@ describe('machine socket fallback', () => {
 
     expect(await finder.findPaths()).toEqual([]);
   });
+
+  describe('cached sockets', () => {
+    const machine = { Name: 'custom-machine', VMType: 'applehv', Running: true };
+    const machineListResult = { command: 'podman', stdout: JSON.stringify([machine]), stderr: '' };
+    const machineSocketPath = '/tmp/podman/custom-api.sock';
+    const inspectResult = { command: 'podman', stdout: machineSocketPath, stderr: '' };
+
+    beforeEach(() => {
+      vi.mocked(process.exec)
+        .mockResolvedValue(machineListResult)
+        .mockResolvedValueOnce(machineListResult)
+        .mockResolvedValueOnce(inspectResult);
+      vi.mocked(access).mockImplementation(async path => {
+        if (path === '/home/user/.local/share/containers/podman/machine/podman.sock') {
+          throw Object.assign(new Error('socket does not exist'), { code: 'ENOENT' });
+        }
+      });
+    });
+
+    test('findPaths reuses an accessible socket while continuing to list machines', async () => {
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+
+      expect(process.exec).toHaveBeenCalledTimes(4);
+      expect(process.exec).toHaveBeenLastCalledWith('podman', ['machine', 'ls', '--format', 'json']);
+      expect(access).toHaveBeenLastCalledWith(machineSocketPath);
+    });
+
+    test('findPaths inspects only new machines and ignores list ordering', async () => {
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+      const newMachine = { Name: 'new-machine', VMType: 'libkrun', Running: true };
+      const newSocketPath = '/tmp/podman/new-api.sock';
+      vi.mocked(process.exec)
+        .mockResolvedValueOnce({ command: 'podman', stdout: JSON.stringify([machine, newMachine]), stderr: '' })
+        .mockResolvedValueOnce({ command: 'podman', stdout: newSocketPath, stderr: '' });
+
+      expect(await finder.findPaths()).toEqual([machineSocketPath, newSocketPath]);
+      expect(process.exec).toHaveBeenCalledTimes(4);
+      expect(process.exec).toHaveBeenLastCalledWith(
+        'podman',
+        ['machine', 'inspect', '--format', '{{.ConnectionInfo.PodmanSocket.Path}}', 'new-machine'],
+        { env: { CONTAINERS_MACHINE_PROVIDER: 'libkrun' } },
+      );
+
+      vi.mocked(process.exec).mockResolvedValueOnce({
+        command: 'podman',
+        stdout: JSON.stringify([newMachine, machine]),
+        stderr: '',
+      });
+      expect(await finder.findPaths()).toEqual([newSocketPath, machineSocketPath]);
+      expect(process.exec).toHaveBeenCalledTimes(5);
+    });
+
+    test.each([
+      { state: 'removed', machines: [] },
+      { state: 'stopped', machines: [{ ...machine, Running: false }] },
+      { state: 'removed while another machine runs', machines: [{ Name: 'other', VMType: 'libkrun', Running: true }] },
+    ])('findPaths evicts a $state machine before it starts again', async ({ machines }) => {
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+      vi.mocked(process.exec)
+        .mockResolvedValueOnce({ command: 'podman', stdout: JSON.stringify(machines), stderr: '' })
+        .mockResolvedValue({ command: 'podman', stdout: '', stderr: '' });
+      expect(await finder.findPaths()).toEqual([]);
+
+      const restartedSocketPath = '/tmp/podman/restarted-api.sock';
+      vi.mocked(process.exec)
+        .mockResolvedValueOnce(machineListResult)
+        .mockResolvedValueOnce({ command: 'podman', stdout: restartedSocketPath, stderr: '' });
+      expect(await finder.findPaths()).toEqual([restartedSocketPath]);
+      expect(process.exec).toHaveBeenLastCalledWith(
+        'podman',
+        ['machine', 'inspect', '--format', '{{.ConnectionInfo.PodmanSocket.Path}}', machine.Name],
+        { env: { CONTAINERS_MACHINE_PROVIDER: machine.VMType } },
+      );
+    });
+
+    test('findPaths inspects a machine again when its provider changes', async () => {
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+      const newSocketPath = '/tmp/podman/libkrun-api.sock';
+      vi.mocked(process.exec)
+        .mockResolvedValueOnce({
+          command: 'podman',
+          stdout: JSON.stringify([{ ...machine, VMType: 'libkrun' }]),
+          stderr: '',
+        })
+        .mockResolvedValueOnce({ command: 'podman', stdout: newSocketPath, stderr: '' });
+
+      expect(await finder.findPaths()).toEqual([newSocketPath]);
+      expect(process.exec).toHaveBeenLastCalledWith(
+        'podman',
+        ['machine', 'inspect', '--format', '{{.ConnectionInfo.PodmanSocket.Path}}', machine.Name],
+        { env: { CONTAINERS_MACHINE_PROVIDER: 'libkrun' } },
+      );
+    });
+
+    test('findPaths refreshes a missing cached socket even if the machine list is unchanged', async () => {
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+      vi.mocked(access)
+        .mockRejectedValueOnce(Object.assign(new Error('shared socket absent'), { code: 'ENOENT' }))
+        .mockRejectedValueOnce(Object.assign(new Error('cached socket absent'), { code: 'ENOENT' }));
+      const newSocketPath = '/tmp/podman/restarted-api.sock';
+      vi.mocked(process.exec)
+        .mockResolvedValueOnce(machineListResult)
+        .mockResolvedValueOnce({ command: 'podman', stdout: newSocketPath, stderr: '' });
+
+      expect(await finder.findPaths()).toEqual([newSocketPath]);
+      expect(await finder.findPaths()).toEqual([newSocketPath]);
+      expect(process.exec).toHaveBeenCalledTimes(5);
+      expect(console.debug).not.toHaveBeenCalled();
+    });
+
+    test('findPaths retries a failed inspection on the next poll', async () => {
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+      vi.mocked(access)
+        .mockRejectedValueOnce(Object.assign(new Error('shared socket absent'), { code: 'ENOENT' }))
+        .mockRejectedValueOnce(Object.assign(new Error('cached socket absent'), { code: 'ENOENT' }));
+      vi.mocked(process.exec)
+        .mockResolvedValueOnce(machineListResult)
+        .mockRejectedValueOnce(new Error('inspection failed'));
+      expect(await finder.findPaths()).toEqual([]);
+
+      vi.mocked(process.exec).mockResolvedValueOnce(machineListResult).mockResolvedValueOnce(inspectResult);
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+      expect(process.exec).toHaveBeenCalledTimes(6);
+    });
+
+    test.each([
+      '',
+      '/tmp/podman/missing-api.sock',
+    ])('findPaths does not cache an unusable inspected socket: %j', async stdout => {
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+      vi.mocked(access).mockRejectedValue(Object.assign(new Error('socket absent'), { code: 'ENOENT' }));
+      vi.mocked(process.exec)
+        .mockResolvedValueOnce(machineListResult)
+        .mockResolvedValueOnce({ command: 'podman', stdout, stderr: '' });
+      expect(await finder.findPaths()).toEqual([]);
+
+      vi.mocked(access)
+        .mockRejectedValueOnce(Object.assign(new Error('shared socket absent'), { code: 'ENOENT' }))
+        .mockResolvedValueOnce(undefined);
+      vi.mocked(process.exec).mockResolvedValueOnce(machineListResult).mockResolvedValueOnce(inspectResult);
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+      expect(process.exec).toHaveBeenCalledTimes(6);
+    });
+
+    test('findPaths discards cached sockets when listing fails', async () => {
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+      vi.mocked(process.exec).mockRejectedValueOnce(new Error('listing failed'));
+      expect(await finder.findPaths()).toEqual([]);
+
+      const newSocketPath = '/tmp/podman/restarted-api.sock';
+      vi.mocked(process.exec)
+        .mockResolvedValueOnce(machineListResult)
+        .mockResolvedValueOnce({ command: 'podman', stdout: newSocketPath, stderr: '' });
+      expect(await finder.findPaths()).toEqual([newSocketPath]);
+    });
+
+    test('findPaths prefers the shared socket and refreshes the fallback if it disappears again', async () => {
+      expect(await finder.findPaths()).toEqual([machineSocketPath]);
+      vi.mocked(access).mockResolvedValueOnce(undefined);
+      expect(await finder.findPaths()).toEqual(['/home/user/.local/share/containers/podman/machine/podman.sock']);
+      expect(process.exec).toHaveBeenCalledTimes(3);
+
+      const newSocketPath = '/tmp/podman/restarted-api.sock';
+      vi.mocked(process.exec)
+        .mockResolvedValueOnce(machineListResult)
+        .mockResolvedValueOnce({ command: 'podman', stdout: newSocketPath, stderr: '' });
+      expect(await finder.findPaths()).toEqual([newSocketPath]);
+    });
+  });
 });

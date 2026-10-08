@@ -35,6 +35,8 @@ export class PodmanSocketMacOSFinder implements SocketFinder {
   @inject(PodmanVersionDetector)
   private readonly versionDetector: PodmanVersionDetector;
 
+  #machineSocketPaths = new Map<string, string>();
+
   async findPaths(): Promise<string[]> {
     // socket path is at $HOME/.local/share/containers/podman/machine/podman.sock
     const socketPath = resolve(homedir(), '.local/share/containers/podman/machine/podman.sock');
@@ -54,16 +56,25 @@ export class PodmanSocketMacOSFinder implements SocketFinder {
       // filter the machines to keep only the running ones
       const runningMachines = machines.filter(m => m.Running);
       if (runningMachines.length === 0) {
+        this.#machineSocketPaths.clear();
         return [];
       }
 
       if (await this.socketExists(socketPath)) {
+        this.#machineSocketPaths.clear();
         return [socketPath];
       }
 
-      const paths = new Set<string>();
+      const paths = new Map<string, string>();
       for (const machine of runningMachines) {
         try {
+          const machineKey = JSON.stringify([machine.VMType, machine.Name]);
+          const cachedPath = this.#machineSocketPaths.get(machineKey);
+          if (cachedPath && (await this.socketExists(cachedPath))) {
+            paths.set(machineKey, cachedPath);
+            continue;
+          }
+
           const { stdout: socketOutput } = await process.exec(
             'podman',
             ['machine', 'inspect', '--format', '{{.ConnectionInfo.PodmanSocket.Path}}', machine.Name],
@@ -71,14 +82,17 @@ export class PodmanSocketMacOSFinder implements SocketFinder {
           );
           const machineSocketPath = socketOutput.trim();
           if (machineSocketPath && (await this.socketExists(machineSocketPath))) {
-            paths.add(machineSocketPath);
+            paths.set(machineKey, machineSocketPath);
           }
         } catch (error: unknown) {
           console.debug(`PodmanSocketMacOSFinder: unable to inspect podman machine ${machine.Name}`, error);
         }
       }
-      return [...paths];
+      // Retain only accessible sockets belonging to machines still running this poll.
+      this.#machineSocketPaths = paths;
+      return [...new Set(paths.values())];
     } catch (error: unknown) {
+      this.#machineSocketPaths.clear();
       console.debug('PodmanSocketMacOSFinder: unable to list podman machines', error);
     }
 
