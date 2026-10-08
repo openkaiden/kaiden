@@ -36,7 +36,7 @@ export class PodmanSocketMacOSFinder implements SocketFinder {
   private readonly versionDetector: PodmanVersionDetector;
 
   async findPaths(): Promise<string[]> {
-    // Podman creates this shared socket symlink when the macOS helper is installed.
+    // socket path is at $HOME/.local/share/containers/podman/machine/podman.sock
     const socketPath = resolve(homedir(), '.local/share/containers/podman/machine/podman.sock');
 
     try {
@@ -90,7 +90,9 @@ export class PodmanSocketMacOSFinder implements SocketFinder {
       await access(socketPath);
       return true;
     } catch (error: unknown) {
-      console.debug(`PodmanSocketMacOSFinder: unable to access socket ${socketPath}`, error);
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        console.debug(`PodmanSocketMacOSFinder: unable to access socket ${socketPath}`, error);
+      }
       return false;
     }
   }
