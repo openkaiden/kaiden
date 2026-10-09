@@ -39,6 +39,8 @@ export interface StoredConnection {
 }
 
 export class OpenAI implements Disposable {
+  protected static readonly DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+
   private provider: Provider | undefined = undefined;
   private connections: Map<string, Disposable> = new Map();
 
@@ -74,10 +76,10 @@ export class OpenAI implements Disposable {
         await this.registerInferenceProviderConnection({
           id: entry.id,
           token: entry.apiKey,
-          baseURL: entry.baseURL,
+          baseURL: this.resolveBaseURL(entry.baseURL),
         });
       } catch (err: unknown) {
-        console.error(`openai: failed to restore connection for baseURL ${entry.baseURL}`, err);
+        console.error(`openai: failed to restore connection ${entry.id}`, err);
       }
     }
   }
@@ -217,15 +219,28 @@ export class OpenAI implements Disposable {
     }
   }
 
+  private resolveBaseURL(baseURL: unknown): string {
+    if (baseURL !== undefined && typeof baseURL !== 'string') {
+      throw new Error('invalid baseURL');
+    }
+    return baseURL === undefined || baseURL === '' ? OpenAI.DEFAULT_BASE_URL : baseURL;
+  }
+
   private async inferenceFactory(params: { [p: string]: unknown }): Promise<void> {
     const apiKey = params['openai.factory.apiKey'];
     if (!apiKey || typeof apiKey !== 'string') throw new Error('invalid apiKey');
 
-    const baseURL = params['openai.factory.baseURL'];
-    if (!baseURL || typeof baseURL !== 'string') throw new Error('invalid baseURL');
+    const baseURL = this.resolveBaseURL(params['openai.factory.baseURL']);
 
     const stored = await this.getStoredConnections();
-    if (stored.some(c => c.apiKey === apiKey && c.baseURL === baseURL)) {
+    if (
+      stored.some(
+        c =>
+          c.apiKey === apiKey &&
+          (c.baseURL === undefined || typeof c.baseURL === 'string') &&
+          this.resolveBaseURL(c.baseURL) === baseURL,
+      )
+    ) {
       throw new Error(`connection already exists for baseURL ${baseURL}`);
     }
 

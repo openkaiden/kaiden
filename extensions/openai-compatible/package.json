@@ -17,7 +17,9 @@
         "openai.factory.baseURL": {
           "type": "string",
           "scope": "InferenceProviderConnectionFactory",
-          "description": "baseURL"
+          "default": "",
+          "placeholder": "https://api.openai.com/v1",
+          "description": "baseURL (leave empty to use the OpenAI API)"
         },
         "openai.factory.apiKey": {
           "type": "string",
