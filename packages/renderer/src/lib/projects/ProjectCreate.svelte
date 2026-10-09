@@ -1,7 +1,8 @@
 <script lang="ts">
 import { Button } from '@podman-desktop/ui-svelte';
-import { toast } from 'svelte-sonner';
+import { toast } from '@zerodevx/svelte-toast';
 
+import { toastThemes } from '/@/lib/toast/toast-themes';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import WizardStepper from '/@/lib/ui/WizardStepper.svelte';
@@ -115,7 +116,7 @@ async function handleBrowseSource(): Promise<void> {
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    toast.error(`Failed to browse for directory: ${message}`);
+    toast.push(`Failed to browse for directory: ${message}`, { theme: toastThemes.error });
   }
 }
 
@@ -129,7 +130,7 @@ async function handleBrowseCloneTo(): Promise<void> {
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    toast.error(`Failed to browse for directory: ${message}`);
+    toast.push(`Failed to browse for directory: ${message}`, { theme: toastThemes.error });
   }
 }
 
@@ -167,7 +168,7 @@ async function handleAnalyze(): Promise<void> {
     currentStepIndex = 1;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    toast.error(`Failed to analyze project: ${message}`);
+    toast.push(`Failed to analyze project: ${message}`, { theme: toastThemes.error });
   } finally {
     analyzing = false;
   }
@@ -206,7 +207,7 @@ async function createProject(): Promise<void> {
       filesystem: { mode: 'project', mounts: [] },
       network: { mode: 'allow' },
     });
-    toast.success(`Project "${projectName}" created successfully`);
+    toast.push(`Project "${projectName}" created successfully`, { theme: toastThemes.success });
     handleNavigation({ page: NavigationPage.PROJECTS });
   } catch (err: unknown) {
     console.error('Failed to create project', err);
