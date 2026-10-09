@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { existsSync } from 'node:fs';
+import { access } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
@@ -35,14 +35,11 @@ export class PodmanSocketMacOSFinder implements SocketFinder {
   @inject(PodmanVersionDetector)
   private readonly versionDetector: PodmanVersionDetector;
 
+  #machineSocketPaths = new Map<string, string>();
+
   async findPaths(): Promise<string[]> {
     // socket path is at $HOME/.local/share/containers/podman/machine/podman.sock
     const socketPath = resolve(homedir(), '.local/share/containers/podman/machine/podman.sock');
-
-    // exists ?
-    if (!existsSync(socketPath)) {
-      return [];
-    }
 
     try {
       const majorVersion = await this.versionDetector.getMajorVersion();
@@ -58,13 +55,59 @@ export class PodmanSocketMacOSFinder implements SocketFinder {
 
       // filter the machines to keep only the running ones
       const runningMachines = machines.filter(m => m.Running);
-      if (runningMachines.length > 0) {
+      if (runningMachines.length === 0) {
+        this.#machineSocketPaths.clear();
+        return [];
+      }
+
+      if (await this.socketExists(socketPath)) {
+        this.#machineSocketPaths.clear();
         return [socketPath];
       }
+
+      const paths = new Map<string, string>();
+      for (const machine of runningMachines) {
+        try {
+          const machineKey = JSON.stringify([machine.VMType, machine.Name]);
+          const cachedPath = this.#machineSocketPaths.get(machineKey);
+          if (cachedPath && (await this.socketExists(cachedPath))) {
+            paths.set(machineKey, cachedPath);
+            continue;
+          }
+
+          const { stdout: socketOutput } = await process.exec(
+            'podman',
+            ['machine', 'inspect', '--format', '{{.ConnectionInfo.PodmanSocket.Path}}', machine.Name],
+            { env: { CONTAINERS_MACHINE_PROVIDER: machine.VMType } },
+          );
+          const machineSocketPath = socketOutput.trim();
+          if (machineSocketPath && (await this.socketExists(machineSocketPath))) {
+            paths.set(machineKey, machineSocketPath);
+          }
+        } catch (error: unknown) {
+          console.debug(`PodmanSocketMacOSFinder: unable to inspect podman machine ${machine.Name}`, error);
+        }
+      }
+      // Retain only accessible sockets belonging to machines still running this poll.
+      this.#machineSocketPaths = paths;
+      return [...new Set(paths.values())];
     } catch (error: unknown) {
+      this.#machineSocketPaths.clear();
       console.debug('PodmanSocketMacOSFinder: unable to list podman machines', error);
     }
 
     return [];
+  }
+
+  private async socketExists(socketPath: string): Promise<boolean> {
+    try {
+      await access(socketPath);
+      return true;
+    } catch (error: unknown) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        console.debug(`PodmanSocketMacOSFinder: unable to access socket ${socketPath}`, error);
+      }
+      return false;
+    }
   }
 }
