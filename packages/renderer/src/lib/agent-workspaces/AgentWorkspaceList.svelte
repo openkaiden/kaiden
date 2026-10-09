@@ -19,10 +19,12 @@ import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
 import { handleNavigation } from '/@/navigation';
 import {
   allOpenshellSandboxes,
+  clearSandboxActionError,
   filteredOpenshellSandboxes,
   type SandboxInfoWithGateway,
   searchPattern as sandboxSearchPattern,
   selectedGateway as sandboxSelectedGateway,
+  setSandboxActionError,
 } from '/@/stores/openshell-sandboxes';
 import { NavigationPage } from '/@api/navigation-page';
 
@@ -64,10 +66,11 @@ async function deleteSelectedSandboxes(): Promise<void> {
   bulkDeleteInProgress = true;
   await Promise.all(
     selectedSandboxes.map(async sandbox => {
+      clearSandboxActionError(sandbox.id);
       try {
         await window.deleteOpenshellSandbox(sandbox.name, sandbox.gatewayName);
-      } catch (error) {
-        console.error(`error while removing workspace ${sandbox.name}`, error);
+      } catch (e: unknown) {
+        setSandboxActionError(sandbox.id, String(e));
       }
     }),
   );
