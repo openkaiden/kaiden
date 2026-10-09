@@ -17,7 +17,13 @@
  ***********************************************************************/
 
 import { create } from '@bufbuild/protobuf';
-import { ProviderProfileSchema } from '@nvidia/openshell-sdk/raw';
+import {
+  NetworkAccessPreset,
+  NetworkEnforcementMode,
+  ProviderCredentialRefreshStrategy,
+  ProviderProfileCategory,
+  ProviderProfileSchema,
+} from '@nvidia/openshell-sdk/raw';
 import type { OpenShellCLI, OpenShellGateway, ProviderConnectionStatus, ProviderProfile } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
 import { parse as parseYaml } from 'yaml';
@@ -31,9 +37,60 @@ import type { Event } from '/@api/event.js';
 import { Emitter } from './events/emitter.js';
 import { Disposable } from './types/disposable.js';
 
+const categories = new Map<string, number>(
+  Object.entries(ProviderProfileCategory)
+    .filter((k): k is [string, number] => typeof k[1] === 'number')
+    .map(k => [k[0].toLowerCase(), k[1]]),
+);
+
+const strategies = new Map<string, number>(
+  Object.entries(ProviderCredentialRefreshStrategy)
+    .filter((k): k is [string, number] => typeof k[1] === 'number')
+    .map(k => [k[0].toLowerCase(), k[1]]),
+);
+
+const enforcements = new Map<string, number>(
+  Object.entries(NetworkEnforcementMode)
+    .filter((k): k is [string, number] => typeof k[1] === 'number')
+    .map(k => [k[0].toLowerCase(), k[1]]),
+);
+
+const accesses = new Map<string, number>(
+  Object.entries(NetworkAccessPreset)
+    .filter((k): k is [string, number] => typeof k[1] === 'number')
+    .map(k => [k[0].toLowerCase().replace('_', '-'), k[1]]),
+);
+
+const EndpointsProviderSchema = z.looseObject({
+  enforcement: z
+    .string()
+    .transform(str => enforcements.get(str.toLowerCase()) ?? 0)
+    .default(0),
+  access: z
+    .string()
+    .transform(str => accesses.get(str.toLowerCase()) ?? 0)
+    .default(0),
+});
+const CredentialsRefreshProviderSchema = z.looseObject({
+  strategy: z
+    .string()
+    .transform(str => strategies.get(str.toLowerCase()) ?? 0)
+    .default(0),
+});
+const CredentialsProviderSchema = z.looseObject({
+  refresh: CredentialsRefreshProviderSchema.optional(),
+});
+
 const OpenshellProviderProfileSchema = z.looseObject({
   id: z.string(),
   display_name: z.string(),
+  binaries: z.array(z.string().transform(str => ({ path: str }))).optional(),
+  category: z
+    .string()
+    .transform(str => categories.get(str.toLowerCase()) ?? 0)
+    .optional(),
+  credentials: z.array(CredentialsProviderSchema).optional(),
+  endpoints: z.array(EndpointsProviderSchema).optional(),
 });
 
 @injectable()

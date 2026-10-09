@@ -21,7 +21,7 @@ import { inject, injectable, preDestroy } from 'inversify';
 
 import { OpenshellGatewayConfig } from '/@/plugin/openshell-cli/openshell-gateway-config.js';
 import { OpenshellGatewayManager } from '/@/plugin/openshell-cli/openshell-gateway-manager.js';
-import type { GatewayMetadata } from '/@api/openshell-gateway-info.js';
+import { GatewayMetadata } from '/@api/openshell-gateway-info.js';
 
 /**
  * Cached factory for OpenShell SDK clients. Resolves gateway metadata from
@@ -30,6 +30,7 @@ import type { GatewayMetadata } from '/@api/openshell-gateway-info.js';
  *
  * Clients are lazy — no network request is made until the first RPC.
  */
+
 @injectable()
 export class OpenshellSdkClientManager {
   readonly #cache = new Map<string, Promise<OpenShellClient>>();

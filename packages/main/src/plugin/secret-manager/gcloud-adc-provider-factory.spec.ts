@@ -19,6 +19,7 @@
 import type { OpenShellClient } from '@nvidia/openshell-sdk';
 import { beforeEach, describe, expect, type Mock, test, vi } from 'vitest';
 
+import { DEFAULT_WORKSPACE, DEFAULT_WORKSPACE_SCOPE } from '/@/plugin/openshell-cli/openshell-utils.js';
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
 import { GcloudAdcProviderFactory, readGcloudAdc } from './gcloud-adc-provider-factory.js';
@@ -44,6 +45,8 @@ const adcOptions: SecretCreateOptions = {
     credentials: {},
   },
 };
+
+const envKeys = ['GOOGLE_API_KEY', 'SECOND_KEY'];
 
 beforeEach(async () => {
   vi.resetAllMocks();
@@ -72,7 +75,7 @@ beforeEach(async () => {
       credentials: [
         {
           name: 'api_key',
-          envVars: ['GOOGLE_API_KEY'],
+          envVars: envKeys,
           refresh: { strategy: 3 },
         },
       ],
@@ -84,46 +87,58 @@ describe('createProvider', () => {
   test('performs the 3-step gcloud ADC flow', async () => {
     await factory.createProvider(client, adcOptions);
 
-    expect(mockRaw.getProviderProfile).toHaveBeenCalledWith({ id: 'google-vertex-ai', workspace: '' });
+    expect(mockRaw.getProviderProfile).toHaveBeenCalledWith({
+      id: 'google-vertex-ai',
+      workspaceScope: DEFAULT_WORKSPACE_SCOPE,
+    });
     expect(mockRaw.createProvider).toHaveBeenCalledWith({
       provider: {
         metadata: { name: 'my-gcp' },
         type: 'google-vertex-ai',
         config: {},
+        profileWorkspace: DEFAULT_WORKSPACE,
       },
-      workspace: '',
+      workspaceScope: DEFAULT_WORKSPACE_SCOPE,
     });
-    expect(mockRaw.configureProviderRefresh).toHaveBeenCalledWith({
-      provider: 'my-gcp',
-      credentialKey: 'GOOGLE_API_KEY',
-      strategy: 3,
-      material: {
-        client_id: 'test-client-id',
-        client_secret: 'test-client-secret',
-        refresh_token: 'test-refresh-token',
-      },
-      secretMaterialKeys: ['client_secret', 'refresh_token'],
-      workspace: '',
-    });
-    expect(mockRaw.rotateProviderCredential).toHaveBeenCalledWith({
-      provider: 'my-gcp',
-      credentialKey: 'GOOGLE_API_KEY',
-      workspace: '',
-    });
+    for (const key of envKeys) {
+      expect(mockRaw.configureProviderRefresh).toHaveBeenCalledWith({
+        provider: 'my-gcp',
+        credentialKey: key,
+        strategy: 3,
+        material: {
+          client_id: 'test-client-id',
+          client_secret: 'test-client-secret',
+          refresh_token: 'test-refresh-token',
+        },
+        secretMaterialKeys: ['client_secret', 'refresh_token'],
+        workspaceScope: DEFAULT_WORKSPACE_SCOPE,
+      });
+      expect(mockRaw.rotateProviderCredential).toHaveBeenCalledWith({
+        provider: 'my-gcp',
+        credentialKey: key,
+        workspaceScope: DEFAULT_WORKSPACE_SCOPE,
+      });
+    }
   });
 
   test('rolls back provider on configureProviderRefresh failure', async () => {
     mockRaw.configureProviderRefresh.mockRejectedValue(new Error('configure failed'));
 
     await expect(factory.createProvider(client, adcOptions)).rejects.toThrow('configure failed');
-    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({ name: 'my-gcp', workspace: '' });
+    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({
+      name: 'my-gcp',
+      workspaceScope: DEFAULT_WORKSPACE_SCOPE,
+    });
   });
 
   test('rolls back provider on rotateProviderCredential failure', async () => {
     mockRaw.rotateProviderCredential.mockRejectedValue(new Error('rotate failed'));
 
     await expect(factory.createProvider(client, adcOptions)).rejects.toThrow('rotate failed');
-    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({ name: 'my-gcp', workspace: '' });
+    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({
+      name: 'my-gcp',
+      workspaceScope: DEFAULT_WORKSPACE_SCOPE,
+    });
   });
 
   test('rejects when provider profile has no ADC credential', async () => {

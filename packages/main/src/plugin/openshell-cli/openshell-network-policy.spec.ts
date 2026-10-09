@@ -16,6 +16,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { create } from '@bufbuild/protobuf';
+import { NetworkAccessPreset, NetworkEndpointSchema, SandboxPolicySchema } from '@nvidia/openshell-sdk/raw';
 import { describe, expect, test } from 'vitest';
 
 import { OPENSHELL_CONTAINER_HOST, OpenshellNetworkPolicy } from './openshell-network-policy.js';
@@ -152,25 +154,45 @@ describe('buildPolicyObject', () => {
   test('builds network rule for deny mode with hosts', () => {
     const policy = networkPolicy.buildPolicyObject({ mode: 'deny', hosts: ['registry.npmjs.org'] });
 
-    expect(policy).toEqual({
-      version: 1,
-      networkPolicies: {
-        'kdn-network': {
-          endpoints: [
-            { host: 'registry.npmjs.org', port: 443, protocol: 'rest', access: 'full', allowEncodedSlash: true },
-            { host: 'registry.npmjs.org', port: 80, protocol: 'rest', access: 'full', allowEncodedSlash: true },
-          ],
-          binaries: [{ path: '/**' }],
+    expect(policy).toEqual(
+      create(SandboxPolicySchema, {
+        version: 1,
+        networkPolicies: {
+          'kdn-network': {
+            endpoints: [
+              {
+                host: 'registry.npmjs.org',
+                port: 443,
+                protocol: 'rest',
+                access: NetworkAccessPreset.FULL,
+                allowEncodedSlash: true,
+              },
+              {
+                host: 'registry.npmjs.org',
+                port: 80,
+                protocol: 'rest',
+                access: NetworkAccessPreset.FULL,
+                allowEncodedSlash: true,
+              },
+            ],
+            binaries: [{ path: '/**' }],
+          },
         },
-      },
-    });
+      }),
+    );
   });
 
   test('builds one endpoint for a host with an explicit port', () => {
     const policy = networkPolicy.buildPolicyObject({ mode: 'deny', hosts: ['api.example.com:8080'] });
 
     expect(policy!.networkPolicies!['kdn-network']!.endpoints).toEqual([
-      { host: 'api.example.com', port: 8080, protocol: 'rest', access: 'full', allowEncodedSlash: true },
+      create(NetworkEndpointSchema, {
+        host: 'api.example.com',
+        port: 8080,
+        protocol: 'rest',
+        access: NetworkAccessPreset.FULL,
+        allowEncodedSlash: true,
+      }),
     ]);
   });
 
@@ -181,15 +203,17 @@ describe('buildPolicyObject', () => {
   test('builds model rule for valid endpoint', () => {
     const policy = networkPolicy.buildPolicyObject(undefined, 'https://api.example.com/v1');
 
-    expect(policy).toEqual({
-      version: 1,
-      networkPolicies: {
-        'kdn-model': {
-          endpoints: [{ host: 'api.example.com', port: 443 }],
-          binaries: [{ path: '/**' }],
+    expect(policy).toEqual(
+      create(SandboxPolicySchema, {
+        version: 1,
+        networkPolicies: {
+          'kdn-model': {
+            endpoints: [{ host: 'api.example.com', port: 443 }],
+            binaries: [{ path: '/**' }],
+          },
         },
-      },
-    });
+      }),
+    );
   });
 
   test('combines network and model rules', () => {
@@ -198,22 +222,36 @@ describe('buildPolicyObject', () => {
       'http://localhost:11434/v1',
     );
 
-    expect(policy).toEqual({
-      version: 1,
-      networkPolicies: {
-        'kdn-network': {
-          endpoints: [
-            { host: 'registry.npmjs.org', port: 443, protocol: 'rest', access: 'full', allowEncodedSlash: true },
-            { host: 'registry.npmjs.org', port: 80, protocol: 'rest', access: 'full', allowEncodedSlash: true },
-          ],
-          binaries: [{ path: '/**' }],
+    expect(policy).toEqual(
+      create(SandboxPolicySchema, {
+        version: 1,
+        networkPolicies: {
+          'kdn-network': {
+            endpoints: [
+              {
+                host: 'registry.npmjs.org',
+                port: 443,
+                protocol: 'rest',
+                access: NetworkAccessPreset.FULL,
+                allowEncodedSlash: true,
+              },
+              {
+                host: 'registry.npmjs.org',
+                port: 80,
+                protocol: 'rest',
+                access: NetworkAccessPreset.FULL,
+                allowEncodedSlash: true,
+              },
+            ],
+            binaries: [{ path: '/**' }],
+          },
+          'kdn-model': {
+            endpoints: [{ host: OPENSHELL_CONTAINER_HOST, port: 11434 }],
+            binaries: [{ path: '/**' }],
+          },
         },
-        'kdn-model': {
-          endpoints: [{ host: OPENSHELL_CONTAINER_HOST, port: 11434 }],
-          binaries: [{ path: '/**' }],
-        },
-      },
-    });
+      }),
+    );
   });
 
   test('rewrites localhost model endpoint', () => {
@@ -230,5 +268,104 @@ describe('buildPolicyObject', () => {
 
   test('returns undefined for invalid model endpoint with no network', () => {
     expect(networkPolicy.buildPolicyObject(undefined, 'not-a-url')).toBeUndefined();
+  });
+});
+
+describe('endpointMatchesHost', () => {
+  test('matches identical hosts', () => {
+    expect(networkPolicy.endpointMatchesHost('api.openai.com', 'api.openai.com')).toBeTruthy();
+  });
+
+  test('does not match different hosts', () => {
+    expect(networkPolicy.endpointMatchesHost('api.openai.com', 'api.anthropic.com')).toBeFalsy();
+  });
+
+  test('matches wildcard * against any host', () => {
+    expect(networkPolicy.endpointMatchesHost('*', 'api.openai.com')).toBeTruthy();
+  });
+
+  test('matches glob pattern *.example.com', () => {
+    expect(networkPolicy.endpointMatchesHost('*.example.com', 'api.example.com')).toBeTruthy();
+  });
+
+  test('does not match glob pattern against non-matching host', () => {
+    expect(networkPolicy.endpointMatchesHost('*.example.com', 'api.other.com')).toBeFalsy();
+  });
+
+  test('matches rewritten container host exactly', () => {
+    expect(networkPolicy.endpointMatchesHost(OPENSHELL_CONTAINER_HOST, OPENSHELL_CONTAINER_HOST)).toBeTruthy();
+  });
+});
+
+describe('isEndpointCovered', () => {
+  test('returns true when exact host and port match', () => {
+    const endpoints = [create(NetworkEndpointSchema, { host: 'api.openai.com', port: 443 })];
+    expect(networkPolicy.isEndpointCovered(endpoints, { host: 'api.openai.com', port: 443 })).toBeTruthy();
+  });
+
+  test('returns false when host matches but port differs', () => {
+    const endpoints = [create(NetworkEndpointSchema, { host: 'api.openai.com', port: 80 })];
+    expect(networkPolicy.isEndpointCovered(endpoints, { host: 'api.openai.com', port: 443 })).toBeFalsy();
+  });
+
+  test('returns true when wildcard host covers the target', () => {
+    const endpoints = [create(NetworkEndpointSchema, { host: '*', port: 443 })];
+    expect(networkPolicy.isEndpointCovered(endpoints, { host: 'api.openai.com', port: 443 })).toBeTruthy();
+  });
+
+  test('returns false for empty endpoints list', () => {
+    expect(networkPolicy.isEndpointCovered([], { host: 'api.openai.com', port: 443 })).toBeFalsy();
+  });
+
+  test('returns true when one of several endpoints matches', () => {
+    const endpoints = [
+      create(NetworkEndpointSchema, { host: 'api.anthropic.com', port: 443 }),
+      create(NetworkEndpointSchema, { host: 'api.openai.com', port: 443 }),
+    ];
+    expect(networkPolicy.isEndpointCovered(endpoints, { host: 'api.openai.com', port: 443 })).toBeTruthy();
+  });
+});
+
+describe('extractBinaryFromCommand', () => {
+  test('extracts single-word command', () => {
+    expect(networkPolicy.extractBinaryFromCommand('claude')).toBe('claude');
+  });
+
+  test('extracts first word from multi-word command', () => {
+    expect(networkPolicy.extractBinaryFromCommand('/usr/bin/agent start')).toBe('/usr/bin/agent');
+  });
+
+  test('trims whitespace', () => {
+    expect(networkPolicy.extractBinaryFromCommand('  claude  ')).toBe('claude');
+  });
+});
+
+describe('isAgentCommandAllowed', () => {
+  test('matches exact path when binary has no wildcard', () => {
+    expect(networkPolicy.isAgentCommandAllowed('/usr/bin/claude', ['/usr/bin/claude', '/usr/bin/node'])).toBe(true);
+  });
+
+  test('rejects path not equal when binary has no wildcard', () => {
+    expect(networkPolicy.isAgentCommandAllowed('/usr/bin/claude', ['/usr/local/bin/claude'])).toBe(false);
+  });
+
+  test('matches bare command exactly when binary has no wildcard', () => {
+    expect(networkPolicy.isAgentCommandAllowed('claude', ['claude'])).toBe(true);
+  });
+
+  test('rejects bare command against absolute binary without wildcard', () => {
+    expect(networkPolicy.isAgentCommandAllowed('claude', ['/usr/local/bin/claude', '/usr/bin/node'])).toBe(false);
+  });
+
+  test('matches via glob when binary contains wildcard', () => {
+    expect(networkPolicy.isAgentCommandAllowed('/usr/local/bin/claude', ['**/claude'])).toBe(true);
+  });
+
+  test('rejects via glob when pattern does not match', () => {
+    expect(networkPolicy.isAgentCommandAllowed('/usr/bin/node', ['**/claude'])).toBe(false);
+  });
+
+  test('matches bare command via glob pattern', () => {
+    expect(networkPolicy.isAgentCommandAllowed('claude', ['**/claude'])).toBe(true);
   });
 });

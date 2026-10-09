@@ -54,12 +54,6 @@
           "description": "Vertex AI provider type",
           "hidden": true
         },
-        "vertex-ai.connection._needsInferenceSetup": {
-          "type": "boolean",
-          "scope": "InferenceProviderConnection",
-          "description": "Whether inference setup is required",
-          "hidden": true
-        },
         "vertex-ai.connection.GOOGLE_APPLICATION_CREDENTIALS": {
           "type": "string",
           "scope": "InferenceProviderConnection",

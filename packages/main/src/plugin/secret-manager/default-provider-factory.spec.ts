@@ -19,6 +19,7 @@
 import type { OpenShellClient } from '@nvidia/openshell-sdk';
 import { beforeEach, describe, expect, type Mock, test, vi } from 'vitest';
 
+import { DEFAULT_WORKSPACE, DEFAULT_WORKSPACE_SCOPE } from '/@/plugin/openshell-cli/openshell-utils.js';
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
 import { DefaultProviderFactory } from './default-provider-factory.js';
@@ -51,10 +52,11 @@ describe('createProvider', () => {
       provider: {
         metadata: { name: 'my-secret' },
         type: 'github',
+        profileWorkspace: DEFAULT_WORKSPACE,
         credentials: { GH_TOKEN: 'ghp_abc123' },
         config: { ORG: 'acme' },
       },
-      workspace: '',
+      workspaceScope: DEFAULT_WORKSPACE_SCOPE,
     });
   });
 

@@ -17,9 +17,15 @@
  ***********************************************************************/
 
 import { isIPv6 } from 'node:net';
+import { matchesGlob } from 'node:path';
 
-import type { MessageInitShape } from '@bufbuild/protobuf';
-import type { NetworkEndpointSchema, SandboxPolicySchema } from '@nvidia/openshell-sdk/raw';
+import { create, type MessageInitShape } from '@bufbuild/protobuf';
+import {
+  NetworkAccessPreset,
+  NetworkEndpoint,
+  NetworkEndpointSchema,
+  SandboxPolicySchema,
+} from '@nvidia/openshell-sdk/raw';
 import { injectable } from 'inversify';
 
 import type { NetworkConfiguration } from '/@api/agent-workspace-info.js';
@@ -49,6 +55,30 @@ export interface NetworkDestination {
 
 @injectable()
 export class OpenshellNetworkPolicy {
+  extractBinaryFromCommand(command: string): string {
+    return command.trim().split(/\s+/)[0] ?? '';
+  }
+
+  endpointMatchesHost(existingHost: string, targetHost: string): boolean {
+    if (existingHost.includes('*')) {
+      return matchesGlob(targetHost, existingHost);
+    }
+    return existingHost === targetHost;
+  }
+
+  isEndpointCovered(endpoints: readonly NetworkEndpoint[], target: ModelEndpoint): boolean {
+    return endpoints.some(ep => this.endpointMatchesHost(ep.host, target.host) && ep.port === target.port);
+  }
+
+  isAgentCommandAllowed(agentBinary: string, binaries: string[]): boolean {
+    return binaries.some(b => {
+      if (!b.includes('*')) {
+        return b === agentBinary;
+      }
+      return matchesGlob(agentBinary, b);
+    });
+  }
+
   /**
    * Parses a network destination stored as either `host` or `host:port`.
    * IPv6 destinations are not supported by this workspace configuration.
@@ -137,18 +167,20 @@ export class OpenshellNetworkPolicy {
     const networkPolicies: NonNullable<OpenshellPolicy['networkPolicies']> = {};
 
     if (network && network.mode !== 'allow' && network.hosts?.length) {
-      const endpoints: MessageInitShape<typeof NetworkEndpointSchema>[] = network.hosts.flatMap(destination => {
+      const endpoints: NetworkEndpoint[] = network.hosts.flatMap(destination => {
         const parsed = this.parseNetworkDestination(destination);
         if (!parsed) return [];
 
         const ports = parsed.port === undefined ? [443, 80] : [parsed.port];
-        return ports.map(port => ({
-          host: parsed.host,
-          port,
-          protocol: 'rest' as const,
-          access: 'full' as const,
-          allowEncodedSlash: true,
-        }));
+        return ports.map(port =>
+          create(NetworkEndpointSchema, {
+            host: parsed.host,
+            port,
+            protocol: 'rest',
+            access: NetworkAccessPreset.FULL,
+            allowEncodedSlash: true,
+          }),
+        );
       });
       if (endpoints.length > 0) {
         networkPolicies[NETWORK_RULE_NAME] = {
@@ -172,6 +204,6 @@ export class OpenshellNetworkPolicy {
       return undefined;
     }
 
-    return { version: 1, networkPolicies };
+    return create(SandboxPolicySchema, { version: 1, networkPolicies });
   }
 }

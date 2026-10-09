@@ -45,6 +45,8 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
       logo: { dark: './icon.png', light: './icon.png' },
     },
     command: 'gemini',
+    baseImage:
+      'ghcr.io/openkaiden/openshell-image-gemini@sha256:e5749e6d720f8b6bc42dcc1651fbbefd2bcc04a029fb6585a32535e4b156a8d2',
     acp: { args: ['--acp'] },
     tags: ['Cloud'],
     configurationFiles: [

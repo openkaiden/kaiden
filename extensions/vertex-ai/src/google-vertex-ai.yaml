@@ -35,7 +35,7 @@ credentials:
           description: Optional delegated user email for domain-wide delegation
   - name: gcloud_adc_token
     description: Google Cloud access token refreshed via gcloud Application Default Credentials
-    env_vars: [GOOGLE_VERTEX_AI_TOKEN, VERTEX_AI_TOKEN]
+    env_vars: [GOOGLE_VERTEX_AI_TOKEN, VERTEX_AI_TOKEN, ANTHROPIC_AUTH_TOKEN]
     required: false
     auth_style: bearer
     header_name: authorization

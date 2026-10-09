@@ -32,6 +32,7 @@ import { Directories } from '/@/plugin/directories.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { mapSdkSandboxRef } from '/@/plugin/openshell-cli/openshell-sdk-sandbox-mapper.js';
+import { DEFAULT_WORKSPACE } from '/@/plugin/openshell-cli/openshell-utils.js';
 import type {
   AcpAttachment,
   AcpElicitationResponseData,
@@ -1284,7 +1285,7 @@ export class AcpSessionManager {
 
   async #listSandboxes(): Promise<SandboxInfo[]> {
     const client = await this.sdkClientManager.getClient();
-    const refs = await client.sandbox.list();
-    return refs.map(mapSdkSandboxRef);
+    const refs = client.sandbox.list({ workspace: DEFAULT_WORKSPACE });
+    return (await refs.all()).map(mapSdkSandboxRef);
   }
 }

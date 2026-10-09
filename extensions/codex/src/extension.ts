@@ -48,6 +48,8 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
       logo: { dark: './icon.png', light: './icon.png' },
     },
     command: 'codex',
+    baseImage:
+      'ghcr.io/openkaiden/openshell-image-codex@sha256:fe6c5d1015ad4b4f838e2818b692044e828cd345c2542899ad0fada153363dd9',
     configurationFiles: [
       {
         path: CODEX_CONFIG_PATH,

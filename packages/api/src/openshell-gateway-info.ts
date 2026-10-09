@@ -72,6 +72,7 @@ export const SandboxInfoSchema = z.object({
     'Starting',
     'Stopping',
     'Stopped',
+    'Completed',
   ]),
   created_at: z
     .string()
@@ -93,6 +94,8 @@ export type SandboxInfo = z.output<typeof SandboxInfoSchema> & {
 
 export const WORKSPACE_LABEL = 'ai.openkaiden.kaiden.workspace';
 export const AGENT_LABEL = 'ai.openkaiden.kaiden.agent';
+export const SECRET_LABEL = 'ai.openkaiden.kaiden.secret';
+export const PROFILE_LABEL = 'ai.openkaiden.kaiden.profile';
 
 export function decodeWorkspaceLabels(labels: Record<string, string>): string | undefined {
   let encoded: string;
@@ -188,13 +191,6 @@ export interface GatewaySandboxes {
   sandboxes: SandboxInfo[];
 }
 
-export const OpenshellProviderInfoSchema = z.object({
-  name: z.string(),
-  type: z.string(),
-});
-
-export type OpenshellProviderInfo = z.output<typeof OpenshellProviderInfoSchema>;
-
 export const OpenshellProfileCredentialSchema = z.looseObject({
   name: z.string(),
   required: z.boolean(),
@@ -209,9 +205,17 @@ export const OpenshellProfileSchema = z.looseObject({
   display_name: z.string(),
   description: z.string().optional(),
   credentials: z.array(OpenshellProfileCredentialSchema).optional(),
+  binaries: z.array(z.string()).optional(),
 });
 
 export type OpenshellProfile = z.output<typeof OpenshellProfileSchema>;
+
+export interface CreateProfileOptions {
+  name: string;
+  from: string;
+  binaries: string[];
+  endpoint?: string;
+}
 
 export interface CreateProviderOptions {
   name: string;
@@ -220,11 +224,6 @@ export interface CreateProviderOptions {
   config?: Record<string, string>;
   flags?: string[];
   env?: Record<string, string>;
-}
-
-export interface SetInferenceOptions {
-  provider: string;
-  model: string;
 }
 
 // ── Gateway metadata (on-disk config folder schema) ───────────────────

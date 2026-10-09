@@ -16,17 +16,14 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { OpenShellClient } from '@nvidia/openshell-sdk';
+import { create } from '@bufbuild/protobuf';
+import { WorkspaceSelectorSchema } from '@nvidia/openshell-sdk/raw';
 
-import type { SecretCreateOptions } from '/@api/secret-info.js';
-
-export const SelectableProviderFactoryToken = Symbol.for('SelectableProviderFactory');
-
-export interface ProviderFactory {
-  createProvider(client: OpenShellClient, options: SecretCreateOptions): Promise<void>;
-}
-
-export interface SelectableProviderFactory extends ProviderFactory {
-  supports(type: string): boolean;
-  readonly requiresClone: boolean;
-}
+export const DEFAULT_WORKSPACE = 'default';
+export const WORKSPACE_SCOPE = 'workspace';
+export const DEFAULT_WORKSPACE_SCOPE = create(WorkspaceSelectorSchema, {
+  selection: {
+    case: WORKSPACE_SCOPE,
+    value: DEFAULT_WORKSPACE,
+  },
+});

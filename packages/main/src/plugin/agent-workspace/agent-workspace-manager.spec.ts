@@ -23,13 +23,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import type { ExecInteractiveSession } from '@nvidia/openshell-sdk';
-import type {
-  Agent,
-  AgentWorkspaceConfiguration,
-  AISDKInferenceProvider,
-  Configuration,
-  ProviderConnectionStatus,
-} from '@openkaiden/api';
+import type { Agent, AgentWorkspaceConfiguration } from '@openkaiden/api';
 import { Terminal as HeadlessTerminal } from '@xterm/headless';
 import type { IpcMainInvokeEvent, WebContents } from 'electron';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -45,7 +39,6 @@ import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/opens
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
-import type { ProviderImpl } from '/@/plugin/provider-impl.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import type { TaskManager } from '/@/plugin/tasks/task-manager.js';
@@ -53,9 +46,15 @@ import type { Task } from '/@/plugin/tasks/tasks.js';
 import type { Exec } from '/@/plugin/util/exec.js';
 import type { AgentWorkspaceCreateOptions } from '/@api/agent-workspace-info.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
-import type { IConfigurationPropertyRecordedSchema, IConfigurationRegistry } from '/@api/configuration/models.js';
+import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
-import { AGENT_LABEL, decodeWorkspaceLabels, WORKSPACE_LABEL } from '/@api/openshell-gateway-info.js';
+import {
+  AGENT_LABEL,
+  decodeWorkspaceLabels,
+  PROFILE_LABEL,
+  SECRET_LABEL,
+  WORKSPACE_LABEL,
+} from '/@api/openshell-gateway-info.js';
 import type { TaskState, TaskStatus } from '/@api/taskInfo.js';
 
 import { AgentWorkspaceManager, encodeWorkspaceLabels } from './agent-workspace-manager.js';
@@ -96,6 +95,7 @@ const TEST_SDK_REFS: {
 ];
 
 const TEST_GATEWAY: GatewayInfo = { canStop: false, name: 'kaiden', endpoint: 'http://localhost:10080' };
+const ADDITIONAL_GATEWAY: GatewayInfo = { canStop: false, name: 'kaiden-test', endpoint: 'http://localhost:10080' };
 
 function mockSdkListSandboxes(
   refs: {
@@ -105,12 +105,28 @@ function mockSdkListSandboxes(
     labels: Record<string, string>;
     resourceVersion: string;
   }[] = TEST_SDK_REFS,
-  gateways: GatewayInfo[] = [TEST_GATEWAY],
 ): void {
+  const gateways: GatewayInfo[] = [TEST_GATEWAY, ADDITIONAL_GATEWAY];
   vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue(gateways);
-  vi.mocked(openshellSdkClientManager.getClient).mockResolvedValue({
-    sandbox: { ...sdkSandbox, list: vi.fn().mockResolvedValue(refs) },
-  } as never);
+  vi.mocked(openshellSdkClientManager.getClient).mockImplementation(gatewayName => {
+    return gatewayName === TEST_GATEWAY.name
+      ? ({
+          sandbox: {
+            ...sdkSandbox,
+            list: vi.fn().mockReturnValue({
+              all: vi.fn().mockResolvedValue(refs),
+            }),
+          },
+        } as never)
+      : ({
+          sandbox: {
+            ...sdkSandbox,
+            list: vi.fn().mockReturnValue({
+              all: vi.fn().mockResolvedValue([]),
+            }),
+          },
+        } as never);
+  });
 }
 
 let manager: AgentWorkspaceManager;
@@ -204,9 +220,12 @@ const openshellGatewayStateManager = {
 
 const secretManager = {
   create: vi.fn(),
+  remove: vi.fn(),
+  removeProfile: vi.fn(),
   init: vi.fn(),
   getSecretForModel: vi.fn(),
   ensureSecretForModel: vi.fn(),
+  ensureSecretForSandbox: vi.fn(),
   getConnectionProperties: vi.fn(),
 } as unknown as SecretManager;
 
@@ -489,20 +508,6 @@ describe('create – OpenShell mode', () => {
     expect(result).toEqual({ id: 'my-sandbox' });
   });
 
-  test('calls openshellCli.enableV2Provider when not globally enabled', async () => {
-    vi.mocked(openshellCli.isV2ProviderEnabled).mockResolvedValue(false);
-    await manager.create(defaultOptions);
-
-    expect(openshellCli.enableV2Provider).toHaveBeenCalledWith();
-  });
-
-  test('skips openshellCli.enableV2Provider when globally enabled', async () => {
-    vi.mocked(openshellCli.isV2ProviderEnabled).mockResolvedValue(true);
-    await manager.create(defaultOptions);
-
-    expect(openshellCli.enableV2Provider).not.toHaveBeenCalled();
-  });
-
   test('derives sandbox name from sourcePath basename when name is omitted', async () => {
     const options: AgentWorkspaceCreateOptions = {
       sourcePath: '/tmp/my-project',
@@ -514,6 +519,25 @@ describe('create – OpenShell mode', () => {
 
     expect(sdkSandbox.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'my-project' }));
     expect(result).toEqual({ id: 'my-project' });
+  });
+
+  test('secret and profile are rollbacked if create errors', async () => {
+    const options: AgentWorkspaceCreateOptions = {
+      sourcePath: '/tmp/my-project',
+      agent: 'claude',
+      model: 'ramalama::granite-4::',
+      gateway: 'kaiden',
+    };
+    vi.mocked(sdkSandbox.create).mockRejectedValue(new Error('Gateway error'));
+    vi.mocked(secretManager.ensureSecretForSandbox).mockResolvedValue({
+      secretName: 'secret',
+      clonedProfile: 'profile',
+    });
+    await expect(manager.create(options)).rejects.toThrow(/Gateway error/);
+
+    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'my-project' }));
+    expect(secretManager.remove).toHaveBeenCalledWith('secret', 'kaiden');
+    expect(secretManager.removeProfile).toHaveBeenCalledWith('profile', 'kaiden');
   });
 
   test('rejects workspace names longer than the hostname limit', async () => {
@@ -1120,6 +1144,34 @@ describe('create – OpenShell mode', () => {
     expect(mockTask.error).toContain('deletion timed out');
   });
 
+  test('cleans up secret and profile when sandbox readiness fails', async () => {
+    vi.mocked(secretManager.ensureSecretForSandbox).mockResolvedValue({
+      secretName: 'my-sandbox-secret',
+      clonedProfile: 'my-sandbox-profile',
+    });
+    vi.mocked(sdkSandbox.waitReady).mockRejectedValue(new Error('timed out'));
+
+    await expect(manager.create(defaultOptions)).rejects.toThrow('timed out');
+
+    expect(secretManager.remove).toHaveBeenCalledWith('my-sandbox-secret', 'kaiden');
+    expect(secretManager.removeProfile).toHaveBeenCalledWith('my-sandbox-profile', 'kaiden');
+    expect(sdkSandbox.delete).not.toHaveBeenCalled();
+  });
+
+  test('cleans up secret and profile when upload fails', async () => {
+    vi.mocked(secretManager.ensureSecretForSandbox).mockResolvedValue({
+      secretName: 'my-sandbox-secret',
+      clonedProfile: 'my-sandbox-profile',
+    });
+    vi.mocked(openshellCli.uploadToSandbox).mockRejectedValue(new Error('upload failed'));
+
+    await expect(manager.create(defaultOptions)).rejects.toThrow('upload failed');
+
+    expect(sdkSandbox.delete).toHaveBeenCalledWith('my-sandbox');
+    expect(secretManager.remove).toHaveBeenCalledWith('my-sandbox-secret', 'kaiden');
+    expect(secretManager.removeProfile).toHaveBeenCalledWith('my-sandbox-profile', 'kaiden');
+  });
+
   test('emits agent-workspace-update even when creation fails', async () => {
     const options = {
       ...defaultOptions,
@@ -1143,15 +1195,21 @@ describe('create – OpenShell mode', () => {
     expect(apiSender.send).toHaveBeenNthCalledWith(2, 'agent-workspace-update');
   });
 
-  test('attaches secret to sandbox when ensureSecretForModel returns a secret', async () => {
-    vi.mocked(secretManager.ensureSecretForModel).mockResolvedValue({ name: 'vertex-ai-conn-1', type: 'vertex-ai' });
+  test('attaches secret to sandbox when ensureSecretForSandbox returns a secret', async () => {
+    vi.mocked(secretManager.ensureSecretForSandbox).mockResolvedValue({
+      secretName: 'my-sandbox-secret',
+      clonedProfile: 'vertex-ai-clone',
+    });
 
     const options = { ...defaultOptions, model: 'vertexai::claude-sonnet-4::' };
     await manager.create(options);
 
     expect(sdkSandbox.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        providers: expect.arrayContaining(['vertex-ai-conn-1']),
+        providers: expect.arrayContaining(['my-sandbox-secret']),
+        labels: expect.objectContaining({
+          [SECRET_LABEL]: 'my-sandbox-secret',
+        }),
       }),
     );
   });
@@ -1184,45 +1242,6 @@ describe('create – OpenShell mode', () => {
     );
     const call = vi.mocked(sdkSandbox.create).mock.calls[0]![0];
     expect(call!.environment).not.toHaveProperty('EMPTY_VAR');
-  });
-
-  test('calls setInference during create when secret type requires it', async () => {
-    vi.mocked(secretManager.ensureSecretForModel).mockResolvedValue({ name: 'vertex-ai-conn-1', type: 'vertex-ai' });
-    vi.mocked(secretManager.getConnectionProperties).mockReturnValue({
-      config: {
-        get: vi.fn((key: string) => (key === 'kaiden.vertexai._needsInferenceSetup' ? true : undefined)),
-      } as unknown as Configuration,
-      connectionProperties: [['kaiden.vertexai._needsInferenceSetup', {} as IConfigurationPropertyRecordedSchema]],
-    });
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
-      connection: {
-        name: 'vertexai',
-        id: 'vertexai',
-        type: 'cloud',
-        sdk: {} as AISDKInferenceProvider,
-        credentials: (): Record<string, string> => {
-          return {};
-        },
-        status: (): ProviderConnectionStatus => 'started',
-        models: [
-          {
-            label: 'claude-sonnet-4',
-          },
-        ],
-      },
-      providerId: 'kaiden.vertexai',
-    });
-    vi.mocked(providerRegistry.getProvider).mockReturnValue({
-      extensionId: 'kaiden.vertexai',
-    } as ProviderImpl);
-
-    const options = { ...defaultOptions, model: 'vertexai::claude-sonnet-4::' };
-    await manager.create(options);
-
-    expect(openshellCli.setInference).toHaveBeenCalledWith({
-      provider: 'vertex-ai-conn-1',
-      model: 'claude-sonnet-4',
-    });
   });
 
   test('does not pass env when all environment values are filtered out', async () => {
@@ -1490,38 +1509,42 @@ describe('ensureModelSecret', () => {
       model: 'anthropic::claude-sonnet-4-20250514::',
       workspaceConfiguration: { secrets: ['anthropic'] },
     } as AgentWorkspaceCreateOptions;
-    await manager.ensureModelSecret(options);
+    await manager.ensureModelSecret(options, 'my-workspace', 'claude');
 
-    expect(secretManager.ensureSecretForModel).not.toHaveBeenCalled();
+    expect(secretManager.ensureSecretForSandbox).not.toHaveBeenCalled();
   });
 
-  test('skips when ensureSecretForModel returns undefined (no registered provider)', async () => {
-    vi.mocked(secretManager.ensureSecretForModel).mockResolvedValue(undefined);
+  test('skips when ensureSecretForSandbox returns undefined (no registered provider)', async () => {
+    vi.mocked(secretManager.ensureSecretForSandbox).mockResolvedValue(undefined);
 
     const options = { ...baseOptions, model: 'unknown::model::' };
-    await manager.ensureModelSecret(options);
+    await manager.ensureModelSecret(options, 'my-workspace', 'claude');
 
     expect(options.secrets).toBeUndefined();
-    expect(secretManager.ensureSecretForModel).toHaveBeenCalledWith('unknown::model::', 'kaiden');
+    expect(secretManager.ensureSecretForSandbox).toHaveBeenCalledWith(
+      'my-workspace',
+      'unknown::model::',
+      'claude',
+      'kaiden',
+    );
   });
 
   test('adds secret name to options.secrets when found', async () => {
-    vi.mocked(secretManager.ensureSecretForModel).mockResolvedValue({ name: 'cursor-conn-123', type: 'cursor' });
+    vi.mocked(secretManager.ensureSecretForSandbox).mockResolvedValue({
+      secretName: 'my-workspace-secret',
+      clonedProfile: 'cursor-clone',
+    });
 
     const options = { ...baseOptions, model: 'cursor::gpt-4o::https://api.cursor.com' };
-    await manager.ensureModelSecret(options);
+    await manager.ensureModelSecret(options, 'my-workspace', 'claude');
 
-    expect(options.secrets).toContain('cursor-conn-123');
-    expect(secretManager.ensureSecretForModel).toHaveBeenCalledWith('cursor::gpt-4o::https://api.cursor.com', 'kaiden');
-  });
-
-  test('does not call setInference when secret type is not in SET_INFERENCE_TYPES', async () => {
-    vi.mocked(secretManager.ensureSecretForModel).mockResolvedValue({ name: 'cursor-conn-123', type: 'cursor' });
-
-    const options = { ...baseOptions, model: 'cursor::gpt-4o::https://api.cursor.com' };
-    await manager.ensureModelSecret(options);
-
-    expect(openshellCli.setInference).not.toHaveBeenCalled();
+    expect(options.secrets).toContain('my-workspace-secret');
+    expect(secretManager.ensureSecretForSandbox).toHaveBeenCalledWith(
+      'my-workspace',
+      'cursor::gpt-4o::https://api.cursor.com',
+      'claude',
+      'kaiden',
+    );
   });
 });
 
@@ -1533,8 +1556,19 @@ describe('list', () => {
 
     expect(openshellGatewayStateManager.listGateways).toHaveBeenCalled();
     expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith('kaiden');
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
     expect(result.flatMap(gw => gw.sandboxes).map(s => s.id)).toEqual(['ws-1', 'ws-2']);
+  });
+
+  test('delegates to SDK client and returns items with specific gateway', async () => {
+    mockSdkListSandboxes();
+
+    const result = await manager.listOpenshellSandboxes(ADDITIONAL_GATEWAY.name);
+
+    expect(openshellGatewayStateManager.listGateways).toHaveBeenCalled();
+    expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith(ADDITIONAL_GATEWAY.name);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.sandboxes).toEqual([]);
   });
 
   test('returns empty sandboxes when SDK client fails for a gateway', async () => {
@@ -1712,6 +1746,68 @@ describe('remove', () => {
       force: true,
     });
   });
+
+  test('deletes associated secret via SECRET_LABEL on sandbox removal', async () => {
+    mockSdkListSandboxes([
+      {
+        id: 'ws-1',
+        name: 'test-workspace-1',
+        phase: 'ready',
+        labels: { [SECRET_LABEL]: 'test-workspace-1-secret' },
+        resourceVersion: '1',
+      },
+    ]);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+
+    await manager.remove('ws-1', 'kaiden');
+
+    expect(secretManager.remove).toHaveBeenCalledWith('test-workspace-1-secret', 'kaiden');
+  });
+
+  test('deletes associated profile via PROFILE_LABEL on sandbox removal', async () => {
+    mockSdkListSandboxes([
+      {
+        id: 'ws-1',
+        name: 'test-workspace-1',
+        phase: 'ready',
+        labels: { [PROFILE_LABEL]: 'test-workspace-1-secret' },
+        resourceVersion: '1',
+      },
+    ]);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+
+    await manager.remove('ws-1', 'kaiden');
+
+    expect(secretManager.removeProfile).toHaveBeenCalledWith('test-workspace-1-secret', 'kaiden');
+  });
+
+  test('does not fail when secret deletion fails during removal', async () => {
+    mockSdkListSandboxes([
+      {
+        id: 'ws-1',
+        name: 'test-workspace-1',
+        phase: 'ready',
+        labels: { [SECRET_LABEL]: 'test-workspace-1-secret' },
+        resourceVersion: '1',
+      },
+    ]);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+    vi.mocked(secretManager.remove).mockRejectedValue(new Error('secret not found'));
+
+    const result = await manager.remove('ws-1', 'kaiden');
+
+    expect(result).toEqual({ id: 'ws-1' });
+    expect(mockTask.status).toBe('success');
+  });
+
+  test('skips secret deletion when no SECRET_LABEL present', async () => {
+    mockSdkListSandboxes();
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+
+    await manager.remove('ws-1', 'kaiden');
+
+    expect(secretManager.remove).not.toHaveBeenCalled();
+  });
 });
 
 describe('deleteOpenshellSandbox', () => {
@@ -1745,6 +1841,23 @@ describe('deleteOpenshellSandbox', () => {
       recursive: true,
       force: true,
     });
+  });
+
+  test('deletes associated secret via SECRET_LABEL', async () => {
+    mockSdkListSandboxes([
+      {
+        id: 'ws-1',
+        name: 'my-workspace',
+        phase: 'ready',
+        labels: { [SECRET_LABEL]: 'my-workspace-secret' },
+        resourceVersion: '1',
+      },
+    ]);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+
+    await manager.deleteOpenshellSandbox('my-workspace', 'kaiden');
+
+    expect(secretManager.remove).toHaveBeenCalledWith('my-workspace-secret', 'kaiden');
   });
 });
 

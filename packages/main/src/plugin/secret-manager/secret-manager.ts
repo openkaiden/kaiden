@@ -16,12 +16,17 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { randomUUID } from 'node:crypto';
+import { isAbsolute } from 'node:path';
+
 import type { Configuration, InferenceProviderConnection } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
 
 import { IPCHandle } from '/@/plugin/api.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
+import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
+import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
 import { ProviderImpl } from '/@/plugin/provider-impl.js';
 import { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import { SafeStorageRegistry } from '/@/plugin/safe-storage/safe-storage-registry.js';
@@ -38,6 +43,11 @@ import type {
 } from '/@api/secret-info.js';
 
 import { OpenshellSecretAdapter } from './openshell-secret-adapter.js';
+
+export interface SandboxSecretResult {
+  secretName: string;
+  clonedProfile?: string;
+}
 
 /**
  * Manages secrets by delegating to a CLI backend.
@@ -62,6 +72,10 @@ export class SecretManager {
     private readonly openshellGateway: OpenshellGateway,
     @inject(OpenshellGatewayStateManager)
     private readonly openshellGatewayStateManager: OpenshellGatewayStateManager,
+    @inject(OpenshellNetworkPolicy)
+    private readonly openshellNetworkPolicy: OpenshellNetworkPolicy,
+    @inject(OpenShellRegistry)
+    private readonly openshellRegistry: OpenShellRegistry,
   ) {}
 
   private get cli(): SecretCliBackend {
@@ -101,38 +115,41 @@ export class SecretManager {
     return result;
   }
 
-  async listServices(): Promise<OpenshellProfile[]> {
-    return this.cli.listServices();
+  async removeProfile(profileId: string, gateway?: string): Promise<void> {
+    await this.openshellAdapter.deleteProfile(profileId, gateway);
   }
 
-  async getSecretForModel(modelId: string, gateway?: string): Promise<SecretInfo | undefined> {
+  async listServices(gateway?: string): Promise<OpenshellProfile[]> {
+    return this.cli.listServices(gateway);
+  }
+
+  /**
+   * Ensure a secret exists for a sandbox. The secret is named
+   * `$sandboxName-$uuid` and is linked to the sandbox rather than
+   * the inference connection.
+   *
+   * The provider profile is always cloned
+   * with the agent command added so the sandbox can run it.
+   */
+  async ensureSecretForSandbox(
+    sandboxName: string,
+    modelId: string,
+    agentCommand: string,
+    gateway?: string,
+  ): Promise<SandboxSecretResult | undefined> {
     const info = this.providerRegistry.getInferenceConnection(modelId);
     if (!info) return undefined;
 
-    const expectedName = `${info.providerId}-${info.connection.id}`;
-    const secrets = await this.list(gateway);
-    const secret = secrets.find(s => s.name === expectedName);
-    if (!secret) return undefined;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, sonarjs/no-unused-vars -- gateway is intentionally omitted
-    const { gateway: _, ...secretInfo } = secret;
-    return secretInfo;
+    return this.createSecretForSandbox(sandboxName, info.providerId, info.connection, agentCommand, gateway);
   }
 
-  async ensureSecretForModel(modelId: string, gateway?: string): Promise<SecretInfo | undefined> {
-    const existing = await this.getSecretForModel(modelId, gateway);
-    if (existing) return existing;
-
-    const info = this.providerRegistry.getInferenceConnection(modelId);
-    if (!info) return undefined;
-
-    return this.createSecretForConnection(info.providerId, info.connection, gateway);
-  }
-
-  async createSecretForConnection(
+  private async createSecretForSandbox(
+    sandboxName: string,
     providerId: string,
     connection: InferenceProviderConnection,
+    agentCommand: string,
     gateway?: string,
-  ): Promise<SecretInfo | undefined> {
+  ): Promise<SandboxSecretResult | undefined> {
     const provider = this.providerRegistry.getProvider(providerId);
     const { config, connectionProperties } = this.getConnectionProperties(connection, provider);
 
@@ -142,9 +159,99 @@ export class SecretManager {
     const secretType = config.get<string>(typeEntry[0]);
     if (!secretType) return undefined;
 
-    const configKeys = connectionProperties.filter(
-      ([fullKey]) => !fullKey.endsWith('._type') && !fullKey.endsWith('._needsInferenceSetup'),
+    const uuid = randomUUID();
+    const secretName = `${sandboxName}-${uuid}`;
+
+    const clonedProfile = await this.resolveProfileForAgent({
+      profileId: secretType,
+      agentCommand,
+      sandboxName,
+      uuid,
+      gateway,
+      endpoint: connection.endpoint,
+    });
+
+    try {
+      const resolvedType = clonedProfile ?? secretType;
+      const secretValue = await this.buildSecretValue(config, connectionProperties, provider);
+
+      await this.create(
+        {
+          name: secretName,
+          type: resolvedType,
+          parentType: secretType,
+          value: secretValue,
+        },
+        gateway,
+      );
+
+      return { secretName, clonedProfile };
+    } catch (err: unknown) {
+      if (clonedProfile) {
+        try {
+          await this.removeProfile(clonedProfile, gateway);
+        } catch (err: unknown) {
+          console.error(`Error while deleting profile ${clonedProfile} on gateway ${gateway}`, err);
+        }
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Clone the provider profile for the sandbox, adding the agent binary
+   * if needed. Returns the cloned profile name, or `undefined` when the
+   * profile should be used directly (e.g. google-vertex-ai which manages
+   * credential refresh via the gateway).
+   */
+  async resolveProfileForAgent({
+    profileId,
+    agentCommand,
+    sandboxName,
+    uuid,
+    gateway,
+    endpoint,
+  }: {
+    profileId: string;
+    agentCommand: string;
+    sandboxName: string;
+    uuid: string;
+    gateway?: string;
+    endpoint?: string;
+  }): Promise<string | undefined> {
+    const profiles = this.openshellRegistry.getProfiles();
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) {
+      throw new Error(`The required profile ${profileId} does not exist`);
+    }
+
+    if (!this.openshellAdapter.shouldCloneProfile(profileId)) {
+      await this.openshellAdapter.ensureProfileOnGateway(profileId, gateway);
+      return undefined;
+    }
+
+    const binaries = profile.binaries?.map(b => b.path) ?? [];
+    const agentBinary = this.openshellNetworkPolicy.extractBinaryFromCommand(agentCommand);
+    const clonedProfileName = `${sandboxName}-${uuid}`;
+
+    const binaryPattern = isAbsolute(agentBinary) ? agentBinary : `/**/${agentBinary}`;
+    if (!this.openshellNetworkPolicy.isAgentCommandAllowed(agentBinary, binaries)) {
+      binaries.push(binaryPattern);
+    }
+    await this.openshellAdapter.createProfile(
+      { name: clonedProfileName, from: profileId, binaries: binaries, endpoint },
+      gateway,
     );
+
+    return clonedProfileName;
+  }
+
+  private async buildSecretValue(
+    config: Configuration,
+    connectionProperties: [string, IConfigurationPropertyRecordedSchema][],
+    provider: ProviderImpl,
+  ): Promise<SecretValue> {
+    const configKeys = connectionProperties.filter(([fullKey]) => !fullKey.endsWith('._type'));
 
     const extensionStorage = this.safeStorageRegistry.getExtensionStorage(provider.extensionId);
 
@@ -164,19 +271,7 @@ export class SecretManager {
         value.config[shortPropertyName] = actualValue;
       }
     }
-
-    const secretName = `${providerId}-${connection.id}`;
-
-    await this.create(
-      {
-        name: secretName,
-        type: secretType,
-        value: value,
-      },
-      gateway,
-    );
-
-    return { name: secretName, type: secretType };
+    return value;
   }
 
   public getConnectionProperties(
