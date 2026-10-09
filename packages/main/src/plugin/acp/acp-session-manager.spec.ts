@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import * as acp from '@agentclientprotocol/sdk';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { AgentRegistry } from '/@/plugin/agent-registry.js';
 import type { Directories } from '/@/plugin/directories.js';
@@ -29,6 +29,7 @@ import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshel
 import type { AcpSessionCreateOptions, AcpSessionInfo } from '/@api/acp-session-info.js';
 import type { AgentInfo } from '/@api/agent-info.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
+import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 import { AGENT_LABEL, type SandboxInfo } from '/@api/openshell-gateway-info.js';
 
 import { AcpSessionManager } from './acp-session-manager.js';
@@ -59,6 +60,12 @@ const openshellSdkClientManager = {
 const agentRegistry: AgentRegistry = {
   getAgent: vi.fn(),
 } as unknown as AgentRegistry;
+
+const PROMPT_TIMEOUT_SECONDS = 300;
+
+const configurationRegistry = {
+  getConfiguration: vi.fn(),
+} as unknown as IConfigurationRegistry;
 
 const FAKE_SESSIONS_DIR = join('/fake', 'acp-sessions');
 
@@ -103,11 +110,22 @@ describe('AcpSessionManager', () => {
   let manager: AcpSessionManager;
 
   beforeEach(() => {
+    vi.useRealTimers();
     vi.resetAllMocks();
     vi.mocked(directories.getAcpSessionsDirectory).mockReturnValue(FAKE_SESSIONS_DIR);
     vi.mocked(openshellSdkClientManager.getClient).mockResolvedValue({ sandbox: sdkSandbox } as never);
     mockSandboxList.mockResolvedValue([]);
-    manager = new AcpSessionManager(apiSender, openshellCli, agentRegistry, directories, openshellSdkClientManager);
+    vi.mocked(configurationRegistry.getConfiguration).mockReturnValue({
+      get: vi.fn().mockReturnValue(PROMPT_TIMEOUT_SECONDS),
+    } as never);
+    manager = new AcpSessionManager(
+      apiSender,
+      openshellCli,
+      agentRegistry,
+      directories,
+      openshellSdkClientManager,
+      configurationRegistry,
+    );
   });
 
   describe('resolveAgentCommand', () => {
@@ -1379,6 +1397,366 @@ describe('AcpSessionManager', () => {
       },
     };
   }
+
+  describe('prompt timeout', () => {
+    const neverResolve = (): Promise<never> => new Promise<never>(() => {});
+    const TIMEOUT_MS = PROMPT_TIMEOUT_SECONDS * 1_000;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    async function setupSessionWithConnection(opts?: {
+      promptResult?: { stopReason: string };
+    }): Promise<{ sessionId: string }> {
+      const { existsSync } = await import('node:fs');
+      const { writeFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(writeFile).mockResolvedValue();
+
+      const agent = createAgentInfo();
+      vi.mocked(agentRegistry.getAgent).mockResolvedValue(agent);
+      mockSandboxList.mockResolvedValue([
+        { id: 'sandbox-1', name: 'test-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' },
+      ]);
+
+      const mockSession = {
+        output: {
+          [Symbol.asyncIterator](): AsyncIterator<never> {
+            return { next: neverResolve };
+          },
+        },
+        write: vi.fn(),
+        resize: vi.fn(),
+        close: vi.fn(),
+        done: neverResolve(),
+      };
+      sdkSandbox.execInteractive.mockResolvedValue(mockSession);
+
+      vi.mocked(acp.ClientSideConnection.prototype.initialize).mockResolvedValue({ protocolVersion: '0.1' } as never);
+      vi.mocked(acp.ClientSideConnection.prototype.newSession).mockResolvedValue({ sessionId: 'acp-1' } as never);
+      vi.mocked(acp.ClientSideConnection.prototype.cancel).mockResolvedValue(undefined as never);
+
+      if (opts?.promptResult) {
+        vi.mocked(acp.ClientSideConnection.prototype.prompt).mockResolvedValue(opts.promptResult as never);
+      } else {
+        vi.mocked(acp.ClientSideConnection.prototype.prompt).mockReturnValue(neverResolve() as never);
+      }
+
+      vi.mocked(acp.ndJsonStream).mockReturnValue({} as never);
+
+      const session = await manager.createSession({
+        sandboxName: 'test-sandbox',
+        prompt: 'hello',
+        agentId: 'openclaw',
+      });
+
+      await vi.waitFor(() => {
+        expect(acp.ClientSideConnection.prototype.prompt).toHaveBeenCalled();
+      });
+
+      return { sessionId: session.id };
+    }
+
+    test('transitions to error status when prompt does not respond within timeout', async () => {
+      const { sessionId } = await setupSessionWithConnection();
+
+      vi.advanceTimersByTime(TIMEOUT_MS);
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const session = sessions.find(s => s.id === sessionId);
+        assert(session);
+        expect(session.status).toBe('error');
+        assert(session.error);
+        expect(session.error).toContain('timed out');
+        expect(session.error).toContain(String(PROMPT_TIMEOUT_SECONDS));
+      });
+
+      expect(acp.ClientSideConnection.prototype.cancel).toHaveBeenCalledWith({ sessionId: 'acp-1' });
+    });
+
+    test('completes successfully when prompt responds before timeout', async () => {
+      const { sessionId } = await setupSessionWithConnection({ promptResult: { stopReason: 'end_turn' } });
+
+      // Let the startAcpSession complete
+      await vi.advanceTimersByTimeAsync(0);
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const updated = sessions.find(s => s.id === sessionId);
+        assert(updated);
+        expect(updated.status).toBe('completed');
+      });
+
+      // Advance past the deadline to prove the timer was cleared
+      vi.advanceTimersByTime(TIMEOUT_MS * 2);
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const updated = sessions.find(s => s.id === sessionId);
+        assert(updated);
+        expect(updated.status).toBe('completed');
+      });
+
+      expect(acp.ClientSideConnection.prototype.cancel).not.toHaveBeenCalled();
+    });
+
+    test('handles cancel failure gracefully on timeout', async () => {
+      const { sessionId } = await setupSessionWithConnection();
+
+      vi.mocked(acp.ClientSideConnection.prototype.cancel).mockRejectedValue(new Error('cancel failed'));
+
+      vi.advanceTimersByTime(TIMEOUT_MS);
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const session = sessions.find(s => s.id === sessionId);
+        assert(session);
+        expect(session.status).toBe('error');
+        assert(session.error);
+        expect(session.error).toContain('timed out');
+      });
+    });
+
+    test('timeout message wins over stderr when stderr is present', async () => {
+      const { existsSync } = await import('node:fs');
+      const { writeFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(writeFile).mockResolvedValue();
+
+      const agent = createAgentInfo();
+      vi.mocked(agentRegistry.getAgent).mockResolvedValue(agent);
+      mockSandboxList.mockResolvedValue([
+        { id: 'sandbox-1', name: 'test-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' },
+      ]);
+
+      type ExecStreamEvent = { stream: 'stdout' | 'stderr'; data: Buffer } | { type: 'exit'; exitCode: number };
+      const events: ExecStreamEvent[] = [];
+      let eventResolve: ((result: IteratorResult<ExecStreamEvent>) => void) | undefined;
+      const iterDone = false;
+
+      const output: AsyncIterable<ExecStreamEvent> = {
+        [Symbol.asyncIterator]() {
+          return {
+            next(): Promise<IteratorResult<ExecStreamEvent>> {
+              if (events.length > 0) {
+                return Promise.resolve({ value: events.shift()!, done: false });
+              }
+              if (iterDone) {
+                return Promise.resolve({ value: undefined as never, done: true });
+              }
+              return new Promise(r => {
+                eventResolve = r;
+              });
+            },
+          };
+        },
+      };
+
+      const mockSession = {
+        output,
+        write: vi.fn(),
+        resize: vi.fn(),
+        close: vi.fn(),
+        done: neverResolve(),
+      };
+      sdkSandbox.execInteractive.mockResolvedValue(mockSession);
+
+      vi.mocked(acp.ClientSideConnection.prototype.initialize).mockResolvedValue({ protocolVersion: '0.1' } as never);
+      vi.mocked(acp.ClientSideConnection.prototype.newSession).mockResolvedValue({ sessionId: 'acp-1' } as never);
+      vi.mocked(acp.ClientSideConnection.prototype.prompt).mockReturnValue(neverResolve() as never);
+      vi.mocked(acp.ClientSideConnection.prototype.cancel).mockResolvedValue(undefined as never);
+      vi.mocked(acp.ndJsonStream).mockReturnValue({} as never);
+
+      // Push stderr before creating session so it's available when timeout fires
+      const stderrEvent: ExecStreamEvent = { stream: 'stderr', data: Buffer.from('some noisy stderr output') };
+      if (eventResolve) {
+        const r = eventResolve;
+        eventResolve = undefined;
+        r({ value: stderrEvent, done: false });
+      } else {
+        events.push(stderrEvent);
+      }
+
+      const session = await manager.createSession({
+        sandboxName: 'test-sandbox',
+        prompt: 'hello',
+        agentId: 'openclaw',
+      });
+
+      await vi.waitFor(() => {
+        expect(acp.ClientSideConnection.prototype.prompt).toHaveBeenCalled();
+      });
+
+      vi.advanceTimersByTime(TIMEOUT_MS);
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const updated = sessions.find(s => s.id === session.id);
+        assert(updated);
+        expect(updated.status).toBe('error');
+        assert(updated.error);
+        expect(updated.error).toContain('timed out');
+        expect(updated.error).not.toContain('noisy stderr');
+      });
+    });
+
+    test('does not time out when agent streams session updates within deadline', async () => {
+      const { sessionId } = await setupSessionWithConnection();
+
+      // Advance to just before the timeout, then send a session update to reset the timer
+      vi.advanceTimersByTime(TIMEOUT_MS - 1_000);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (manager as any).handleSessionUpdate(sessionId, {
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          messageId: 'msg-1',
+          content: { type: 'text', text: 'still working...' },
+        },
+      });
+
+      // Advance again just before the new timeout - should still be running
+      vi.advanceTimersByTime(TIMEOUT_MS - 1_000);
+
+      const sessions = await manager.listSessions();
+      const session = sessions.find(s => s.id === sessionId);
+      assert(session);
+      expect(session.status).toBe('running');
+
+      // Now let the full timeout elapse without activity
+      vi.advanceTimersByTime(TIMEOUT_MS);
+
+      await vi.waitFor(async () => {
+        const updated = (await manager.listSessions()).find(s => s.id === sessionId);
+        assert(updated);
+        expect(updated.status).toBe('error');
+        assert(updated.error);
+        expect(updated.error).toContain('timed out');
+      });
+    });
+
+    test('does not time out during a permission wait', async () => {
+      const { sessionId } = await setupSessionWithConnection();
+
+      // Simulate a permission request which should pause the timer
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handlePermission = (manager as any).handlePermissionRequest.bind(manager);
+      const permissionPromise = handlePermission(sessionId, {
+        toolCall: { toolCallId: 'tc-1', title: 'Run command' },
+        options: [
+          { name: 'Allow', kind: 'allow', optionId: 'opt-allow' },
+          { name: 'Deny', kind: 'deny', optionId: 'opt-deny' },
+        ],
+      });
+
+      // Advance well past the timeout - should NOT trigger because timer is paused
+      vi.advanceTimersByTime(TIMEOUT_MS * 3);
+
+      const sessions = await manager.listSessions();
+      const session = sessions.find(s => s.id === sessionId);
+      assert(session);
+      expect(session.status).toBe('waiting_input');
+      expect(session.error).toBeUndefined();
+
+      // Get the requestId from the session events
+      const events = manager.getSessionEvents(sessionId);
+      const toolCallEvent = events.find(e => e.kind === 'tool_call' && 'permissionRequest' in e && e.permissionRequest);
+      assert(toolCallEvent);
+      assert(toolCallEvent.kind === 'tool_call');
+      const requestId = toolCallEvent.permissionRequest?.requestId;
+      assert(requestId);
+
+      // Resolve the permission request
+      manager.respondToRequest({
+        sessionId,
+        requestId,
+        type: 'permission',
+        data: { optionId: 'opt-allow' },
+      } as never);
+
+      await permissionPromise;
+
+      // After permission resolves, timer should restart - advance past it
+      vi.advanceTimersByTime(TIMEOUT_MS);
+
+      await vi.waitFor(async () => {
+        const updated = (await manager.listSessions()).find(s => s.id === sessionId);
+        assert(updated);
+        expect(updated.status).toBe('error');
+        assert(updated.error);
+        expect(updated.error).toContain('timed out');
+      });
+    });
+
+    test('sendFollowUp transitions to error on timeout', async () => {
+      const { sessionId } = await setupSessionWithConnection({ promptResult: { stopReason: 'end_turn' } });
+      await vi.advanceTimersByTimeAsync(0);
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const session = sessions.find(s => s.id === sessionId);
+        assert(session);
+        expect(session.status).toBe('completed');
+      });
+
+      vi.mocked(acp.ClientSideConnection.prototype.prompt).mockReturnValue(neverResolve() as never);
+
+      const followUpPromise = manager.sendFollowUp(sessionId, 'follow up question');
+      await vi.advanceTimersByTimeAsync(0);
+
+      vi.advanceTimersByTime(TIMEOUT_MS);
+
+      await expect(followUpPromise).rejects.toThrow('timed out');
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const session = sessions.find(s => s.id === sessionId);
+        assert(session);
+        expect(session.status).toBe('error');
+        assert(session.error);
+        expect(session.error).toContain('timed out');
+        expect(session.error).toContain(String(PROMPT_TIMEOUT_SECONDS));
+      });
+
+      expect(acp.ClientSideConnection.prototype.cancel).toHaveBeenCalledWith({ sessionId: 'acp-1' });
+    });
+
+    test('reconnect-retry path transitions to error on timeout after reconnection', async () => {
+      const { sessionId } = await setupSessionWithConnection({ promptResult: { stopReason: 'end_turn' } });
+      await vi.advanceTimersByTimeAsync(0);
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const session = sessions.find(s => s.id === sessionId);
+        assert(session);
+        expect(session.status).toBe('completed');
+      });
+
+      vi.mocked(acp.ClientSideConnection.prototype.prompt)
+        .mockRejectedValueOnce(new Error('connection closed'))
+        .mockReturnValue(neverResolve() as never);
+
+      const followUpPromise = manager.sendFollowUp(sessionId, 'follow up question');
+      await vi.advanceTimersByTimeAsync(0);
+
+      vi.advanceTimersByTime(TIMEOUT_MS);
+
+      await expect(followUpPromise).rejects.toThrow('timed out');
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        const session = sessions.find(s => s.id === sessionId);
+        assert(session);
+        expect(session.status).toBe('error');
+        assert(session.error);
+        expect(session.error).toContain('timed out');
+      });
+    });
+  });
 
   describe('ANSI code stripping in error messages', () => {
     test('strips ANSI escape codes from stderr lines on process exit', async () => {

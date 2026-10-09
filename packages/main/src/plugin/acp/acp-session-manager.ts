@@ -43,8 +43,10 @@ import type {
   AcpSessionStatus,
   AcpUserResponse,
 } from '/@api/acp-session-info.js';
+import { AcpSettings } from '/@api/acp-settings.js';
 import type { AgentInfo } from '/@api/agent-info.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
+import { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { SandboxInfo } from '/@api/openshell-gateway-info.js';
 import { AGENT_LABEL } from '/@api/openshell-gateway-info.js';
 
@@ -55,6 +57,13 @@ const PTY_COLS = 65_535;
 
 // eslint-disable-next-line sonarjs/publicly-writable-directories
 const ATTACHMENT_UPLOAD_DIR = '/sandbox/.kaiden-attachments';
+
+class PromptTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PromptTimeoutError';
+  }
+}
 
 const debugPty = createAcpDebug('pty');
 const debugProtocol = createAcpDebug('protocol');
@@ -82,6 +91,9 @@ interface AcpSession {
   connectionClosed: boolean;
   agentCommand: string[];
   gatewayName?: string;
+  inactivityTimer?: ReturnType<typeof setTimeout>;
+  promptTimeoutReject?: (err: Error) => void;
+  promptTimeoutMs?: number;
 }
 
 @injectable()
@@ -95,6 +107,7 @@ export class AcpSessionManager {
     @inject(AgentRegistry) private readonly agentRegistry: AgentRegistry,
     @inject(Directories) private readonly directories: Directories,
     @inject(OpenshellSdkClientManager) private readonly sdkClientManager: OpenshellSdkClientManager,
+    @inject(IConfigurationRegistry) private readonly configurationRegistry: IConfigurationRegistry,
   ) {}
 
   async init(): Promise<void> {
@@ -259,7 +272,7 @@ export class AcpSessionManager {
         const s = this.sessions.get(sessionId);
         if (s) {
           s.connectionClosed = true;
-          if (s.info.status !== 'completed' && s.info.status !== 'cancelled') {
+          if (s.info.status !== 'completed' && s.info.status !== 'cancelled' && s.info.status !== 'error') {
             this.updateSessionStatus(sessionId, exitCode === 0 ? 'completed' : 'error');
             if (exitCode !== 0) {
               const stderrMsg = s.stderrLines.join(' ').trim();
@@ -273,7 +286,7 @@ export class AcpSessionManager {
         const s = this.sessions.get(sessionId);
         if (s) {
           s.connectionClosed = true;
-          if (s.info.status !== 'completed' && s.info.status !== 'cancelled') {
+          if (s.info.status !== 'completed' && s.info.status !== 'cancelled' && s.info.status !== 'error') {
             this.updateSessionStatus(sessionId, 'error');
             const stderrMsg = s.stderrLines.join(' ').trim();
             s.info.error = stderrMsg || (err instanceof Error ? err.message : String(err));
@@ -286,13 +299,84 @@ export class AcpSessionManager {
       this.updateSessionStatus(sessionId, 'error');
       const s = this.sessions.get(sessionId);
       if (s) {
-        const stderrMsg = s.stderrLines.join(' ').trim();
-        s.info.error = stderrMsg || (err instanceof Error ? err.message : String(err));
+        if (err instanceof PromptTimeoutError) {
+          s.info.error = err.message;
+        } else {
+          const stderrMsg = s.stderrLines.join(' ').trim();
+          s.info.error = stderrMsg || (err instanceof Error ? err.message : String(err));
+        }
       }
     });
 
     this.apiSender.send('acp-session-update');
     return info;
+  }
+
+  private async promptWithTimeout(
+    session: AcpSession,
+    params: { sessionId: string; prompt: acp.ContentBlock[] },
+  ): Promise<Awaited<ReturnType<acp.ClientSideConnection['prompt']>>> {
+    session.promptTimeoutMs = this.getPromptTimeoutMs();
+
+    if (session.promptTimeoutMs <= 0) {
+      return session.connection.prompt(params);
+    }
+
+    type PromptResult = Awaited<ReturnType<acp.ClientSideConnection['prompt']>>;
+    const timeoutPromise = new Promise<PromptResult>((_, reject) => {
+      session.promptTimeoutReject = reject;
+    });
+    this.resetInactivityTimer(session);
+
+    try {
+      return await Promise.race([session.connection.prompt(params), timeoutPromise]);
+    } catch (err) {
+      if (err instanceof PromptTimeoutError) {
+        session.connection.cancel({ sessionId: params.sessionId }).catch((cancelErr: unknown) => {
+          debugProtocol(
+            `[ACP ${session.info.sandboxName}] cancel after timeout failed for session ${session.info.id}: ${cancelErr instanceof Error ? cancelErr.message : String(cancelErr)}`,
+          );
+        });
+      }
+      throw err;
+    } finally {
+      this.clearInactivityTimer(session);
+    }
+  }
+
+  private getPromptTimeoutMs(): number {
+    const config = this.configurationRegistry.getConfiguration(AcpSettings.SectionName);
+    const seconds = config.get<number>(AcpSettings.PromptTimeoutSeconds, 300);
+    return seconds * 1_000;
+  }
+
+  private resetInactivityTimer(session: AcpSession): void {
+    if (session.inactivityTimer !== undefined) {
+      clearTimeout(session.inactivityTimer);
+      session.inactivityTimer = undefined;
+    }
+    if (!session.promptTimeoutReject || !session.promptTimeoutMs || session.pendingRequests.size > 0) {
+      return;
+    }
+    const timeoutMs = session.promptTimeoutMs;
+    session.inactivityTimer = setTimeout(() => {
+      session.promptTimeoutReject?.(
+        new PromptTimeoutError(`Prompt timed out after ${timeoutMs / 1_000} seconds with no activity from the agent`),
+      );
+    }, timeoutMs);
+  }
+
+  private pauseInactivityTimer(session: AcpSession): void {
+    if (session.inactivityTimer !== undefined) {
+      clearTimeout(session.inactivityTimer);
+      session.inactivityTimer = undefined;
+    }
+  }
+
+  private clearInactivityTimer(session: AcpSession): void {
+    this.pauseInactivityTimer(session);
+    session.promptTimeoutReject = undefined;
+    session.promptTimeoutMs = undefined;
   }
 
   private async startAcpSession(sessionId: string, prompt: string): Promise<void> {
@@ -335,7 +419,7 @@ export class AcpSessionManager {
     this.updateSessionStatus(sessionId, 'running');
 
     debugProtocol(`sending prompt: ${prompt}`);
-    const result = await session.connection.prompt({
+    const result = await this.promptWithTimeout(session, {
       sessionId: newSession.sessionId,
       prompt: [{ type: 'text', text: prompt }],
     });
@@ -366,6 +450,9 @@ export class AcpSessionManager {
   private handleSessionUpdate(sessionId: string, params: acp.SessionNotification): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
+
+    // Reset inactivity timer on any activity from the agent
+    this.resetInactivityTimer(session);
 
     const update = params.update;
     debugProtocol(`sessionUpdate: ${update.sessionUpdate}`, JSON.stringify(update).slice(0, 200));
@@ -595,6 +682,7 @@ export class AcpSessionManager {
     const requestId = randomUUID();
     const previousStatus = session.info.status;
     this.updateSessionStatus(sessionId, 'waiting_input');
+    this.pauseInactivityTimer(session);
 
     const toolCallId = params.toolCall.toolCallId;
     const permissionData = {
@@ -668,6 +756,11 @@ export class AcpSessionManager {
     } else if (response.type === 'elicitation') {
       pending.resolve(response.data as AcpElicitationResponseData);
     }
+
+    // Resume inactivity timer if all pending requests are resolved
+    if (session.pendingRequests.size === 0) {
+      this.resetInactivityTimer(session);
+    }
   }
 
   private async reconnectSession(sessionId: string): Promise<void> {
@@ -719,7 +812,7 @@ export class AcpSessionManager {
         const s = this.sessions.get(sessionId);
         if (s) {
           s.connectionClosed = true;
-          if (s.info.status !== 'completed' && s.info.status !== 'cancelled') {
+          if (s.info.status !== 'completed' && s.info.status !== 'cancelled' && s.info.status !== 'error') {
             this.updateSessionStatus(sessionId, exitCode === 0 ? 'completed' : 'error');
             if (exitCode !== 0) {
               const stderrMsg = s.stderrLines.join(' ').trim();
@@ -733,7 +826,7 @@ export class AcpSessionManager {
         const s = this.sessions.get(sessionId);
         if (s) {
           s.connectionClosed = true;
-          if (s.info.status !== 'completed' && s.info.status !== 'cancelled') {
+          if (s.info.status !== 'completed' && s.info.status !== 'cancelled' && s.info.status !== 'error') {
             this.updateSessionStatus(sessionId, 'error');
             const stderrMsg = s.stderrLines.join(' ').trim();
             s.info.error = stderrMsg || (err instanceof Error ? err.message : String(err));
@@ -829,7 +922,7 @@ export class AcpSessionManager {
     }
 
     try {
-      const result = await session.connection.prompt({
+      const result = await this.promptWithTimeout(session, {
         sessionId: session.acpSessionId,
         prompt: contentBlocks,
       });
@@ -841,19 +934,35 @@ export class AcpSessionManager {
       if (err instanceof Error && err.message.toLowerCase().includes('connection closed')) {
         debugLifecycle(`${session.info.sandboxName} connection died during prompt, reconnecting...`);
         await this.reconnectSession(sessionId);
-        const result = await session.connection.prompt({
-          sessionId: session.acpSessionId!,
-          prompt: contentBlocks,
-        });
-        if (result.stopReason === 'end_turn' || result.stopReason === 'cancelled') {
-          this.updateSessionStatus(sessionId, 'completed');
+        try {
+          const result = await this.promptWithTimeout(session, {
+            sessionId: session.acpSessionId!,
+            prompt: contentBlocks,
+          });
+          if (result.stopReason === 'end_turn' || result.stopReason === 'cancelled') {
+            this.updateSessionStatus(sessionId, 'completed');
+          }
+          return;
+        } catch (retryErr: unknown) {
+          console.error(`[ACP ${session.info.sandboxName}] follow-up after reconnect failed:`, retryErr);
+          this.updateSessionStatus(sessionId, 'error');
+          if (retryErr instanceof PromptTimeoutError) {
+            session.info.error = retryErr.message;
+          } else {
+            const stderrMsg = session.stderrLines.join(' ').trim();
+            session.info.error = stderrMsg || (retryErr instanceof Error ? retryErr.message : String(retryErr));
+          }
+          throw retryErr;
         }
-        return;
       }
       console.error(`[ACP ${session.info.sandboxName}] follow-up failed:`, err);
       this.updateSessionStatus(sessionId, 'error');
-      const stderrMsg = session.stderrLines.join(' ').trim();
-      session.info.error = stderrMsg || (err instanceof Error ? err.message : String(err));
+      if (err instanceof PromptTimeoutError) {
+        session.info.error = err.message;
+      } else {
+        const stderrMsg = session.stderrLines.join(' ').trim();
+        session.info.error = stderrMsg || (err instanceof Error ? err.message : String(err));
+      }
       throw err;
     }
   }
@@ -1167,6 +1276,7 @@ export class AcpSessionManager {
   @preDestroy()
   dispose(): void {
     for (const [, session] of this.sessions) {
+      this.clearInactivityTimer(session);
       for (const [, pending] of session.pendingRequests) {
         pending.reject(new Error('Manager disposing'));
       }
