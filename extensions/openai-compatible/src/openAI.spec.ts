@@ -474,7 +474,7 @@ describe('restoreConnections', () => {
     });
   });
 
-  test('should restore connections even when one fails model listing', async () => {
+  test('should skip failed connection and continue restoring others when model listing fails', async () => {
     const stored: StoredConnection[] = [
       { id: 'id-1', apiKey: 'key1', baseURL: 'http://a/v1' },
       { id: 'id-2', apiKey: 'key2', baseURL: 'http://b/v1' },
@@ -485,7 +485,11 @@ describe('restoreConnections', () => {
     const openai = new OpenAI(PROVIDER_API_MOCK, SECRET_STORAGE_MOCK, CONFIGURATION_API_MOCK);
     await openai.init();
 
-    expect(PROVIDER_MOCK.registerInferenceProviderConnection).toHaveBeenCalledTimes(2);
+    // only the second connection should be registered; the first failed model listing
+    expect(PROVIDER_MOCK.registerInferenceProviderConnection).toHaveBeenCalledTimes(1);
+    expect(PROVIDER_MOCK.registerInferenceProviderConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'id-2' }),
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://a/v1/models', {
@@ -521,7 +525,7 @@ describe('restoreConnections', () => {
 });
 
 describe('listModels error handling (through factory)', () => {
-  test('non-200 response should return undefined', async () => {
+  test('non-200 response should reject and not persist', async () => {
     const openai = new OpenAI(PROVIDER_API_MOCK, SECRET_STORAGE_MOCK, CONFIGURATION_API_MOCK);
     await openai.init();
 
@@ -530,12 +534,15 @@ describe('listModels error handling (through factory)', () => {
 
     fetchMock.mockResolvedValueOnce({ status: 500, json: async () => ({}) });
 
-    await expect(create({ 'openai.factory.apiKey': 'k', 'openai.factory.baseURL': 'http://x/v1' })).resolves.toBe(
-      undefined,
+    await expect(create({ 'openai.factory.apiKey': 'k', 'openai.factory.baseURL': 'http://x/v1' })).rejects.toThrow(
+      'failed to list models',
     );
+
+    expect(SECRET_STORAGE_MOCK.store).not.toHaveBeenCalled();
+    expect(PROVIDER_MOCK.registerInferenceProviderConnection).not.toHaveBeenCalled();
   });
 
-  test('missing data field should return undefined', async () => {
+  test('missing data field should reject and not persist', async () => {
     const openai = new OpenAI(PROVIDER_API_MOCK, SECRET_STORAGE_MOCK, CONFIGURATION_API_MOCK);
     await openai.init();
 
@@ -544,12 +551,15 @@ describe('listModels error handling (through factory)', () => {
 
     fetchMock.mockResolvedValueOnce({ status: 200, json: async () => ({}) });
 
-    await expect(create({ 'openai.factory.apiKey': 'k', 'openai.factory.baseURL': 'http://x/v1' })).resolves.toBe(
-      undefined,
+    await expect(create({ 'openai.factory.apiKey': 'k', 'openai.factory.baseURL': 'http://x/v1' })).rejects.toThrow(
+      'malformed response from http://x/v1',
     );
+
+    expect(SECRET_STORAGE_MOCK.store).not.toHaveBeenCalled();
+    expect(PROVIDER_MOCK.registerInferenceProviderConnection).not.toHaveBeenCalled();
   });
 
-  test('data not array should return undefined', async () => {
+  test('data not array should reject and not persist', async () => {
     const openai = new OpenAI(PROVIDER_API_MOCK, SECRET_STORAGE_MOCK, CONFIGURATION_API_MOCK);
     await openai.init();
 
@@ -558,9 +568,12 @@ describe('listModels error handling (through factory)', () => {
 
     fetchMock.mockResolvedValueOnce({ status: 200, json: async () => ({ data: {} }) });
 
-    await expect(create({ 'openai.factory.apiKey': 'k', 'openai.factory.baseURL': 'http://x/v1' })).resolves.toBe(
-      undefined,
+    await expect(create({ 'openai.factory.apiKey': 'k', 'openai.factory.baseURL': 'http://x/v1' })).rejects.toThrow(
+      'malformed response from http://x/v1: data is not an array',
     );
+
+    expect(SECRET_STORAGE_MOCK.store).not.toHaveBeenCalled();
+    expect(PROVIDER_MOCK.registerInferenceProviderConnection).not.toHaveBeenCalled();
   });
 });
 
