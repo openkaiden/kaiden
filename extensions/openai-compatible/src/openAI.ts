@@ -160,14 +160,25 @@ export class OpenAI implements Disposable {
     id,
     token,
     baseURL,
+    models: preloadedModels,
   }: {
     id: string;
     token: string;
     baseURL: string;
+    models?: InferenceModel[];
   }): Promise<void> {
     if (!this.provider) throw new Error('cannot create MCP provider connection: provider is not initialized');
 
-    const models: InferenceModel[] = await this.listModels(baseURL, token);
+    let models: InferenceModel[] = preloadedModels ?? [];
+    let status: ProviderConnectionStatus = 'unknown';
+
+    if (!preloadedModels) {
+      try {
+        models = await this.listModels(baseURL, token);
+      } catch (err: unknown) {
+        status = 'stopped';
+      }
+    }
 
     const openai = createOpenAICompatible({
       baseURL: baseURL,
@@ -183,7 +194,7 @@ export class OpenAI implements Disposable {
       endpoint: baseURL,
       sdk: openai,
       status(): ProviderConnectionStatus {
-        return 'unknown';
+        return status;
       },
       lifecycle: {
         delete: async (): Promise<void> => {
@@ -238,7 +249,8 @@ export class OpenAI implements Disposable {
     }
 
     const id = randomUUID();
-    await this.registerInferenceProviderConnection({ id, token: apiKey, baseURL });
+    const models = await this.listModels(baseURL, apiKey);
+    await this.registerInferenceProviderConnection({ id, token: apiKey, baseURL, models });
     await this.saveConnection({ id, apiKey, baseURL });
   }
 

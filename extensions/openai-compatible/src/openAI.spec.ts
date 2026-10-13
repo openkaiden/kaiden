@@ -474,7 +474,7 @@ describe('restoreConnections', () => {
     });
   });
 
-  test('should skip failed connection and continue restoring others when model listing fails', async () => {
+  test('should restore connections even when one fails model listing', async () => {
     const stored: StoredConnection[] = [
       { id: 'id-1', apiKey: 'key1', baseURL: 'http://a/v1' },
       { id: 'id-2', apiKey: 'key2', baseURL: 'http://b/v1' },
@@ -485,11 +485,19 @@ describe('restoreConnections', () => {
     const openai = new OpenAI(PROVIDER_API_MOCK, SECRET_STORAGE_MOCK, CONFIGURATION_API_MOCK);
     await openai.init();
 
-    // only the second connection should be registered; the first failed model listing
-    expect(PROVIDER_MOCK.registerInferenceProviderConnection).toHaveBeenCalledTimes(1);
-    expect(PROVIDER_MOCK.registerInferenceProviderConnection).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'id-2' }),
-    );
+    expect(PROVIDER_MOCK.registerInferenceProviderConnection).toHaveBeenCalledTimes(2);
+
+    // first connection should be registered with stopped status and no models
+    const firstConnection = vi.mocked(PROVIDER_MOCK.registerInferenceProviderConnection).mock.calls[0][0];
+    expect(firstConnection.id).toBe('id-1');
+    expect(firstConnection.status()).toBe('stopped');
+    expect(firstConnection.models).toEqual([]);
+
+    // second connection should be registered normally
+    const secondConnection = vi.mocked(PROVIDER_MOCK.registerInferenceProviderConnection).mock.calls[1][0];
+    expect(secondConnection.id).toBe('id-2');
+    expect(secondConnection.status()).toBe('unknown');
+    expect(secondConnection.models).toEqual([{ label: 'gpt-4o' }, { label: 'gpt-4.1' }]);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://a/v1/models', {
