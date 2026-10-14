@@ -533,17 +533,59 @@ describe('restoreConnections', () => {
 });
 
 describe('listModels error handling (through factory)', () => {
-  test('non-200 response should reject and not persist', async () => {
+  test('401 without error body should reject with fallback message and not persist', async () => {
     const openai = new OpenAI(PROVIDER_API_MOCK, SECRET_STORAGE_MOCK, CONFIGURATION_API_MOCK);
     await openai.init();
 
     const mock = vi.mocked(PROVIDER_MOCK.setInferenceProviderConnectionFactory);
     const create = mock.mock.calls[0][0].create;
 
-    fetchMock.mockResolvedValueOnce({ status: 500, json: async () => ({}) });
+    fetchMock.mockResolvedValueOnce({ status: 401, json: async () => ({}) });
 
     await expect(create({ 'openai.factory.apiKey': 'k', 'openai.factory.baseURL': 'http://x/v1' })).rejects.toThrow(
-      'failed to list models',
+      'Incorrect API key — the server rejected the credentials (HTTP 401)',
+    );
+
+    expect(SECRET_STORAGE_MOCK.store).not.toHaveBeenCalled();
+    expect(PROVIDER_MOCK.registerInferenceProviderConnection).not.toHaveBeenCalled();
+  });
+
+  test('401 with OpenAI-style error body should surface server message', async () => {
+    const openai = new OpenAI(PROVIDER_API_MOCK, SECRET_STORAGE_MOCK, CONFIGURATION_API_MOCK);
+    await openai.init();
+
+    const mock = vi.mocked(PROVIDER_MOCK.setInferenceProviderConnectionFactory);
+    const create = mock.mock.calls[0][0].create;
+
+    fetchMock.mockResolvedValueOnce({
+      status: 401,
+      json: async () => ({ error: { message: 'Incorrect API key provided: k***.' } }),
+    });
+
+    await expect(create({ 'openai.factory.apiKey': 'k', 'openai.factory.baseURL': 'http://x/v1' })).rejects.toThrow(
+      'Incorrect API key provided: k***.',
+    );
+
+    expect(SECRET_STORAGE_MOCK.store).not.toHaveBeenCalled();
+    expect(PROVIDER_MOCK.registerInferenceProviderConnection).not.toHaveBeenCalled();
+  });
+
+  test('401 with non-JSON body should reject with fallback message', async () => {
+    const openai = new OpenAI(PROVIDER_API_MOCK, SECRET_STORAGE_MOCK, CONFIGURATION_API_MOCK);
+    await openai.init();
+
+    const mock = vi.mocked(PROVIDER_MOCK.setInferenceProviderConnectionFactory);
+    const create = mock.mock.calls[0][0].create;
+
+    fetchMock.mockResolvedValueOnce({
+      status: 401,
+      json: async () => {
+        throw new SyntaxError('Unexpected token');
+      },
+    });
+
+    await expect(create({ 'openai.factory.apiKey': 'k', 'openai.factory.baseURL': 'http://x/v1' })).rejects.toThrow(
+      'Incorrect API key — the server rejected the credentials (HTTP 401)',
     );
 
     expect(SECRET_STORAGE_MOCK.store).not.toHaveBeenCalled();

@@ -125,7 +125,24 @@ export class OpenAI implements Disposable {
         Authorization: `Bearer ${token}`,
       },
     });
-    if (res.status !== 200) throw new Error('failed to list models');
+    if (res.status !== 200) {
+      let serverMessage: string | undefined;
+      try {
+        const errorBody = (await res.json()) as { error?: { message?: string } };
+        serverMessage = errorBody.error?.message;
+      } catch {
+        // response body is not JSON
+      }
+
+      switch (res.status) {
+        case 401:
+          throw new Error(serverMessage ?? 'Incorrect API key — the server rejected the credentials (HTTP 401)');
+        case 403:
+          throw new Error(serverMessage ?? `Access denied — the server rejected the request (HTTP 403)`);
+        default:
+          throw new Error(serverMessage ?? `Unexpected error: ${res.status} ${res.statusText}`);
+      }
+    }
     const body = await res.json();
 
     if (!('data' in body)) throw new Error(`malformed response from ${baseURL}`);
