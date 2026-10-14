@@ -863,7 +863,7 @@ function handleKeyDown(e: KeyboardEvent): void {
 
         <!-- Toolbar inside the box -->
         <div class="flex items-center justify-between px-2 pb-2">
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-1 flex-wrap">
             <button
               class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-[var(--pd-content-text)] opacity-60 hover:opacity-100 hover:bg-[var(--pd-content-card-hover-bg)] transition-colors"
               title="Attach file"
@@ -905,7 +905,7 @@ function handleKeyDown(e: KeyboardEvent): void {
             {/if}
             {#each selectConfigOptions as configOpt (configOpt.id)}
               <div class="inline-flex items-center gap-1.5 rounded-full border border-[var(--pd-content-divider)] bg-[var(--pd-content-card-bg)] px-2.5 py-0.5" title={configOpt.description ?? configOpt.name}>
-                <span class="w-2 h-2 rounded-full bg-[var(--pd-status-connected)] shrink-0"></span>
+                <span class="text-xs text-[var(--pd-content-text)] opacity-60 shrink-0">{configOpt.name}</span>
                 <select
                   value={configOpt.currentValue}
                   onchange={(e: Event): void => handleConfigChange(configOpt.id, e)}
