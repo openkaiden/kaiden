@@ -180,6 +180,19 @@ export class AcpSessionManager {
     return { input, output };
   }
 
+  // Returns the sandbox name, appending " (N)" when sessions with that name already exist.
+  private nextSessionName(sandboxName: string): string {
+    const existing = new Set([...this.sessions.values()].map(s => s.info.name));
+    if (!existing.has(sandboxName)) {
+      return sandboxName;
+    }
+    let n = 2;
+    while (existing.has(`${sandboxName} (${n})`)) {
+      n++;
+    }
+    return `${sandboxName} (${n})`;
+  }
+
   async createSession(options: AcpSessionCreateOptions): Promise<AcpSessionInfo> {
     const sandboxes = await this.#listSandboxes();
     const sandbox = sandboxes.find(s => s.name === options.sandboxName);
@@ -208,6 +221,9 @@ export class AcpSessionManager {
 
     const info: AcpSessionInfo = {
       id: sessionId,
+      // Prompt-less sessions have no prompt to derive a title from, so name them
+      // after the sandbox with a numeric suffix to tell sessions apart.
+      name: options.prompt ? undefined : this.nextSessionName(sandbox.name),
       sandboxName: sandbox.name,
       sandboxId: sandbox.id,
       prompt: options.prompt ?? '',

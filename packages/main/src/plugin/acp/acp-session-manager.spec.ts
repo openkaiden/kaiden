@@ -1380,6 +1380,99 @@ describe('AcpSessionManager', () => {
     };
   }
 
+  describe('createSession', () => {
+    function setupConnectionMocks(): {
+      initialize: ReturnType<typeof vi.fn>;
+      newSession: ReturnType<typeof vi.fn>;
+      prompt: ReturnType<typeof vi.fn>;
+    } {
+      vi.mocked(agentRegistry.getAgent).mockResolvedValue(createAgentInfo());
+      mockSandboxList.mockResolvedValue([
+        { id: 'sandbox-1', name: 'test-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' },
+      ]);
+
+      const mockSession = {
+        output: {
+          [Symbol.asyncIterator]: (): AsyncIterator<unknown> => ({
+            next: (): Promise<IteratorResult<unknown>> => Promise.resolve({ value: undefined, done: true }),
+          }),
+        },
+        write: vi.fn(),
+        resize: vi.fn(),
+        close: vi.fn(),
+        done: new Promise<number>(() => {}),
+      };
+      sdkSandbox.execInteractive.mockResolvedValue(mockSession);
+
+      const mockConnection = {
+        initialize: vi.fn().mockResolvedValue({ protocolVersion: '0.1' }),
+        newSession: vi.fn().mockResolvedValue({ sessionId: 'acp-1' }),
+        prompt: vi.fn().mockReturnValue(new Promise(() => {})),
+      };
+      vi.mocked(acp.ClientSideConnection).mockImplementation(function () {
+        return mockConnection as never;
+      });
+      vi.mocked(acp.ndJsonStream).mockReturnValue({} as never);
+      return mockConnection;
+    }
+
+    test('names a prompt-less session after its sandbox', async () => {
+      setupConnectionMocks();
+
+      const session = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+
+      expect(session.name).toBe('test-sandbox');
+      expect(session.prompt).toBe('');
+    });
+
+    test('appends a numeric suffix for further prompt-less sessions on the same sandbox', async () => {
+      setupConnectionMocks();
+
+      const first = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+      const second = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+      const third = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+
+      expect(first.name).toBe('test-sandbox');
+      expect(second.name).toBe('test-sandbox (2)');
+      expect(third.name).toBe('test-sandbox (3)');
+    });
+
+    test('keeps the prompt as title and leaves name unset when a prompt is provided', async () => {
+      setupConnectionMocks();
+
+      const session = await manager.createSession({
+        sandboxName: 'test-sandbox',
+        prompt: 'hello',
+        agentId: 'openclaw',
+      });
+
+      expect(session.name).toBeUndefined();
+      expect(session.prompt).toBe('hello');
+    });
+
+    test('omits the prompt flow event when created without a prompt', async () => {
+      setupConnectionMocks();
+
+      const session = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+
+      expect(manager.getSessionEvents(session.id)).toHaveLength(0);
+    });
+
+    test('fetches capabilities then leaves the session idle without sending a prompt', async () => {
+      const connection = setupConnectionMocks();
+
+      const session = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+
+      await vi.waitFor(async () => {
+        const sessions = await manager.listSessions();
+        expect(sessions.find(s => s.id === session.id)?.status).toBe('idle');
+      });
+      expect(connection.initialize).toHaveBeenCalled();
+      expect(connection.newSession).toHaveBeenCalled();
+      expect(connection.prompt).not.toHaveBeenCalled();
+    });
+  });
+
   describe('ANSI code stripping in error messages', () => {
     test('strips ANSI escape codes from stderr lines on process exit', async () => {
       const { mockExec, sessionId } = await setupSdkSession();
