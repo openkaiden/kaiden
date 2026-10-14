@@ -1849,6 +1849,43 @@ describe('AcpSessionManager', () => {
         expect(session.error).toContain('timed out');
       });
     });
+
+    test('does not time out when the configured timeout is 0 (disabled)', async () => {
+      vi.mocked(configurationRegistry.getConfiguration).mockReturnValue({
+        get: vi.fn().mockReturnValue(0),
+      } as never);
+
+      const { sessionId } = await setupSessionWithConnection();
+
+      // Advance well past what the default deadline would be: the prompt hangs but the
+      // session must stay running because the timeout is disabled.
+      vi.advanceTimersByTime(TIMEOUT_MS * 3);
+      await vi.advanceTimersByTimeAsync(0);
+
+      const sessions = await manager.listSessions();
+      const session = sessions.find(s => s.id === sessionId);
+      assert(session);
+      expect(session.status).toBe('running');
+      expect(session.error).toBeUndefined();
+      expect(acp.ClientSideConnection.prototype.cancel).not.toHaveBeenCalled();
+    });
+
+    test('cancelSession during an active prompt timer ends as cancelled, not error', async () => {
+      const { sessionId } = await setupSessionWithConnection();
+
+      manager.cancelSession(sessionId);
+
+      // The inactivity timer must have been cleared on cancel: advancing past the deadline
+      // must not flip the status from 'cancelled' to 'error'.
+      vi.advanceTimersByTime(TIMEOUT_MS * 2);
+      await vi.advanceTimersByTimeAsync(0);
+
+      const sessions = await manager.listSessions();
+      const session = sessions.find(s => s.id === sessionId);
+      assert(session);
+      expect(session.status).toBe('cancelled');
+      expect(session.error).toBeUndefined();
+    });
   });
 
   describe('ANSI code stripping in error messages', () => {

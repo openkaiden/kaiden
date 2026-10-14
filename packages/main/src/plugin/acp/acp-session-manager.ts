@@ -43,7 +43,7 @@ import type {
   AcpSessionStatus,
   AcpUserResponse,
 } from '/@api/acp-session-info.js';
-import { AcpSettings } from '/@api/acp-settings.js';
+import { AcpSettings, DEFAULT_PROMPT_TIMEOUT_SECONDS } from '/@api/acp-settings.js';
 import type { AgentInfo } from '/@api/agent-info.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import { IConfigurationRegistry } from '/@api/configuration/models.js';
@@ -317,12 +317,7 @@ export class AcpSessionManager {
       this.updateSessionStatus(sessionId, 'error');
       const s = this.sessions.get(sessionId);
       if (s) {
-        if (err instanceof PromptTimeoutError) {
-          s.info.error = err.message;
-        } else {
-          const stderrMsg = s.stderrLines.join(' ').trim();
-          s.info.error = stderrMsg || (err instanceof Error ? err.message : String(err));
-        }
+        this.setSessionError(s, err);
       }
     });
 
@@ -364,8 +359,19 @@ export class AcpSessionManager {
 
   private getPromptTimeoutMs(): number {
     const config = this.configurationRegistry.getConfiguration(AcpSettings.SectionName);
-    const seconds = config.get<number>(AcpSettings.PromptTimeoutSeconds, 300);
+    const seconds = config.get<number>(AcpSettings.PromptTimeoutSeconds, DEFAULT_PROMPT_TIMEOUT_SECONDS);
     return seconds * 1_000;
+  }
+
+  // The timeout message must win over stderr noise, so a PromptTimeoutError keeps its own
+  // message; any other error falls back to the collected stderr then the error message.
+  private setSessionError(session: AcpSession, err: unknown): void {
+    if (err instanceof PromptTimeoutError) {
+      session.info.error = err.message;
+    } else {
+      const stderrMsg = session.stderrLines.join(' ').trim();
+      session.info.error = stderrMsg || (err instanceof Error ? err.message : String(err));
+    }
   }
 
   private resetInactivityTimer(session: AcpSession): void {
@@ -970,23 +976,13 @@ export class AcpSessionManager {
         } catch (retryErr: unknown) {
           console.error(`[ACP ${session.info.sandboxName}] follow-up after reconnect failed:`, retryErr);
           this.updateSessionStatus(sessionId, 'error');
-          if (retryErr instanceof PromptTimeoutError) {
-            session.info.error = retryErr.message;
-          } else {
-            const stderrMsg = session.stderrLines.join(' ').trim();
-            session.info.error = stderrMsg || (retryErr instanceof Error ? retryErr.message : String(retryErr));
-          }
+          this.setSessionError(session, retryErr);
           throw retryErr;
         }
       }
       console.error(`[ACP ${session.info.sandboxName}] follow-up failed:`, err);
       this.updateSessionStatus(sessionId, 'error');
-      if (err instanceof PromptTimeoutError) {
-        session.info.error = err.message;
-      } else {
-        const stderrMsg = session.stderrLines.join(' ').trim();
-        session.info.error = stderrMsg || (err instanceof Error ? err.message : String(err));
-      }
+      this.setSessionError(session, err);
       throw err;
     }
   }
@@ -1211,6 +1207,10 @@ export class AcpSessionManager {
       throw new Error(`Session "${sessionId}" not found`);
     }
 
+    // Clear the inactivity timer first: otherwise a timeout could fire during cancellation
+    // and overwrite the 'cancelled' status with 'error'.
+    this.clearInactivityTimer(session);
+
     for (const [, pending] of session.pendingRequests) {
       pending.reject(new Error('Session cancelled'));
     }
@@ -1229,6 +1229,8 @@ export class AcpSessionManager {
     if (!session) {
       throw new Error(`Session "${sessionId}" not found`);
     }
+
+    this.clearInactivityTimer(session);
 
     for (const [, pending] of session.pendingRequests) {
       pending.reject(new Error('Session deleted'));
