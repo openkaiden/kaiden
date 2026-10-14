@@ -169,6 +169,12 @@ jobs:
       - name: Run Build and Compile on all platforms
         timeout-minutes: 60
         shell: bash
+        env:
+          # /tmp on the ubuntu-26.04 runner is a ~8G RAM-backed tmpfs.
+          # flatpak-bundler stages its ostree repo there during
+          # `flatpak build-export` and overflows it ("Disk quota exceeded").
+          # Point temp at the runner temp dir on the 145G root disk instead.
+          TMPDIR: ${{ runner.temp }}
         run: |
           if [ -n "${{ matrix.windows_arch }}" ]; then
             pnpm exec cross-env MODE=production pnpm run build
