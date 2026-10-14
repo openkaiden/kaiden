@@ -1886,6 +1886,10 @@ export function initExposure(): void {
     return ipcInvoke('agent-registry:getAgentInfos');
   });
 
+  contextBridge.exposeInMainWorld('getHostPresets', async (): Promise<containerDesktopAPI.HostPreset[]> => {
+    return ipcInvoke('host-preset-registry:getHostPresets');
+  });
+
   contextBridge.exposeInMainWorld('selectCliToolVersionToUpdate', async (id: string): Promise<string> => {
     return ipcInvoke('cli-tool-registry:selectCliToolVersionToUpdate', id);
   });

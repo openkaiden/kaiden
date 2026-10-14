@@ -51,6 +51,7 @@ import product from '/@product.json' with { type: 'json' };
 import { securityRestrictionCurrentHandler } from '../../security-restrictions-handler.js';
 import { getBase64Image, isLinux, isMac, isWindows } from '../../util.js';
 import { AgentRegistry } from '../agent-registry.js';
+import { HostPresetRegistry } from '../agent-workspace/host-preset-registry.js';
 import { AuthenticationImpl } from '../authentication.js';
 import { CancellationTokenSource } from '../cancellation-token.js';
 import { Certificates } from '../certificates.js';
@@ -203,6 +204,8 @@ export class ExtensionLoader implements IAsyncDisposable {
     private cliToolRegistry: CliToolRegistry,
     @inject(AgentRegistry)
     private agentRegistry: AgentRegistry,
+    @inject(HostPresetRegistry)
+    private hostPresetRegistry: HostPresetRegistry,
     @inject(OpenShellRegistry)
     private openShellRegistry: OpenShellRegistry,
     @inject(NotificationRegistry)
@@ -1717,6 +1720,17 @@ export class ExtensionLoader implements IAsyncDisposable {
       },
     };
 
+    const workspace: typeof containerDesktopAPI.workspace = {
+      registerHostPreset(preset: containerDesktopAPI.HostPreset): containerDesktopAPI.Disposable {
+        const disposable = instance.hostPresetRegistry.registerHostPreset(preset);
+        disposables.push(disposable);
+        return disposable;
+      },
+      getHostPresets(): ReadonlyArray<containerDesktopAPI.HostPreset> {
+        return instance.hostPresetRegistry.getHostPresets();
+      },
+    };
+
     const openshell: typeof containerDesktopAPI.openshell = {
       registerGateway(gateway: containerDesktopAPI.OpenShellGateway): containerDesktopAPI.Disposable {
         const disposable = instance.openShellRegistry.registerGateway(gateway);
@@ -1799,6 +1813,7 @@ export class ExtensionLoader implements IAsyncDisposable {
       net,
       mcpRegistry,
       agents,
+      workspace,
       openshell,
     };
   }

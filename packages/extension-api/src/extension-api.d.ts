@@ -5485,6 +5485,25 @@ declare module '@openkaiden/api' {
     readonly workspace: AgentWorkspaceConfiguration;
   }
 
+  /** A named set of hosts that can be added to an agent workspace. */
+  export interface HostPreset {
+    /** Unique identifier for this preset. No default. */
+    readonly id: string;
+    /** Display name for this preset. No default. */
+    readonly name: string;
+    /** Optional description of this preset. Defaults to `undefined`. */
+    readonly description?: string;
+    /** Host entries included in this preset. No default. */
+    readonly hosts: ReadonlyArray<string>;
+  }
+
+  export namespace workspace {
+    /** Register a host preset for use by agent workspaces. The preset ID must be unique. */
+    export function registerHostPreset(preset: HostPreset): Disposable;
+    /** Get all currently registered host presets. */
+    export function getHostPresets(): ReadonlyArray<HostPreset>;
+  }
+
   export interface Agent {
     readonly id: string;
     readonly name: string;
