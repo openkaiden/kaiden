@@ -57,8 +57,8 @@ $effect(() => {
 $effect(() => {
   if (draftAgentId && acpAgents.some(a => a.id === draftAgentId)) {
     selectedAgentId = draftAgentId;
-  } else if (draftNeedsAgentSelection && acpAgents.length > 0 && !selectedAgentId) {
-    selectedAgentId = acpAgents[0]!.id;
+  } else if (draftNeedsAgentSelection && !acpAgents.some(a => a.id === selectedAgentId)) {
+    selectedAgentId = acpAgents[0]?.id ?? '';
   }
 });
 

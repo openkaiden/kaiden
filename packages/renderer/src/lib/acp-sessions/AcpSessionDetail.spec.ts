@@ -18,7 +18,7 @@
 
 import '@testing-library/jest-dom/vitest';
 
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { writable } from 'svelte/store';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -775,5 +775,29 @@ describe('draft mode sandbox/agent selection', () => {
 
     const sandboxSelect = screen.getByLabelText('Sandbox');
     expect(sandboxSelect).toHaveValue('plain-sandbox');
+  });
+
+  test('clears the selected agent when it leaves the available ACP agents', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([]);
+    // reject so the auto-create latch clears and the draft input re-enables
+    vi.mocked(window.createAcpSession).mockRejectedValue(new Error('rejected'));
+    vi.mocked(openshellSandboxesStore).allOpenshellSandboxes = writable<SandboxInfoWithGateway[]>([
+      SANDBOX_WITHOUT_LABEL,
+    ]);
+    const agents = writable<AgentInfo[]>([ACP_AGENT]);
+    vi.mocked(agentsStore).agentInfos = agents;
+
+    render(AcpSessionDetail, { sessionId: 'new' });
+
+    // unlabelled sandbox auto-selects the sole ACP agent, so the draft can send
+    const textarea = screen.getByRole('textbox');
+    await waitFor(() => expect(textarea).toBeEnabled());
+
+    // the selected agent disappears from the registry
+    agents.set([]);
+
+    // the stale id must be cleared, otherwise the draft would still try to send a removed agent
+    await waitFor(() => expect(textarea).toBeDisabled());
+    expect(screen.getByText('No ACP-capable agents available.')).toBeInTheDocument();
   });
 });
