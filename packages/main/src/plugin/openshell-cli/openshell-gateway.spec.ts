@@ -30,7 +30,7 @@ import type { Directories } from '/@/plugin/directories.js';
 import type { OpenshellGatewayManager } from '/@/plugin/openshell-cli/openshell-gateway-manager.js';
 import type { NotificationRegistry } from '/@/plugin/tasks/notification-registry.js';
 import type { Exec } from '/@/plugin/util/exec.js';
-import { isFreePort } from '/@/plugin/util/port.js';
+import { getFreePort, isFreePort } from '/@/plugin/util/port.js';
 import { isLinux, isMac } from '/@/util.js';
 import type { CliToolInfo } from '/@api/cli-tool-info.js';
 import type { ListedGateway } from '/@api/openshell-gateway-info.js';
@@ -115,6 +115,7 @@ const notificationRegistry = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(getFreePort).mockResolvedValue(17670);
   gatewayLogStream.removeAllListeners();
   vi.mocked(directories.getDataDirectory).mockReturnValue(KAIDEN_DATA_DIRECTORY);
   vi.mocked(cliToolRegistry.getCliToolInfos).mockReturnValue([
@@ -210,6 +211,99 @@ describe.each(['default', 'created'])('%s gateway process environment', launch =
 });
 
 describe('init', () => {
+  test.each([17670, 17671, 17672])('auto-starts and registers the available port %s', async port => {
+    vi.mocked(getFreePort).mockResolvedValue(port);
+    vi.mocked(spawn).mockReturnValue(createMockChildProcess());
+    vi.mocked(gatewayManager.health)
+      .mockRejectedValueOnce(new Error('connection refused'))
+      .mockResolvedValue({ status: 'healthy', version: '1.0.0' });
+
+    await gateway.init();
+
+    expect(getFreePort).toHaveBeenCalledWith(17670);
+    expect(spawn).toHaveBeenCalledWith(
+      GATEWAY_BINARY,
+      expect.arrayContaining(['--port', String(port)]),
+      expect.anything(),
+    );
+    expect(gatewayManager.addGateway).toHaveBeenLastCalledWith('kaiden-local', {
+      name: 'kaiden-local',
+      gateway_endpoint: `http://127.0.0.1:${port}`,
+      gateway_port: port,
+      is_remote: false,
+    });
+    expect(gateway.isRunning()).toBe(true);
+    expect(notificationRegistry.addNotification).not.toHaveBeenCalled();
+  });
+
+  test.each([false, true])('reuses a healthy gateway on the default port (created: %s)', async created => {
+    vi.mocked(existsSync).mockReturnValue(created);
+    vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local-dev', 'http://127.0.0.1:17670')]);
+
+    await gateway.init();
+
+    expect(gatewayManager.setActiveGateway).toHaveBeenCalledWith('local-dev');
+    expect(getFreePort).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  test('restarts a stopped created gateway on the default port without allocating another port', async () => {
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(spawn).mockReturnValue(createMockChildProcess());
+    vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local-dev', 'http://127.0.0.1:17670')]);
+    vi.mocked(gatewayManager.health)
+      .mockRejectedValueOnce(new Error('connection refused'))
+      .mockResolvedValue({ status: 'healthy', version: '1.0.0' });
+
+    await gateway.init();
+
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(gateway.canStopGateway('local-dev')).toBe(true);
+    expect(gateway.isRunning()).toBe(false);
+    expect(gatewayManager.setActiveGateway).toHaveBeenCalledWith('local-dev');
+    expect(getFreePort).not.toHaveBeenCalled();
+  });
+
+  test('preserves an unreachable gateway registration on the occupied default port', async () => {
+    vi.mocked(getFreePort).mockResolvedValue(17671);
+    vi.mocked(spawn).mockReturnValue(createMockChildProcess());
+    vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local-dev', 'http://127.0.0.1:17670')]);
+    vi.mocked(gatewayManager.health)
+      .mockRejectedValueOnce(new Error('incompatible gateway'))
+      .mockRejectedValueOnce(new Error('incompatible gateway'))
+      .mockResolvedValue({ status: 'healthy', version: '1.0.0' });
+    vi.mocked(gatewayManager.getGateway).mockResolvedValue(listed('kaiden-local', 'http://127.0.0.1:17670').metadata);
+
+    await gateway.init();
+
+    expect(gatewayManager.removeGateway).not.toHaveBeenCalledWith('local-dev');
+    expect(gatewayManager.removeGateway).toHaveBeenCalledWith('kaiden-local');
+    expect(gatewayManager.addGateway).toHaveBeenLastCalledWith(
+      'kaiden-local',
+      expect.objectContaining({ gateway_endpoint: 'http://127.0.0.1:17671', gateway_port: 17671 }),
+    );
+    expect(gateway.isRunning()).toBe(true);
+  });
+
+  test('reports port allocation failure without spawning a gateway', async () => {
+    vi.mocked(gatewayManager.health).mockRejectedValue(new Error('connection refused'));
+    vi.mocked(getFreePort).mockRejectedValue(new Error('No available port'));
+    const failures: string[] = [];
+    const subscription = gateway.onDidGatewayInitFailed(message => failures.push(message));
+    try {
+      await gateway.init();
+
+      expect(failures).toEqual(['No available port']);
+      expect(spawn).not.toHaveBeenCalled();
+      expect(gateway.isRunning()).toBe(false);
+      expect(notificationRegistry.addNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ body: 'No available port', type: 'error' }),
+      );
+    } finally {
+      subscription.dispose();
+    }
+  });
+
   test('does not inspect storage paths for invalid registered gateway names', async () => {
     vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('../outside', 'http://127.0.0.1:17675')]);
     vi.mocked(gatewayManager.getActiveGateway).mockResolvedValue('../outside');

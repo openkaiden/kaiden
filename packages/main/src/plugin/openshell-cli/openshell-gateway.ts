@@ -35,7 +35,7 @@ import { Emitter } from '/@/plugin/events/emitter.js';
 import { OpenshellGatewayManager } from '/@/plugin/openshell-cli/openshell-gateway-manager.js';
 import { NotificationRegistry } from '/@/plugin/tasks/notification-registry.js';
 import { Exec } from '/@/plugin/util/exec.js';
-import { isFreePort } from '/@/plugin/util/port.js';
+import { getFreePort, isFreePort } from '/@/plugin/util/port.js';
 import { isLinux, isMac } from '/@/util.js';
 import type { Event } from '/@api/event.js';
 import {
@@ -225,7 +225,11 @@ export class OpenshellGateway implements Disposable {
 
     console.log('[openshell-gateway] no existing gateways found, auto-starting local gateway');
     try {
-      await this.start();
+      const port = await getFreePort(DEFAULT_PORT);
+      if (port !== DEFAULT_PORT) {
+        console.log(`[openshell-gateway] default port ${DEFAULT_PORT} unavailable, using ${port}`);
+      }
+      await this.start({ port });
       await this.removeSamePortGateways(this.#defaultGatewayBookkeeping.port);
       this._onDidGatewayStart.fire();
     } catch (err: unknown) {
