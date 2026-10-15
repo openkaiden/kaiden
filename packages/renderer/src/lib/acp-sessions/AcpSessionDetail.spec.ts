@@ -801,3 +801,34 @@ describe('draft mode sandbox/agent selection', () => {
     expect(screen.getByText('No ACP-capable agents available.')).toBeInTheDocument();
   });
 });
+
+describe('workspace unavailable indicators', () => {
+  test('header shows unavailable label when sandboxId is missing', () => {
+    const session: AcpSessionInfo = { ...COMPLETED_SESSION, sandboxId: undefined };
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([session]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    expect(screen.getByText(`(${session.sandboxName}, unavailable)`)).toBeInTheDocument();
+  });
+
+  test('banner warns about unavailable workspace', () => {
+    const session: AcpSessionInfo = { ...COMPLETED_SESSION, sandboxId: undefined };
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([session]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    expect(
+      screen.getByText(`Sandbox "${session.sandboxName}" workspace is unavailable. This session is read-only.`),
+    ).toBeInTheDocument();
+  });
+
+  test('header does not show unavailable label when sandboxId is present', () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    expect(screen.getByText(`(${COMPLETED_SESSION.sandboxName})`)).toBeInTheDocument();
+    expect(screen.queryByText(/unavailable/)).not.toBeInTheDocument();
+  });
+});
