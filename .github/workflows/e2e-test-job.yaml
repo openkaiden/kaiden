@@ -181,6 +181,7 @@ jobs:
         shell: bash
         env:
           VITE_CI: 'true'
+          KAIDEN_E2E_VERBOSE_LOGS: 'true'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

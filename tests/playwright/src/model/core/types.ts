@@ -299,6 +299,11 @@ export interface WorkspaceCustomMount {
   readOnly?: boolean;
 }
 
+export const PERMISSION_ACTION = {
+  ALLOW: /allow/i,
+  DENY: /deny|reject/i,
+} as const;
+
 export const SELECTORS = {
   MAIN_ANY: 'main',
   MAIN_INITIALIZING: 'main.flex.flex-row.w-screen.h-screen.justify-center',
