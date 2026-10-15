@@ -1,18 +1,19 @@
 
 <script lang="ts">
+import { faChevronDown } from '@fortawesome/free-solid-svg-icons/faChevronDown';
 import { faToolbox } from '@fortawesome/free-solid-svg-icons/faToolbox';
+import { Icon } from '@podman-desktop/ui-svelte/icons';
 import type { DynamicToolUIPart } from 'ai';
 import { tick } from 'svelte';
 /* eslint-disable import/no-duplicates */
 import { cubicInOut } from 'svelte/easing';
 import { SvelteSet } from 'svelte/reactivity';
 import { slide } from 'svelte/transition';
-/* eslint-enable import/no-duplicates */
-import Fa from 'svelte-fa';
 
+/* eslint-enable import/no-duplicates */
 import { formatText } from '/@/lib/format/format';
-import ChevronDownIcon from '/@/lib/ui/shadcn/icons/chevron-down.svelte';
-import { getLock } from '/@/lib/ui/shadcn/lock.svelte';
+
+import { getLock } from './lock.svelte';
 
 interface Props {
   tools: Array<DynamicToolUIPart>;
@@ -77,7 +78,7 @@ function isMcpResourceContent(
   {#each tools as tool (tool.toolCallId)}
     <div class="flex flex-row items-center gap-2">
 
-      <Fa icon={faToolbox} />
+      <Icon icon={faToolbox} />
       <div class="font-medium">{tool.toolName}</div>
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -85,7 +86,7 @@ function isMcpResourceContent(
         class="cursor-pointer"
         onclick={toggle.bind(undefined, tool.toolCallId)}
       >
-        <ChevronDownIcon />
+        <Icon icon={faChevronDown} />
       </div>
     </div>
 

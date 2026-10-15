@@ -1,5 +1,4 @@
 @import 'tailwindcss';
-@import 'tw-animate-css';
 @config '../../../tailwind.config.cjs';
 
 /* Disable dragging links elements */

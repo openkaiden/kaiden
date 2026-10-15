@@ -3,7 +3,6 @@ import { faCheckCircle, faCodeBranch, faFolderOpen } from '@fortawesome/free-sol
 import { Button, Input } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
-import { Textarea } from '/@/lib/ui/shadcn/textarea';
 import type { WorkspaceProjectAnalysis } from '/@api/workspace-project-info';
 
 import { formatGitUrl } from './git-url-utils';
@@ -64,13 +63,13 @@ let displayFolder = $derived(analysis?.folder ?? '');
     <label for="project-description" class="block text-xs font-semibold uppercase tracking-wider text-(--pd-content-card-text) opacity-70 mb-2">
       Description
     </label>
-    <Textarea
+    <textarea
       id="project-description"
       bind:value={projectDescription}
       placeholder="Describe your project..."
       rows={3}
-      class="bg-muted min-h-[24px] resize-none rounded-lg text-sm! dark:border-zinc-700"
-    />
+      class="w-full min-h-6 resize-none rounded-lg border border-(--pd-input-field-stroke) bg-(--pd-input-field-bg) px-3 py-2 text-sm text-(--pd-input-field-focused-text)"
+    ></textarea>
   </div>
 
   {#if !isGitSource}

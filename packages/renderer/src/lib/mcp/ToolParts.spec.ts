@@ -22,7 +22,7 @@ import userEvent from '@testing-library/user-event';
 import type { DynamicToolUIPart } from 'ai';
 import { describe, expect, test, vi } from 'vitest';
 
-import ToolParts from './tool-parts.svelte';
+import ToolParts from './ToolParts.svelte';
 
 function matches(content: string, val: unknown): boolean {
   try {
