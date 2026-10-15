@@ -181,6 +181,7 @@ let gatewayStateUpdateCallback: (() => void) | undefined;
 
 const openshellGateway = {
   createLocalGateway: vi.fn(),
+  stopManagedGateway: vi.fn(),
   supportsMounts: vi.fn(),
   onDidGatewayStart: vi.fn((cb: () => void) => {
     gatewayStartCallback = cb;
@@ -324,6 +325,10 @@ describe('init', () => {
 
   test('registers IPC handler for listOpenshellGateways', () => {
     expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:listOpenshellGateways', expect.any(Function));
+  });
+
+  test('registers IPC handler for stopOpenshellGateway', () => {
+    expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:stopOpenshellGateway', expect.any(Function));
   });
 
   test('refreshes gateway state before returning a newly created gateway', async () => {
@@ -2747,5 +2752,76 @@ describe('decodeWorkspaceLabels', () => {
         'ai.openkaiden.kaiden.workspace.2': 'def',
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('stopOpenshellGateway', () => {
+  test('refreshes workspace rows only after the gateway state refresh completes', async () => {
+    const refresh = Promise.withResolvers<void>();
+    vi.mocked(openshellGatewayStateManager.refresh).mockReturnValue(refresh.promise);
+    const stopping = manager.stopOpenshellGateway('local-dev');
+    await vi.waitFor(() => expect(openshellGatewayStateManager.refresh).toHaveBeenCalledOnce());
+    expect(apiSender.send).not.toHaveBeenCalledWith('agent-workspace-update');
+    refresh.resolve();
+    await stopping;
+    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+  });
+
+  test('stops a gateway and refreshes its state', async () => {
+    await manager.stopOpenshellGateway('local-dev');
+    expect(openshellGateway.stopManagedGateway).toHaveBeenCalledWith('local-dev');
+    expect(openshellGatewayStateManager.refresh).toHaveBeenCalledOnce();
+    expect(mockTask.status).toBe('success');
+    expect(mockTask.state).toBe('completed');
+  });
+
+  test.each([new Error('stop failed'), 'stop failed'])('reports gateway stop failures: %s', async cause => {
+    vi.mocked(openshellGateway.stopManagedGateway).mockRejectedValue(cause);
+    await expect(manager.stopOpenshellGateway('local-dev')).rejects.toMatchObject({
+      message: 'Failed to stop gateway "local-dev": stop failed',
+      cause,
+    });
+    expect(mockTask.status).toBe('failure');
+    expect(mockTask.error).toBe('Failed to stop gateway "local-dev": stop failed');
+    expect(mockTask.state).toBe('completed');
+    expect(openshellGatewayStateManager.refresh).not.toHaveBeenCalled();
+    expect(apiSender.send).not.toHaveBeenCalledWith('agent-workspace-update');
+  });
+
+  test('stop IPC handler forwards the gateway name', async () => {
+    const handler = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(([channel]) => channel === 'agent-workspace:stopOpenshellGateway')?.[1];
+    assert(handler);
+    const event: IpcMainInvokeEvent = {
+      sender: webContents,
+      senderFrame: webContents.mainFrame,
+      processId: 1,
+      frameId: 1,
+      type: 'frame',
+      defaultPrevented: false,
+      preventDefault: vi.fn(),
+    };
+    await handler(event, 'local-dev');
+    expect(openshellGateway.stopManagedGateway).toHaveBeenCalledWith('local-dev');
+    expect(mockTask.status).toBe('success');
+    expect(mockTask.state).toBe('completed');
+  });
+
+  test.each([
+    new Error('refresh failed'),
+    'refresh failed',
+  ])('reports refresh failure separately and updates workspace rows after successfully stopping a gateway: %s', async cause => {
+    vi.mocked(openshellGatewayStateManager.refresh).mockRejectedValue(cause);
+    await expect(manager.stopOpenshellGateway('local-dev')).rejects.toMatchObject({
+      message: 'Gateway "local-dev" stopped, but failed to refresh gateway state: refresh failed',
+      cause,
+    });
+    expect(openshellGateway.stopManagedGateway).toHaveBeenCalledExactlyOnceWith('local-dev');
+    expect(openshellGatewayStateManager.refresh).toHaveBeenCalledOnce();
+    expect(apiSender.send).toHaveBeenCalledExactlyOnceWith('agent-workspace-update');
+    expect(mockTask.status).toBe('failure');
+    expect(mockTask.error).toBe('Gateway "local-dev" stopped, but failed to refresh gateway state: refresh failed');
+    expect(mockTask.state).toBe('completed');
   });
 });

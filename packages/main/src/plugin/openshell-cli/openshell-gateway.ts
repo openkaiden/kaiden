@@ -626,6 +626,17 @@ export class OpenshellGateway implements Disposable {
     return proc !== undefined && typeof proc.exitCode !== 'number' && !proc.signalCode;
   }
 
+  async stopManagedGateway(name: string): Promise<void> {
+    if (!this.#gatewayBookkeeping.has(name)) {
+      throw new Error(`Gateway "${name}" is not a running gateway managed by this instance`);
+    }
+    // A stale UI snapshot can offer Stop after the gateway exited on its own; that is already the requested state.
+    if (!this.canStopGateway(name)) {
+      return;
+    }
+    await this.stopGateway(name);
+  }
+
   isRunning(): boolean {
     return this.canStopGateway(DEFAULT_GATEWAY_NAME);
   }

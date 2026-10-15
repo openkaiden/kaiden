@@ -53,6 +53,54 @@ beforeEach(() => {
   vi.mocked(window.createLocalGateway).mockResolvedValue([]);
 });
 
+test.each([true, false])('stops a managed gateway (active: %s)', async active => {
+  setOpenshellStarted();
+  const gateway: GatewayInfo = { name: 'local-dev', endpoint: 'http://localhost:17675', active, canStop: true };
+  openshellGateways.set([gateway]);
+  const pending = Promise.withResolvers<void>();
+  vi.mocked(window.stopOpenshellGateway).mockReturnValue(pending.promise);
+  render(PreferencesOpenshellGatewaysRendering);
+  const button = screen.getByRole('button', { name: 'Stop gateway local-dev' });
+  expect(button).toHaveAttribute('title', 'Stop gateway local-dev');
+  expect(button).not.toHaveTextContent('Stop');
+  await fireEvent.click(button);
+  expect(button).toBeDisabled();
+  expect(button).toHaveClass('disabled');
+  await fireEvent.click(button);
+  expect(window.stopOpenshellGateway).toHaveBeenCalledExactlyOnceWith('local-dev');
+  openshellGateways.set([{ ...gateway, canStop: false }]);
+  pending.resolve();
+  await vi.waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Stop gateway local-dev' })).not.toBeInTheDocument(),
+  );
+  expect(screen.getByText('local-dev')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /restart|start gateway/i })).not.toBeInTheDocument();
+});
+
+test('does not offer stopping an unowned or stopped gateway', () => {
+  setOpenshellStarted();
+  openshellGateways.set([
+    { canStop: false, name: 'remote', endpoint: 'https://example.com', is_remote: true },
+    { name: 'stopped', endpoint: 'http://localhost:17675', canStop: false },
+  ]);
+  render(PreferencesOpenshellGatewaysRendering);
+  expect(screen.queryByRole('button', { name: /Stop gateway/ })).not.toBeInTheDocument();
+});
+
+test('shows stop errors and permits retry', async () => {
+  setOpenshellStarted();
+  openshellGateways.set([{ name: 'local-dev', endpoint: 'http://localhost:17675', canStop: true }]);
+  vi.mocked(window.stopOpenshellGateway).mockRejectedValueOnce(new Error('Permission denied'));
+  render(PreferencesOpenshellGatewaysRendering);
+  const button = screen.getByRole('button', { name: 'Stop gateway local-dev' });
+  await fireEvent.click(button);
+  expect(await screen.findByText(/Permission denied/)).toBeInTheDocument();
+  expect(button).toBeEnabled();
+  vi.mocked(window.stopOpenshellGateway).mockResolvedValue(undefined);
+  await fireEvent.click(button);
+  expect(window.stopOpenshellGateway).toHaveBeenCalledTimes(2);
+});
+
 test('creates a gateway after confirming the selected port is available', async () => {
   setOpenshellStarted();
   render(PreferencesOpenshellGatewaysRendering);

@@ -647,6 +647,51 @@ describe('stop', () => {
   });
 });
 
+describe('stopManagedGateway', () => {
+  test.each(['kaiden-local', 'local-dev'])('stops only the named managed gateway: %s', async name => {
+    const defaultProcess = createMockChildProcess();
+    const namedProcess = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValueOnce(defaultProcess).mockReturnValueOnce(namedProcess);
+    await gateway.start();
+    await gateway.createLocalGateway({ name: 'local-dev', port: 17675, bindAddress: '127.0.0.1' });
+
+    const stopping = gateway.stopManagedGateway(name);
+    const stoppedProcess = name === 'kaiden-local' ? defaultProcess : namedProcess;
+    const otherProcess = name === 'kaiden-local' ? namedProcess : defaultProcess;
+    stoppedProcess.emit('exit', 0, undefined);
+    await stopping;
+
+    expect(stoppedProcess.kill).toHaveBeenCalledExactlyOnceWith('SIGTERM');
+    expect(otherProcess.kill).not.toHaveBeenCalled();
+    expect(gateway.canStopGateway(name)).toBe(false);
+    expect(gateway.canStopGateway(name === 'kaiden-local' ? 'local-dev' : 'kaiden-local')).toBe(true);
+    expect(gatewayManager.removeGateway).not.toHaveBeenCalled();
+  });
+
+  test('rejects an unowned gateway without stopping a managed gateway', async () => {
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    await gateway.start();
+
+    await expect(gateway.stopManagedGateway('external')).rejects.toThrow(
+      'Gateway "external" is not a running gateway managed by this instance',
+    );
+    expect(proc.kill).not.toHaveBeenCalled();
+    expect(gateway.isRunning()).toBe(true);
+  });
+
+  test('treats a managed gateway that already exited as stopped', async () => {
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    await gateway.start();
+    proc.emit('exit', 0, undefined);
+
+    await expect(gateway.stopManagedGateway('kaiden-local')).resolves.toBeUndefined();
+    expect(proc.kill).not.toHaveBeenCalled();
+    expect(gateway.isRunning()).toBe(false);
+  });
+});
+
 describe('isRunning', () => {
   test('returns false when no process is spawned', () => {
     expect(gateway.isRunning()).toBe(false);

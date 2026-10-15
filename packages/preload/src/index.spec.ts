@@ -155,6 +155,12 @@ describe('collect calls to exposeInMainWorld and ipcRenderer.on and calls initEx
     expect(result).toEqual(['file1', 'file2']);
   });
 
+  test('stops the named gateway through IPC', async () => {
+    vi.mocked(ipcRenderer.invoke).mockResolvedValue({ result: undefined });
+    await getInMainWorld('stopOpenshellGateway')('local-dev');
+    expect(ipcRenderer.invoke).toHaveBeenCalledWith('agent-workspace:stopOpenshellGateway', 'local-dev');
+  });
+
   test('saveDialog', async () => {
     vi.mocked(ipcRenderer.invoke).mockResolvedValue({ error: undefined, result: undefined });
 
