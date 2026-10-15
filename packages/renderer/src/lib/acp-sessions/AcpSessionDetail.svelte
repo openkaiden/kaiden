@@ -15,12 +15,12 @@ import type {
   AcpSessionConfigSelectGroup,
   AcpSessionConfigSelectOption,
   AcpSessionInfo,
-  AcpSessionStatus,
   AcpSlashCommand,
 } from '/@api/acp-session-info';
 import { AcpSettings } from '/@api/acp-settings';
 import { AGENT_LABEL } from '/@api/openshell-gateway-info';
 
+import { ACP_SESSION_STATUS_COLORS, getStatusDotClass, isWorkspaceUnavailable } from './acp-session-status';
 import AcpAtMentionCompletion from './AcpAtMentionCompletion.svelte';
 import AcpSlashCommandCompletion from './AcpSlashCommandCompletion.svelte';
 import AcpFlowAgentMessage from './flow/AcpFlowAgentMessage.svelte';
@@ -114,6 +114,8 @@ const sessionDisplayName: string = $derived.by(() => {
   return session.prompt.trim() ? session.prompt.trim() : 'Session';
 });
 const isWaitingInput = $derived(!isDraft && session?.status === 'waiting_input');
+const workspaceUnavailable = $derived(session ? isWorkspaceUnavailable(session) : false);
+const headerDotClass = $derived(session ? getStatusDotClass(session) : ACP_SESSION_STATUS_COLORS.idle);
 const hasPendingPermission = $derived(
   events.some(e => e.kind === 'tool_call' && e.permissionRequest && !e.permissionRequest.resolved),
 );
@@ -362,15 +364,6 @@ $effect(() => {
     if (workingInterval) clearInterval(workingInterval);
   };
 });
-
-const STATUS_COLORS: Record<AcpSessionStatus, string> = {
-  idle: 'bg-[var(--pd-status-not-running)]',
-  running: 'bg-[var(--pd-status-running)]',
-  waiting_input: 'bg-[var(--pd-status-waiting)]',
-  completed: 'bg-[var(--pd-status-terminated)]',
-  error: 'bg-[var(--pd-status-dead)]',
-  cancelled: 'bg-[var(--pd-status-not-running)]',
-};
 
 const SCROLL_BOTTOM_THRESHOLD = 10;
 
@@ -767,7 +760,7 @@ function handleKeyDown(e: KeyboardEvent): void {
 <!-- Header bar -->
 <div class="flex items-center justify-between px-4 py-2 border-b border-[var(--pd-content-divider)]">
   <div class="flex items-center gap-2 min-w-0">
-    <span class="w-2 h-2 rounded-full shrink-0 {STATUS_COLORS[session?.status ?? 'idle']}"></span>
+    <span class="w-2 h-2 rounded-full shrink-0 {headerDotClass}"></span>
     <span class="text-sm font-medium text-[var(--pd-content-header-text)] truncate">
       {#if isDraft}
         New Session
@@ -776,7 +769,8 @@ function handleKeyDown(e: KeyboardEvent): void {
       {/if}
     </span>
     {#if session?.sandboxName}
-      <span class="text-xs text-[var(--pd-content-text)] opacity-50 shrink-0">({session.sandboxName})</span>
+      <span class="text-xs text-[var(--pd-content-text)] opacity-50 shrink-0"
+        >({session.sandboxName}{#if workspaceUnavailable}, unavailable{/if})</span>
     {/if}
   </div>
   <div class="flex items-center gap-2 shrink-0">
@@ -827,9 +821,9 @@ function handleKeyDown(e: KeyboardEvent): void {
       </div>
     {/if}
 
-    {#if session && !session.sandboxId}
+    {#if session && workspaceUnavailable}
       <div class="rounded-lg border border-[var(--pd-state-warning)] bg-[var(--pd-state-warning)]/10 px-4 py-3 text-sm text-[var(--pd-state-warning)]">
-        Sandbox "{session.sandboxName}" no longer exists. This session is read-only.
+        Sandbox "{session.sandboxName}" workspace is unavailable. This session is read-only.
       </div>
     {/if}
   </div>
