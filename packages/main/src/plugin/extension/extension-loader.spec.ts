@@ -46,6 +46,7 @@ import product from '/@product.json' with { type: 'json' };
 
 import { getBase64Image } from '../../util.js';
 import type { AgentRegistry } from '../agent-registry.js';
+import { HostPresetRegistry } from '../agent-workspace/host-preset-registry.js';
 import type { AuthenticationImpl } from '../authentication.js';
 import type { CliToolRegistry } from '../cli-tool-registry.js';
 import type { ColorRegistry } from '../color-registry.js';
@@ -235,6 +236,9 @@ const agentRegistry: AgentRegistry = {
   registerAgent: vi.fn(),
 } as unknown as AgentRegistry;
 
+vi.mock(import('../agent-workspace/host-preset-registry.js'));
+const hostPresetRegistry = new HostPresetRegistry(apiSender);
+
 const openShellRegistry: OpenShellRegistry = {
   registerGateway: vi.fn(),
   registerCLI: vi.fn(),
@@ -401,6 +405,7 @@ beforeEach(() => {
     kubernetesGeneratorRegistry,
     cliToolRegistry,
     agentRegistry,
+    hostPresetRegistry,
     openShellRegistry,
     notificationRegistry,
     imageCheckerImpl,
@@ -2144,6 +2149,24 @@ test('registerAgent', async () => {
   expect(disposables.length).toBe(1);
 
   expect(agentRegistry.registerAgent).toHaveBeenCalledWith(agent);
+});
+
+test('workspace host preset API registers and retrieves presets', () => {
+  const disposables: IDisposable[] = [];
+  const api = createApi(disposables);
+  const preset: containerDesktopAPI.HostPreset = {
+    id: 'registries',
+    name: 'Registries',
+    hosts: [{ hostname: 'registry.npmjs.org' }],
+  };
+  const registration = Disposable.create(() => {});
+  vi.mocked(hostPresetRegistry.registerHostPreset).mockReturnValue(registration);
+  vi.mocked(hostPresetRegistry.getHostPresets).mockReturnValue([preset]);
+
+  expect(api.workspace.registerHostPreset(preset)).toBe(registration);
+  expect(disposables).toContain(registration);
+  expect(hostPresetRegistry.registerHostPreset).toHaveBeenCalledWith(preset);
+  expect(api.workspace.getHostPresets()).toStrictEqual([preset]);
 });
 
 test('registerGateway', async () => {

@@ -57,6 +57,7 @@ import { AcpIPCHandler } from '/@/plugin/acp/acp-ipc-handler.js';
 import { AcpSessionManager } from '/@/plugin/acp/acp-session-manager.js';
 import { AgentRegistry } from '/@/plugin/agent-registry.js';
 import { AgentWorkspaceManager } from '/@/plugin/agent-workspace/agent-workspace-manager.js';
+import { HostPresetRegistry } from '/@/plugin/agent-workspace/host-preset-registry.js';
 import { IPCHandle, IPCMainOn, WebContentsType } from '/@/plugin/api.js';
 import { ContainerfileParser } from '/@/plugin/containerfile-parser.js';
 import { ExtensionApiVersion } from '/@/plugin/extension/extension-api-version.js';
@@ -623,6 +624,7 @@ export class PluginSystem {
     container.bind<OpenshellGatewayStateManager>(OpenshellGatewayStateManager).toSelf().inSingletonScope();
     container.bind<OpenshellImageBuilder>(OpenshellImageBuilder).toSelf().inSingletonScope();
     container.bind<AgentWorkspaceManager>(AgentWorkspaceManager).toSelf().inSingletonScope();
+    container.bind<HostPresetRegistry>(HostPresetRegistry).toSelf().inSingletonScope();
     container.bind(SelectableProviderFactoryToken).to(GcloudAdcProviderFactory).inSingletonScope();
     container.bind(DefaultProviderFactory).to(DefaultProviderFactory).inSingletonScope();
     container.bind<OpenshellSecretAdapter>(OpenshellSecretAdapter).toSelf().inSingletonScope();
