@@ -63,7 +63,12 @@ import type {
   OpenshellUpload,
   SandboxInfo,
 } from '/@api/openshell-gateway-info.js';
-import { AGENT_LABEL, decodeWorkspaceLabels, WORKSPACE_LABEL } from '/@api/openshell-gateway-info.js';
+import {
+  AGENT_LABEL,
+  decodeWorkspaceLabels,
+  MIN_GATEWAY_VERSION,
+  WORKSPACE_LABEL,
+} from '/@api/openshell-gateway-info.js';
 import { TerminalSettings } from '/@api/terminal/terminal-settings.js';
 
 import { dedupeOpenshellMounts, partitionOpenshellUploads, resolveOpenshellMountTarget } from './openshell-mounts.js';
@@ -198,6 +203,11 @@ export class AgentWorkspaceManager implements Disposable {
         .find(candidate => candidate.name === options.gateway);
       if (!gateway?.gatewayState?.reachable) {
         throw new Error(`gateway "${options.gateway}" is unreachable`);
+      }
+      if (!gateway.gatewayState.compatible) {
+        throw new Error(
+          `gateway "${options.gateway}" version ${gateway.version ?? 'unknown'} is below the minimum required version ${MIN_GATEWAY_VERSION}`,
+        );
       }
 
       if (options.replaceConfig) {

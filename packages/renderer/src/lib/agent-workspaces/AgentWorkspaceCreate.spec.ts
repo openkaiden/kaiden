@@ -182,7 +182,7 @@ beforeEach(() => {
       name: 'kaiden',
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   vi.mocked(openshellSandboxesStore).allOpenshellSandboxes = writable<(SandboxInfo & { gatewayName: string })[]>([]);
@@ -266,14 +266,14 @@ test('Expect gateway selector defaults to the active OpenShell gateway when mult
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: false,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   render(AgentWorkspaceCreate);
@@ -300,14 +300,14 @@ test('Expect selected gateway included when creating a workspace', async () => {
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   render(AgentWorkspaceCreate);
@@ -340,21 +340,21 @@ test('does not offer unreachable gateways for workspace creation', () => {
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'stopped',
       endpoint: 'http://localhost:17671',
       active: false,
-      gatewayState: { reachable: false, health: 'unknown' },
+      gatewayState: { reachable: false, health: 'unknown', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
 
@@ -365,6 +365,40 @@ test('does not offer unreachable gateways for workspace creation', () => {
   expect(screen.queryByRole('option', { name: /stopped/ })).not.toBeInTheDocument();
 });
 
+test('does not offer version-incompatible gateways for workspace creation', () => {
+  vi.mocked(openshellGatewaysStore).openshellGateways.set([
+    {
+      name: 'compatible',
+      endpoint: 'http://localhost:17670',
+      canStop: false,
+      active: true,
+      version: '0.0.116',
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
+    },
+    {
+      name: 'outdated',
+      endpoint: 'http://localhost:17671',
+      canStop: false,
+      active: false,
+      version: '0.0.100',
+      gatewayState: { reachable: true, health: 'healthy', compatible: false },
+    },
+    {
+      name: 'no-version',
+      endpoint: 'https://remote.example.com',
+      canStop: false,
+      active: false,
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
+    },
+  ]);
+
+  render(AgentWorkspaceCreate);
+
+  expect(screen.getByRole('option', { name: /compatible/ })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: /no-version/ })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: /outdated/ })).not.toBeInTheDocument();
+});
+
 test('user-selected gateway is preserved across store updates', async () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
@@ -372,14 +406,14 @@ test('user-selected gateway is preserved across store updates', async () => {
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   render(AgentWorkspaceCreate);
@@ -396,14 +430,14 @@ test('user-selected gateway is preserved across store updates', async () => {
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
 
@@ -419,21 +453,21 @@ test('falls back to active gateway when selected gateway becomes unreachable', a
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'extra',
       endpoint: 'https://extra.example.com',
       active: false,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   render(AgentWorkspaceCreate);
@@ -447,21 +481,21 @@ test('falls back to active gateway when selected gateway becomes unreachable', a
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
-      gatewayState: { reachable: false, health: 'unknown' },
+      gatewayState: { reachable: false, health: 'unknown', compatible: true },
     },
     {
       canStop: false,
       name: 'extra',
       endpoint: 'https://extra.example.com',
       active: false,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
 
@@ -477,7 +511,7 @@ test('clears selected gateway when all gateways become unreachable', async () =>
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   render(AgentWorkspaceCreate);
@@ -490,7 +524,7 @@ test('clears selected gateway when all gateways become unreachable', async () =>
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: false, health: 'unknown' },
+      gatewayState: { reachable: false, health: 'unknown', compatible: true },
     },
   ]);
 
@@ -709,14 +743,14 @@ test('Expect secrets listed from the selected gateway', async () => {
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
-      gatewayState: { reachable: true, health: 'healthy' },
+      gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
   vi.mocked(window.listSecrets).mockImplementation(async gateway =>

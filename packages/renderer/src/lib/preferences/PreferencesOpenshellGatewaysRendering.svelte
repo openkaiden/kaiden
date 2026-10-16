@@ -41,6 +41,9 @@ function getStatusColor(gateway: GatewayInfo): string {
   if (!gateway.gatewayState.reachable) {
     return 'bg-(--pd-status-stopped)';
   }
+  if (!gateway.gatewayState.compatible) {
+    return 'bg-(--pd-status-terminated)';
+  }
   switch (gateway.gatewayState.health) {
     case 'healthy':
       return 'bg-(--pd-status-running)';
@@ -63,10 +66,16 @@ function getDetails(gateway: GatewayInfo): string {
   }
   parts.push(gateway.endpoint);
 
+  if (gateway.version) {
+    parts.push(gateway.version);
+  }
+
   if (!gateway.gatewayState) {
     parts.push('Unknown');
   } else if (!gateway.gatewayState.reachable) {
     parts.push('Disconnected');
+  } else if (!gateway.gatewayState.compatible) {
+    parts.push('Incompatible');
   } else {
     switch (gateway.gatewayState.health) {
       case 'healthy':
