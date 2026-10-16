@@ -2157,7 +2157,7 @@ test('workspace host preset API registers and retrieves presets', () => {
   const preset: containerDesktopAPI.HostPreset = {
     id: 'registries',
     name: 'Registries',
-    hosts: ['registry.npmjs.org'],
+    hosts: [{ hostname: 'registry.npmjs.org' }],
   };
   const registration = Disposable.create(() => {});
   vi.mocked(hostPresetRegistry.registerHostPreset).mockReturnValue(registration);

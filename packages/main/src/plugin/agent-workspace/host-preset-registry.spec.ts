@@ -25,35 +25,36 @@ import { HostPresetRegistry } from './host-preset-registry.js';
 
 const apiSender: ApiSenderType = { send: vi.fn(), receive: vi.fn() };
 
+let registry: HostPresetRegistry;
+
 describe('HostPresetRegistry', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    registry = new HostPresetRegistry(apiSender);
   });
 
   test('registers and returns host presets', () => {
-    const registry = new HostPresetRegistry(apiSender);
-    const preset: HostPreset = { id: 'registries', name: 'Registries', hosts: ['registry.npmjs.org'] };
-
+    const preset: HostPreset = { id: 'registries', name: 'Registries', hosts: [{ hostname: 'registry.npmjs.org' }] };
     registry.registerHostPreset(preset);
-
     expect(registry.getHostPresets()).toStrictEqual([preset]);
   });
 
-  test('rejects a duplicate preset id', () => {
-    const registry = new HostPresetRegistry(apiSender);
-    const preset: HostPreset = { id: 'registries', name: 'Registries', hosts: ['registry.npmjs.org'] };
+  test('registers and send event', () => {
+    const preset: HostPreset = { id: 'registries', name: 'Registries', hosts: [{ hostname: 'registry.npmjs.org' }] };
     registry.registerHostPreset(preset);
+    expect(apiSender.send).toHaveBeenCalledWith('host-preset-registry:updated');
+  });
 
+  test('rejects a duplicate preset id', () => {
+    const preset: HostPreset = { id: 'registries', name: 'Registries', hosts: [{ hostname: 'registry.npmjs.org' }] };
+    registry.registerHostPreset(preset);
     expect(() => registry.registerHostPreset(preset)).toThrow(`Host preset with id 'registries' is already registered`);
   });
 
   test('removes a preset when its registration is disposed', () => {
-    const registry = new HostPresetRegistry(apiSender);
-    const preset: HostPreset = { id: 'registries', name: 'Registries', hosts: ['registry.npmjs.org'] };
+    const preset: HostPreset = { id: 'registries', name: 'Registries', hosts: [{ hostname: 'registry.npmjs.org' }] };
     const registration = registry.registerHostPreset(preset);
-
     registration.dispose();
-
     expect(registry.getHostPresets()).toStrictEqual([]);
   });
 });

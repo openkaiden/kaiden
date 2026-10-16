@@ -919,7 +919,6 @@ export class PluginSystem {
     const cancellationTokenRegistry = container.get<CancellationTokenRegistry>(CancellationTokenRegistry);
     const cliToolRegistry = container.get<CliToolRegistry>(CliToolRegistry);
     const agentRegistry = container.get<AgentRegistry>(AgentRegistry);
-    const hostPresetRegistry = container.get<HostPresetRegistry>(HostPresetRegistry);
     const troubleshooting = container.get<Troubleshooting>(Troubleshooting);
     const menuRegistry = container.get<MenuRegistry>(MenuRegistry);
     const contributionManager = container.get<ContributionManager>(ContributionManager);
@@ -1893,13 +1892,6 @@ export class PluginSystem {
     this.ipcHandle('agent-registry:getAgentInfos', async (): Promise<ReadonlyArray<AgentInfo>> => {
       return agentRegistry.getAgentInfos();
     });
-
-    this.ipcHandle(
-      'host-preset-registry:getHostPresets',
-      async (): Promise<ReadonlyArray<containerDesktopAPI.HostPreset>> => {
-        return hostPresetRegistry.getHostPresets();
-      },
-    );
 
     this.ipcHandle(
       'troubleshooting:saveLogs',
