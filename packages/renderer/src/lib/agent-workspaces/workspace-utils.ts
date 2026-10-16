@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
+import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
 import { AGENT_LABEL } from '/@api/openshell-gateway-info';
 
 export const ACTIVE_GROUP_LABEL = 'Active';

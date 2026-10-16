@@ -12,18 +12,18 @@ import {
   TableRow,
 } from '@podman-desktop/ui-svelte';
 
-import { withBulkConfirmation } from '/@/lib/actions/BulkActions';
-import NotificationsBox from '/@/lib/dashboard/NotificationsBox.svelte';
-import GatewayFilterDropdown from '/@/lib/gateways/GatewayFilterDropdown.svelte';
-import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
-import { handleNavigation } from '/@/navigation';
+import GatewayFilterDropdown from '/@/kaiden/lib/gateways/GatewayFilterDropdown.svelte';
 import {
   allOpenshellSandboxes,
   filteredOpenshellSandboxes,
   type SandboxInfoWithGateway,
   searchPattern as sandboxSearchPattern,
   selectedGateway as sandboxSelectedGateway,
-} from '/@/stores/openshell-sandboxes';
+} from '/@/kaiden/stores/openshell-sandboxes';
+import { withBulkConfirmation } from '/@/lib/actions/BulkActions';
+import NotificationsBox from '/@/lib/dashboard/NotificationsBox.svelte';
+import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
+import { handleNavigation } from '/@/navigation';
 import { NavigationPage } from '/@api/navigation-page';
 
 import AgentWorkspaceEmptyScreen from './AgentWorkspaceEmptyScreen.svelte';

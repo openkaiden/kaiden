@@ -22,7 +22,7 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { openshellGateways } from '/@/stores/openshell-gateways';
+import { openshellGateways } from '/@/kaiden/stores/openshell-gateways';
 import type { GatewayInfo } from '/@api/openshell-gateway-info';
 
 import GatewayFilterDropdown from './GatewayFilterDropdown.svelte';

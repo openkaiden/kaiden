@@ -1,8 +1,8 @@
 <script lang="ts">
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
-import { getSecretIcon, getServiceLabel } from '/@/lib/secret-vault/secret-vault-utils';
-import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
+import { getSecretIcon, getServiceLabel } from '/@/kaiden/lib/secret-vault/secret-vault-utils';
+import type { SecretVaultInfoUI } from '/@/kaiden/lib/secret-vault/SecretVaultInfoUI';
 import Badge from '/@/lib/ui/Badge.svelte';
 import { handleNavigation } from '/@/navigation';
 import { NavigationPage } from '/@api/navigation-page';

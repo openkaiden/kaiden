@@ -23,13 +23,13 @@ import { writable } from 'svelte/store';
 import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
-import * as secretVaultStore from '/@/stores/secret-vault';
+import type { SecretVaultInfoUI } from '/@/kaiden/lib/secret-vault/SecretVaultInfoUI';
+import * as secretVaultStore from '/@/kaiden/stores/secret-vault';
 
 import SecretVaultDetails from './SecretVaultDetails.svelte';
 
 vi.mock(import('tinro'));
-vi.mock(import('/@/stores/secret-vault'));
+vi.mock(import('/@/kaiden/stores/secret-vault'));
 
 const routerStore = writable({
   path: '/preferences/secret-vault/github-pat/summary',

@@ -21,8 +21,8 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
-import type { SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
 
 import SandboxActions from './SandboxActions.svelte';
 

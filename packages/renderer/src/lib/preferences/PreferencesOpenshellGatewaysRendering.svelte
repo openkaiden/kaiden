@@ -2,9 +2,9 @@
 import { faPlus } from '@fortawesome/free-solid-svg-icons';
 import { Button, EmptyScreen, ErrorMessage } from '@podman-desktop/ui-svelte';
 
+import { openshellGateways } from '/@/kaiden/stores/openshell-gateways';
 import EngineIcon from '/@/lib/ui/EngineIcon.svelte';
 import { extensionInfos } from '/@/stores/extensions';
-import { openshellGateways } from '/@/stores/openshell-gateways';
 import { type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME } from '/@api/openshell-gateway-info';
 
 import { GatewayStopAction } from './gateway-stop-action.svelte';

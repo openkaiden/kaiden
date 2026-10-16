@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
+import type { SecretVaultInfoUI } from '/@/kaiden/lib/secret-vault/SecretVaultInfoUI';
 
 interface Props {
   object: SecretVaultInfoUI;

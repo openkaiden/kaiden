@@ -1,7 +1,7 @@
 <script lang="ts">
-import { getServiceLabel } from '/@/lib/secret-vault/secret-vault-utils';
-import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
-import { allOpenshellSandboxes } from '/@/stores/openshell-sandboxes';
+import { getServiceLabel } from '/@/kaiden/lib/secret-vault/secret-vault-utils';
+import type { SecretVaultInfoUI } from '/@/kaiden/lib/secret-vault/SecretVaultInfoUI';
+import { allOpenshellSandboxes } from '/@/kaiden/stores/openshell-sandboxes';
 import type { AgentWorkspaceConfiguration } from '/@api/agent-workspace-info';
 
 interface Props {

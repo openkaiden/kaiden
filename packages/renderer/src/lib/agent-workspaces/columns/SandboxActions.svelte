@@ -1,9 +1,9 @@
 <script lang="ts">
 import { faTrash } from '@fortawesome/free-solid-svg-icons';
 
+import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
-import type { SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
 
 interface Props {
   object: SandboxInfoWithGateway;

@@ -22,9 +22,9 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/sve
 import { tick } from 'svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import { openshellGateways } from '/@/kaiden/stores/openshell-gateways';
+import { openshellSandboxes, selectedGateway } from '/@/kaiden/stores/openshell-sandboxes';
 import { notificationQueue } from '/@/stores/notifications';
-import { openshellGateways } from '/@/stores/openshell-gateways';
-import { openshellSandboxes, selectedGateway } from '/@/stores/openshell-sandboxes';
 import type { NotificationCard } from '/@api/notification';
 import type { GatewayInfo, GatewaySandboxes } from '/@api/openshell-gateway-info';
 

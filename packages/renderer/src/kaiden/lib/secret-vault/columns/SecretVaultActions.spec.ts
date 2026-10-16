@@ -21,8 +21,8 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
-import { secretVaultInfos } from '/@/stores/secret-vault';
+import type { SecretVaultInfoUI } from '/@/kaiden/lib/secret-vault/SecretVaultInfoUI';
+import { secretVaultInfos } from '/@/kaiden/stores/secret-vault';
 
 import SecretVaultActions from './SecretVaultActions.svelte';
 

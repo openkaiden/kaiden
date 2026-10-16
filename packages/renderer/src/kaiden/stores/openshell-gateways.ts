@@ -18,9 +18,8 @@
 
 import { get, type Writable, writable } from 'svelte/store';
 
+import { EventStore } from '/@/stores/event-store';
 import type { GatewayInfo } from '/@api/openshell-gateway-info';
-
-import { EventStore } from './event-store';
 
 const windowEvents = ['agent-gateway-update', 'openshell-registry:gateway-update'];
 const windowListeners = ['extensions-already-started'];

@@ -23,16 +23,16 @@ import userEvent from '@testing-library/user-event';
 import { writable } from 'svelte/store';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import * as openshellGatewaysStore from '/@/kaiden/stores/openshell-gateways';
+import * as openshellSandboxesStore from '/@/kaiden/stores/openshell-sandboxes';
+import * as secretVaultStore from '/@/kaiden/stores/secret-vault';
 import { initializeDraftFromProject, resetDraft, wizard } from '/@/stores/agent-workspace-create-draft.svelte';
 import * as agentsStore from '/@/stores/agents';
 import * as mcpStore from '/@/stores/mcp-remote-servers';
 import * as modelCatalogStore from '/@/stores/model-catalog';
 import * as modelsStore from '/@/stores/models';
-import * as openshellGatewaysStore from '/@/stores/openshell-gateways';
-import * as openshellSandboxesStore from '/@/stores/openshell-sandboxes';
 import * as providerStore from '/@/stores/providers';
 import * as ragStore from '/@/stores/rag-environments';
-import * as secretVaultStore from '/@/stores/secret-vault';
 import * as skillsStore from '/@/stores/skills';
 import * as workspaceProjectsStore from '/@/stores/workspace-projects';
 import type { AgentInfo } from '/@api/agent-info';
@@ -51,13 +51,13 @@ vi.mock(import('/@/navigation'));
 vi.mock(import('/@/stores/agents'));
 vi.mock(import('/@/stores/skills'));
 vi.mock(import('/@/stores/mcp-remote-servers'));
-vi.mock(import('/@/stores/secret-vault'));
+vi.mock(import('/@/kaiden/stores/secret-vault'));
 vi.mock(import('/@/stores/providers'));
 vi.mock(import('/@/stores/rag-environments'));
 vi.mock(import('/@/stores/model-catalog'));
 vi.mock(import('/@/stores/models'));
-vi.mock(import('/@/stores/openshell-gateways'));
-vi.mock(import('/@/stores/openshell-sandboxes'));
+vi.mock(import('/@/kaiden/stores/openshell-gateways'));
+vi.mock(import('/@/kaiden/stores/openshell-sandboxes'));
 vi.mock(import('/@/stores/workspace-projects'));
 
 function buildCatalogModels(providers: ProviderInfo[]): CatalogModelInfo[] {

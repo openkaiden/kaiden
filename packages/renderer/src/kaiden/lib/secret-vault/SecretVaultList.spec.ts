@@ -23,9 +23,9 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
-import { openshellGateways } from '/@/stores/openshell-gateways';
-import { secretVaultInfos, secretVaultSearchPattern, selectedGateway } from '/@/stores/secret-vault';
+import type { SecretVaultInfoUI } from '/@/kaiden/lib/secret-vault/SecretVaultInfoUI';
+import { openshellGateways } from '/@/kaiden/stores/openshell-gateways';
+import { secretVaultInfos, secretVaultSearchPattern, selectedGateway } from '/@/kaiden/stores/secret-vault';
 import type { GatewayInfo } from '/@api/openshell-gateway-info';
 
 import SecretVaultList from './SecretVaultList.svelte';

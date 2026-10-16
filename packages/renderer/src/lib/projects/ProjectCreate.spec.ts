@@ -22,7 +22,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import * as secretVaultStore from '/@/stores/secret-vault';
+import * as secretVaultStore from '/@/kaiden/stores/secret-vault';
 import * as skillsStore from '/@/stores/skills';
 import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 import type { SkillInfo } from '/@api/skill/skill-info';
@@ -32,7 +32,7 @@ import ProjectCreate from './ProjectCreate.svelte';
 
 vi.mock(import('/@/navigation'));
 vi.mock(import('/@/stores/skills'));
-vi.mock(import('/@/stores/secret-vault'));
+vi.mock(import('/@/kaiden/stores/secret-vault'));
 
 const SAMPLE_SKILLS: SkillInfo[] = [
   { name: 'code-review', description: 'Reviews code', path: '/skills/code-review', enabled: true, managed: false },

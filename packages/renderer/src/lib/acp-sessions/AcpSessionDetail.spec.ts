@@ -23,10 +23,10 @@ import userEvent from '@testing-library/user-event';
 import { writable } from 'svelte/store';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
+import * as openshellSandboxesStore from '/@/kaiden/stores/openshell-sandboxes';
 import * as acpSessionsStore from '/@/stores/acp-sessions.svelte';
 import * as agentsStore from '/@/stores/agents';
-import type { SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
-import * as openshellSandboxesStore from '/@/stores/openshell-sandboxes';
 import type { AcpFlowToolCallEvent, AcpSessionInfo } from '/@api/acp-session-info';
 import type { AgentInfo } from '/@api/agent-info';
 import { AGENT_LABEL } from '/@api/openshell-gateway-info';
@@ -35,7 +35,7 @@ import AcpSessionDetail from './AcpSessionDetail.svelte';
 
 vi.mock(import('/@/stores/acp-sessions.svelte'));
 vi.mock(import('/@/stores/agents'));
-vi.mock(import('/@/stores/openshell-sandboxes'));
+vi.mock(import('/@/kaiden/stores/openshell-sandboxes'));
 vi.mock(import('tinro'));
 
 const COMPLETED_SESSION: AcpSessionInfo = {

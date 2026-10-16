@@ -2,10 +2,10 @@
 import { faKey } from '@fortawesome/free-solid-svg-icons';
 import { Button, Expandable } from '@podman-desktop/ui-svelte';
 
+import { secretVaultInfos } from '/@/kaiden/stores/secret-vault';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import ChecklistPanel from '/@/lib/ui/ChecklistPanel.svelte';
 import { handleNavigation } from '/@/navigation';
-import { secretVaultInfos } from '/@/stores/secret-vault';
 import { NavigationPage } from '/@api/navigation-page';
 
 interface Props {

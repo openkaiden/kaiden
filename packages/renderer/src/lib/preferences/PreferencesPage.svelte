@@ -1,6 +1,9 @@
 <script lang="ts">
 import { onMount } from 'svelte';
 
+import SecretVaultCreate from '/@/kaiden/lib/secret-vault/SecretVaultCreate.svelte';
+import SecretVaultDetails from '/@/kaiden/lib/secret-vault/SecretVaultDetails.svelte';
+import SecretVaultList from '/@/kaiden/lib/secret-vault/SecretVaultList.svelte';
 import CodingAgentsPage from '/@/lib/coding-agents/CodingAgentsPage.svelte';
 import MCPDetails from '/@/lib/mcp/MCPDetails.svelte';
 import McpServerList from '/@/lib/mcp/MCPServerList.svelte';
@@ -9,9 +12,6 @@ import SemanticRouterCreate from '/@/lib/models/SemanticRouterCreate.svelte';
 import Onboarding from '/@/lib/onboarding/Onboarding.svelte';
 import ExperimentalPage from '/@/lib/preferences/ExperimentalPage.svelte';
 import PreferencesContainerConnectionEdit from '/@/lib/preferences/PreferencesContainerConnectionEdit.svelte';
-import SecretVaultCreate from '/@/lib/secret-vault/SecretVaultCreate.svelte';
-import SecretVaultDetails from '/@/lib/secret-vault/SecretVaultDetails.svelte';
-import SecretVaultList from '/@/lib/secret-vault/SecretVaultList.svelte';
 import SkillCreate from '/@/lib/skills/SkillCreate.svelte';
 import SkillDetails from '/@/lib/skills/SkillDetails.svelte';
 import SkillsList from '/@/lib/skills/SkillsList.svelte';

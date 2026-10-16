@@ -23,9 +23,9 @@ import { writable } from 'svelte/store';
 import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import * as mcpStore from '/@/stores/mcp-remote-servers';
-import type { SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
 import * as ragStore from '/@/stores/rag-environments';
 import * as skillsStore from '/@/stores/skills';
 import type { AgentWorkspaceConfiguration } from '/@api/agent-workspace-info';

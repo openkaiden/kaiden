@@ -8,9 +8,9 @@ import { Terminal } from '@xterm/xterm';
 import { onDestroy, onMount } from 'svelte';
 import { router } from 'tinro';
 
+import { allOpenshellSandboxes } from '/@/kaiden/stores/openshell-sandboxes';
 import { getTerminalTheme } from '/@/lib/terminal/terminal-theme';
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
-import { allOpenshellSandboxes } from '/@/stores/openshell-sandboxes';
 import { TerminalSettings } from '/@api/terminal/terminal-settings';
 
 const MAX_RECONNECT_ATTEMPTS = 30;

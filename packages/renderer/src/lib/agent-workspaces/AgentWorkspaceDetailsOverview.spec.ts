@@ -22,9 +22,9 @@ import { render, screen } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
 import * as agentsStore from '/@/stores/agents';
 import * as modelsStore from '/@/stores/models';
-import type { SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
 import type { AgentWorkspaceConfiguration } from '/@api/agent-workspace-info';
 import type { CatalogModelInfo } from '/@api/model-registry-info';
 

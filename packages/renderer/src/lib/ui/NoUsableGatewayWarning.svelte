@@ -2,8 +2,8 @@
 import { Button } from '@podman-desktop/ui-svelte';
 import { router } from 'tinro';
 
+import { openshellGateways, openshellGatewaysReady } from '/@/kaiden/stores/openshell-gateways';
 import WarningMessage from '/@/lib/ui/WarningMessage.svelte';
-import { openshellGateways, openshellGatewaysReady } from '/@/stores/openshell-gateways';
 import type { GatewayInfo } from '/@api/openshell-gateway-info';
 
 const GATEWAY_SETTINGS_PATH = '/preferences/openshell/gateways';

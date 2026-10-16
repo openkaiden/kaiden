@@ -22,13 +22,13 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import * as secretVaultStore from '/@/stores/secret-vault';
+import * as secretVaultStore from '/@/kaiden/stores/secret-vault';
 import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 
 import ProjectCreateStepSecrets from './ProjectCreateStepSecrets.svelte';
 
 vi.mock(import('/@/navigation'));
-vi.mock(import('/@/stores/secret-vault'));
+vi.mock(import('/@/kaiden/stores/secret-vault'));
 
 const SAMPLE_SECRETS: SecretVaultInfo[] = [
   { id: 'github-token', name: 'GitHub Token', type: 'github', description: 'Personal access token' },

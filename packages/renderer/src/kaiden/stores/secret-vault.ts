@@ -19,11 +19,10 @@
 import type { Writable } from 'svelte/store';
 import { derived, get, writable } from 'svelte/store';
 
-import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
+import type { SecretVaultInfoUI } from '/@/kaiden/lib/secret-vault/SecretVaultInfoUI';
+import { EventStore } from '/@/stores/event-store';
 import { findMatchInLeaves } from '/@/stores/search-util';
 import type { GatewaySecretInfo } from '/@api/secret-info';
-
-import { EventStore } from './event-store';
 
 function secretInfoToVaultInfo(info: GatewaySecretInfo): SecretVaultInfoUI {
   return {

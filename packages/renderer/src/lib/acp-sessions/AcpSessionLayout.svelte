@@ -6,8 +6,8 @@ import type { Snippet } from 'svelte';
 import { tick } from 'svelte';
 import { router } from 'tinro';
 
+import { allOpenshellSandboxes } from '/@/kaiden/stores/openshell-sandboxes';
 import { acpSessions } from '/@/stores/acp-sessions.svelte';
-import { allOpenshellSandboxes } from '/@/stores/openshell-sandboxes';
 import type { AcpSessionInfo } from '/@api/acp-session-info';
 
 import { getStatusDotClass, isWorkspaceUnavailable } from './acp-session-status';

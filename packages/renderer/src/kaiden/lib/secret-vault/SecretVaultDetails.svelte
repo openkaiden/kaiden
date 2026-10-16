@@ -4,15 +4,15 @@ import { Tab } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { router } from 'tinro';
 
+import { getSecretIcon, getServiceLabel } from '/@/kaiden/lib/secret-vault/secret-vault-utils';
+import type { SecretVaultInfoUI } from '/@/kaiden/lib/secret-vault/SecretVaultInfoUI';
+import { secretVaultInfos } from '/@/kaiden/stores/secret-vault';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
-import { getSecretIcon, getServiceLabel } from '/@/lib/secret-vault/secret-vault-utils';
-import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
 import Badge from '/@/lib/ui/Badge.svelte';
 import DetailsPage from '/@/lib/ui/DetailsPage.svelte';
 import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
 import { getTabUrl, isTabSelected } from '/@/lib/ui/Util';
 import Route from '/@/Route.svelte';
-import { secretVaultInfos } from '/@/stores/secret-vault';
 
 import SecretVaultDetailsSummary from './SecretVaultDetailsSummary.svelte';
 

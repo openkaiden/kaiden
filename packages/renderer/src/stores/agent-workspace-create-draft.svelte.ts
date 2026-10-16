@@ -18,10 +18,10 @@
 
 import { get } from 'svelte/store';
 
+import { secretVaultInfos } from '/@/kaiden/stores/secret-vault';
 import type { CustomMount } from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepFileSystem.svelte';
 import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
 import { ragEnvironments } from '/@/stores/rag-environments';
-import { secretVaultInfos } from '/@/stores/secret-vault';
 import { skillInfos } from '/@/stores/skills';
 import { type NetworkConfiguration, sanitizeDns1123Label } from '/@api/agent-workspace-info';
 import type { ModelInfo } from '/@api/model-registry-info';

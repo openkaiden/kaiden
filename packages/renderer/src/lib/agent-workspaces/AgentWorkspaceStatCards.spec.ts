@@ -21,7 +21,7 @@ import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import type { SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
+import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
 import { AGENT_LABEL } from '/@api/openshell-gateway-info';
 
 import AgentWorkspaceStatCards from './AgentWorkspaceStatCards.svelte';

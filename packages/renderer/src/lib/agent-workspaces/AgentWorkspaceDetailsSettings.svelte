@@ -3,6 +3,7 @@ import { faBook, faServer, faWrench } from '@fortawesome/free-solid-svg-icons';
 import { Button, Input, SettingsNavItem } from '@podman-desktop/ui-svelte';
 import { router } from 'tinro';
 
+import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
 import AgentWorkspaceCreateStepFileSystem, {
   type CustomMount,
 } from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepFileSystem.svelte';
@@ -13,7 +14,6 @@ import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import ChecklistPanel from '/@/lib/ui/ChecklistPanel.svelte';
 import { handleNavigation } from '/@/navigation';
 import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
-import type { SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
 import { ragEnvironments } from '/@/stores/rag-environments';
 import { skillInfos } from '/@/stores/skills';
 import type {

@@ -23,7 +23,7 @@ import { writable } from 'svelte/store';
 import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { openshellGateways, openshellGatewaysReady } from '/@/stores/openshell-gateways';
+import { openshellGateways, openshellGatewaysReady } from '/@/kaiden/stores/openshell-gateways';
 
 import NoUsableGatewayWarning from './NoUsableGatewayWarning.svelte';
 

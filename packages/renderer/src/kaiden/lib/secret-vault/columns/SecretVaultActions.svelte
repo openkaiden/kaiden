@@ -2,10 +2,10 @@
 import { faTrash } from '@fortawesome/free-solid-svg-icons';
 import { ErrorMessage } from '@podman-desktop/ui-svelte';
 
+import type { SecretVaultInfoUI } from '/@/kaiden/lib/secret-vault/SecretVaultInfoUI';
+import { clearSecretActionError, setSecretActionError } from '/@/kaiden/stores/secret-vault';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
-import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
 import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
-import { clearSecretActionError, setSecretActionError } from '/@/stores/secret-vault';
 
 interface Props {
   object: SecretVaultInfoUI;

@@ -12,18 +12,18 @@ import {
   TableRow,
 } from '@podman-desktop/ui-svelte';
 
-import { withBulkConfirmation } from '/@/lib/actions/BulkActions';
-import GatewayFilterDropdown from '/@/lib/gateways/GatewayFilterDropdown.svelte';
-import type { SecretVaultInfoUI } from '/@/lib/secret-vault/SecretVaultInfoUI';
-import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
-import { handleNavigation } from '/@/navigation';
+import GatewayFilterDropdown from '/@/kaiden/lib/gateways/GatewayFilterDropdown.svelte';
+import type { SecretVaultInfoUI } from '/@/kaiden/lib/secret-vault/SecretVaultInfoUI';
 import {
   clearSecretActionError,
   filteredSecretVaultInfos,
   secretVaultSearchPattern,
   selectedGateway as secretVaultSelectedGateway,
   setSecretActionError,
-} from '/@/stores/secret-vault';
+} from '/@/kaiden/stores/secret-vault';
+import { withBulkConfirmation } from '/@/lib/actions/BulkActions';
+import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
+import { handleNavigation } from '/@/navigation';
 import { NavigationPage } from '/@api/navigation-page';
 
 import SecretVaultAccount from './columns/SecretVaultAccount.svelte';

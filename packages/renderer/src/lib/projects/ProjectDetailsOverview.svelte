@@ -10,8 +10,8 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
+import { secretVaultInfos } from '/@/kaiden/stores/secret-vault';
 import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
-import { secretVaultInfos } from '/@/stores/secret-vault';
 import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';
 
 interface Props {

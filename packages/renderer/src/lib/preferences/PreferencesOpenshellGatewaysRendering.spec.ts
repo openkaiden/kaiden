@@ -21,8 +21,8 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import { openshellGateways } from '/@/kaiden/stores/openshell-gateways';
 import { extensionInfos } from '/@/stores/extensions';
-import { openshellGateways } from '/@/stores/openshell-gateways';
 import type { GatewayInfo } from '/@api/openshell-gateway-info';
 
 import PreferencesOpenshellGatewaysRendering from './PreferencesOpenshellGatewaysRendering.svelte';

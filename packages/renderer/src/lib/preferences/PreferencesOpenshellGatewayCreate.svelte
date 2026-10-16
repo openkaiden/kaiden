@@ -1,8 +1,8 @@
 <script lang="ts">
 import { Button, Dropdown, ErrorMessage, Input, NumberInput } from '@podman-desktop/ui-svelte';
 
+import { openshellGateways } from '/@/kaiden/stores/openshell-gateways';
 import Dialog from '/@/lib/dialogs/Dialog.svelte';
-import { openshellGateways } from '/@/stores/openshell-gateways';
 import { GATEWAY_NAME_PATTERN, KAIDEN_LOCAL_GATEWAY_NAME, type LocalGatewayDriver } from '/@api/openshell-gateway-info';
 
 interface Props {

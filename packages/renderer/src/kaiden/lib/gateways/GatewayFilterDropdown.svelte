@@ -1,7 +1,7 @@
 <script lang="ts">
 import { Dropdown } from '@podman-desktop/ui-svelte';
 
-import { openshellGateways } from '/@/stores/openshell-gateways';
+import { openshellGateways } from '/@/kaiden/stores/openshell-gateways';
 
 interface Props {
   value?: string;

@@ -18,9 +18,9 @@
 
 import { assert, beforeEach, describe, expect, test } from 'vitest';
 
+import { secretVaultInfos } from '/@/kaiden/stores/secret-vault';
 import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
 import { ragEnvironments } from '/@/stores/rag-environments';
-import { secretVaultInfos } from '/@/stores/secret-vault';
 import { skillInfos } from '/@/stores/skills';
 import type { NetworkConfiguration } from '/@api/agent-workspace-info';
 import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info';

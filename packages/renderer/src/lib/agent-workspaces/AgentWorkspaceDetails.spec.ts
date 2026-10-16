@@ -23,7 +23,7 @@ import { get, writable } from 'svelte/store';
 import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { openshellSandboxes } from '/@/stores/openshell-sandboxes';
+import { openshellSandboxes } from '/@/kaiden/stores/openshell-sandboxes';
 import type { AgentWorkspaceConfiguration } from '/@api/agent-workspace-info';
 import type { GatewaySandboxes } from '/@api/openshell-gateway-info';
 
