@@ -319,11 +319,11 @@ describe('init', () => {
 
     vi.mocked(gatewayManager.listGateways)
       // init() discovery: only the stale external gateway
-      .mockResolvedValueOnce([listed('my-private-gw', 'http://127.0.0.1:17670')])
+      .mockResolvedValueOnce([listed('my-private-gw', 'http://127.0.0.1:29670')])
       // removeSamePortGateways(): both exist after registration
       .mockResolvedValueOnce([
-        listed('my-private-gw', 'http://127.0.0.1:17670'),
-        listed('kaiden-local', 'http://127.0.0.1:17670'),
+        listed('my-private-gw', 'http://127.0.0.1:29670'),
+        listed('kaiden-local', 'http://127.0.0.1:29670'),
       ]);
 
     const proc = createMockChildProcess();
@@ -362,7 +362,7 @@ describe('init', () => {
     );
     expect(spawn).toHaveBeenCalledWith(
       GATEWAY_BINARY,
-      expect.arrayContaining(['--port', '17670']),
+      expect.arrayContaining(['--port', '29670']),
       expect.objectContaining({ detached: false }),
     );
   });
@@ -381,7 +381,7 @@ describe('init', () => {
       'kaiden-local',
       expect.objectContaining({
         name: 'kaiden-local',
-        gateway_endpoint: 'http://127.0.0.1:17670',
+        gateway_endpoint: 'http://127.0.0.1:29670',
         is_remote: false,
       }),
     );
@@ -541,7 +541,7 @@ describe('start', () => {
         '--config',
         GATEWAY_CONFIG_PATH,
         '--port',
-        '17670',
+        '29670',
         '--bind-address',
         '127.0.0.1',
         '--disable-tls',
@@ -578,7 +578,7 @@ describe('start', () => {
       'kaiden-local',
       expect.objectContaining({
         name: 'kaiden-local',
-        gateway_endpoint: 'http://127.0.0.1:17670',
+        gateway_endpoint: 'http://127.0.0.1:29670',
         is_remote: false,
       }),
     );
@@ -1520,7 +1520,7 @@ describe('gateway config generation', () => {
 
     expect(spawn).toHaveBeenCalledWith(
       GATEWAY_BINARY,
-      ['--port', '17670', '--bind-address', '127.0.0.1', '--disable-tls', '--db-url', GATEWAY_DB_URL],
+      ['--port', '29670', '--bind-address', '127.0.0.1', '--disable-tls', '--db-url', GATEWAY_DB_URL],
       expect.objectContaining({ detached: false }),
     );
   });
