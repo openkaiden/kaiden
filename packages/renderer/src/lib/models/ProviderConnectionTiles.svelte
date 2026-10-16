@@ -1,7 +1,7 @@
 <script lang="ts">
 import { router } from 'tinro';
 
-import Card from '/@/lib/components/Card.svelte';
+import Card from '/@/kaiden/lib/components/Card.svelte';
 import type { InferenceConnectionSummary } from '/@/lib/models/models-utils';
 
 interface Props {

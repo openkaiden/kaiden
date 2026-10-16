@@ -9,7 +9,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import { slide } from 'svelte/transition';
 
 /* eslint-enable import/no-duplicates */
-import { formatText } from '/@/lib/format/format';
+import { formatText } from '/@/kaiden/lib/format/format';
 
 interface Props {
   tools: Array<DynamicToolUIPart>;

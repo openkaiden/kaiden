@@ -2,7 +2,7 @@
 import { faCirclePlay, faRobot, faTableCells } from '@fortawesome/free-solid-svg-icons';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
-import Card from '/@/lib/components/Card.svelte';
+import Card from '/@/kaiden/lib/components/Card.svelte';
 import type { SandboxInfoWithGateway } from '/@/stores/openshell-sandboxes';
 
 import { getAgentId } from './workspace-utils';
