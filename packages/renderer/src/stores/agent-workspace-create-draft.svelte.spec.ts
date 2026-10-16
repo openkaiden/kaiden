@@ -18,10 +18,10 @@
 
 import { assert, beforeEach, describe, expect, test } from 'vitest';
 
+import { mcpRemoteServerInfos } from '/@/kaiden/stores/mcp-remote-servers';
 import { secretVaultInfos } from '/@/kaiden/stores/secret-vault';
-import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
+import { skillInfos } from '/@/kaiden/stores/skills';
 import { ragEnvironments } from '/@/stores/rag-environments';
-import { skillInfos } from '/@/stores/skills';
 import type { NetworkConfiguration } from '/@api/agent-workspace-info';
 import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info';
 import type { ModelInfo } from '/@api/model-registry-info';

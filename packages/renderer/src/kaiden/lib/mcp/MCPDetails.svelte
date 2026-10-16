@@ -4,12 +4,12 @@ import type { DynamicToolUIPart } from 'ai';
 import { onMount } from 'svelte';
 import { router } from 'tinro';
 
+import { mcpRemoteServerInfos } from '/@/kaiden/stores/mcp-remote-servers';
 import MonacoEditor from '/@/lib/editor/MonacoEditor.svelte';
 import MCPIcon from '/@/lib/images/MCPIcon.svelte';
 import DetailsPage from '/@/lib/ui/DetailsPage.svelte';
 import { getTabUrl, isTabSelected } from '/@/lib/ui/Util';
 import Route from '/@/Route.svelte';
-import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
 import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info';
 
 import ToolParts from './tool-parts.svelte';

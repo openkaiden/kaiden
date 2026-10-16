@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { MCPTarget } from '/@/lib/mcp/setup/mcp-target';
+import type { MCPTarget } from '/@/kaiden/lib/mcp/setup/mcp-target';
 
 interface Props {
   targets: Array<MCPTarget>;

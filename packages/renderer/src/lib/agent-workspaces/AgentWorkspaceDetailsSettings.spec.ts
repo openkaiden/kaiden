@@ -23,11 +23,11 @@ import { writable } from 'svelte/store';
 import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import * as mcpStore from '/@/kaiden/stores/mcp-remote-servers';
 import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
+import * as skillsStore from '/@/kaiden/stores/skills';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
-import * as mcpStore from '/@/stores/mcp-remote-servers';
 import * as ragStore from '/@/stores/rag-environments';
-import * as skillsStore from '/@/stores/skills';
 import type { AgentWorkspaceConfiguration } from '/@api/agent-workspace-info';
 import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info';
 import type { RagEnvironment } from '/@api/rag/rag-environment';
@@ -36,10 +36,10 @@ import type { SkillInfo } from '/@api/skill/skill-info';
 import AgentWorkspaceDetailsSettings from './AgentWorkspaceDetailsSettings.svelte';
 
 vi.mock(import('tinro'));
-vi.mock(import('/@/stores/skills'));
+vi.mock(import('/@/kaiden/stores/skills'));
 vi.mock(import('/@/stores/rag-environments'));
 vi.mock(import('/@/navigation'));
-vi.mock(import('/@/stores/mcp-remote-servers'));
+vi.mock(import('/@/kaiden/stores/mcp-remote-servers'));
 vi.mock(import('/@/lib/dialogs/messagebox-utils'));
 
 const routerStore = writable({

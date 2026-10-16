@@ -2,12 +2,12 @@
 import { FilteredEmptyScreen, Table, TableColumn, TableRow } from '@podman-desktop/ui-svelte';
 import SimpleColumn from '@podman-desktop/ui-svelte/TableSimpleColumn';
 
-import MCPNameColumn from '/@/lib/mcp/column/MCPNameColumn.svelte';
-import MCPStatusColumn from '/@/lib/mcp/column/MCPStatusColumn.svelte';
-import { filteredMcpRemoteServerInfos, mcpRemoteServerInfoSearchPattern } from '/@/stores/mcp-remote-servers';
+import MCPNameColumn from '/@/kaiden/lib/mcp/column/MCPNameColumn.svelte';
+import MCPStatusColumn from '/@/kaiden/lib/mcp/column/MCPStatusColumn.svelte';
+import { filteredMcpRemoteServerInfos, mcpRemoteServerInfoSearchPattern } from '/@/kaiden/stores/mcp-remote-servers';
+import McpIcon from '/@/lib/images/MCPIcon.svelte';
 import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info';
 
-import McpIcon from '../images/MCPIcon.svelte';
 import { MCPServerDescriptionColumn } from './mcp-server-columns';
 import MCPServerEmptyScreen from './MCPServerEmptyScreen.svelte';
 import McpServerRemoteListActions from './MCPServerRemoteListActions.svelte';

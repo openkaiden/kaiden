@@ -21,7 +21,7 @@ import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
+import { mcpRemoteServerInfos } from '/@/kaiden/stores/mcp-remote-servers';
 import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info';
 import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';
 

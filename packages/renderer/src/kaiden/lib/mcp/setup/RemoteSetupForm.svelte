@@ -4,8 +4,8 @@ import type { components } from '@openkaiden/mcp-registry-types';
 import { Button } from '@podman-desktop/ui-svelte';
 import { SvelteMap } from 'svelte/reactivity';
 
-import FormSection from '/@/lib/mcp/setup/FormSection.svelte';
-import { createInputWithVariables } from '/@/lib/mcp/setup/input-with-variable-response-utils';
+import FormSection from '/@/kaiden/lib/mcp/setup/FormSection.svelte';
+import { createInputWithVariables } from '/@/kaiden/lib/mcp/setup/input-with-variable-response-utils';
 import type { InputWithVariableResponse, MCPSetupRemoteOptions } from '/@api/mcp/mcp-setup';
 
 interface Props {

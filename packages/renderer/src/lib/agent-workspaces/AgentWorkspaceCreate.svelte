@@ -5,9 +5,11 @@ import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { onMount, untrack } from 'svelte';
 import { toast } from 'svelte-sonner';
 
+import { mcpRemoteServerInfos } from '/@/kaiden/stores/mcp-remote-servers';
 import { openshellGateways } from '/@/kaiden/stores/openshell-gateways';
 import { allOpenshellSandboxes } from '/@/kaiden/stores/openshell-sandboxes';
 import { secretVaultInfos } from '/@/kaiden/stores/secret-vault';
+import { skillInfos } from '/@/kaiden/stores/skills';
 import { getModelId } from '/@/lib/models/models-utils';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
@@ -20,12 +22,10 @@ import {
   WORKSPACE_REGISTRY_HOSTS,
 } from '/@/stores/agent-workspace-create-draft.svelte';
 import { agentInfos } from '/@/stores/agents';
-import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
 import { disabledModels, isModelEnabled, modelKey } from '/@/stores/model-catalog';
 import { catalogModels } from '/@/stores/models';
 import { providerInfos } from '/@/stores/providers';
 import { ragEnvironments } from '/@/stores/rag-environments';
-import { skillInfos } from '/@/stores/skills';
 import { workspaceProjectInfos } from '/@/stores/workspace-projects';
 import type {
   AgentWorkspaceConfiguration,

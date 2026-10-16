@@ -22,14 +22,14 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import * as skillsStore from '/@/kaiden/stores/skills';
 import { handleNavigation } from '/@/navigation';
-import * as skillsStore from '/@/stores/skills';
 import { NavigationPage } from '/@api/navigation-page';
 import type { SkillInfo } from '/@api/skill/skill-info';
 
 import SkillsList from './SkillsList.svelte';
 
-vi.mock(import('/@/stores/skills'));
+vi.mock(import('/@/kaiden/stores/skills'));
 vi.mock(import('/@/navigation'));
 
 beforeEach(() => {

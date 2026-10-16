@@ -2,12 +2,12 @@
 import { ErrorMessage, FormPage } from '@podman-desktop/ui-svelte';
 import { router } from 'tinro';
 
+import type { MCPTarget } from '/@/kaiden/lib/mcp/setup/mcp-target';
+import MCPSetupDropdown from '/@/kaiden/lib/mcp/setup/MCPSetupDropdown.svelte';
+import PackageSetupForm from '/@/kaiden/lib/mcp/setup/PackageSetupForm.svelte';
+import RemoteSetupForm from '/@/kaiden/lib/mcp/setup/RemoteSetupForm.svelte';
+import { mcpRegistriesServerInfos } from '/@/kaiden/stores/mcp-registry-servers';
 import MCPValidServerIndicatorIcon from '/@/lib/images/MCPValidServerIndicatorIcon.svelte';
-import type { MCPTarget } from '/@/lib/mcp/setup/mcp-target';
-import MCPSetupDropdown from '/@/lib/mcp/setup/MCPSetupDropdown.svelte';
-import PackageSetupForm from '/@/lib/mcp/setup/PackageSetupForm.svelte';
-import RemoteSetupForm from '/@/lib/mcp/setup/RemoteSetupForm.svelte';
-import { mcpRegistriesServerInfos } from '/@/stores/mcp-registry-servers';
 import type { MCPSetupOptions, MCPSetupPackageOptions } from '/@api/mcp/mcp-setup';
 
 interface Props {

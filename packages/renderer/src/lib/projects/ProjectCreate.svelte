@@ -2,13 +2,13 @@
 import { Button } from '@podman-desktop/ui-svelte';
 import { toast } from 'svelte-sonner';
 
+import { mcpRemoteServerInfos } from '/@/kaiden/stores/mcp-remote-servers';
 import { secretVaultInfos } from '/@/kaiden/stores/secret-vault';
+import { skillInfos } from '/@/kaiden/stores/skills';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import WizardStepper from '/@/lib/ui/WizardStepper.svelte';
 import { handleNavigation } from '/@/navigation';
-import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
-import { skillInfos } from '/@/stores/skills';
 import { NavigationPage } from '/@api/navigation-page';
 import type { WorkspaceProjectAnalysis } from '/@api/workspace-project-info';
 

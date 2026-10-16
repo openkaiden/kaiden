@@ -2,9 +2,8 @@
 import { faTrash } from '@fortawesome/free-solid-svg-icons/faTrash';
 
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
+import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
 import type { SkillInfo } from '/@api/skill/skill-info';
-
-import ListItemButtonIcon from '../ui/ListItemButtonIcon.svelte';
 
 interface Props {
   object: SkillInfo;

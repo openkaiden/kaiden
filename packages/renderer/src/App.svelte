@@ -25,6 +25,7 @@ import type { KubernetesNavigationRequest } from '/@api/kubernetes-navigation';
 import type { NavigationRequest } from '/@api/navigation-request';
 
 import AppNavigation from './AppNavigation.svelte';
+import McpRegistryCreateFromRegistryForm from './kaiden/lib/mcp/MCPRegistryCreateFromRegistryForm.svelte';
 import { navigateTo } from './kubernetesNavigation';
 import Appearance from './lib/appearance/Appearance.svelte';
 import ComposeDetails from './lib/compose/ComposeDetails.svelte';
@@ -67,7 +68,6 @@ import KubePodDetails from './lib/kube/pods/PodDetails.svelte';
 import KubePodsList from './lib/kube/pods/PodsList.svelte';
 import PortForwardingList from './lib/kubernetes-port-forward/PortForwardingList.svelte';
 import ManifestDetails from './lib/manifest/ManifestDetails.svelte';
-import McpRegistryCreateFromRegistryForm from './lib/mcp/MCPRegistryCreateFromRegistryForm.svelte';
 import CreateNetwork from './lib/network/CreateNetwork.svelte';
 import NetworkDetails from './lib/network/NetworkDetails.svelte';
 import NetworksList from './lib/network/NetworksList.svelte';

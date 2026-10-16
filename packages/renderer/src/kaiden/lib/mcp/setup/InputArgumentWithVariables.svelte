@@ -2,8 +2,8 @@
 import type { components } from '@openkaiden/mcp-registry-types';
 import { Input } from '@podman-desktop/ui-svelte';
 
+import InputArgument from '/@/kaiden/lib/mcp/setup/InputArgument.svelte';
 import Markdown from '/@/lib/markdown/Markdown.svelte';
-import InputArgument from '/@/lib/mcp/setup/InputArgument.svelte';
 
 interface Props {
   object: components['schemas']['InputWithVariables'];

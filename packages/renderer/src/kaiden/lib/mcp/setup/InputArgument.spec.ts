@@ -21,7 +21,7 @@ import type { components } from '@openkaiden/mcp-registry-types';
 import { render } from '@testing-library/svelte';
 import { expect, test, vi } from 'vitest';
 
-import InputArgument from '/@/lib/mcp/setup/InputArgument.svelte';
+import InputArgument from '/@/kaiden/lib/mcp/setup/InputArgument.svelte';
 
 const STRING_INPUT: components['schemas']['Input'] = {
   format: 'string',

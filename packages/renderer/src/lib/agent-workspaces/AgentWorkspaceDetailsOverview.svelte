@@ -10,12 +10,12 @@ import {
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
 import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
+import { skillInfos } from '/@/kaiden/stores/skills';
 import { getAgentIcon } from '/@/lib/agent-workspaces/agent-utis';
 import IconImage from '/@/lib/appearance/IconImage.svelte';
 import { getModelId } from '/@/lib/models/models-utils';
 import { agentInfos } from '/@/stores/agents';
 import { catalogModels } from '/@/stores/models';
-import { skillInfos } from '/@/stores/skills';
 import type { AgentWorkspaceConfiguration } from '/@api/agent-workspace-info';
 
 import { getAgentId, getReferenceTime, isActiveWorkspace } from './workspace-utils';

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { EmptyScreen } from '@podman-desktop/ui-svelte';
 
-import McpIcon from '../images/MCPIcon.svelte';
+import McpIcon from '/@/lib/images/MCPIcon.svelte';
 </script>
 
 <EmptyScreen

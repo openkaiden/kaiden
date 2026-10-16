@@ -3,11 +3,11 @@ import { Checkbox, EmptyScreen, Tab } from '@podman-desktop/ui-svelte';
 import { toast } from 'svelte-sonner';
 import { router } from 'tinro';
 
+import { skillInfos } from '/@/kaiden/stores/skills';
 import DetailsPage from '/@/lib/ui/DetailsPage.svelte';
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
 import { getTabUrl, isTabSelected } from '/@/lib/ui/Util';
 import Route from '/@/Route.svelte';
-import { skillInfos } from '/@/stores/skills';
 import type { SkillInfo, SkillResourceEntry } from '/@api/skill/skill-info';
 
 import { countTopLevelEntries, formatTokenCount } from './skill-utils';

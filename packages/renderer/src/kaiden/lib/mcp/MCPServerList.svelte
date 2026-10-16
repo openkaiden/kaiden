@@ -1,7 +1,7 @@
 <script lang="ts">
 import { Button, NavPage } from '@podman-desktop/ui-svelte';
 
-import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
+import { mcpRemoteServerInfos } from '/@/kaiden/stores/mcp-remote-servers';
 
 import McpRegistriesEditing from './MCPRegistriesEditing.svelte';
 import McpServerListRegistryInstall from './MCPServerListRegistryInstall.svelte';

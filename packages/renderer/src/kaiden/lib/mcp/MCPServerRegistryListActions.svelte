@@ -1,11 +1,10 @@
 <script lang="ts">
 import { faPlusCircle } from '@fortawesome/free-solid-svg-icons';
 
+import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
 import { handleNavigation } from '/@/navigation';
 import type { MCPServerDetail } from '/@api/mcp/mcp-server-info';
 import { NavigationPage } from '/@api/navigation-page';
-
-import ListItemButtonIcon from '../ui/ListItemButtonIcon.svelte';
 
 export let object: MCPServerDetail;
 

@@ -23,7 +23,7 @@ import { writable } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import * as secretVaultStore from '/@/kaiden/stores/secret-vault';
-import * as skillsStore from '/@/stores/skills';
+import * as skillsStore from '/@/kaiden/stores/skills';
 import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 import type { SkillInfo } from '/@api/skill/skill-info';
 import type { WorkspaceProjectAnalysis, WorkspaceProjectInfo } from '/@api/workspace-project-info';
@@ -31,7 +31,7 @@ import type { WorkspaceProjectAnalysis, WorkspaceProjectInfo } from '/@api/works
 import ProjectCreate from './ProjectCreate.svelte';
 
 vi.mock(import('/@/navigation'));
-vi.mock(import('/@/stores/skills'));
+vi.mock(import('/@/kaiden/stores/skills'));
 vi.mock(import('/@/kaiden/stores/secret-vault'));
 
 const SAMPLE_SKILLS: SkillInfo[] = [

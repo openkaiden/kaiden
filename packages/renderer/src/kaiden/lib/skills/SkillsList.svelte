@@ -2,11 +2,11 @@
 import { faPlus } from '@fortawesome/free-solid-svg-icons/faPlus';
 import { Button, FilteredEmptyScreen, NavPage, Table, TableColumn, TableRow } from '@podman-desktop/ui-svelte';
 
-import SkillEnabledColumn from '/@/lib/skills/columns/SkillEnabledColumn.svelte';
-import SkillNameColumn from '/@/lib/skills/columns/SkillNameColumn.svelte';
+import SkillEnabledColumn from '/@/kaiden/lib/skills/columns/SkillEnabledColumn.svelte';
+import SkillNameColumn from '/@/kaiden/lib/skills/columns/SkillNameColumn.svelte';
+import { filteredSkillInfos, skillSearchPattern } from '/@/kaiden/stores/skills';
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
 import { handleNavigation } from '/@/navigation';
-import { filteredSkillInfos, skillSearchPattern } from '/@/stores/skills';
 import { NavigationPage } from '/@api/navigation-page';
 import type { SkillInfo } from '/@api/skill/skill-info';
 

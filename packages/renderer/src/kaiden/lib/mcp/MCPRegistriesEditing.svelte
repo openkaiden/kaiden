@@ -3,9 +3,9 @@ import { faPlusCircle, faTrash } from '@fortawesome/free-solid-svg-icons';
 import type * as containerDesktopAPI from '@openkaiden/api';
 import { Button, ErrorMessage, Input, Link } from '@podman-desktop/ui-svelte';
 
+import { mcpRegistriesInfos, mcpRegistriesSuggestedInfos } from '/@/kaiden/stores/mcp-registries';
 import IconImage from '/@/lib/appearance/IconImage.svelte';
 import Dialog from '/@/lib/dialogs/Dialog.svelte';
-import { mcpRegistriesInfos, mcpRegistriesSuggestedInfos } from '/@/stores/mcp-registries';
 
 // contains the original instances of MCP registries when user clicks
 let originRegistries = $state<containerDesktopAPI.MCPRegistry[]>([]);

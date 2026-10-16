@@ -2,17 +2,17 @@
 import { FilteredEmptyScreen, Spinner, Table, TableColumn, TableRow } from '@podman-desktop/ui-svelte';
 import SimpleColumn from '@podman-desktop/ui-svelte/TableSimpleColumn';
 
-import MCPValidServerIndicatorIcon from '/@/lib/images/MCPValidServerIndicatorIcon.svelte';
-import PreviousNext from '/@/lib/ui/PreviousNext.svelte';
 import {
   filteredMcpRegistriesServerInfos,
   mcpRegistriesServerInfos,
   mcpRegistriesServerInfosSearchPattern,
   mcpRegistryServersLoading,
-} from '/@/stores/mcp-registry-servers';
+} from '/@/kaiden/stores/mcp-registry-servers';
+import McpIcon from '/@/lib/images/MCPIcon.svelte';
+import MCPValidServerIndicatorIcon from '/@/lib/images/MCPValidServerIndicatorIcon.svelte';
+import PreviousNext from '/@/lib/ui/PreviousNext.svelte';
 import type { MCPServerDetail } from '/@api/mcp/mcp-server-info';
 
-import McpIcon from '../images/MCPIcon.svelte';
 import { MCPServerDescriptionColumn } from './mcp-server-columns';
 import McpEmptyScreen from './MCPRegistryEmptyScreen.svelte';
 import McpServerListActions from './MCPServerRegistryListActions.svelte';

@@ -3,7 +3,9 @@ import { faBook, faServer, faWrench } from '@fortawesome/free-solid-svg-icons';
 import { Button, Input, SettingsNavItem } from '@podman-desktop/ui-svelte';
 import { router } from 'tinro';
 
+import { mcpRemoteServerInfos } from '/@/kaiden/stores/mcp-remote-servers';
 import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
+import { skillInfos } from '/@/kaiden/stores/skills';
 import AgentWorkspaceCreateStepFileSystem, {
   type CustomMount,
 } from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepFileSystem.svelte';
@@ -13,9 +15,7 @@ import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import ChecklistPanel from '/@/lib/ui/ChecklistPanel.svelte';
 import { handleNavigation } from '/@/navigation';
-import { mcpRemoteServerInfos } from '/@/stores/mcp-remote-servers';
 import { ragEnvironments } from '/@/stores/rag-environments';
-import { skillInfos } from '/@/stores/skills';
 import type {
   AgentWorkspaceConfiguration,
   AgentWorkspaceMcpConfig,
