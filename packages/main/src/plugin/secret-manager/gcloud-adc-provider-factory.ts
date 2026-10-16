@@ -24,12 +24,15 @@ import type { OpenShellClient } from '@nvidia/openshell-sdk';
 import { ProviderCredentialRefreshStrategy } from '@nvidia/openshell-sdk/raw';
 import { injectable } from 'inversify';
 
+import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
 import type { SelectableProviderFactory } from './provider-factory.js';
 
 @injectable()
 export class GcloudAdcProviderFactory implements SelectableProviderFactory {
+  readonly requiresClone = false;
+
   supports(type: string): boolean {
     return type === 'google-vertex-ai';
   }
@@ -37,51 +40,63 @@ export class GcloudAdcProviderFactory implements SelectableProviderFactory {
   async createProvider(client: OpenShellClient, options: SecretCreateOptions): Promise<void> {
     const credentials = typeof options.value !== 'string' ? options.value.credentials : undefined;
 
-    const profileResponse = await client.raw.getProviderProfile({ id: options.type, workspace: '' });
+    const profileResponse = await client.raw.getProviderProfile({
+      id: options.type,
+      workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+    });
     const adcCredential = profileResponse.profile?.credentials.find(
       c => c.refresh?.strategy === ProviderCredentialRefreshStrategy.OAUTH2_REFRESH_TOKEN,
     );
     if (!adcCredential) {
       throw new Error(`--from-gcloud-adc is not supported for '${options.type}' providers`);
     }
-    const credentialKey = adcCredential.envVars[0];
-    if (!credentialKey) {
+    if (adcCredential.envVars.length === 0) {
       throw new Error(`ADC credential in '${options.type}' profile has no env_vars declared`);
     }
 
     const value = options.value;
     await client.raw.createProvider({
       provider: {
+        profileWorkspace: OpenshellWorkspaceDefaults.WORKSPACE,
         metadata: { name: options.name },
         type: options.type,
         config: typeof value !== 'string' ? (value.config ?? {}) : {},
       },
-      workspace: '',
+      workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
     });
 
     const { clientId, clientSecret, refreshToken } = await readGcloudAdc(credentials);
-    try {
-      await client.raw.configureProviderRefresh({
-        provider: options.name,
-        credentialKey,
-        strategy: ProviderCredentialRefreshStrategy.OAUTH2_REFRESH_TOKEN,
-        material: {
-          client_id: clientId,
-          client_secret: clientSecret,
-          refresh_token: refreshToken,
-        },
-        secretMaterialKeys: ['client_secret', 'refresh_token'],
-        workspace: '',
-      });
+    for (const key of adcCredential.envVars) {
+      try {
+        await client.raw.configureProviderRefresh({
+          provider: options.name,
+          credentialKey: key,
+          strategy: ProviderCredentialRefreshStrategy.OAUTH2_REFRESH_TOKEN,
+          material: {
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: refreshToken,
+          },
+          secretMaterialKeys: ['client_secret', 'refresh_token'],
+          workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+        });
 
-      await client.raw.rotateProviderCredential({
-        provider: options.name,
-        credentialKey,
-        workspace: '',
-      });
-    } catch (error: unknown) {
-      await client.raw.deleteProvider({ name: options.name, workspace: '' }).catch(() => {});
-      throw error;
+        await client.raw.rotateProviderCredential({
+          provider: options.name,
+          credentialKey: key,
+          workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+        });
+      } catch (error: unknown) {
+        try {
+          await client.raw.deleteProvider({
+            name: options.name,
+            workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+          });
+        } catch (deleteError: unknown) {
+          console.error(`Error while deleting provider ${options.name}`, deleteError);
+        }
+        throw error;
+      }
     }
   }
 }

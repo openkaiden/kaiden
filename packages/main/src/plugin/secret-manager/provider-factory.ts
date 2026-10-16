@@ -28,4 +28,5 @@ export interface ProviderFactory {
 
 export interface SelectableProviderFactory extends ProviderFactory {
   supports(type: string): boolean;
+  readonly requiresClone: boolean;
 }

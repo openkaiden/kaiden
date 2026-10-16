@@ -83,6 +83,8 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
       logo: { dark: './icon_dark.png', light: './icon_light.png' },
     },
     command: 'opencode',
+    baseImage:
+      'ghcr.io/openkaiden/openshell-image-opencode@sha256:9e059ed9992619aae7d45e3922864d140d1c3208086cea61eac693f17319342c',
     acp: { args: ['acp'] },
     tags: ['Recommended'],
     configurationFiles: [

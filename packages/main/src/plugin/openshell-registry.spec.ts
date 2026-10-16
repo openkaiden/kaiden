@@ -16,6 +16,14 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import assert from 'node:assert';
+
+import {
+  NetworkAccessPreset,
+  NetworkEnforcementMode,
+  ProviderCredentialRefreshStrategy,
+  ProviderProfileCategory,
+} from '@nvidia/openshell-sdk/raw';
 import type { OpenShellCLI, OpenShellGateway, ProviderConnectionStatus, ProviderProfile } from '@openkaiden/api';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -31,7 +39,13 @@ const apiSender: ApiSenderType = {
 
 const properties = new Properties();
 
-let registry: OpenShellRegistry;
+class TestOpenShellRegistry extends OpenShellRegistry {
+  lookup(enumObj: Record<string, number | string>, keyTransform?: (key: string) => string): Map<string, number> {
+    return super.buildEnumLookup(enumObj, keyTransform);
+  }
+}
+
+let registry: TestOpenShellRegistry;
 
 function createGateway(overrides?: Partial<OpenShellGateway>): OpenShellGateway {
   return {
@@ -81,16 +95,37 @@ function createProfile(overrides?: Partial<ProviderProfile>): ProviderProfile {
   } as unknown as ProviderProfile;
 }
 
+beforeEach(() => {
+  vi.resetAllMocks();
+  registry = new TestOpenShellRegistry(apiSender, properties);
+});
+
+afterEach(() => {
+  registry.dispose();
+});
+
+describe('buildEnumLookup', () => {
+  test('converts string-keyed enum entries to a lowercase lookup map', () => {
+    const result = registry.lookup({ FOO: 1, BAR: 2 });
+    expect(result.get('foo')).toBe(1);
+    expect(result.get('bar')).toBe(2);
+  });
+
+  test('excludes numeric reverse-mapping entries', () => {
+    const result = registry.lookup({ FOO: 1, '1': 'FOO' });
+    expect(result.size).toBe(1);
+    expect(result.get('foo')).toBe(1);
+  });
+
+  test('applies custom keyTransform after lowercasing', () => {
+    const result = registry.lookup({ READ_ONLY: 1, READ_WRITE: 2 }, k => k.replaceAll('_', '-'));
+    expect(result.get('read-only')).toBe(1);
+    expect(result.get('read-write')).toBe(2);
+    expect(result.has('read_only')).toBe(false);
+  });
+});
+
 describe('OpenShellRegistry', () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
-    registry = new OpenShellRegistry(apiSender, properties);
-  });
-
-  afterEach(() => {
-    registry.dispose();
-  });
-
   describe('registerGateway', () => {
     test('sends openshell-registry:gateway-update event via apiSender', () => {
       registry.registerGateway(createGateway());
@@ -327,6 +362,95 @@ describe('OpenShellRegistry', () => {
       expect(profiles[0]!.credentials[0]!.name).toBe('api_key');
       expect(profiles[0]!.credentials[0]!.required).toBe(true);
       expect(profiles[0]!.credentials[0]!.envVars).toEqual(['OPENAI_API_KEY']);
+    });
+
+    test.each([
+      ['unspecified', ProviderProfileCategory.UNSPECIFIED],
+      ['other', ProviderProfileCategory.OTHER],
+      ['inference', ProviderProfileCategory.INFERENCE],
+      ['agent', ProviderProfileCategory.AGENT],
+      ['source_control', ProviderProfileCategory.SOURCE_CONTROL],
+      ['messaging', ProviderProfileCategory.MESSAGING],
+      ['data', ProviderProfileCategory.DATA],
+      ['knowledge', ProviderProfileCategory.KNOWLEDGE],
+    ])('parses category %s', (yamlValue, expected) => {
+      const yaml = `id: cat-test\ndisplay_name: Test\ncategory: ${yamlValue}\n`;
+      registry.registerProfile(yaml);
+      const profile = registry.getProfiles()[0];
+      assert(profile);
+      expect(profile.category).toBe(expected);
+    });
+
+    test.each([
+      ['unspecified', ProviderCredentialRefreshStrategy.UNSPECIFIED],
+      ['static', ProviderCredentialRefreshStrategy.STATIC],
+      ['external', ProviderCredentialRefreshStrategy.EXTERNAL],
+      ['oauth2_refresh_token', ProviderCredentialRefreshStrategy.OAUTH2_REFRESH_TOKEN],
+      ['oauth2_client_credentials', ProviderCredentialRefreshStrategy.OAUTH2_CLIENT_CREDENTIALS],
+      ['google_service_account_jwt', ProviderCredentialRefreshStrategy.GOOGLE_SERVICE_ACCOUNT_JWT],
+      ['aws_sts_assume_role', ProviderCredentialRefreshStrategy.AWS_STS_ASSUME_ROLE],
+    ])('parses credential refresh strategy %s', (yamlValue, expected) => {
+      const yaml = [
+        'id: strategy-test',
+        'display_name: Test',
+        'credentials:',
+        '  - refresh:',
+        `      strategy: ${yamlValue}`,
+      ].join('\n');
+      registry.registerProfile(yaml);
+      const profile = registry.getProfiles()[0];
+      assert(profile);
+      expect(profile.credentials[0]?.refresh?.strategy).toBe(expected);
+    });
+
+    test.each([
+      ['unspecified', NetworkEnforcementMode.UNSPECIFIED],
+      ['enforce', NetworkEnforcementMode.ENFORCE],
+      ['audit', NetworkEnforcementMode.AUDIT],
+    ])('parses enforcement mode %s', (yamlValue, expected) => {
+      const yaml = ['id: enforcement-test', 'display_name: Test', 'endpoints:', `  - enforcement: ${yamlValue}`].join(
+        '\n',
+      );
+      registry.registerProfile(yaml);
+      const profile = registry.getProfiles()[0];
+      assert(profile);
+      expect(profile.endpoints[0]?.enforcement).toBe(expected);
+    });
+
+    test.each([
+      ['unspecified', NetworkAccessPreset.UNSPECIFIED],
+      ['read-only', NetworkAccessPreset.READ_ONLY],
+      ['read-write', NetworkAccessPreset.READ_WRITE],
+      ['full', NetworkAccessPreset.FULL],
+    ])('parses network access preset %s', (yamlValue, expected) => {
+      const yaml = ['id: access-test', 'display_name: Test', 'endpoints:', `  - access: ${yamlValue}`].join('\n');
+      registry.registerProfile(yaml);
+      const profile = registry.getProfiles()[0];
+      assert(profile);
+      expect(profile.endpoints[0]?.access).toBe(expected);
+    });
+
+    test('uses the unspecified enum value for unknown field names', () => {
+      const yaml = [
+        'id: provider-with-unknown-enums',
+        'display_name: Provider with unknown enums',
+        'category: unknown',
+        'credentials:',
+        '  - refresh:',
+        '      strategy: unknown',
+        'endpoints:',
+        '  - enforcement: unknown',
+        '    access: unknown',
+      ].join('\n');
+
+      registry.registerProfile(yaml);
+
+      const profile = registry.getProfiles()[0];
+      assert(profile);
+      expect(profile.category).toBe(ProviderProfileCategory.UNSPECIFIED);
+      expect(profile.credentials[0]?.refresh?.strategy).toBe(ProviderCredentialRefreshStrategy.UNSPECIFIED);
+      expect(profile.endpoints[0]?.enforcement).toBe(NetworkEnforcementMode.UNSPECIFIED);
+      expect(profile.endpoints[0]?.access).toBe(NetworkAccessPreset.UNSPECIFIED);
     });
 
     test('throws when YAML is missing required id field', () => {

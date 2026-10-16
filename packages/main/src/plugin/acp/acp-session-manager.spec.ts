@@ -106,7 +106,9 @@ describe('AcpSessionManager', () => {
     vi.resetAllMocks();
     vi.mocked(directories.getAcpSessionsDirectory).mockReturnValue(FAKE_SESSIONS_DIR);
     vi.mocked(openshellSdkClientManager.getClient).mockResolvedValue({ sandbox: sdkSandbox } as never);
-    mockSandboxList.mockResolvedValue([]);
+    mockSandboxList.mockReturnValue({
+      all: vi.fn().mockResolvedValue([]),
+    });
     manager = new AcpSessionManager(apiSender, openshellCli, agentRegistry, directories, openshellSdkClientManager);
   });
 
@@ -896,9 +898,13 @@ describe('AcpSessionManager', () => {
           events: [],
         }),
       );
-      mockSandboxList.mockResolvedValue([
-        { id: 'other-id', name: 'other-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' },
-      ]);
+      mockSandboxList.mockReturnValue({
+        all: vi
+          .fn()
+          .mockResolvedValue([
+            { id: 'other-id', name: 'other-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' },
+          ]),
+      });
 
       await manager.init();
 
@@ -926,9 +932,11 @@ describe('AcpSessionManager', () => {
           events: [],
         }),
       );
-      mockSandboxList.mockResolvedValue([
-        { id: 'sb-id', name: 'my-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' },
-      ]);
+      mockSandboxList.mockReturnValue({
+        all: vi
+          .fn()
+          .mockResolvedValue([{ id: 'sb-id', name: 'my-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' }]),
+      });
 
       await manager.init();
 
@@ -956,9 +964,13 @@ describe('AcpSessionManager', () => {
           events: [],
         }),
       );
-      mockSandboxList.mockResolvedValue([
-        { id: 'sb-id', name: 'my-sandbox', phase: 'deleting', labels: {}, resourceVersion: '1' },
-      ]);
+      mockSandboxList.mockReturnValue({
+        all: vi
+          .fn()
+          .mockResolvedValue([
+            { id: 'sb-id', name: 'my-sandbox', phase: 'deleting', labels: {}, resourceVersion: '1' },
+          ]),
+      });
 
       await manager.init();
 
@@ -1016,7 +1028,9 @@ describe('AcpSessionManager', () => {
           events: [],
         }),
       );
-      mockSandboxList.mockResolvedValue([]);
+      mockSandboxList.mockReturnValue({
+        all: vi.fn().mockResolvedValue([]),
+      });
 
       await manager.init();
 
@@ -1287,9 +1301,13 @@ describe('AcpSessionManager', () => {
 
     const agent = createAgentInfo();
     vi.mocked(agentRegistry.getAgent).mockResolvedValue(agent);
-    mockSandboxList.mockResolvedValue([
-      { id: 'sandbox-1', name: 'test-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' },
-    ]);
+    mockSandboxList.mockReturnValue({
+      all: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'sandbox-1', name: 'test-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' },
+        ]),
+    });
 
     type ExecStreamEvent = { stream: 'stdout' | 'stderr'; data: Buffer } | { type: 'exit'; exitCode: number };
     const events: ExecStreamEvent[] = [];
@@ -1387,9 +1405,13 @@ describe('AcpSessionManager', () => {
       prompt: ReturnType<typeof vi.fn>;
     } {
       vi.mocked(agentRegistry.getAgent).mockResolvedValue(createAgentInfo());
-      mockSandboxList.mockResolvedValue([
-        { id: 'sandbox-1', name: 'test-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' },
-      ]);
+      mockSandboxList.mockReturnValue({
+        all: vi
+          .fn()
+          .mockResolvedValue([
+            { id: 'sandbox-1', name: 'test-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' },
+          ]),
+      });
 
       const mockSession = {
         output: {

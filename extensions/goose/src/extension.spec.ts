@@ -49,7 +49,7 @@ describe('activate', () => {
         icon: expect.objectContaining({ icon: { dark: './icon_dark.png', light: './icon_light.png' } }),
         destinationSkillsFolder: '${HOME}/.agents/skills',
         baseImage:
-          'ghcr.io/openkaiden/openshell-image-goose@sha256:e23918ed2ee0e7e13dc5dc52d753ac187ff5508fc0fdd4b5fd1f2e43e147584f',
+          'ghcr.io/openkaiden/openshell-image-goose@sha256:25806faabdac9da5b929bf97201a47f55a5917ccebb82bb59efc25c36340260c',
         isSupportedModelType: expect.any(Function),
       }),
     );

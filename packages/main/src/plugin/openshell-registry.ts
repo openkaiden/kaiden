@@ -17,7 +17,13 @@
  ***********************************************************************/
 
 import { create } from '@bufbuild/protobuf';
-import { ProviderProfileSchema } from '@nvidia/openshell-sdk/raw';
+import {
+  NetworkAccessPreset,
+  NetworkEnforcementMode,
+  ProviderCredentialRefreshStrategy,
+  ProviderProfileCategory,
+  ProviderProfileSchema,
+} from '@nvidia/openshell-sdk/raw';
 import type { OpenShellCLI, OpenShellGateway, ProviderConnectionStatus, ProviderProfile } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
 import { parse as parseYaml } from 'yaml';
@@ -31,13 +37,58 @@ import type { Event } from '/@api/event.js';
 import { Emitter } from './events/emitter.js';
 import { Disposable } from './types/disposable.js';
 
-const OpenshellProviderProfileSchema = z.looseObject({
-  id: z.string(),
-  display_name: z.string(),
-});
-
 @injectable()
 export class OpenShellRegistry implements IDisposable {
+  protected buildEnumLookup(
+    enumObj: Record<string, number | string>,
+    keyTransform?: (key: string) => string,
+  ): Map<string, number> {
+    const transform = keyTransform ?? ((k: string): string => k);
+    return new Map(
+      Object.entries(enumObj)
+        .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+        .map(([key, value]) => [transform(key.toLowerCase()), value]),
+    );
+  }
+
+  private readonly categories = this.buildEnumLookup(ProviderProfileCategory);
+  private readonly strategies = this.buildEnumLookup(ProviderCredentialRefreshStrategy);
+  private readonly enforcements = this.buildEnumLookup(NetworkEnforcementMode);
+  private readonly accesses = this.buildEnumLookup(NetworkAccessPreset, k => k.replaceAll('_', '-'));
+
+  private readonly EndpointsProviderSchema = z.looseObject({
+    enforcement: z
+      .string()
+      .transform(str => this.enforcements.get(str.toLowerCase()) ?? NetworkEnforcementMode.UNSPECIFIED)
+      .default(NetworkEnforcementMode.UNSPECIFIED),
+    access: z
+      .string()
+      .transform(str => this.accesses.get(str.toLowerCase()) ?? NetworkAccessPreset.UNSPECIFIED)
+      .default(NetworkAccessPreset.UNSPECIFIED),
+  });
+
+  private readonly CredentialsRefreshProviderSchema = z.looseObject({
+    strategy: z
+      .string()
+      .transform(str => this.strategies.get(str.toLowerCase()) ?? ProviderCredentialRefreshStrategy.UNSPECIFIED)
+      .default(ProviderCredentialRefreshStrategy.UNSPECIFIED),
+  });
+
+  private readonly CredentialsProviderSchema = z.looseObject({
+    refresh: this.CredentialsRefreshProviderSchema.optional(),
+  });
+
+  private readonly OpenshellProviderProfileSchema = z.looseObject({
+    id: z.string(),
+    display_name: z.string(),
+    binaries: z.array(z.string().transform(str => ({ path: str }))).optional(),
+    category: z
+      .string()
+      .transform(str => this.categories.get(str.toLowerCase()) ?? ProviderProfileCategory.UNSPECIFIED)
+      .optional(),
+    credentials: z.array(this.CredentialsProviderSchema).optional(),
+    endpoints: z.array(this.EndpointsProviderSchema).optional(),
+  });
   private intervalId: NodeJS.Timeout | undefined;
 
   constructor(
@@ -129,7 +180,7 @@ export class OpenShellRegistry implements IDisposable {
 
   private parseYamlProfile(yamlContent: string): ProviderProfile {
     const raw = parseYaml(yamlContent);
-    const parsed = OpenshellProviderProfileSchema.parse(raw);
+    const parsed = this.OpenshellProviderProfileSchema.parse(raw);
     return create(ProviderProfileSchema, this.properties.renameKeys(parsed));
   }
 

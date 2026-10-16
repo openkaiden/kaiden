@@ -1,9 +1,9 @@
 [openshell]
-version = 1
+version = 2
 
 {{#driver}}
 [openshell.gateway]
-compute_drivers = ["{{{driver}}}"]
+compute_driver = "{{{driver}}}"
 
 [openshell.drivers.{{{driver}}}]
 {{#supportsContainerSettings}}
@@ -28,4 +28,3 @@ allow_unauthenticated_users = true
 signing_key_path = '''{{{gatewayDir}}}/jwt/signing.pem'''
 public_key_path = '''{{{gatewayDir}}}/jwt/public.pem'''
 kid_path = '''{{{gatewayDir}}}/jwt/kid'''
-ttl_secs = 0

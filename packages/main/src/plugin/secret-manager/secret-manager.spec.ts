@@ -16,20 +16,31 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { randomUUID } from 'node:crypto';
+
+import { create } from '@bufbuild/protobuf';
 import type { OpenShellClient } from '@nvidia/openshell-sdk';
+import { ProviderProfileSchema } from '@nvidia/openshell-sdk/raw';
 import type { FileSystemWatcher, InferenceProviderConnection } from '@openkaiden/api';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { IPCHandle } from '/@/plugin/api.js';
+import type { ContainerProviderRegistry } from '/@/plugin/container-registry.js';
 import type { FilesystemMonitoring } from '/@/plugin/filesystem-monitoring.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
+import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
-import type { ProviderImpl } from '/@/plugin/provider-impl.js';
+import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
+import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
+import { ProviderImpl } from '/@/plugin/provider-impl.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
-import type { SafeStorageRegistry } from '/@/plugin/safe-storage/safe-storage-registry.js';
+import type { SafeStorageRegistry, SecretStorageWrapper } from '/@/plugin/safe-storage/safe-storage-registry.js';
+import type { SchedulerRegistry } from '/@/plugin/scheduler/scheduler-registry.js';
+import type { SkillManager } from '/@/plugin/skill/skill-manager.js';
+import { Properties } from '/@/plugin/util/properties.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
-import type { IConfigurationRegistry } from '/@api/configuration/models.js';
+import type { IConfigurationPropertyRecordedSchema, IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
 import { DefaultProviderFactory } from './default-provider-factory.js';
@@ -37,9 +48,25 @@ import { GcloudAdcProviderFactory } from './gcloud-adc-provider-factory.js';
 import { OpenshellSecretAdapter } from './openshell-secret-adapter.js';
 import { SecretManager } from './secret-manager.js';
 
-vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-client-manager.js'));
+vi.mock(import('node:crypto'));
 
-let manager: SecretManager;
+vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-client-manager.js'));
+vi.mock(import('/@/plugin/openshell-registry.js'));
+vi.mock(import('/@/plugin/provider-impl.js'));
+
+let manager: TestSecretManager;
+
+class TestSecretManager extends SecretManager {
+  override async resolveProfileForAgent(options: {
+    profileId: string;
+    agentCommand: string;
+    secretName: string;
+    gateway?: string;
+    endpoint?: string;
+  }): Promise<string | undefined> {
+    return super.resolveProfileForAgent(options);
+  }
+}
 
 const apiSender: ApiSenderType = {
   send: vi.fn(),
@@ -52,14 +79,32 @@ const mockRaw = {
   listProviders: vi.fn(),
   deleteProvider: vi.fn(),
   listProviderProfiles: vi.fn(),
+  importProviderProfiles: vi.fn(),
+  deleteProviderProfile: vi.fn(),
 };
 const mockClient = { raw: mockRaw } as unknown as OpenShellClient;
 const sdkClientManager = new OpenshellSdkClientManager(undefined!, undefined!);
+const openshellNetworkPolicy = new OpenshellNetworkPolicy();
+const openshellRegistry = new OpenShellRegistry(apiSender, new Properties());
 const openshellAdapter = new OpenshellSecretAdapter(
   sdkClientManager,
   [new GcloudAdcProviderFactory()],
   new DefaultProviderFactory(),
+  openshellNetworkPolicy,
+  openshellRegistry,
 );
+
+const mockProvider = new ProviderImpl(
+  '0',
+  'kaiden.openai',
+  'OpenAI',
+  { id: 'openai', name: 'OpenAI', status: 'installed' },
+  {} as ProviderRegistry,
+  {} as ContainerProviderRegistry,
+  {} as SchedulerRegistry,
+  {} as SkillManager,
+);
+Object.defineProperty(mockProvider, 'extensionId', { value: 'kaiden.openai' });
 
 let gatewayStartCallback: (() => void) | undefined;
 
@@ -70,7 +115,7 @@ const providerRegistry = {
 
 const extensionStorageMock = {
   get: vi.fn(),
-} as unknown as ReturnType<SafeStorageRegistry['getExtensionStorage']>;
+} as unknown as SecretStorageWrapper;
 
 const configurationRegistry = {
   getConfiguration: vi.fn(),
@@ -113,7 +158,8 @@ beforeEach(() => {
     { canStop: false, name: 'kaiden', endpoint: 'http://localhost' },
   ]);
   vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
-  manager = new SecretManager(
+  vi.mocked(randomUUID).mockReturnValue('00-01-02-03-04');
+  manager = new TestSecretManager(
     apiSender,
     ipcHandle,
     openshellAdapter,
@@ -122,6 +168,8 @@ beforeEach(() => {
     safeStorageRegistry,
     openshellGateway,
     openshellGatewayStateManager,
+    openshellNetworkPolicy,
+    openshellRegistry,
   );
   manager.init();
 });
@@ -170,7 +218,7 @@ describe('openshellAdapter', () => {
       { canStop: false, name: 'kaiden', endpoint: 'http://localhost' },
     ]);
     vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
-    manager = new SecretManager(
+    manager = new TestSecretManager(
       apiSender,
       ipcHandle,
       openshellAdapter,
@@ -179,6 +227,8 @@ describe('openshellAdapter', () => {
       safeStorageRegistry,
       openshellGateway,
       openshellGatewayStateManager,
+      openshellNetworkPolicy,
+      openshellRegistry,
     );
     manager.init();
   });
@@ -191,11 +241,12 @@ describe('openshellAdapter', () => {
     expect(mockRaw.createProvider).toHaveBeenCalledWith({
       provider: {
         metadata: { name: 'my-secret' },
+        profileWorkspace: OpenshellWorkspaceDefaults.WORKSPACE,
         type: 'github',
         credentials: { GH_TOKEN: 'ghp_abc123' },
         config: {},
       },
-      workspace: '',
+      workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
     });
     expect(result).toEqual({ name: 'my-secret' });
   });
@@ -261,7 +312,10 @@ describe('openshellAdapter', () => {
 
     const result = await manager.remove('my-openai');
 
-    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({ name: 'my-openai', workspace: '' });
+    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({
+      name: 'my-openai',
+      workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+    });
     expect(result).toEqual({ name: 'my-openai' });
   });
 
@@ -306,9 +360,9 @@ describe('openshellAdapter', () => {
   });
 });
 
-describe('inference connection lifecycle', () => {
+describe('ensureSecretForSandbox', () => {
   const mockConnection: InferenceProviderConnection = {
-    id: 'conn-123',
+    id: 'conn-sandbox',
     name: 'test-connection',
     type: 'cloud',
     sdk: {} as InferenceProviderConnection['sdk'],
@@ -317,215 +371,457 @@ describe('inference connection lifecycle', () => {
     credentials: () => ({ token: 'secret-token' }),
   };
 
-  test('getSecretForModel returns SecretInfo matching by name', async () => {
+  test('creates sandbox-named secret when none exists', async () => {
+    mockRaw.listProviders.mockResolvedValue({ providers: [] });
     vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
       connection: mockConnection,
-      providerId: 'kaiden.cursor',
+      providerId: 'kaiden.openai',
     });
-    mockRaw.listProviders.mockResolvedValue({
-      providers: [
-        { metadata: { name: 'other-provider' }, type: 'other' },
-        { metadata: { name: 'kaiden.cursor-conn-123' }, type: 'cursor' },
-      ],
-    });
+    vi.mocked(providerRegistry.getProvider).mockReturnValue(mockProvider);
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      create(ProviderProfileSchema, { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] }),
+    ]);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
-    const secret = await manager.getSecretForModel('cursor::model-1::', 'remote');
-    expect(secret).toEqual({ name: 'kaiden.cursor-conn-123', type: 'cursor' });
-    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
-  });
-
-  test('getSecretForModel returns undefined for unknown model', async () => {
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue(undefined);
-
-    const secret = await manager.getSecretForModel('unknown::model::');
-    expect(secret).toBeUndefined();
-  });
-
-  test('getSecretForModel returns correct type for vertex-ai provider', async () => {
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
-      connection: mockConnection,
-      providerId: 'kaiden.vertex-ai',
-    });
-    mockRaw.listProviders.mockResolvedValue({
-      providers: [{ metadata: { name: 'kaiden.vertex-ai-conn-123' }, type: 'vertex-ai' }],
-    });
-
-    const secret = await manager.getSecretForModel('vertexai::model-1::');
-    expect(secret).toEqual({ name: 'kaiden.vertex-ai-conn-123', type: 'vertex-ai' });
-  });
-});
-
-describe('createSecretForConnection', () => {
-  const mockConnection: InferenceProviderConnection = {
-    id: 'conn-456',
-    name: 'test-connection',
-    type: 'cloud',
-    sdk: {} as InferenceProviderConnection['sdk'],
-    status: () => 'started',
-    models: [{ label: 'model-1' }],
-    credentials: () => ({ token: 'secret-token' }),
-  };
-
-  function setupConfigMocksForCreate(secretType: string): void {
     const properties = {
-      'cursor.connection._type': {
+      'openai.connection._type': {
+        title: 'type',
+        parentId: 'openai',
         scope: 'InferenceProviderConnection',
-        extension: { id: 'kaiden.cursor' },
-        title: 'Cursor',
-        parentId: 'cursor',
+        extension: { id: 'kaiden.openai' },
       },
-      'cursor.connection.token': {
+      'openai.connection.token': {
+        title: 'token',
+        parentId: 'openai',
         scope: 'InferenceProviderConnection',
-        extension: { id: 'kaiden.cursor' },
+        extension: { id: 'kaiden.openai' },
         format: 'password',
-        title: 'Cursor',
-        parentId: 'cursor',
       },
-    } as Record<string, Record<string, unknown>>;
-
-    vi.mocked(configurationRegistry.getConfigurationProperties).mockReturnValue(
-      properties as unknown as ReturnType<typeof configurationRegistry.getConfigurationProperties>,
-    );
+    } as Record<string, IConfigurationPropertyRecordedSchema>;
+    vi.mocked(configurationRegistry.getConfigurationProperties).mockReturnValue(properties);
     vi.mocked(configurationRegistry.getConfiguration).mockReturnValue({
       get: vi.fn((key: string) => {
-        if (key === 'cursor.connection._type') return secretType;
-        if (key === 'cursor.connection.token') return 'cursor:conn-456:token';
+        if (key === 'openai.connection._type') return 'openai';
+        if (key === 'openai.connection.token') return 'openai:conn-sandbox:token';
         return undefined;
       }),
       has: vi.fn(),
       update: vi.fn(),
-    } as unknown as ReturnType<typeof configurationRegistry.getConfiguration>);
-
+    });
     vi.mocked(extensionStorageMock.get).mockResolvedValue('actual-api-key');
-    mockRaw.listProviders.mockResolvedValue({ providers: [] });
     mockRaw.createProvider.mockResolvedValue({});
-    vi.mocked(providerRegistry.getProvider).mockReturnValue({
-      extensionId: 'kaiden.cursor',
-    } as unknown as ProviderImpl);
-  }
 
-  test('creates secret and returns SecretInfo when none exists', async () => {
-    setupConfigMocksForCreate('cursor');
+    const result = await manager.ensureSecretForSandbox('my-sandbox', 'openai::gpt-4::', 'claude', 'kaiden');
 
-    const result = await manager.createSecretForConnection('kaiden.cursor', mockConnection);
-
-    expect(mockRaw.createProvider).toHaveBeenCalledWith({
-      provider: {
-        metadata: { name: 'kaiden.cursor-conn-456' },
-        type: 'cursor',
-        credentials: { token: 'actual-api-key' },
-        config: {},
-      },
-      workspace: '',
-    });
-    expect(result).toEqual({ name: 'kaiden.cursor-conn-456', type: 'cursor' });
+    expect(result).toEqual({ secretName: 'my-sandbox-00-01-02-03-04', clonedProfile: 'my-sandbox-00-01-02-03-04' });
+    expect(mockRaw.createProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({
+          metadata: { name: 'my-sandbox-00-01-02-03-04' },
+          type: 'my-sandbox-00-01-02-03-04',
+        }),
+      }),
+    );
   });
 
-  test('returns undefined when _type is not configured', async () => {
-    vi.mocked(configurationRegistry.getConfigurationProperties).mockReturnValue({});
-    vi.mocked(configurationRegistry.getConfiguration).mockReturnValue({
-      get: vi.fn(() => undefined),
-      has: vi.fn(),
-      update: vi.fn(),
-    } as unknown as ReturnType<typeof configurationRegistry.getConfiguration>);
-    vi.mocked(providerRegistry.getProvider).mockReturnValue({
-      extensionId: 'kaiden.cursor',
-    } as unknown as ProviderImpl);
-
-    const result = await manager.createSecretForConnection('kaiden.cursor', mockConnection);
-
-    expect(result).toBeUndefined();
-    expect(mockRaw.createProvider).not.toHaveBeenCalled();
-  });
-});
-
-describe('ensureSecretForModel', () => {
-  const mockConnection: InferenceProviderConnection = {
-    id: 'conn-789',
-    name: 'test-connection',
-    type: 'cloud',
-    sdk: {} as InferenceProviderConnection['sdk'],
-    status: () => 'started',
-    models: [{ label: 'model-1' }],
-    credentials: () => ({ token: 'secret-token' }),
-  };
-
-  test('returns existing secret without creating', async () => {
+  test('profile rolled back if create secret fails', async () => {
+    mockRaw.listProviders.mockResolvedValue({ providers: [] });
     vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
       connection: mockConnection,
-      providerId: 'kaiden.cursor',
+      providerId: 'kaiden.openai',
     });
-    mockRaw.listProviders.mockResolvedValue({
-      providers: [{ metadata: { name: 'kaiden.cursor-conn-789' }, type: 'cursor' }],
-    });
-
-    const result = await manager.ensureSecretForModel('cursor::model-1::', 'remote');
-
-    expect(result).toEqual({ name: 'kaiden.cursor-conn-789', type: 'cursor' });
-    expect(mockRaw.createProvider).not.toHaveBeenCalled();
-    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
-  });
-
-  test('creates and returns secret when missing but connection exists', async () => {
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
-      connection: mockConnection,
-      providerId: 'kaiden.cursor',
-    });
-    mockRaw.listProviders.mockResolvedValue({ providers: [] });
-    mockRaw.createProvider.mockResolvedValue({});
-    vi.mocked(providerRegistry.getProvider).mockReturnValue({
-      extensionId: 'kaiden.cursor',
-    } as unknown as ProviderImpl);
+    vi.mocked(providerRegistry.getProvider).mockReturnValue(mockProvider);
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      create(ProviderProfileSchema, { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] }),
+    ]);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
     const properties = {
-      'cursor.connection._type': {
+      'openai.connection._type': {
+        title: 'type',
+        parentId: 'openai',
         scope: 'InferenceProviderConnection',
-        extension: { id: 'kaiden.cursor' },
-        title: 'Cursor',
-        parentId: 'cursor',
+        extension: { id: 'kaiden.openai' },
       },
-      'cursor.connection.token': {
+      'openai.connection.token': {
+        title: 'token',
+        parentId: 'openai',
         scope: 'InferenceProviderConnection',
-        extension: { id: 'kaiden.cursor' },
+        extension: { id: 'kaiden.openai' },
         format: 'password',
-        title: 'Cursor',
-        parentId: 'cursor',
       },
-    } as Record<string, Record<string, unknown>>;
-    vi.mocked(configurationRegistry.getConfigurationProperties).mockReturnValue(
-      properties as unknown as ReturnType<typeof configurationRegistry.getConfigurationProperties>,
-    );
+    } as Record<string, IConfigurationPropertyRecordedSchema>;
+    vi.mocked(configurationRegistry.getConfigurationProperties).mockReturnValue(properties);
     vi.mocked(configurationRegistry.getConfiguration).mockReturnValue({
       get: vi.fn((key: string) => {
-        if (key === 'cursor.connection._type') return 'cursor';
-        if (key === 'cursor.connection.token') return 'cursor:conn-789:token';
+        if (key === 'openai.connection._type') return 'openai';
+        if (key === 'openai.connection.token') return 'openai:conn-sandbox:token';
         return undefined;
       }),
       has: vi.fn(),
       update: vi.fn(),
-    } as unknown as ReturnType<typeof configurationRegistry.getConfiguration>);
-    vi.mocked(extensionStorageMock.get).mockResolvedValue('actual-api-key');
-
-    const result = await manager.ensureSecretForModel('cursor::model-1::', 'remote');
-
-    expect(mockRaw.createProvider).toHaveBeenCalledWith({
-      provider: {
-        metadata: { name: 'kaiden.cursor-conn-789' },
-        type: 'cursor',
-        credentials: { token: 'actual-api-key' },
-        config: {},
-      },
-      workspace: '',
     });
-    expect(result).toEqual({ name: 'kaiden.cursor-conn-789', type: 'cursor' });
+    vi.mocked(extensionStorageMock.get).mockResolvedValue('actual-api-key');
+    mockRaw.createProvider.mockRejectedValue(new Error(`Can't create provider`));
+
+    await expect(manager.ensureSecretForSandbox('my-sandbox', 'openai::gpt-4::', 'claude', 'kaiden')).rejects.toThrow(
+      /Can't create provider/,
+    );
+
+    expect(mockRaw.createProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: expect.objectContaining({
+          metadata: { name: 'my-sandbox-00-01-02-03-04' },
+          type: 'my-sandbox-00-01-02-03-04',
+        }),
+      }),
+    );
+    expect(mockRaw.deleteProviderProfile).toHaveBeenCalledWith({
+      id: 'my-sandbox-00-01-02-03-04',
+      allowMissing: true,
+      workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+    });
   });
 
-  test('returns undefined when no inference connection found', async () => {
+  test('returns undefined when no inference connection exists', async () => {
+    mockRaw.listProviders.mockResolvedValue({ providers: [] });
     vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue(undefined);
 
-    const result = await manager.ensureSecretForModel('unknown::model::');
+    const result = await manager.ensureSecretForSandbox('my-sandbox', 'unknown::model::', 'claude');
 
     expect(result).toBeUndefined();
-    expect(mockRaw.createProvider).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveProfileForAgent', () => {
+  test('clones profile when no binaries field (absence means no binary authorised)', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      create(ProviderProfileSchema, { id: 'openai', displayName: 'OpenAI', credentials: [] }),
+    ]);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent({
+      profileId: 'openai',
+      agentCommand: 'claude',
+      secretName: 'test-sandbox-test-uuid-1234',
+    });
+
+    expect(result).toBe('test-sandbox-test-uuid-1234');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'test-sandbox-test-uuid-1234',
+              binaries: [expect.objectContaining({ path: '/**/claude' })],
+            }),
+          }),
+        ],
+        workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+      }),
+    );
+  });
+
+  test('clones profile when binaries is empty (no binary authorised)', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      create(ProviderProfileSchema, { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] }),
+    ]);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent({
+      profileId: 'openai',
+      agentCommand: 'claude',
+      secretName: 'test-sandbox-test-uuid-1234',
+    });
+
+    expect(result).toBe('test-sandbox-test-uuid-1234');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'test-sandbox-test-uuid-1234',
+              binaries: [expect.objectContaining({ path: '/**/claude' })],
+            }),
+          }),
+        ],
+        workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+      }),
+    );
+  });
+
+  test('clones profile with existing binaries when agent command already matches', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      create(ProviderProfileSchema, {
+        id: 'openai',
+        displayName: 'OpenAI',
+        credentials: [],
+        binaries: [{ path: '**/claude' }, { path: '/usr/bin/node' }],
+      }),
+    ]);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent({
+      profileId: 'openai',
+      agentCommand: '/usr/local/bin/claude',
+      secretName: 'test-sandbox-test-uuid-1234',
+    });
+
+    expect(result).toBe('test-sandbox-test-uuid-1234');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'test-sandbox-test-uuid-1234',
+              binaries: [
+                expect.objectContaining({ path: '**/claude' }),
+                expect.objectContaining({ path: '/usr/bin/node' }),
+              ],
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  test('clones profile when agent command is not in binaries', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      create(ProviderProfileSchema, {
+        id: 'openai',
+        displayName: 'OpenAI',
+        credentials: [],
+        binaries: [{ path: '/usr/bin/node' }],
+      }),
+    ]);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent({
+      profileId: 'openai',
+      agentCommand: 'claude',
+      secretName: 'test-sandbox-test-uuid-1234',
+    });
+
+    expect(result).toBe('test-sandbox-test-uuid-1234');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'test-sandbox-test-uuid-1234',
+              binaries: [
+                expect.objectContaining({ path: '/usr/bin/node' }),
+                expect.objectContaining({ path: '/**/claude' }),
+              ],
+            }),
+          }),
+        ],
+        workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+      }),
+    );
+  });
+
+  test('clones profile with absolute agent command', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      create(ProviderProfileSchema, {
+        id: 'openai',
+        displayName: 'OpenAI',
+        credentials: [],
+        binaries: [{ path: '/usr/bin/node' }],
+      }),
+    ]);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent({
+      profileId: 'openai',
+      agentCommand: '/usr/local/bin/claude',
+      secretName: 'test-sandbox-test-uuid-1234',
+    });
+
+    expect(result).toBe('test-sandbox-test-uuid-1234');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'test-sandbox-test-uuid-1234',
+              binaries: [
+                expect.objectContaining({ path: '/usr/bin/node' }),
+                expect.objectContaining({ path: '/usr/local/bin/claude' }),
+              ],
+            }),
+          }),
+        ],
+        workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+      }),
+    );
+  });
+
+  test('passes gateway when cloning profile', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      create(ProviderProfileSchema, {
+        id: 'openai',
+        displayName: 'OpenAI',
+        credentials: [],
+        binaries: [{ path: '/usr/bin/node' }],
+      }),
+    ]);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    await manager.resolveProfileForAgent({
+      profileId: 'openai',
+      agentCommand: 'claude',
+      secretName: 'test-sandbox-test-uuid-1234',
+      gateway: 'remote-gw',
+    });
+
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              id: 'test-sandbox-test-uuid-1234',
+              binaries: [
+                expect.objectContaining({ path: '/usr/bin/node' }),
+                expect.objectContaining({ path: '/**/claude' }),
+              ],
+            }),
+          }),
+        ],
+        workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+      }),
+    );
+  });
+
+  test('uses sandbox name in cloned profile name regardless of endpoint', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      create(ProviderProfileSchema, { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] }),
+    ]);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const endpoint = 'http://localhost:11434/v1';
+    const result = await manager.resolveProfileForAgent({
+      profileId: 'openai',
+      agentCommand: 'claude',
+      secretName: 'my-sandbox-test-uuid-1234',
+      endpoint,
+    });
+
+    expect(result).toBe('my-sandbox-test-uuid-1234');
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({ id: 'my-sandbox-test-uuid-1234' }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  test('uses sandbox name without endpoint', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      create(ProviderProfileSchema, { id: 'openai', displayName: 'OpenAI', credentials: [], binaries: [] }),
+    ]);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent({
+      profileId: 'openai',
+      agentCommand: 'claude',
+      secretName: 'test-sandbox-test-uuid-1234',
+    });
+
+    expect(result).toBe('test-sandbox-test-uuid-1234');
+  });
+
+  test('passes endpoint to createProfile when cloning', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      create(ProviderProfileSchema, {
+        id: 'openai',
+        displayName: 'OpenAI',
+        credentials: [],
+        binaries: [],
+        endpoints: [],
+      }),
+    ]);
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const endpoint = 'http://localhost:11434/v1';
+    await manager.resolveProfileForAgent({
+      profileId: 'openai',
+      agentCommand: 'claude',
+      secretName: 'test-sandbox-test-uuid-1234',
+      endpoint,
+    });
+
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: expect.objectContaining({
+              endpoints: expect.arrayContaining([
+                expect.objectContaining({
+                  host: 'host.openshell.internal',
+                  port: 11434,
+                }),
+              ]),
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  test('returns undefined without cloning for google-vertex-ai profile', async () => {
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
+      create(ProviderProfileSchema, {
+        id: 'google-vertex-ai',
+        displayName: 'Google Vertex AI',
+        credentials: [],
+        binaries: [{ path: '/**' }],
+      }),
+    ]);
+    mockRaw.listProviderProfiles.mockResolvedValue({
+      profiles: [{ id: 'google-vertex-ai' }],
+    });
+
+    const result = await manager.resolveProfileForAgent({
+      profileId: 'google-vertex-ai',
+      agentCommand: 'claude',
+      secretName: 'test-sandbox-test-uuid-1234',
+    });
+
+    expect(result).toBeUndefined();
+    expect(mockRaw.importProviderProfiles).not.toHaveBeenCalled();
+  });
+
+  test('imports google-vertex-ai profile to gateway when not present', async () => {
+    const registryProfile = create(ProviderProfileSchema, {
+      id: 'google-vertex-ai',
+      displayName: 'Google Vertex AI',
+      credentials: [],
+      binaries: [{ path: '/**' }],
+    });
+    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([registryProfile]);
+    mockRaw.listProviderProfiles.mockResolvedValue({ profiles: [] });
+    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
+
+    const result = await manager.resolveProfileForAgent({
+      profileId: 'google-vertex-ai',
+      agentCommand: 'claude',
+      secretName: 'test-sandbox-test-uuid-1234',
+    });
+
+    expect(result).toBeUndefined();
+    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profiles: [
+          expect.objectContaining({
+            profile: registryProfile,
+            source: 'imported from registry',
+          }),
+        ],
+      }),
+    );
   });
 });

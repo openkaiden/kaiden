@@ -19,6 +19,8 @@
 import { PolicyStatus } from '@nvidia/openshell-sdk/raw';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
+
 import { OpenshellNetworkPolicy } from './openshell-network-policy.js';
 import { OpenshellPolicyManager } from './openshell-policy-manager.js';
 import { OpenshellSdkClientManager } from './openshell-sdk-client-manager.js';
@@ -67,7 +69,11 @@ test('preserves existing policy and applies structured network and model rules o
     networkPolicies: { ...existingPolicy.networkPolicies, ...policy.networkPolicies },
   });
   expect(getSandboxPolicyStatus).toHaveBeenCalledWith(
-    { name: 'my-sandbox', version: 7 },
+    {
+      sandbox: 'my-sandbox',
+      version: 7,
+      workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+    },
     { timeoutMs: expect.any(Number) },
   );
 });
