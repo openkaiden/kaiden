@@ -8,7 +8,9 @@ import { router } from 'tinro';
 
 import { acpSessions } from '/@/stores/acp-sessions.svelte';
 import { allOpenshellSandboxes } from '/@/stores/openshell-sandboxes';
-import type { AcpSessionInfo, AcpSessionStatus } from '/@api/acp-session-info';
+import type { AcpSessionInfo } from '/@api/acp-session-info';
+
+import { getStatusDotClass, isWorkspaceUnavailable } from './acp-session-status';
 
 interface Props {
   currentSessionId?: string;
@@ -22,15 +24,6 @@ let renameValue = $state('');
 let renameInputElement: HTMLInputElement | undefined = $state();
 
 const hasReadySandboxes = $derived($allOpenshellSandboxes.some(s => s.phase === 'Ready'));
-
-const STATUS_COLORS: Record<AcpSessionStatus, string> = {
-  idle: 'bg-[var(--pd-status-not-running)]',
-  running: 'bg-[var(--pd-status-running)]',
-  waiting_input: 'bg-[var(--pd-status-waiting)]',
-  completed: 'bg-[var(--pd-status-terminated)]',
-  error: 'bg-[var(--pd-status-dead)]',
-  cancelled: 'bg-[var(--pd-status-not-running)]',
-};
 
 const sortedSessions: AcpSessionInfo[] = $derived([...$acpSessions].sort((a, b) => b.createdAt - a.createdAt));
 const needsInputSessions: AcpSessionInfo[] = $derived(sortedSessions.filter(s => s.status === 'waiting_input'));
@@ -126,8 +119,10 @@ async function handleDeleteSession(e: MouseEvent, id: string): Promise<void> {
     </div>
     <div class="flex-1 overflow-auto">
       {#snippet sessionRow(s: AcpSessionInfo)}
+        {@const unavailable = isWorkspaceUnavailable(s)}
         <div class="group flex items-center hover:bg-[var(--pd-content-card-hover-bg)] transition-colors
-          {s.id === currentSessionId ? 'bg-[var(--pd-content-card-inset-bg)] border-l-2 border-l-[var(--pd-button-primary-bg)]' : 'border-l-2 border-l-transparent'}">
+          {s.id === currentSessionId ? 'bg-[var(--pd-content-card-inset-bg)] border-l-2 border-l-[var(--pd-button-primary-bg)]' : 'border-l-2 border-l-transparent'}
+          {unavailable ? 'opacity-50' : ''}">
           {#if renamingSessionId === s.id}
             <input
               bind:this={renameInputElement}
@@ -145,8 +140,12 @@ async function handleDeleteSession(e: MouseEvent, id: string): Promise<void> {
               onclick={(): void => navigateToSession(s.id)}
               ondblclick={(e: MouseEvent): Promise<void> => startRenaming(e, s)}
             >
-              <span class="w-2 h-2 rounded-full shrink-0 {STATUS_COLORS[s.status]}"></span>
-              <span class="truncate text-[var(--pd-content-text)]" title={sessionDisplayName(s)}>{sessionDisplayName(s)}</span>
+              <span class="w-2 h-2 rounded-full shrink-0 {getStatusDotClass(s)}"></span>
+              <span
+                class="truncate text-[var(--pd-content-text)]"
+                title={unavailable
+                  ? `${sessionDisplayName(s)} (workspace unavailable)`
+                  : sessionDisplayName(s)}>{sessionDisplayName(s)}</span>
             </button>
             <button
               class="shrink-0 p-1.5 rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 focus-visible:opacity-100 hover:text-[var(--pd-content-header-text)] transition-opacity"

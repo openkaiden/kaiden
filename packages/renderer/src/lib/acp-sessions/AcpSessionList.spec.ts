@@ -132,3 +132,18 @@ test('cancelled sessions remain in the Completed group', () => {
   expect(screen.getAllByText('Completed').length).toBeGreaterThanOrEqual(1);
   expect(screen.queryByText('Failed')).not.toBeInTheDocument();
 });
+
+test('sessions without a sandbox are greyed out as workspace unavailable', () => {
+  const sessions = [makeSession({ createdAt: 1000, prompt: 'orphaned session', sandboxId: undefined })];
+
+  vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>(sessions);
+
+  render(AcpSessionList);
+
+  expect(screen.getByText(/\(unavailable\)/)).toBeInTheDocument();
+  const unavailableElements = screen.getAllByTitle('Workspace unavailable');
+  expect(unavailableElements).toHaveLength(2);
+  for (const el of unavailableElements) {
+    expect(el).toHaveClass('opacity-50');
+  }
+});
