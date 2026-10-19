@@ -141,6 +141,21 @@ describe('createProvider', () => {
     });
   });
 
+  test('logs and re-throws original error when deleteProvider fails during rollback', async () => {
+    const consoleSpy = vi.spyOn(console, 'error');
+    mockRaw.configureProviderRefresh.mockRejectedValue(new Error('configure failed'));
+    mockRaw.deleteProvider.mockRejectedValue(new Error('delete failed'));
+
+    await expect(factory.createProvider(client, adcOptions)).rejects.toThrow('configure failed');
+    expect(mockRaw.deleteProvider).toHaveBeenCalledWith({
+      name: 'my-gcp',
+      workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+    });
+    expect(consoleSpy).toHaveBeenCalledWith('Error while deleting provider my-gcp', expect.any(Error));
+
+    consoleSpy.mockRestore();
+  });
+
   test('rejects when provider profile has no ADC credential', async () => {
     mockRaw.getProviderProfile.mockResolvedValue({
       profile: { credentials: [{ name: 'api_key', envVars: ['KEY'], refresh: { strategy: 1 } }] },

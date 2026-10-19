@@ -22,7 +22,7 @@ import { access, lstat, readFile, realpath, rm, writeFile } from 'node:fs/promis
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import type { ExecInteractiveSession } from '@nvidia/openshell-sdk';
+import type { ExecInteractiveSession, OpenShellClient } from '@nvidia/openshell-sdk';
 import type { Agent, AgentWorkspaceConfiguration } from '@openkaiden/api';
 import { Terminal as HeadlessTerminal } from '@xterm/headless';
 import type { IpcMainInvokeEvent, WebContents } from 'electron';
@@ -110,22 +110,22 @@ function mockSdkListSandboxes(
   vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue(gateways);
   vi.mocked(openshellSdkClientManager.getClient).mockImplementation(gatewayName => {
     return gatewayName === TEST_GATEWAY.name
-      ? ({
+      ? Promise.resolve({
           sandbox: {
             ...sdkSandbox,
             list: vi.fn().mockReturnValue({
               all: vi.fn().mockResolvedValue(refs),
             }),
           },
-        } as never)
-      : ({
+        } as unknown as OpenShellClient)
+      : Promise.resolve({
           sandbox: {
             ...sdkSandbox,
             list: vi.fn().mockReturnValue({
               all: vi.fn().mockResolvedValue([]),
             }),
           },
-        } as never);
+        } as unknown as OpenShellClient);
   });
 }
 

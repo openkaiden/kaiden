@@ -131,8 +131,8 @@ export class SecretManager {
     await this.openshellAdapter.deleteProfile(profileId, gateway);
   }
 
-  async listServices(gateway?: string): Promise<OpenshellProfile[]> {
-    return this.cli.listServices(gateway);
+  async listServices(): Promise<OpenshellProfile[]> {
+    return this.cli.listServices();
   }
 
   /**

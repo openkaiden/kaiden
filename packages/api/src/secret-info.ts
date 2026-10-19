@@ -28,11 +28,11 @@ export interface SecretName {
 /**
  * Secret information.
  */
-export type SecretInfo = {
-  type: string;
+export interface SecretInfo {
   name: string;
+  type: string;
   description?: string;
-};
+}
 
 /** Secret metadata together with the OpenShell gateway that owns it. */
 export interface GatewaySecretInfo extends SecretInfo {
