@@ -23,9 +23,9 @@ import { writable } from 'svelte/store';
 import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import { workspaceProjectInfos } from '/@/kaiden/stores/workspace-projects';
 import { handleNavigation } from '/@/navigation';
 import { initializeDraftFromProject } from '/@/stores/agent-workspace-create-draft.svelte';
-import { workspaceProjectInfos } from '/@/stores/workspace-projects';
 import { NavigationPage } from '/@api/navigation-page';
 import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';
 

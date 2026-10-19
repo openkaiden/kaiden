@@ -5,6 +5,7 @@ import { router } from 'tinro';
 
 import { mcpRemoteServerInfos } from '/@/kaiden/stores/mcp-remote-servers';
 import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
+import { ragEnvironments } from '/@/kaiden/stores/rag-environments';
 import { skillInfos } from '/@/kaiden/stores/skills';
 import AgentWorkspaceCreateStepFileSystem, {
   type CustomMount,
@@ -15,7 +16,6 @@ import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import ChecklistPanel from '/@/lib/ui/ChecklistPanel.svelte';
 import { handleNavigation } from '/@/navigation';
-import { ragEnvironments } from '/@/stores/rag-environments';
 import type {
   AgentWorkspaceConfiguration,
   AgentWorkspaceMcpConfig,

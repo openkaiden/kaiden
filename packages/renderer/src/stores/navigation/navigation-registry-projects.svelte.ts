@@ -18,7 +18,7 @@
 
 import { faFolderOpen } from '@fortawesome/free-solid-svg-icons/faFolderOpen';
 
-import { workspaceProjectInfos } from '/@/stores/workspace-projects';
+import { workspaceProjectInfos } from '/@/kaiden/stores/workspace-projects';
 
 import type { NavigationRegistryEntry } from './navigation-registry';
 

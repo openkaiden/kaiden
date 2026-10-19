@@ -18,9 +18,8 @@
 
 import { type Writable, writable } from 'svelte/store';
 
+import { EventStore } from '/@/stores/event-store';
 import type { RagEnvironment } from '/@api/rag/rag-environment';
-
-import { EventStore } from './event-store';
 
 const windowEvents = [
   'rag-environment-created',

@@ -11,8 +11,10 @@ import { disabledModels, isModelEnabled, modelKey } from '/@/kaiden/stores/model
 import { catalogModels } from '/@/kaiden/stores/models';
 import { openshellGateways } from '/@/kaiden/stores/openshell-gateways';
 import { allOpenshellSandboxes } from '/@/kaiden/stores/openshell-sandboxes';
+import { ragEnvironments } from '/@/kaiden/stores/rag-environments';
 import { secretVaultInfos } from '/@/kaiden/stores/secret-vault';
 import { skillInfos } from '/@/kaiden/stores/skills';
+import { workspaceProjectInfos } from '/@/kaiden/stores/workspace-projects';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import WizardStepper from '/@/lib/ui/WizardStepper.svelte';
@@ -25,8 +27,6 @@ import {
 } from '/@/stores/agent-workspace-create-draft.svelte';
 import { agentInfos } from '/@/stores/agents';
 import { providerInfos } from '/@/stores/providers';
-import { ragEnvironments } from '/@/stores/rag-environments';
-import { workspaceProjectInfos } from '/@/stores/workspace-projects';
 import type {
   AgentWorkspaceConfiguration,
   AgentWorkspaceMount,

@@ -5,6 +5,11 @@ import '@fortawesome/fontawesome-free/css/all.min.css';
 import { tablePersistence } from '@podman-desktop/ui-svelte';
 import { router } from 'tinro';
 
+import ProjectCreate from '/@/kaiden/lib/projects/ProjectCreate.svelte';
+import ProjectDetails from '/@/kaiden/lib/projects/ProjectDetails.svelte';
+import ProjectList from '/@/kaiden/lib/projects/ProjectList.svelte';
+import RAGEnvironmentDetails from '/@/kaiden/lib/rag/RAGEnvironmentDetails.svelte';
+import RAGEnvironmentList from '/@/kaiden/lib/rag/RAGEnvironmentList.svelte';
 import AcpSessionDetail from '/@/lib/acp-sessions/AcpSessionDetail.svelte';
 import AcpSessionLayout from '/@/lib/acp-sessions/AcpSessionLayout.svelte';
 import AcpSessionList from '/@/lib/acp-sessions/AcpSessionList.svelte';
@@ -13,11 +18,6 @@ import AgentWorkspaceDetails from '/@/lib/agent-workspaces/AgentWorkspaceDetails
 import AgentWorkspaceList from '/@/lib/agent-workspaces/AgentWorkspaceList.svelte';
 import { parseExtensionListRequest } from '/@/lib/extensions/extension-list';
 import KubernetesRoot from '/@/lib/kube/KubernetesRoot.svelte';
-import ProjectCreate from '/@/lib/projects/ProjectCreate.svelte';
-import ProjectDetails from '/@/lib/projects/ProjectDetails.svelte';
-import ProjectList from '/@/lib/projects/ProjectList.svelte';
-import RAGEnvironmentDetails from '/@/lib/rag/RAGEnvironmentDetails.svelte';
-import RAGEnvironmentList from '/@/lib/rag/RAGEnvironmentList.svelte';
 import PinActions from '/@/lib/statusbar/PinActions.svelte';
 import { handleNavigation } from '/@/navigation';
 import { kubernetesNoCurrentContext } from '/@/stores/kubernetes-no-current-context';

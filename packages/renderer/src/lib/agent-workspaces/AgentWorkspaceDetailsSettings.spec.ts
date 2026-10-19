@@ -25,9 +25,9 @@ import { beforeEach, expect, test, vi } from 'vitest';
 
 import * as mcpStore from '/@/kaiden/stores/mcp-remote-servers';
 import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
+import * as ragStore from '/@/kaiden/stores/rag-environments';
 import * as skillsStore from '/@/kaiden/stores/skills';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
-import * as ragStore from '/@/stores/rag-environments';
 import type { AgentWorkspaceConfiguration } from '/@api/agent-workspace-info';
 import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info';
 import type { RagEnvironment } from '/@api/rag/rag-environment';
@@ -37,7 +37,7 @@ import AgentWorkspaceDetailsSettings from './AgentWorkspaceDetailsSettings.svelt
 
 vi.mock(import('tinro'));
 vi.mock(import('/@/kaiden/stores/skills'));
-vi.mock(import('/@/stores/rag-environments'));
+vi.mock(import('/@/kaiden/stores/rag-environments'));
 vi.mock(import('/@/navigation'));
 vi.mock(import('/@/kaiden/stores/mcp-remote-servers'));
 vi.mock(import('/@/lib/dialogs/messagebox-utils'));

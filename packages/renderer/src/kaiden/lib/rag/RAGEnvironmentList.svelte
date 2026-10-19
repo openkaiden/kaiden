@@ -2,9 +2,9 @@
 import { faPlus } from '@fortawesome/free-solid-svg-icons';
 import { Button, NavPage, Table, TableColumn, TableRow } from '@podman-desktop/ui-svelte';
 
-import RAGEnvironmentCreateModal from '/@/lib/rag/RAGEnvironmentCreateModal.svelte';
+import RAGEnvironmentCreateModal from '/@/kaiden/lib/rag/RAGEnvironmentCreateModal.svelte';
+import { ragEnvironments } from '/@/kaiden/stores/rag-environments';
 import { providerInfos } from '/@/stores/providers';
-import { ragEnvironments } from '/@/stores/rag-environments';
 import type { RagEnvironment } from '/@api/rag/rag-environment';
 
 import RAGEnvironmentActions from './columns/RAGEnvironmentActions.svelte';

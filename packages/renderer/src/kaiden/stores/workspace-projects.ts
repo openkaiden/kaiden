@@ -19,9 +19,8 @@
 import type { Writable } from 'svelte/store';
 import { writable } from 'svelte/store';
 
+import { EventStore } from '/@/stores/event-store';
 import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';
-
-import { EventStore } from './event-store';
 
 export const workspaceProjectInfos: Writable<readonly WorkspaceProjectInfo[]> = writable([]);
 

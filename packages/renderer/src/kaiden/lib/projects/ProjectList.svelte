@@ -2,9 +2,9 @@
 import { faPlus } from '@fortawesome/free-solid-svg-icons';
 import { Button, FilteredEmptyScreen, NavPage, Table, TableColumn, TableRow } from '@podman-desktop/ui-svelte';
 
+import { workspaceProjectInfos } from '/@/kaiden/stores/workspace-projects';
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
 import { handleNavigation } from '/@/navigation';
-import { workspaceProjectInfos } from '/@/stores/workspace-projects';
 import { NavigationPage } from '/@api/navigation-page';
 import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';
 
