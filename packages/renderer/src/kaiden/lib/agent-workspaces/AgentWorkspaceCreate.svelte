@@ -6,6 +6,13 @@ import { onMount, untrack } from 'svelte';
 import { toast } from 'svelte-sonner';
 
 import { getModelId } from '/@/kaiden/lib/models/models-utils';
+import {
+  applyProjectToDraft,
+  resetDraft,
+  wizard,
+  WORKSPACE_REGISTRY_HOSTS,
+} from '/@/kaiden/stores/agent-workspace-create-draft.svelte';
+import { agentInfos } from '/@/kaiden/stores/agents';
 import { mcpRemoteServerInfos } from '/@/kaiden/stores/mcp-remote-servers';
 import { disabledModels, isModelEnabled, modelKey } from '/@/kaiden/stores/model-catalog';
 import { catalogModels } from '/@/kaiden/stores/models';
@@ -19,13 +26,6 @@ import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import WizardStepper from '/@/lib/ui/WizardStepper.svelte';
 import { handleNavigation } from '/@/navigation';
-import {
-  applyProjectToDraft,
-  resetDraft,
-  wizard,
-  WORKSPACE_REGISTRY_HOSTS,
-} from '/@/stores/agent-workspace-create-draft.svelte';
-import { agentInfos } from '/@/stores/agents';
 import { providerInfos } from '/@/stores/providers';
 import type {
   AgentWorkspaceConfiguration,

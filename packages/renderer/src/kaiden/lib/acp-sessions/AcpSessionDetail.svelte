@@ -5,9 +5,9 @@ import { toast } from '@zerodevx/svelte-toast';
 import { untrack } from 'svelte';
 import { router } from 'tinro';
 
+import { acpSessions, acpSessionsEventStoreInfo } from '/@/kaiden/stores/acp-sessions.svelte';
+import { agentInfos } from '/@/kaiden/stores/agents';
 import { allOpenshellSandboxes } from '/@/kaiden/stores/openshell-sandboxes';
-import { acpSessions, acpSessionsEventStoreInfo } from '/@/stores/acp-sessions.svelte';
-import { agentInfos } from '/@/stores/agents';
 import type {
   AcpAttachment,
   AcpFlowEvent,

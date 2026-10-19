@@ -23,9 +23,9 @@ import { writable } from 'svelte/store';
 import { router } from 'tinro';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import { initializeDraftFromProject } from '/@/kaiden/stores/agent-workspace-create-draft.svelte';
 import { workspaceProjectInfos } from '/@/kaiden/stores/workspace-projects';
 import { handleNavigation } from '/@/navigation';
-import { initializeDraftFromProject } from '/@/stores/agent-workspace-create-draft.svelte';
 import { NavigationPage } from '/@api/navigation-page';
 import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';
 
@@ -33,7 +33,7 @@ import ProjectDetails from './ProjectDetails.svelte';
 
 vi.mock(import('tinro'));
 vi.mock(import('/@/navigation'));
-vi.mock(import('/@/stores/agent-workspace-create-draft.svelte'));
+vi.mock(import('/@/kaiden/stores/agent-workspace-create-draft.svelte'));
 
 const routerStore = writable({
   path: '/projects/my-project/overview',

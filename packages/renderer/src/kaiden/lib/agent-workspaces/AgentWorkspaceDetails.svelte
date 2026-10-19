@@ -3,10 +3,10 @@ import { faArrowsRotate, faTerminal, faTrash } from '@fortawesome/free-solid-svg
 import { ErrorMessage, Tab } from '@podman-desktop/ui-svelte';
 import { router } from 'tinro';
 
+import AgentWorkspaceDetailsOverview from '/@/kaiden/lib/agent-workspaces/AgentWorkspaceDetailsOverview.svelte';
+import AgentWorkspaceDetailsSettings from '/@/kaiden/lib/agent-workspaces/AgentWorkspaceDetailsSettings.svelte';
+import AgentWorkspaceTerminal from '/@/kaiden/lib/agent-workspaces/AgentWorkspaceTerminal.svelte';
 import { allOpenshellSandboxes } from '/@/kaiden/stores/openshell-sandboxes';
-import AgentWorkspaceDetailsOverview from '/@/lib/agent-workspaces/AgentWorkspaceDetailsOverview.svelte';
-import AgentWorkspaceDetailsSettings from '/@/lib/agent-workspaces/AgentWorkspaceDetailsSettings.svelte';
-import AgentWorkspaceTerminal from '/@/lib/agent-workspaces/AgentWorkspaceTerminal.svelte';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import DetailsPage from '/@/lib/ui/DetailsPage.svelte';
 import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';

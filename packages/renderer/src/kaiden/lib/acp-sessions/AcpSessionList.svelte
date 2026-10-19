@@ -12,9 +12,9 @@ import {
 } from '@podman-desktop/ui-svelte';
 import { router } from 'tinro';
 
+import { acpSessions } from '/@/kaiden/stores/acp-sessions.svelte';
 import { allOpenshellSandboxes } from '/@/kaiden/stores/openshell-sandboxes';
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
-import { acpSessions } from '/@/stores/acp-sessions.svelte';
 import type { AcpSessionInfo, AcpSessionStatus } from '/@api/acp-session-info';
 
 import AcpNoSandboxEmptyScreen from './AcpNoSandboxEmptyScreen.svelte';

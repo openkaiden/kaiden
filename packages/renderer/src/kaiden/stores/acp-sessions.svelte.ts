@@ -18,9 +18,8 @@
 
 import { type Writable, writable } from 'svelte/store';
 
+import { EventStore } from '/@/stores/event-store';
 import type { AcpSessionInfo } from '/@api/acp-session-info';
-
-import { EventStore } from './event-store';
 
 export const acpSessions: Writable<AcpSessionInfo[]> = writable([]);
 

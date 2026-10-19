@@ -3,15 +3,15 @@ import { faBook, faServer, faWrench } from '@fortawesome/free-solid-svg-icons';
 import { Button, Input, SettingsNavItem } from '@podman-desktop/ui-svelte';
 import { router } from 'tinro';
 
+import AgentWorkspaceCreateStepFileSystem, {
+  type CustomMount,
+} from '/@/kaiden/lib/agent-workspaces/AgentWorkspaceCreateStepFileSystem.svelte';
+import AgentWorkspaceCreateStepNetworking from '/@/kaiden/lib/agent-workspaces/AgentWorkspaceCreateStepNetworking.svelte';
+import WorkspaceDescriptionField from '/@/kaiden/lib/agent-workspaces/WorkspaceDescriptionField.svelte';
 import { mcpRemoteServerInfos } from '/@/kaiden/stores/mcp-remote-servers';
 import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
 import { ragEnvironments } from '/@/kaiden/stores/rag-environments';
 import { skillInfos } from '/@/kaiden/stores/skills';
-import AgentWorkspaceCreateStepFileSystem, {
-  type CustomMount,
-} from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepFileSystem.svelte';
-import AgentWorkspaceCreateStepNetworking from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepNetworking.svelte';
-import WorkspaceDescriptionField from '/@/lib/agent-workspaces/WorkspaceDescriptionField.svelte';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import ChecklistPanel from '/@/lib/ui/ChecklistPanel.svelte';

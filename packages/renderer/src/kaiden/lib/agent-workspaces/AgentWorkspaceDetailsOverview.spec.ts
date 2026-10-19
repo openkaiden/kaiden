@@ -22,15 +22,15 @@ import { render, screen } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import * as agentsStore from '/@/kaiden/stores/agents';
 import * as modelsStore from '/@/kaiden/stores/models';
 import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
-import * as agentsStore from '/@/stores/agents';
 import type { AgentWorkspaceConfiguration } from '/@api/agent-workspace-info';
 import type { CatalogModelInfo } from '/@api/model-registry-info';
 
 import AgentWorkspaceDetailsOverview from './AgentWorkspaceDetailsOverview.svelte';
 
-vi.mock(import('/@/stores/agents'));
+vi.mock(import('/@/kaiden/stores/agents'));
 vi.mock(import('/@/kaiden/stores/models'));
 
 const workspaceSummary: SandboxInfoWithGateway = {

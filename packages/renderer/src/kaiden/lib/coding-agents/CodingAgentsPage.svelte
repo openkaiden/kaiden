@@ -2,8 +2,8 @@
 import { faTerminal } from '@fortawesome/free-solid-svg-icons';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
+import { agentInfos } from '/@/kaiden/stores/agents';
 import IconImage from '/@/lib/appearance/IconImage.svelte';
-import { agentInfos } from '/@/stores/agents';
 import type { AgentInfo } from '/@api/agent-info';
 
 import CodingAgentDetail from './CodingAgentDetail.svelte';

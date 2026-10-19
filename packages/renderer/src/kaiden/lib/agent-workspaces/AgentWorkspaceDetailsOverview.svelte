@@ -9,13 +9,13 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
+import { getAgentIcon } from '/@/kaiden/lib/agent-workspaces/agent-utis';
 import { getModelId } from '/@/kaiden/lib/models/models-utils';
+import { agentInfos } from '/@/kaiden/stores/agents';
 import { catalogModels } from '/@/kaiden/stores/models';
 import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
 import { skillInfos } from '/@/kaiden/stores/skills';
-import { getAgentIcon } from '/@/lib/agent-workspaces/agent-utis';
 import IconImage from '/@/lib/appearance/IconImage.svelte';
-import { agentInfos } from '/@/stores/agents';
 import type { AgentWorkspaceConfiguration } from '/@api/agent-workspace-info';
 
 import { getAgentId, getReferenceTime, isActiveWorkspace } from './workspace-utils';

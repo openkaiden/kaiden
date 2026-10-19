@@ -1,10 +1,10 @@
 <script lang="ts">
 import { faRocket, faTrash } from '@fortawesome/free-solid-svg-icons';
 
+import { initializeDraftFromProject } from '/@/kaiden/stores/agent-workspace-create-draft.svelte';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
 import { handleNavigation } from '/@/navigation';
-import { initializeDraftFromProject } from '/@/stores/agent-workspace-create-draft.svelte';
 import { NavigationPage } from '/@api/navigation-page';
 import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';
 

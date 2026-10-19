@@ -23,6 +23,8 @@ import userEvent from '@testing-library/user-event';
 import { writable } from 'svelte/store';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { initializeDraftFromProject, resetDraft, wizard } from '/@/kaiden/stores/agent-workspace-create-draft.svelte';
+import * as agentsStore from '/@/kaiden/stores/agents';
 import * as mcpStore from '/@/kaiden/stores/mcp-remote-servers';
 import * as modelCatalogStore from '/@/kaiden/stores/model-catalog';
 import * as modelsStore from '/@/kaiden/stores/models';
@@ -32,8 +34,6 @@ import * as ragStore from '/@/kaiden/stores/rag-environments';
 import * as secretVaultStore from '/@/kaiden/stores/secret-vault';
 import * as skillsStore from '/@/kaiden/stores/skills';
 import * as workspaceProjectsStore from '/@/kaiden/stores/workspace-projects';
-import { initializeDraftFromProject, resetDraft, wizard } from '/@/stores/agent-workspace-create-draft.svelte';
-import * as agentsStore from '/@/stores/agents';
 import * as providerStore from '/@/stores/providers';
 import type { AgentInfo } from '/@api/agent-info';
 import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info';
@@ -48,7 +48,7 @@ import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';
 import AgentWorkspaceCreate from './AgentWorkspaceCreate.svelte';
 
 vi.mock(import('/@/navigation'));
-vi.mock(import('/@/stores/agents'));
+vi.mock(import('/@/kaiden/stores/agents'));
 vi.mock(import('/@/kaiden/stores/skills'));
 vi.mock(import('/@/kaiden/stores/mcp-remote-servers'));
 vi.mock(import('/@/kaiden/stores/secret-vault'));

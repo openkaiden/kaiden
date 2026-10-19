@@ -3,9 +3,9 @@ import { Button, Checkbox, Link, Tooltip } from '@podman-desktop/ui-svelte';
 import { onMount } from 'svelte';
 import { router } from 'tinro';
 
+import { guidedSetupSteps } from '/@/kaiden/lib/guided-setup/guided-setup-steps';
+import GuidedSetup from '/@/kaiden/lib/guided-setup/GuidedSetup.svelte';
 import IconImage from '/@/lib/appearance/IconImage.svelte';
-import { guidedSetupSteps } from '/@/lib/guided-setup/guided-setup-steps';
-import GuidedSetup from '/@/lib/guided-setup/GuidedSetup.svelte';
 import DesktopIcon from '/@/lib/images/DesktopIcon.svelte';
 import { onboardingList } from '/@/stores/onboarding';
 import { providerInfos } from '/@/stores/providers';

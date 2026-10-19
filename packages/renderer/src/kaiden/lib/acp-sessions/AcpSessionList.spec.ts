@@ -22,14 +22,14 @@ import { render, screen } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import * as acpSessionsStore from '/@/kaiden/stores/acp-sessions.svelte';
 import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
 import * as openshellSandboxesStore from '/@/kaiden/stores/openshell-sandboxes';
-import * as acpSessionsStore from '/@/stores/acp-sessions.svelte';
 import type { AcpSessionInfo } from '/@api/acp-session-info';
 
 import AcpSessionList from './AcpSessionList.svelte';
 
-vi.mock(import('/@/stores/acp-sessions.svelte'));
+vi.mock(import('/@/kaiden/stores/acp-sessions.svelte'));
 vi.mock(import('/@/kaiden/stores/openshell-sandboxes'));
 vi.mock(import('tinro'));
 

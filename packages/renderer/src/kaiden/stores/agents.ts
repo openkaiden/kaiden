@@ -18,9 +18,8 @@
 
 import { type Writable, writable } from 'svelte/store';
 
+import { EventStore } from '/@/stores/event-store';
 import type { AgentInfo } from '/@api/agent-info';
-
-import { EventStore } from './event-store';
 
 const windowEvents: string[] = [
   'extensions-started',

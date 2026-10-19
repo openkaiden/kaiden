@@ -18,11 +18,11 @@
 
 import { get } from 'svelte/store';
 
+import type { CustomMount } from '/@/kaiden/lib/agent-workspaces/AgentWorkspaceCreateStepFileSystem.svelte';
 import { mcpRemoteServerInfos } from '/@/kaiden/stores/mcp-remote-servers';
 import { ragEnvironments } from '/@/kaiden/stores/rag-environments';
 import { secretVaultInfos } from '/@/kaiden/stores/secret-vault';
 import { skillInfos } from '/@/kaiden/stores/skills';
-import type { CustomMount } from '/@/lib/agent-workspaces/AgentWorkspaceCreateStepFileSystem.svelte';
 import { type NetworkConfiguration, sanitizeDns1123Label } from '/@api/agent-workspace-info';
 import type { ModelInfo } from '/@api/model-registry-info';
 import type { FilesystemConfiguration, WorkspaceProjectInfo } from '/@api/workspace-project-info';

@@ -3,7 +3,7 @@ import { faChevronDown, faFolder, faFolderOpen, faInfoCircle, faRocket } from '@
 import { Button, Dropdown, Input } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
-import WorkspaceDescriptionField from '/@/lib/agent-workspaces/WorkspaceDescriptionField.svelte';
+import WorkspaceDescriptionField from '/@/kaiden/lib/agent-workspaces/WorkspaceDescriptionField.svelte';
 import { getSandboxNameValidationError } from '/@api/agent-workspace-info';
 import type { GatewayInfo } from '/@api/openshell-gateway-info';
 import type { WorkspaceProjectInfo } from '/@api/workspace-project-info';

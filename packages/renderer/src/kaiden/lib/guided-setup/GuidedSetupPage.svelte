@@ -7,10 +7,10 @@ import { untrack } from 'svelte';
 import { getCompatibleModels } from '/@/kaiden/lib/models/compatible-connections';
 import CompatibleConnectionGate from '/@/kaiden/lib/models/CompatibleConnectionGate.svelte';
 import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
+import { agentInfos } from '/@/kaiden/stores/agents';
 import { disabledModels, isModelEnabled, modelSelectionKey } from '/@/kaiden/stores/model-catalog';
 import { catalogModels } from '/@/kaiden/stores/models';
 import IconImage from '/@/lib/appearance/IconImage.svelte';
-import { agentInfos } from '/@/stores/agents';
 import type { DefaultWorkspaceModelSettings } from '/@api/onboarding-settings-info';
 
 import type { GuidedSetupStepProps } from './guided-setup-steps';

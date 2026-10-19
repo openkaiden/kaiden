@@ -1,6 +1,6 @@
 import { derived } from 'svelte/store';
 
-import { cliToolInfos } from './cli-tools';
+import { cliToolInfos } from '/@/stores/cli-tools';
 
 const gooseCliToolId = 'kaiden.goose.goose';
 

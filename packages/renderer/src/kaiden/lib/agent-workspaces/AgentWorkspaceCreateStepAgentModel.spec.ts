@@ -22,10 +22,10 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
+import * as agentsStore from '/@/kaiden/stores/agents';
 import * as inferenceConnectionSummariesStore from '/@/kaiden/stores/inference-connection-summaries';
 import * as modelCatalogStore from '/@/kaiden/stores/model-catalog';
 import * as modelsStore from '/@/kaiden/stores/models';
-import * as agentsStore from '/@/stores/agents';
 import * as configurationPropertiesStore from '/@/stores/configurationProperties';
 import * as providersStore from '/@/stores/providers';
 import type { AgentInfo } from '/@api/agent-info';
@@ -35,7 +35,7 @@ import type { ProviderInfo } from '/@api/provider-info';
 import AgentWorkspaceCreateStepAgentModel from './AgentWorkspaceCreateStepAgentModel.svelte';
 
 vi.mock(import('/@/navigation'));
-vi.mock(import('/@/stores/agents'));
+vi.mock(import('/@/kaiden/stores/agents'));
 vi.mock(import('/@/stores/providers'));
 vi.mock(import('/@/kaiden/stores/model-catalog'));
 vi.mock(import('/@/kaiden/stores/models'));

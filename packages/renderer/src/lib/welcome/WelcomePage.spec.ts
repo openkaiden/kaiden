@@ -32,7 +32,7 @@ import type { TelemetryMessages } from '/@api/telemetry';
 
 import WelcomePage from './WelcomePage.svelte';
 
-vi.mock(import('/@/lib/guided-setup/guided-setup-steps'), async importOriginal => ({
+vi.mock(import('/@/kaiden/lib/guided-setup/guided-setup-steps'), async importOriginal => ({
   ...(await importOriginal()),
   guidedSetupSteps: [],
 }));

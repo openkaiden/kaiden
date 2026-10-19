@@ -19,7 +19,7 @@
 import { faRobot } from '@fortawesome/free-solid-svg-icons/faRobot';
 import { get } from 'svelte/store';
 
-import { acpSessions } from '/@/stores/acp-sessions.svelte';
+import { acpSessions } from '/@/kaiden/stores/acp-sessions.svelte';
 
 import type { NavigationRegistryEntry } from './navigation-registry';
 
