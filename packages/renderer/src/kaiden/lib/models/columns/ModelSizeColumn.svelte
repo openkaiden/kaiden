@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { CatalogModelInfo } from '/@/lib/models/models-utils';
+import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
 
 interface Props {
   object: CatalogModelInfo;

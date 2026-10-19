@@ -22,10 +22,10 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import * as inferenceConnectionSummariesStore from '/@/kaiden/stores/inference-connection-summaries';
+import * as modelCatalogStore from '/@/kaiden/stores/model-catalog';
+import * as modelsStore from '/@/kaiden/stores/models';
 import * as configurationPropertiesStore from '/@/stores/configurationProperties';
-import * as inferenceConnectionSummariesStore from '/@/stores/inference-connection-summaries';
-import * as modelCatalogStore from '/@/stores/model-catalog';
-import * as modelsStore from '/@/stores/models';
 import * as providersStore from '/@/stores/providers';
 import type { AgentInfo } from '/@api/agent-info';
 import type { CatalogModelInfo, InferenceConnectionSummary } from '/@api/model-registry-info';
@@ -33,10 +33,10 @@ import type { ProviderInfo } from '/@api/provider-info';
 
 import CodingAgentDetail from './CodingAgentDetail.svelte';
 
-vi.mock(import('/@/stores/models'));
-vi.mock(import('/@/stores/model-catalog'));
+vi.mock(import('/@/kaiden/stores/models'));
+vi.mock(import('/@/kaiden/stores/model-catalog'));
 vi.mock(import('/@/stores/providers'));
-vi.mock(import('/@/stores/inference-connection-summaries'));
+vi.mock(import('/@/kaiden/stores/inference-connection-summaries'));
 vi.mock(import('/@/stores/configurationProperties'));
 
 const mockAgentInfo: AgentInfo = {

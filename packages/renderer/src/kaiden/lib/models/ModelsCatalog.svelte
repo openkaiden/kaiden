@@ -12,24 +12,24 @@ import {
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { router } from 'tinro';
 
-import ModelActionsColumn from '/@/lib/models/columns/ModelActionsColumn.svelte';
-import ModelNameColumn from '/@/lib/models/columns/ModelNameColumn.svelte';
-import ModelRuntimeColumn from '/@/lib/models/columns/ModelRuntimeColumn.svelte';
-import ModelSizeColumn from '/@/lib/models/columns/ModelSizeColumn.svelte';
-import ModelStatusColumn from '/@/lib/models/columns/ModelStatusColumn.svelte';
-import LocalRuntimeTiles from '/@/lib/models/LocalRuntimeTiles.svelte';
-import type { CatalogModelInfo, InferenceConnectionSummary } from '/@/lib/models/models-utils';
-import ModelsCatalogEmptyScreen from '/@/lib/models/ModelsCatalogEmptyScreen.svelte';
-import ProviderConnectionTiles from '/@/lib/models/ProviderConnectionTiles.svelte';
-import SemanticRouterCards from '/@/lib/models/SemanticRouterCards.svelte';
-import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
+import ModelActionsColumn from '/@/kaiden/lib/models/columns/ModelActionsColumn.svelte';
+import ModelNameColumn from '/@/kaiden/lib/models/columns/ModelNameColumn.svelte';
+import ModelRuntimeColumn from '/@/kaiden/lib/models/columns/ModelRuntimeColumn.svelte';
+import ModelSizeColumn from '/@/kaiden/lib/models/columns/ModelSizeColumn.svelte';
+import ModelStatusColumn from '/@/kaiden/lib/models/columns/ModelStatusColumn.svelte';
+import LocalRuntimeTiles from '/@/kaiden/lib/models/LocalRuntimeTiles.svelte';
+import type { CatalogModelInfo, InferenceConnectionSummary } from '/@/kaiden/lib/models/models-utils';
+import ModelsCatalogEmptyScreen from '/@/kaiden/lib/models/ModelsCatalogEmptyScreen.svelte';
+import ProviderConnectionTiles from '/@/kaiden/lib/models/ProviderConnectionTiles.svelte';
+import SemanticRouterCards from '/@/kaiden/lib/models/SemanticRouterCards.svelte';
 import {
   cloudConnectionSummaries as cloudConnectionSummariesStore,
   inHouseConnectionSummaries as inHouseConnectionSummariesStore,
   localConnectionSummaries as localConnectionSummariesStore,
-} from '/@/stores/inference-connection-summaries';
-import { cloudCatalogModels, inHouseCatalogModels, localCatalogModels } from '/@/stores/models';
-import { semanticRouterInfos } from '/@/stores/semantic-routers';
+} from '/@/kaiden/stores/inference-connection-summaries';
+import { cloudCatalogModels, inHouseCatalogModels, localCatalogModels } from '/@/kaiden/stores/models';
+import { semanticRouterInfos } from '/@/kaiden/stores/semantic-routers';
+import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
 import type { SemanticRouterInfo } from '/@api/semantic-router-info';
 
 type ModelSelectable = CatalogModelInfo & { selected: boolean };
@@ -133,8 +133,11 @@ function filterBySearch(models: CatalogModelInfo[], term: string): CatalogModelI
   const q = term.trim().toLowerCase();
   return models.filter(
     m =>
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional: || needed for boolean short-circuit
       m.label.toLowerCase().includes(q) ||
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
       m.providerId.toLowerCase().includes(q) ||
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
       m.providerName.toLowerCase().includes(q) ||
       (m.connectionName?.toLowerCase().includes(q) ?? false),
   );
@@ -144,6 +147,7 @@ function filterConnectionsBySearch(conns: InferenceConnectionSummary[], term: st
   if (!term.trim()) return conns;
   const q = term.trim().toLowerCase();
   return conns.filter(
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional: || needed for boolean short-circuit
     c => c.providerName.toLowerCase().includes(q) || (c.connectionType?.toLowerCase().includes(q) ?? false),
   );
 }

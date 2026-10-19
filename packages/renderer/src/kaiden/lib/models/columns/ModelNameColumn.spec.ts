@@ -21,7 +21,7 @@ import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/svelte';
 import { expect, test } from 'vitest';
 
-import type { CatalogModelInfo } from '/@/lib/models/models-utils';
+import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
 
 import ModelNameColumn from './ModelNameColumn.svelte';
 

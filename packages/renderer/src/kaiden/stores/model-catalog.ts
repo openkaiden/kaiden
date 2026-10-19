@@ -18,7 +18,7 @@
 
 import { writable } from 'svelte/store';
 
-import { configurationProperties } from './configurationProperties';
+import { configurationProperties } from '/@/stores/configurationProperties';
 
 const DISABLED_MODELS_KEY = 'modelCatalog.disabledModels';
 let requestId = 0;

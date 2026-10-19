@@ -3,12 +3,12 @@ import { faPlus } from '@fortawesome/free-solid-svg-icons';
 import { Button, ErrorMessage, Input, NumberInput } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
-import type { CatalogModelInfo } from '/@/lib/models/models-utils';
-import SemanticRouterCreateStepModels from '/@/lib/models/SemanticRouterCreateStepModels.svelte';
+import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
+import SemanticRouterCreateStepModels from '/@/kaiden/lib/models/SemanticRouterCreateStepModels.svelte';
+import { resetRouterDraft, routerWizard } from '/@/kaiden/stores/semantic-router-create-draft.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import WizardStepper from '/@/lib/ui/WizardStepper.svelte';
 import { handleNavigation } from '/@/navigation';
-import { resetRouterDraft, routerWizard } from '/@/stores/semantic-router-create-draft.svelte';
 import { NavigationPage } from '/@api/navigation-page';
 import type { SemanticRouterConfigInfo } from '/@api/semantic-router-info';
 
@@ -85,6 +85,7 @@ function buildConfig(): SemanticRouterConfigInfo {
   const modelRefs = buildModelRefs();
   return {
     name: d.name.trim(),
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional: || converts empty string to undefined
     description: d.description.trim() || undefined,
     listeners: [{ address: d.listenerAddress, port: d.listenerPort, timeout: d.timeout }],
     routing: {

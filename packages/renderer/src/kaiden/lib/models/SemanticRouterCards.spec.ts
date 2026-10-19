@@ -22,13 +22,13 @@ import { render, screen } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import type { CatalogModelInfo } from '/@/lib/models/models-utils';
-import * as modelsStore from '/@/stores/models';
+import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
+import * as modelsStore from '/@/kaiden/stores/models';
 import type { SemanticRouterConfigInfo } from '/@api/semantic-router-info';
 
 import SemanticRouterCards from './SemanticRouterCards.svelte';
 
-vi.mock(import('/@/stores/models'));
+vi.mock(import('/@/kaiden/stores/models'));
 
 beforeEach(() => {
   vi.resetAllMocks();

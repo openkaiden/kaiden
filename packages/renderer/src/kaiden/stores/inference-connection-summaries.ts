@@ -18,9 +18,8 @@
 
 import { derived, type Writable, writable } from 'svelte/store';
 
+import { EventStore } from '/@/stores/event-store';
 import type { InferenceConnectionSummary } from '/@api/model-registry-info';
-
-import { EventStore } from './event-store';
 
 const windowEvents = [
   'inference-connection-summary-registry:update',

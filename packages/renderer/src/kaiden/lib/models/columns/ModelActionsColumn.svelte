@@ -1,7 +1,7 @@
 <script lang="ts">
-import type { CatalogModelInfo } from '/@/lib/models/models-utils';
+import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
+import { disabledModels, isModelEnabled, toggleModel } from '/@/kaiden/stores/model-catalog';
 import SlideToggle from '/@/lib/ui/SlideToggle.svelte';
-import { disabledModels, isModelEnabled, toggleModel } from '/@/stores/model-catalog';
 
 interface Props {
   object: CatalogModelInfo;

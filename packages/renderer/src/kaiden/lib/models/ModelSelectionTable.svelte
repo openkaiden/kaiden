@@ -3,8 +3,8 @@ import { faSearch } from '@fortawesome/free-solid-svg-icons';
 import { StatusIcon } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
+import { modelSelectionKey } from '/@/kaiden/stores/model-catalog';
 import { handleNavigation } from '/@/navigation';
-import { modelSelectionKey } from '/@/stores/model-catalog';
 import { NavigationPage } from '/@api/navigation-page';
 
 import type { CatalogModelInfo } from './models-utils';

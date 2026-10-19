@@ -3,12 +3,12 @@ import { faTerminal } from '@fortawesome/free-solid-svg-icons';
 import { Button } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
+import { getCompatibleModels } from '/@/kaiden/lib/models/compatible-connections';
+import CompatibleConnectionGate from '/@/kaiden/lib/models/CompatibleConnectionGate.svelte';
+import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
+import { modelSelectionKey } from '/@/kaiden/stores/model-catalog';
+import { catalogModels } from '/@/kaiden/stores/models';
 import IconImage from '/@/lib/appearance/IconImage.svelte';
-import { getCompatibleModels } from '/@/lib/models/compatible-connections';
-import CompatibleConnectionGate from '/@/lib/models/CompatibleConnectionGate.svelte';
-import type { CatalogModelInfo } from '/@/lib/models/models-utils';
-import { modelSelectionKey } from '/@/stores/model-catalog';
-import { catalogModels } from '/@/stores/models';
 import type { AgentInfo } from '/@api/agent-info';
 import type { DefaultPerAgentWorkspaceSettings, DefaultWorkspaceSettings } from '/@api/onboarding-settings-info';
 

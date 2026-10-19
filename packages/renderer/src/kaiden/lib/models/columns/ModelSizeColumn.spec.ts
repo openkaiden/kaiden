@@ -21,9 +21,9 @@ import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/svelte';
 import { expect, test } from 'vitest';
 
-import type { CatalogModelInfo } from '/@/lib/models/models-utils';
+import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
 
-import ModelRuntimeColumn from './ModelRuntimeColumn.svelte';
+import ModelSizeColumn from './ModelSizeColumn.svelte';
 
 const model: CatalogModelInfo = {
   providerId: 'gemini',
@@ -35,14 +35,8 @@ const model: CatalogModelInfo = {
   connectionStatus: 'started',
 };
 
-test('should display the provider name', () => {
-  render(ModelRuntimeColumn, { object: model });
+test('should display dash placeholder for size', () => {
+  render(ModelSizeColumn, { object: model });
 
-  expect(screen.getByText('Gemini')).toBeInTheDocument();
-});
-
-test('should have the provider name as title attribute', () => {
-  render(ModelRuntimeColumn, { object: model });
-
-  expect(screen.getByTitle('Gemini')).toBeInTheDocument();
+  expect(screen.getByText('—')).toBeInTheDocument();
 });

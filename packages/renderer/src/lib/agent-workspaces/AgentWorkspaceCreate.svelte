@@ -5,12 +5,14 @@ import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { onMount, untrack } from 'svelte';
 import { toast } from 'svelte-sonner';
 
+import { getModelId } from '/@/kaiden/lib/models/models-utils';
 import { mcpRemoteServerInfos } from '/@/kaiden/stores/mcp-remote-servers';
+import { disabledModels, isModelEnabled, modelKey } from '/@/kaiden/stores/model-catalog';
+import { catalogModels } from '/@/kaiden/stores/models';
 import { openshellGateways } from '/@/kaiden/stores/openshell-gateways';
 import { allOpenshellSandboxes } from '/@/kaiden/stores/openshell-sandboxes';
 import { secretVaultInfos } from '/@/kaiden/stores/secret-vault';
 import { skillInfos } from '/@/kaiden/stores/skills';
-import { getModelId } from '/@/lib/models/models-utils';
 import type { ChecklistItem } from '/@/lib/ui/ChecklistPanel.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import WizardStepper from '/@/lib/ui/WizardStepper.svelte';
@@ -22,8 +24,6 @@ import {
   WORKSPACE_REGISTRY_HOSTS,
 } from '/@/stores/agent-workspace-create-draft.svelte';
 import { agentInfos } from '/@/stores/agents';
-import { disabledModels, isModelEnabled, modelKey } from '/@/stores/model-catalog';
-import { catalogModels } from '/@/stores/models';
 import { providerInfos } from '/@/stores/providers';
 import { ragEnvironments } from '/@/stores/rag-environments';
 import { workspaceProjectInfos } from '/@/stores/workspace-projects';

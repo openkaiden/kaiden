@@ -4,9 +4,9 @@ import type { ModelType } from '@openkaiden/api';
 import { Button } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
+import { inferenceConnectionSummariesData } from '/@/kaiden/stores/inference-connection-summaries';
 import PreferencesConnectionCreationRendering from '/@/lib/preferences/PreferencesConnectionCreationOrEditRendering.svelte';
 import { configurationProperties } from '/@/stores/configurationProperties';
-import { inferenceConnectionSummariesData } from '/@/stores/inference-connection-summaries';
 import { providerInfos } from '/@/stores/providers';
 import type { CatalogModelInfo } from '/@api/model-registry-info';
 import type { ProviderInfo } from '/@api/provider-info';

@@ -4,13 +4,13 @@ import { Input } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { untrack } from 'svelte';
 
+import { getCompatibleModels } from '/@/kaiden/lib/models/compatible-connections';
+import CompatibleConnectionGate from '/@/kaiden/lib/models/CompatibleConnectionGate.svelte';
+import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
+import { disabledModels, isModelEnabled, modelKey, modelSelectionKey } from '/@/kaiden/stores/model-catalog';
+import { catalogModels } from '/@/kaiden/stores/models';
 import IconImage from '/@/lib/appearance/IconImage.svelte';
-import { getCompatibleModels } from '/@/lib/models/compatible-connections';
-import CompatibleConnectionGate from '/@/lib/models/CompatibleConnectionGate.svelte';
-import type { CatalogModelInfo } from '/@/lib/models/models-utils';
 import { agentInfos } from '/@/stores/agents';
-import { disabledModels, isModelEnabled, modelKey, modelSelectionKey } from '/@/stores/model-catalog';
-import { catalogModels } from '/@/stores/models';
 import type { ModelInfo } from '/@api/model-registry-info';
 
 interface Props {

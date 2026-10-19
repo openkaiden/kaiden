@@ -2,9 +2,9 @@
 import { faPlus } from '@fortawesome/free-solid-svg-icons';
 import { Button, Checkbox, CloseButton, Dropdown, Input, NumberInput } from '@podman-desktop/ui-svelte';
 
-import type { CatalogModelInfo } from '/@/lib/models/models-utils';
+import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
+import type { DecisionConfigDraft, KeywordGroupDraft } from '/@/kaiden/stores/semantic-router-create-draft.svelte';
 import SlideToggle from '/@/lib/ui/SlideToggle.svelte';
-import type { DecisionConfigDraft, KeywordGroupDraft } from '/@/stores/semantic-router-create-draft.svelte';
 
 interface Props {
   keywords: KeywordGroupDraft[];

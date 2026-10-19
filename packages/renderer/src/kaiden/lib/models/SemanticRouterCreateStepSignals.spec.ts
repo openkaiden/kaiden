@@ -21,7 +21,7 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type { CatalogModelInfo } from '/@/lib/models/models-utils';
+import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
 
 import SemanticRouterCreateStepSignals from './SemanticRouterCreateStepSignals.svelte';
 

@@ -19,7 +19,8 @@
 import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { configurationProperties } from './configurationProperties';
+import { configurationProperties } from '/@/stores/configurationProperties';
+
 import { disabledModels, isModelEnabled, modelKey, modelSelectionKey, toggleModel } from './model-catalog';
 
 const getConfigurationValueMock = vi.fn();

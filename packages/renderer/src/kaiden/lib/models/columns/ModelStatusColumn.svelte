@@ -1,8 +1,8 @@
 <script lang="ts">
 import { StatusIcon } from '@podman-desktop/ui-svelte';
 
-import type { CatalogModelInfo } from '/@/lib/models/models-utils';
-import { disabledModels, isModelEnabled } from '/@/stores/model-catalog';
+import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
+import { disabledModels, isModelEnabled } from '/@/kaiden/stores/model-catalog';
 
 interface Props {
   object: CatalogModelInfo;

@@ -4,8 +4,8 @@ import type { InferenceProviderConnectionType } from '@openkaiden/api';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 import { SvelteSet } from 'svelte/reactivity';
 
-import type { CatalogModelInfo } from '/@/lib/models/models-utils';
-import { catalogModels } from '/@/stores/models';
+import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
+import { catalogModels } from '/@/kaiden/stores/models';
 import type { SemanticRouterInfo } from '/@api/semantic-router-info';
 
 interface Props {

@@ -22,15 +22,15 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { writable } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import * as modelCatalogStore from '/@/stores/model-catalog';
-import * as modelsStore from '/@/stores/models';
+import * as modelCatalogStore from '/@/kaiden/stores/model-catalog';
+import * as modelsStore from '/@/kaiden/stores/models';
 import type { CatalogModelInfo } from '/@api/model-registry-info';
 
 import SemanticRouterCreateStepModels from './SemanticRouterCreateStepModels.svelte';
 
 vi.mock(import('/@/navigation'));
-vi.mock(import('/@/stores/model-catalog'));
-vi.mock(import('/@/stores/models'));
+vi.mock(import('/@/kaiden/stores/model-catalog'));
+vi.mock(import('/@/kaiden/stores/models'));
 
 const mockCloudModels: CatalogModelInfo[] = [
   {

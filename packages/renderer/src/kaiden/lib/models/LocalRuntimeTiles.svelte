@@ -1,7 +1,7 @@
 <script lang="ts">
 import { router } from 'tinro';
 
-import type { InferenceConnectionSummary } from '/@/lib/models/models-utils';
+import type { InferenceConnectionSummary } from '/@/kaiden/lib/models/models-utils';
 
 interface Props {
   connections: InferenceConnectionSummary[];

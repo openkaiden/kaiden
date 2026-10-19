@@ -2,8 +2,8 @@
 import { untrack } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 
-import { disabledModels, isModelEnabled, modelKey, modelSelectionKey } from '/@/stores/model-catalog';
-import { catalogModels } from '/@/stores/models';
+import { disabledModels, isModelEnabled, modelKey, modelSelectionKey } from '/@/kaiden/stores/model-catalog';
+import { catalogModels } from '/@/kaiden/stores/models';
 
 import type { CatalogModelInfo } from './models-utils';
 import ModelSelectionTable from './ModelSelectionTable.svelte';

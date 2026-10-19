@@ -18,9 +18,8 @@
 
 import { derived, type Writable, writable } from 'svelte/store';
 
+import { EventStore } from '/@/stores/event-store';
 import type { CatalogModelInfo, ModelInfo } from '/@api/model-registry-info';
-
-import { EventStore } from './event-store';
 
 const windowEvents = ['model-registry:update', 'extension-started', 'extension-stopped', 'extensions-started'];
 

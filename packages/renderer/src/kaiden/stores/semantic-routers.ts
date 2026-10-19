@@ -19,9 +19,8 @@
 import type { Writable } from 'svelte/store';
 import { writable } from 'svelte/store';
 
+import { EventStore } from '/@/stores/event-store';
 import type { SemanticRouterInfo } from '/@api/semantic-router-info';
-
-import { EventStore } from './event-store';
 
 export const semanticRouterInfos: Writable<readonly SemanticRouterInfo[]> = writable([]);
 
