@@ -16,34 +16,20 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { faRobot } from '@fortawesome/free-solid-svg-icons/faRobot';
-import { get } from 'svelte/store';
+import { faLayerGroup } from '@fortawesome/free-solid-svg-icons/faLayerGroup';
 
-import { acpSessions } from '/@/kaiden/stores/acp-sessions.svelte';
+import type { NavigationRegistryEntry } from '/@/stores/navigation/navigation-registry';
 
-import type { NavigationRegistryEntry } from './navigation-registry';
-
-export function createNavigationAcpSessionsEntry(): NavigationRegistryEntry {
+export function createNavigationAgentWorkspacesEntry(): NavigationRegistryEntry {
   const registry: NavigationRegistryEntry = {
-    name: 'Agents',
-    icon: { faIcon: { definition: faRobot, size: 'lg' } },
-    link: '/acp-sessions',
-    tooltip: 'Agent Sessions',
+    name: 'Workspaces',
+    icon: { faIcon: { definition: faLayerGroup, size: 'lg' } },
+    link: '/agent-workspaces',
+    tooltip: 'Agentic Workspaces',
     type: 'entry',
-    hidden: true,
     get counter() {
-      return get(acpSessions).filter(s => s.status === 'waiting_input').length;
+      return 0;
     },
   };
-
-  window
-    .isOpenshellAvailable()
-    ?.then(available => {
-      registry.hidden = !available;
-    })
-    ?.catch(() => {
-      registry.hidden = true;
-    });
-
   return registry;
 }

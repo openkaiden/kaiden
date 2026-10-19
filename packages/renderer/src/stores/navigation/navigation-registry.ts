@@ -21,14 +21,14 @@ import type { Component } from 'svelte';
 import { type Writable, writable } from 'svelte/store';
 import type { IconSize } from 'svelte-fa';
 
+import { createNavigationAcpSessionsEntry } from '/@/kaiden/stores/navigation/navigation-registry-acp-sessions.svelte';
+import { createNavigationAgentWorkspacesEntry } from '/@/kaiden/stores/navigation/navigation-registry-agent-workspaces.svelte';
+import { createNavigationProjectsEntry } from '/@/kaiden/stores/navigation/navigation-registry-projects.svelte';
+import { createNavigationRagEntry } from '/@/kaiden/stores/navigation/navigation-registry-rag.svelte';
 import { configurationProperties } from '/@/stores/configurationProperties';
 import { EventStore } from '/@/stores/event-store';
 
-import { createNavigationAcpSessionsEntry } from './navigation-registry-acp-sessions.svelte';
-import { createNavigationAgentWorkspacesEntry } from './navigation-registry-agent-workspaces.svelte';
 import { createNavigationExtensionEntry, createNavigationExtensionGroup } from './navigation-registry-extension.svelte';
-import { createNavigationProjectsEntry } from './navigation-registry-projects.svelte';
-import { createNavigationRagEntry } from './navigation-registry-rag.svelte';
 
 export interface NavigationRegistryEntry {
   name: string;

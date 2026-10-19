@@ -19,8 +19,7 @@
 import { faFolderOpen } from '@fortawesome/free-solid-svg-icons/faFolderOpen';
 
 import { workspaceProjectInfos } from '/@/kaiden/stores/workspace-projects';
-
-import type { NavigationRegistryEntry } from './navigation-registry';
+import type { NavigationRegistryEntry } from '/@/stores/navigation/navigation-registry';
 
 let count = $state(0);
 

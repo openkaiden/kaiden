@@ -17,9 +17,8 @@
  ***********************************************************************/
 import { faFileLines } from '@fortawesome/free-solid-svg-icons';
 
+import type { NavigationRegistryEntry } from '/@/stores/navigation/navigation-registry';
 import { providerInfos } from '/@/stores/providers';
-
-import type { NavigationRegistryEntry } from './navigation-registry';
 
 let noProviders = $state(true);
 let configHidden = $state(false);

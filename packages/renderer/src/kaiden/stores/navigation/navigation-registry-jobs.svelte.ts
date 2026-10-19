@@ -16,8 +16,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import JobIcon from '../../lib/images/JobIcon.svelte';
-import type { NavigationRegistryEntry } from './navigation-registry';
+import JobIcon from '/@/lib/images/JobIcon.svelte';
+import type { NavigationRegistryEntry } from '/@/stores/navigation/navigation-registry';
 
 export function createNavigationJobsEntry(): NavigationRegistryEntry {
   const registry: NavigationRegistryEntry = {
