@@ -32,11 +32,14 @@ import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk
 import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
 import { DefaultProviderFactory } from '/@/plugin/secret-manager/default-provider-factory.js';
-import { CreateSecretWithParentTypeOptions } from '/@/plugin/secret-manager/secret-manager.js';
 import type { OpenshellProfile } from '/@api/openshell-gateway-info.js';
 import type { SecretCliBackend, SecretCreateOptions, SecretInfo, SecretName } from '/@api/secret-info.js';
 
-import type { ProviderFactory, SelectableProviderFactory } from './provider-factory.js';
+import type {
+  CreateSecretWithParentTypeOptions,
+  ProviderFactory,
+  SelectableProviderFactory,
+} from './provider-factory.js';
 import { SelectableProviderFactoryToken } from './provider-factory.js';
 
 interface CreateProfileOptions {

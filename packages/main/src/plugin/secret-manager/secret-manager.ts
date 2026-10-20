@@ -30,6 +30,7 @@ import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
 import { ProviderImpl } from '/@/plugin/provider-impl.js';
 import { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import { SafeStorageRegistry } from '/@/plugin/safe-storage/safe-storage-registry.js';
+import { CreateSecretWithParentTypeOptions } from '/@/plugin/secret-manager/provider-factory.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import { IConfigurationPropertyRecordedSchema, IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { OpenshellProfile } from '/@api/openshell-gateway-info.js';
@@ -55,10 +56,6 @@ interface ResolveProfileOptions {
   secretName: string;
   gateway?: string;
   endpoint?: string;
-}
-
-export interface CreateSecretWithParentTypeOptions extends SecretCreateOptions {
-  parentType?: string;
 }
 
 /**
