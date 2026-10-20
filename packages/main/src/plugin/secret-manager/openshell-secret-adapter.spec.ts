@@ -407,7 +407,7 @@ describe('createProfile', () => {
   });
 
   test('skips adding endpoint when existing wildcard host covers it', async () => {
-    const baseEndpoints = [create(NetworkEndpointSchema, { host: '*', port: 443 })];
+    const baseEndpoints = [create(NetworkEndpointSchema, { host: '**', port: 443 })];
     vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
       create(ProviderProfileSchema, {
         id: 'openai',

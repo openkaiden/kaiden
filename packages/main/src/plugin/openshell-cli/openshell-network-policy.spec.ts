@@ -280,16 +280,33 @@ describe('endpointMatchesHost', () => {
     expect(networkPolicy.endpointMatchesHost('api.openai.com', 'api.anthropic.com')).toBeFalsy();
   });
 
-  test('matches wildcard * against any host', () => {
-    expect(networkPolicy.endpointMatchesHost('*', 'api.openai.com')).toBeTruthy();
+  test('* matches a single-label host', () => {
+    expect(networkPolicy.endpointMatchesHost('*', 'localhost')).toBeTruthy();
   });
 
-  test('matches glob pattern *.example.com', () => {
+  test('* does not match a multi-label host', () => {
+    expect(networkPolicy.endpointMatchesHost('*', 'api.openai.com')).toBeFalsy();
+  });
+
+  test('** matches any multi-label host', () => {
+    expect(networkPolicy.endpointMatchesHost('**', 'api.openai.com')).toBeTruthy();
+  });
+
+  test('*.example.com matches one subdomain level', () => {
     expect(networkPolicy.endpointMatchesHost('*.example.com', 'api.example.com')).toBeTruthy();
+  });
+
+  test('*.example.com does not match two subdomain levels', () => {
+    expect(networkPolicy.endpointMatchesHost('*.example.com', 'a.b.example.com')).toBeFalsy();
   });
 
   test('does not match glob pattern against non-matching host', () => {
     expect(networkPolicy.endpointMatchesHost('*.example.com', 'api.other.com')).toBeFalsy();
+  });
+
+  test('matching is case-insensitive', () => {
+    expect(networkPolicy.endpointMatchesHost('API.OpenAI.COM', 'api.openai.com')).toBeTruthy();
+    expect(networkPolicy.endpointMatchesHost('*.Example.COM', 'Api.Example.com')).toBeTruthy();
   });
 
   test('matches rewritten container host exactly', () => {
@@ -308,9 +325,14 @@ describe('isEndpointCovered', () => {
     expect(networkPolicy.isEndpointCovered(endpoints, { host: 'api.openai.com', port: 443 })).toBeFalsy();
   });
 
-  test('returns true when wildcard host covers the target', () => {
-    const endpoints = [create(NetworkEndpointSchema, { host: '*', port: 443 })];
+  test('returns true when ** wildcard host covers any target', () => {
+    const endpoints = [create(NetworkEndpointSchema, { host: '**', port: 443 })];
     expect(networkPolicy.isEndpointCovered(endpoints, { host: 'api.openai.com', port: 443 })).toBeTruthy();
+  });
+
+  test('returns false when * wildcard does not cover multi-label target', () => {
+    const endpoints = [create(NetworkEndpointSchema, { host: '*', port: 443 })];
+    expect(networkPolicy.isEndpointCovered(endpoints, { host: 'api.openai.com', port: 443 })).toBeFalsy();
   });
 
   test('returns false for empty endpoints list', () => {

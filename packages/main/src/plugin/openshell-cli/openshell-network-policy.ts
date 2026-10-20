@@ -65,10 +65,22 @@ export class OpenshellNetworkPolicy {
   }
 
   endpointMatchesHost(existingHost: string, targetHost: string): boolean {
-    if (existingHost.includes('*')) {
-      return matchesGlob(targetHost, existingHost);
+    const pattern = existingHost.toLowerCase();
+    const host = targetHost.toLowerCase();
+    if (!pattern.includes('*')) {
+      return pattern === host;
     }
-    return existingHost === targetHost;
+    // OpenShell host globs use '.' as separator: '*' = one label, '**' = any labels.
+    const regex = pattern
+      .split('**')
+      .map(part =>
+        part
+          .split('*')
+          .map(s => s.replaceAll(/[.+?^${}()|[\]\\]/g, '\\$&'))
+          .join('[^.]*'),
+      )
+      .join('.*');
+    return new RegExp(`^${regex}$`).test(host);
   }
 
   isEndpointCovered(endpoints: readonly NetworkEndpoint[], target: ModelEndpoint): boolean {
