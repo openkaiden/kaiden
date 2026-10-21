@@ -101,7 +101,7 @@ jobs:
           git tag ${{ steps.TAG_UTIL.outputs.githubTag }}
 
           # push tag to the prereleases repository
-          git remote add prereleases https://${KAIDEN_BOT_TOKEN}@github.com/openkaiden/testing-prereleases
+          git remote add prereleases https://x-access-token:${KAIDEN_BOT_TOKEN}@github.com/openkaiden/testing-prereleases.git
           git push prereleases ${{ steps.TAG_UTIL.outputs.githubTag }}
 
       - name: Create Release
