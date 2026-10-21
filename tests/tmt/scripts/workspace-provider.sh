@@ -64,12 +64,8 @@ export VITE_CI=true
 pnpm install --frozen-lockfile
 pnpm exec playwright install chromium
 pnpm run test:e2e:build
-# This plan runs the provider-agent suite only (@workspace-provider): Claude,
-# OpenCode, Copilot, Goose, OpenClaw. The @workspace-sandbox filesystem/network
-# matrix is intentionally excluded here and covered by the Windows workflow.
-#
-# xvfb-maybe lives in node_modules/.bin; invoke it via `pnpm exec` because this
-# script runs under plain bash (not an npm/pnpm script) where .bin is not on PATH.
-pnpm exec xvfb-maybe --auto-servernum --server-args='-screen 0 1280x960x24' -- \
-  pnpm exec playwright test -c tests/playwright/playwright.config.ts \
-  --project=Workspace-Provider --grep @workspace-provider workspaces/
+# Delegate to the same script the Azure/MAPT Windows workflow runs so both
+# platforms execute one identical Workspace-Provider suite (including the
+# filesystem/network matrix). Running under `pnpm run` puts node_modules/.bin on
+# PATH, so the script's own xvfb-maybe resolves without any workaround here.
+pnpm run test:e2e:workspaces:run

@@ -57,6 +57,12 @@ jobs:
             echo "::error::Repository must use owner/repo format"
             exit 1
           fi
+          # Provider secrets are exposed to the tmt plan/script of the repository
+          # under test, so only allow repositories from the upstream org.
+          if [[ "$repository" != openkaiden/* ]]; then
+            echo "::error::Only openkaiden/* repositories may run this workflow"
+            exit 1
+          fi
           if [[ "$ref" =~ [[:space:]] || "$ref" == *";"* || "$ref" == -* ]]; then
             echo "::error::Ref must not contain whitespace, semicolons, or start with a dash"
             exit 1
@@ -79,6 +85,7 @@ jobs:
           # Masked provider credentials; without them every scenario with a
           # requiredResource calls test.skip and the job reports a false green.
           secrets: ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }};OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }};GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }};MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }};PODMANDESKTOP_CI_BOT_TOKEN=${{ secrets.GITHUB_TOKEN }}
-          # Below the job timeout-minutes so a Testing Farm result link is
-          # returned instead of GitHub killing the job first.
-          timeout: 210
+          # The action polls for ~(timeout x 4) minutes (timeout x 2 iterations,
+          # 120s each), so keep it well under the job timeout-minutes (240) to
+          # return a Testing Farm result link instead of GitHub killing the job.
+          timeout: 50
