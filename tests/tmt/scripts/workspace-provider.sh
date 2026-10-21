@@ -23,6 +23,8 @@ set -euo pipefail
 
 repo_dir="$(mktemp -d /tmp/kaiden-e2e.XXXXXX)"
 test_data_dir="$TMT_TEST_DATA"
+# tmt_path=tests/tmt scopes plan discovery to the tmt tree, which does not contain
+# the application source needed to build and run Kaiden. Clone the full repo here.
 git clone --filter=blob:none --no-checkout "https://github.com/${KAIDEN_REPOSITORY}.git" "$repo_dir"
 git -C "$repo_dir" fetch --depth 1 origin "$KAIDEN_REF"
 git -C "$repo_dir" checkout --detach FETCH_HEAD
@@ -34,9 +36,14 @@ if [[ ! -f .nvmrc ]]; then
 fi
 
 node_version="$(tr -d '[:space:]' < .nvmrc)"
-curl --fail --silent --show-error --location \
-  "https://nodejs.org/dist/v${node_version}/node-v${node_version}-linux-x64.tar.xz" \
-  | tar -xJ --strip-components=1 -C /usr/local
+node_tarball="node-v${node_version}-linux-x64.tar.xz"
+node_base="https://nodejs.org/dist/v${node_version}"
+# Verify the tarball against the official checksum before extracting it as root.
+curl --fail --silent --show-error --location -O "${node_base}/${node_tarball}"
+curl --fail --silent --show-error --location -O "${node_base}/SHASUMS256.txt"
+grep " ${node_tarball}\$" SHASUMS256.txt | sha256sum -c -
+tar -xJ --strip-components=1 -C /usr/local -f "${node_tarball}"
+rm -f "${node_tarball}" SHASUMS256.txt
 # corepack reads the pinned pnpm version from package.json's packageManager field,
 # so there is nothing to hardcode here.
 corepack enable
@@ -57,6 +64,10 @@ export VITE_CI=true
 pnpm install --frozen-lockfile
 pnpm exec playwright install chromium
 pnpm run test:e2e:build
+# This plan runs the provider-agent suite only (@workspace-provider): Claude,
+# OpenCode, Copilot, Goose, OpenClaw. The @workspace-sandbox filesystem/network
+# matrix is intentionally excluded here and covered by the Windows workflow.
+#
 # xvfb-maybe lives in node_modules/.bin; invoke it via `pnpm exec` because this
 # script runs under plain bash (not an npm/pnpm script) where .bin is not on PATH.
 pnpm exec xvfb-maybe --auto-servernum --server-args='-screen 0 1280x960x24' -- \

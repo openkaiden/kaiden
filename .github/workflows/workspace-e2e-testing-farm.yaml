@@ -38,6 +38,9 @@ jobs:
   workspace-e2e:
     name: Fedora 44 workspace provider E2E
     runs-on: ubuntu-24.04
+    # Scheduled runs only on the upstream repo (forks lack TEST_FARM_TOKEN and
+    # would fail nightly); manual dispatch stays available everywhere.
+    if: github.event_name != 'schedule' || github.repository == 'openkaiden/kaiden'
     timeout-minutes: 240
     steps:
       - name: Resolve source repository and ref
@@ -54,7 +57,7 @@ jobs:
             echo "::error::Repository must use owner/repo format"
             exit 1
           fi
-          if [[ "$ref" =~ [[:space:];] || "$ref" == -* ]]; then
+          if [[ "$ref" =~ [[:space:]] || "$ref" == *";"* || "$ref" == -* ]]; then
             echo "::error::Ref must not contain whitespace, semicolons, or start with a dash"
             exit 1
           fi
@@ -63,7 +66,7 @@ jobs:
           echo "Testing $repository at $ref on Fedora 44"
 
       - name: Submit workspace provider tests to Testing Farm
-        uses: sclorg/testing-farm-as-github-action@v4
+        uses: sclorg/testing-farm-as-github-action@230555baceb860aa468d216f1822974836b965d1 # v4
         with:
           api_key: ${{ secrets.TEST_FARM_TOKEN }}
           git_url: https://github.com/${{ steps.source.outputs.repository }}.git
@@ -73,5 +76,9 @@ jobs:
           compose: Fedora-44
           arch: x86_64
           variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.ref }}
-          timeout: 240
-          pull_request_status_name: Fedora 44 workspace E2E
+          # Masked provider credentials; without them every scenario with a
+          # requiredResource calls test.skip and the job reports a false green.
+          secrets: ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }};OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }};GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }};MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }};PODMANDESKTOP_CI_BOT_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          # Below the job timeout-minutes so a Testing Farm result link is
+          # returned instead of GitHub killing the job first.
+          timeout: 210
