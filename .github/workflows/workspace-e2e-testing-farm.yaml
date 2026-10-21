@@ -1,0 +1,77 @@
+#
+# Copyright (C) 2026 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: workspace e2e tests (Testing Farm)
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Repository to test (owner/repo); defaults to this repository'
+        required: false
+        type: string
+      ref:
+        description: 'Branch, tag, or SHA to test; defaults to the dispatch ref'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  workspace-e2e:
+    name: Fedora 44 workspace provider E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - name: Resolve source repository and ref
+        id: source
+        env:
+          INPUT_REPOSITORY: ${{ inputs.repository }}
+          INPUT_REF: ${{ inputs.ref }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+          CURRENT_REF: ${{ github.ref_name }}
+        run: |
+          repository="${INPUT_REPOSITORY:-$CURRENT_REPOSITORY}"
+          ref="${INPUT_REF:-$CURRENT_REF}"
+          if [[ ! "$repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::Repository must use owner/repo format"
+            exit 1
+          fi
+          if [[ "$ref" =~ [[:space:];] || "$ref" == -* ]]; then
+            echo "::error::Ref must not contain whitespace, semicolons, or start with a dash"
+            exit 1
+          fi
+          echo "repository=$repository" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "Testing $repository at $ref on Fedora 44"
+
+      - name: Submit workspace provider tests to Testing Farm
+        uses: sclorg/testing-farm-as-github-action@v4
+        with:
+          api_key: ${{ secrets.TEST_FARM_TOKEN }}
+          git_url: https://github.com/${{ steps.source.outputs.repository }}.git
+          git_ref: ${{ steps.source.outputs.ref }}
+          tmt_plan_regex: workspace-provider
+          tmt_path: tests/tmt
+          compose: Fedora-44
+          arch: x86_64
+          variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.ref }}
+          timeout: 240
+          pull_request_status_name: Fedora 44 workspace E2E

@@ -1,0 +1,21 @@
+summary: Run Kaiden workspace provider E2E tests on Fedora
+discover:
+  how: fmf
+execute:
+  how: tmt
+provision:
+  hardware:
+    memory: '>= 16 GiB'
+prepare:
+  - name: Install system dependencies
+    how: shell
+    script: |
+      # passt provides pasta: OpenShell fails closed unless Podman reports
+      # rootlessNetworkCmd=pasta, so install it explicitly rather than rely on
+      # podman's transitive deps.
+      dnf install -y alsa-lib at-spi2-atk atk cairo cups-libs git gtk3 libdrm libX11 libXcomposite libXdamage libXext libXfixes libXi libXrandr libXScrnSaver libXtst mesa-libgbm nss pango passt podman xdg-utils xorg-x11-server-Xvfb
+  - name: Enable Podman socket
+    how: shell
+    script: |
+      systemctl --user enable --now podman.socket
+      podman info

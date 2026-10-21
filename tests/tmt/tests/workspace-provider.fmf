@@ -1,0 +1,5 @@
+summary: Run the workspace provider Playwright project
+test: bash ../scripts/workspace-provider.sh
+duration: 240m
+require:
+  - podman
