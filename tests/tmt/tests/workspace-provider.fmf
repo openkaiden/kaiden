@@ -17,9 +17,10 @@
 
 summary: Run the workspace provider Playwright project
 test: bash ../scripts/workspace-provider.sh
-# Keep below the Testing Farm timeout and the GitHub job timeout-minutes so a
-# run that overshoots still returns a Testing Farm result instead of being
-# killed by the outer GitHub job.
-duration: 200m
+# Must stay below the action's polling window (~200m from timeout: 50) with
+# margin for queueing/provisioning, which in turn stays below the GitHub job
+# timeout-minutes (240), so a run that overshoots still returns a Testing Farm
+# result instead of being killed by the outer GitHub job: 180m < ~200m < 240m.
+duration: 180m
 require:
   - podman
