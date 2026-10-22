@@ -22,12 +22,8 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
-      repository:
-        description: 'Repository to test (owner/repo); defaults to this repository'
-        required: false
-        type: string
       ref:
-        description: 'Branch, tag, or SHA to test; defaults to the dispatch ref'
+        description: 'Branch, tag, or full SHA of openkaiden/kaiden to test; defaults to the dispatch ref'
         required: false
         type: string
 
@@ -48,11 +44,12 @@ jobs:
     steps:
       - name: Check out workflow scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Resolve source repository and ref
         id: source
         env:
-          INPUT_REPOSITORY: ${{ inputs.repository }}
           INPUT_REF: ${{ inputs.ref }}
           CURRENT_REPOSITORY: ${{ github.repository }}
           CURRENT_REF: ${{ github.ref_name }}

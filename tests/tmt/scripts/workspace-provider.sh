@@ -63,10 +63,32 @@ node --version
 pnpm --version
 
 mkdir -p "$test_data_dir"
+
+# Testing Farm publishes $TMT_TEST_DATA as (publicly readable) artifacts, and the
+# workspace specs type provider API keys into the UI, so Playwright traces,
+# videos and screenshots can contain them in clear text. Build a redaction list
+# from the keys present in the environment for the sibling sanitizer to use.
+secrets_file="$(mktemp)"
+chmod 600 "$secrets_file"
+for key in ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY MISTRAL_API_KEY; do
+  if [ -n "${!key:-}" ]; then
+    printf '%s=%s\n' "$key" "${!key}" >> "$secrets_file"
+  fi
+done
+
 cleanup() {
   if [[ -d tests/playwright/output ]]; then
-    cp -R tests/playwright/output "$test_data_dir/playwright-output"
+    dest="$test_data_dir/playwright-output"
+    mkdir -p "$dest"
+    # Exclude traces/videos/screenshots: they can embed the typed-in keys and
+    # cannot be reliably redacted. Publish only the (text) remainder.
+    tar -C tests/playwright/output \
+      --exclude='*.zip' --exclude='*.webm' --exclude='*.png' \
+      --exclude='*.jpg' --exclude='*.jpeg' -cf - . | tar -C "$dest" -xf -
+    # Redact any provider keys that still appear in the text artifacts.
+    SECRETS_FILE="$secrets_file" bash .github/scripts/pde2e/sanitize-collected-logs.sh "$dest" || true
   fi
+  rm -f "$secrets_file"
 }
 trap cleanup EXIT
 

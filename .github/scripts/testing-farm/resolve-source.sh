@@ -16,46 +16,48 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-# Resolve and validate the repository/ref a Testing Farm run should test and pin
-# it to an immutable commit SHA. Reads INPUT_REPOSITORY/INPUT_REF (workflow
-# inputs) with CURRENT_REPOSITORY/CURRENT_REF as defaults, and writes the
+# Validate the ref a Testing Farm run should test and pin it to an immutable
+# commit SHA. The repository is always this repository (CURRENT_REPOSITORY); the
+# ref defaults to the dispatch ref unless INPUT_REF overrides it. Writes the
 # resolved `repository` and `sha` to GITHUB_OUTPUT. Kept out of the workflow YAML
 # so it can be run and tested locally.
 
 set -euo pipefail
 
-repository="${INPUT_REPOSITORY:-${CURRENT_REPOSITORY:?CURRENT_REPOSITORY is required}}"
+repository="${CURRENT_REPOSITORY:?CURRENT_REPOSITORY is required}"
 ref="${INPUT_REF:-${CURRENT_REF:?CURRENT_REF is required}}"
 
-if [[ ! "$repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-  echo "::error::Repository must use owner/repo format"
-  exit 1
-fi
-
-# Provider secrets are exposed to the tmt plan/script of the repository under
-# test, so only allow repositories from the upstream org.
+# Defense in depth behind the job's `if: github.repository == 'openkaiden/kaiden'`:
+# the provider secrets must only ever reach upstream-org code.
 if [[ "$repository" != openkaiden/* ]]; then
   echo "::error::Only openkaiden/* repositories may run this workflow"
   exit 1
 fi
 
-# Reject whitespace / ';' / leading '-' (shell-syntax smuggling) and refs/pull/*.
-# This is hardening, not a guarantee: the real trust boundary is who can dispatch
-# (write access), and a resolved SHA can still point at a fork PR commit the
-# upstream repo serves.
+# Reject whitespace / ';' / leading '-' (shell-syntax smuggling) and refs/pull/*
+# (a fork PR head). Hardening only: the real trust boundary is who can dispatch.
 if [[ "$ref" =~ [[:space:]] || "$ref" == *";"* || "$ref" == -* || "$ref" == refs/pull/* ]]; then
-  echo "::error::Ref must be a branch, tag, or SHA (no refs/pull/*, whitespace, ';', or leading '-')"
+  echo "::error::Ref must be a branch, tag, or full SHA (no refs/pull/*, whitespace, ';', or leading '-')"
   exit 1
 fi
 
-# Pin to an immutable commit SHA so the Testing Farm plan checkout and the
-# script's own fetch test the same source even if the branch moves in between.
-sha="$(git ls-remote "https://github.com/${repository}.git" "$ref" | awk 'NR==1{print $1}')"
+# Pin to an immutable commit SHA. Query exact refs (branch, then peeled tag, then
+# lightweight tag) to avoid `git ls-remote`'s tail-matching ambiguity, and accept
+# only a full 40-char SHA passed directly so we fail here rather than at fetch
+# time (GitHub cannot `fetch --depth 1` an abbreviated SHA).
+url="https://github.com/${repository}.git"
+sha="$(git ls-remote "$url" "refs/heads/${ref}" | awk 'NR==1{print $1}')"
 if [ -z "$sha" ]; then
-  if [[ "$ref" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+  sha="$(git ls-remote "$url" "refs/tags/${ref}^{}" | awk 'NR==1{print $1}')"
+fi
+if [ -z "$sha" ]; then
+  sha="$(git ls-remote "$url" "refs/tags/${ref}" | awk 'NR==1{print $1}')"
+fi
+if [ -z "$sha" ]; then
+  if [[ "$ref" =~ ^[0-9a-fA-F]{40}$ ]]; then
     sha="$ref"
   else
-    echo "::error::Could not resolve ref '$ref' to a commit SHA"
+    echo "::error::Could not resolve ref '$ref' to a branch, tag, or full 40-char SHA"
     exit 1
   fi
 fi
