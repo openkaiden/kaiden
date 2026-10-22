@@ -87,6 +87,18 @@ const SANDBOX_READY_TIMEOUT_SECONDS = 300;
 const SANDBOX_DELETE_TIMEOUT_SECONDS = 120;
 const DEFAULT_TERMINAL_SCROLLBACK = 1000;
 
+// Matches OpenShell's restrictive_default_policy() with /dev/pts and /dev/ptmx
+// added so the workload can self-allocate PTYs (required by the node-pty relay
+// used by Agentic dev environments).
+const SANDBOX_FILESYSTEM_POLICY = {
+  filesystem: {
+    includeWorkdir: true,
+    readOnly: ['/bin', '/usr', '/lib', '/proc', '/dev/urandom', '/etc', '/var/log'],
+    readWrite: ['/tmp', '/dev/null', '/dev/pts', '/dev/ptmx'],
+  },
+  landlock: { compatibility: 'best_effort' },
+};
+
 export interface AgentTerminalClient {
   onData: (content: string) => void;
   onError?: (error: string) => void;
@@ -335,6 +347,7 @@ export class AgentWorkspaceManager implements Disposable {
         ...(secretResult?.clonedProfile ? { [PROFILE_LABEL]: secretResult.clonedProfile } : {}),
       },
       tty: true,
+      policy: SANDBOX_FILESYSTEM_POLICY,
       rawSpec:
         gateway.driver && mounts.length > 0
           ? {

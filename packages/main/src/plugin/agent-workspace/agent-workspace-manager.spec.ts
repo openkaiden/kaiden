@@ -566,6 +566,23 @@ describe('create – OpenShell mode', () => {
     );
   });
 
+  test('sets filesystem policy with /dev/pts and /dev/ptmx for PTY access at creation time', async () => {
+    await manager.create(defaultOptions);
+
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        policy: {
+          filesystem: {
+            includeWorkdir: true,
+            readOnly: ['/bin', '/usr', '/lib', '/proc', '/dev/urandom', '/etc', '/var/log'],
+            readWrite: ['/tmp', '/dev/null', '/dev/pts', '/dev/ptmx'],
+          },
+          landlock: { compatibility: 'best_effort' },
+        },
+      }),
+    );
+  });
+
   test('rejects an unreachable gateway before creating a sandbox', async () => {
     vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
       {
@@ -1179,7 +1196,6 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(options);
 
-    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellPolicyManager.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
       openshellNetworkPolicy.buildPolicyObject(options.network),
@@ -1187,25 +1203,23 @@ describe('create – OpenShell mode', () => {
     );
   });
 
-  test('does not set policy for deny mode with no hosts and no model endpoint', async () => {
+  test('does not update network policy for deny mode with no hosts and no model endpoint', async () => {
     const options = { ...defaultOptions, network: { mode: 'deny' as const } };
 
     await manager.create(options);
 
-    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
-  test('does not set policy for deny mode with empty hosts and no model endpoint', async () => {
+  test('does not update network policy for deny mode with empty hosts and no model endpoint', async () => {
     const options = { ...defaultOptions, network: { mode: 'deny' as const, hosts: [] } };
 
     await manager.create(options);
 
-    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
-  test('does not set policy for allow mode with no model endpoint', async () => {
+  test('does not update network policy for allow mode with no model endpoint', async () => {
     const options = {
       ...defaultOptions,
       network: { mode: 'allow' as const, hosts: ['registry.npmjs.org'] },
@@ -1213,14 +1227,12 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(options);
 
-    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
-  test('does not set policy when network is undefined and no model endpoint', async () => {
+  test('does not update network policy when network is undefined and no model endpoint', async () => {
     await manager.create(defaultOptions);
 
-    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
