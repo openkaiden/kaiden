@@ -26,4 +26,4 @@ export enum AcpSettings {
  * Default inactivity timeout (in seconds) for ACP prompt calls. Shared between the
  * configuration registration and the runtime fallback to avoid two sources of truth.
  */
-export const DEFAULT_PROMPT_TIMEOUT_SECONDS = 300;
+export const ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT = 300;
