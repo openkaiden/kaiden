@@ -21,6 +21,15 @@ set -euo pipefail
 : "${KAIDEN_REPOSITORY:?Testing Farm did not provide KAIDEN_REPOSITORY}"
 : "${KAIDEN_REF:?Testing Farm did not provide KAIDEN_REF}"
 
+# Fail fast if a provider key is missing (e.g. a rotated/removed secret): without
+# it every requiredResource scenario calls test.skip and the run is a false green.
+for key in ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY MISTRAL_API_KEY; do
+  if [ -z "${!key:-}" ]; then
+    echo "Missing required provider secret ${key}; scenarios would silently skip" >&2
+    exit 1
+  fi
+done
+
 repo_dir="$(mktemp -d /tmp/kaiden-e2e.XXXXXX)"
 test_data_dir="$TMT_TEST_DATA"
 # Testing Farm checks out the repo for tmt, but with tmt_path=tests/tmt the tmt
@@ -66,28 +75,37 @@ mkdir -p "$test_data_dir"
 
 # Testing Farm publishes $TMT_TEST_DATA as (publicly readable) artifacts, and the
 # workspace specs type provider API keys into the UI, so Playwright traces,
-# videos and screenshots can contain them in clear text. Build a redaction list
-# from the keys present in the environment for the sibling sanitizer to use.
+# videos, screenshots and the HTML report can contain them in clear text. Build a
+# redaction list from the provider keys for the sibling sanitizer (mktemp already
+# creates the file mode 0600).
 secrets_file="$(mktemp)"
-chmod 600 "$secrets_file"
 for key in ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY MISTRAL_API_KEY; do
-  if [ -n "${!key:-}" ]; then
-    printf '%s=%s\n' "$key" "${!key}" >> "$secrets_file"
-  fi
+  printf '%s=%s\n' "$key" "${!key}" >> "$secrets_file"
 done
 
 cleanup() {
   if [[ -d tests/playwright/output ]]; then
     dest="$test_data_dir/playwright-output"
     mkdir -p "$dest"
-    # Exclude traces/videos/screenshots: they can embed the typed-in keys and
-    # cannot be reliably redacted. Publish only the (text) remainder.
-    tar -C tests/playwright/output \
-      --exclude='*.zip' --exclude='*.webm' --exclude='*.png' \
-      --exclude='*.jpg' --exclude='*.jpeg' -cf - . | tar -C "$dest" -xf -
-    # Redact any provider keys that still appear in the text artifacts.
-    SECRETS_FILE="$secrets_file" bash .github/scripts/pde2e/sanitize-collected-logs.sh "$dest" || true
+    # Allow-list only the plain-text reports the sanitizer can redact
+    # (test-results.json, junit-results.xml, *.log). Everything else is dropped
+    # by default: traces, videos and screenshots embed the typed-in keys, the
+    # HTML report embeds the data as base64, and error-context.md holds page
+    # snapshots — none can be reliably redacted.
+    while IFS= read -r -d '' file; do
+      rel="${file#tests/playwright/output/}"
+      mkdir -p "$dest/$(dirname "$rel")"
+      cp "$file" "$dest/$rel"
+    done < <(find tests/playwright/output -type f \
+      \( -name 'test-results.json' -o -name 'junit-results.xml' -o -name '*.log' \) -print0)
+    # Fail closed: if redaction fails, drop the artifacts rather than publish
+    # unredacted provider keys.
+    if ! SECRETS_FILE="$secrets_file" bash .github/scripts/pde2e/sanitize-collected-logs.sh "$dest"; then
+      echo "::error::artifact sanitization failed; dropping collected artifacts" >&2
+      rm -rf "$dest"
+    fi
   fi
+  rm -rf "$repo_dir"
   rm -f "$secrets_file"
 }
 trap cleanup EXIT

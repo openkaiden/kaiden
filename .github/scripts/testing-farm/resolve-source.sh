@@ -28,9 +28,9 @@ repository="${CURRENT_REPOSITORY:?CURRENT_REPOSITORY is required}"
 ref="${INPUT_REF:-${CURRENT_REF:?CURRENT_REF is required}}"
 
 # Defense in depth behind the job's `if: github.repository == 'openkaiden/kaiden'`:
-# the provider secrets must only ever reach upstream-org code.
-if [[ "$repository" != openkaiden/* ]]; then
-  echo "::error::Only openkaiden/* repositories may run this workflow"
+# the provider secrets must only ever reach this exact upstream repository.
+if [[ "$repository" != "openkaiden/kaiden" ]]; then
+  echo "::error::Only openkaiden/kaiden may run this workflow"
   exit 1
 fi
 
