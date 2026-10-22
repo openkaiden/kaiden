@@ -18,7 +18,7 @@
 
 import { inject, injectable } from 'inversify';
 
-import { AcpSettings, DEFAULT_PROMPT_TIMEOUT_SECONDS } from '/@api/acp-settings.js';
+import { ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT, AcpSettings } from '/@api/acp-settings.js';
 import { type IConfigurationNode, IConfigurationRegistry } from '/@api/configuration/models.js';
 
 @injectable()
@@ -42,7 +42,7 @@ export class AcpInit {
           description:
             'Inactivity timeout (in seconds) for ACP prompt calls. The session is cancelled if the agent produces no activity within this period. Set to 0 to disable.',
           type: 'number',
-          default: DEFAULT_PROMPT_TIMEOUT_SECONDS,
+          default: ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT,
           minimum: 0,
           maximum: 3600,
         },

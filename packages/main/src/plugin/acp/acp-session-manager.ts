@@ -44,7 +44,7 @@ import type {
   AcpSessionStatus,
   AcpUserResponse,
 } from '/@api/acp-session-info.js';
-import { AcpSettings, DEFAULT_PROMPT_TIMEOUT_SECONDS } from '/@api/acp-settings.js';
+import { ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT, AcpSettings } from '/@api/acp-settings.js';
 import type { AgentInfo } from '/@api/agent-info.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import { IConfigurationRegistry } from '/@api/configuration/models.js';
@@ -52,19 +52,13 @@ import type { SandboxInfo } from '/@api/openshell-gateway-info.js';
 import { AGENT_LABEL } from '/@api/openshell-gateway-info.js';
 
 import { createAcpDebug } from './acp-debug.js';
+import { PromptTimeoutError } from './acp-prompt-timeout-error.js';
 
 const MAX_STDERR_LINES = 100;
 const PTY_COLS = 65_535;
 
 // eslint-disable-next-line sonarjs/publicly-writable-directories
 const ATTACHMENT_UPLOAD_DIR = '/sandbox/.kaiden-attachments';
-
-class PromptTimeoutError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'PromptTimeoutError';
-  }
-}
 
 const debugPty = createAcpDebug('pty');
 const debugProtocol = createAcpDebug('protocol');
@@ -294,8 +288,7 @@ export class AcpSessionManager {
           if (s.info.status !== 'completed' && s.info.status !== 'cancelled' && s.info.status !== 'error') {
             this.updateSessionStatus(sessionId, exitCode === 0 ? 'completed' : 'error');
             if (exitCode !== 0) {
-              const stderrMsg = s.stderrLines.join(' ').trim();
-              s.info.error = stderrMsg || `Process exited with code ${exitCode}`;
+              this.setSessionError(s, new Error(`Process exited with code ${exitCode}`));
             }
           }
         }
@@ -307,8 +300,7 @@ export class AcpSessionManager {
           s.connectionClosed = true;
           if (s.info.status !== 'completed' && s.info.status !== 'cancelled' && s.info.status !== 'error') {
             this.updateSessionStatus(sessionId, 'error');
-            const stderrMsg = s.stderrLines.join(' ').trim();
-            s.info.error = stderrMsg || (err instanceof Error ? err.message : String(err));
+            this.setSessionError(s, err);
           }
         }
       });
@@ -346,8 +338,10 @@ export class AcpSessionManager {
       return await Promise.race([session.connection.prompt(params), timeoutPromise]);
     } catch (err) {
       if (err instanceof PromptTimeoutError) {
+        // Fire-and-forget: awaiting a cancel on an already-hung agent could block indefinitely,
+        // which would defeat the timeout we are enforcing here.
         session.connection.cancel({ sessionId: params.sessionId }).catch((cancelErr: unknown) => {
-          debugProtocol(
+          console.error(
             `[ACP ${session.info.sandboxName}] cancel after timeout failed for session ${session.info.id}: ${cancelErr instanceof Error ? cancelErr.message : String(cancelErr)}`,
           );
         });
@@ -360,7 +354,7 @@ export class AcpSessionManager {
 
   private getPromptTimeoutMs(): number {
     const config = this.configurationRegistry.getConfiguration(AcpSettings.SectionName);
-    const seconds = config.get<number>(AcpSettings.PromptTimeoutSeconds, DEFAULT_PROMPT_TIMEOUT_SECONDS);
+    const seconds = config.get<number>(AcpSettings.PromptTimeoutSeconds, ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT);
     return seconds * 1_000;
   }
 
@@ -478,7 +472,7 @@ export class AcpSessionManager {
     };
   }
 
-  private handleSessionUpdate(sessionId: string, params: acp.SessionNotification): void {
+  protected handleSessionUpdate(sessionId: string, params: acp.SessionNotification): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
@@ -701,7 +695,7 @@ export class AcpSessionManager {
     }
   }
 
-  private async handlePermissionRequest(
+  protected async handlePermissionRequest(
     sessionId: string,
     params: acp.RequestPermissionRequest,
   ): Promise<acp.RequestPermissionResponse> {
@@ -846,8 +840,7 @@ export class AcpSessionManager {
           if (s.info.status !== 'completed' && s.info.status !== 'cancelled' && s.info.status !== 'error') {
             this.updateSessionStatus(sessionId, exitCode === 0 ? 'completed' : 'error');
             if (exitCode !== 0) {
-              const stderrMsg = s.stderrLines.join(' ').trim();
-              s.info.error = stderrMsg || `Process exited with code ${exitCode}`;
+              this.setSessionError(s, new Error(`Process exited with code ${exitCode}`));
             }
           }
         }
@@ -859,8 +852,7 @@ export class AcpSessionManager {
           s.connectionClosed = true;
           if (s.info.status !== 'completed' && s.info.status !== 'cancelled' && s.info.status !== 'error') {
             this.updateSessionStatus(sessionId, 'error');
-            const stderrMsg = s.stderrLines.join(' ').trim();
-            s.info.error = stderrMsg || (err instanceof Error ? err.message : String(err));
+            this.setSessionError(s, err);
           }
         }
       });

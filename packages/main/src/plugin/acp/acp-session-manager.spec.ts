@@ -27,12 +27,28 @@ import type { Directories } from '/@/plugin/directories.js';
 import type { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import type { AcpSessionCreateOptions, AcpSessionInfo } from '/@api/acp-session-info.js';
+import { ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT } from '/@api/acp-settings.js';
 import type { AgentInfo } from '/@api/agent-info.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 import { AGENT_LABEL, type SandboxInfo } from '/@api/openshell-gateway-info.js';
 
 import { AcpSessionManager } from './acp-session-manager.js';
+
+// Exposes the protected ACP callbacks so tests can drive session updates and permission
+// requests directly, without reaching into private members via `as any`.
+class TestAcpSessionManager extends AcpSessionManager {
+  triggerSessionUpdate(sessionId: string, params: acp.SessionNotification): void {
+    this.handleSessionUpdate(sessionId, params);
+  }
+
+  triggerPermissionRequest(
+    sessionId: string,
+    params: acp.RequestPermissionRequest,
+  ): Promise<acp.RequestPermissionResponse> {
+    return this.handlePermissionRequest(sessionId, params);
+  }
+}
 
 vi.mock(import('node:fs'));
 vi.mock(import('node:fs/promises'));
@@ -61,7 +77,7 @@ const agentRegistry: AgentRegistry = {
   getAgent: vi.fn(),
 } as unknown as AgentRegistry;
 
-const PROMPT_TIMEOUT_SECONDS = 300;
+const PROMPT_TIMEOUT_SECONDS = ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT;
 
 const configurationRegistry = {
   getConfiguration: vi.fn(),
@@ -107,7 +123,7 @@ function createAgentInfo(overrides?: Partial<AgentInfo>): AgentInfo {
 }
 
 describe('AcpSessionManager', () => {
-  let manager: AcpSessionManager;
+  let manager: TestAcpSessionManager;
 
   beforeEach(() => {
     vi.useRealTimers();
@@ -120,7 +136,7 @@ describe('AcpSessionManager', () => {
     vi.mocked(configurationRegistry.getConfiguration).mockReturnValue({
       get: vi.fn().mockReturnValue(PROMPT_TIMEOUT_SECONDS),
     } as never);
-    manager = new AcpSessionManager(
+    manager = new TestAcpSessionManager(
       apiSender,
       openshellCli,
       agentRegistry,
@@ -1307,7 +1323,7 @@ describe('AcpSessionManager', () => {
     end: (exitCode: number) => void;
   }
 
-  async function setupSdkSession(): Promise<{
+  async function setupSdkSession(opts?: { promptError?: Error }): Promise<{
     sessionId: string;
     mockExec: MockExecSession;
   }> {
@@ -1367,7 +1383,10 @@ describe('AcpSessionManager', () => {
     const mockConnection = {
       initialize: vi.fn().mockResolvedValue({ protocolVersion: '0.1' }),
       newSession: vi.fn().mockResolvedValue({ sessionId: 'acp-1' }),
-      prompt: vi.fn().mockReturnValue(new Promise(() => {})),
+      prompt: opts?.promptError
+        ? vi.fn().mockRejectedValue(opts.promptError)
+        : vi.fn().mockReturnValue(new Promise(() => {})),
+      cancel: vi.fn().mockResolvedValue(undefined),
     };
     vi.mocked(acp.ClientSideConnection).mockImplementation(function () {
       return mockConnection as never;
@@ -1640,85 +1659,18 @@ describe('AcpSessionManager', () => {
     });
 
     test('timeout message wins over stderr when stderr is present', async () => {
-      const { existsSync } = await import('node:fs');
-      const { writeFile } = await import('node:fs/promises');
+      const { sessionId, mockExec } = await setupSdkSession();
 
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(writeFile).mockResolvedValue();
-
-      const agent = createAgentInfo();
-      vi.mocked(agentRegistry.getAgent).mockResolvedValue(agent);
-      mockSandboxList.mockReturnValue({
-        all: vi
-          .fn()
-          .mockResolvedValue([
-            { id: 'sandbox-1', name: 'test-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' },
-          ]),
-      });
-
-      type ExecStreamEvent = { stream: 'stdout' | 'stderr'; data: Buffer } | { type: 'exit'; exitCode: number };
-      const events: ExecStreamEvent[] = [];
-      let eventResolve: ((result: IteratorResult<ExecStreamEvent>) => void) | undefined;
-      const iterDone = false;
-
-      const output: AsyncIterable<ExecStreamEvent> = {
-        [Symbol.asyncIterator]() {
-          return {
-            next(): Promise<IteratorResult<ExecStreamEvent>> {
-              if (events.length > 0) {
-                return Promise.resolve({ value: events.shift()!, done: false });
-              }
-              if (iterDone) {
-                return Promise.resolve({ value: undefined as never, done: true });
-              }
-              return new Promise(r => {
-                eventResolve = r;
-              });
-            },
-          };
-        },
-      };
-
-      const mockSession = {
-        output,
-        write: vi.fn(),
-        resize: vi.fn(),
-        close: vi.fn(),
-        done: neverResolve(),
-      };
-      sdkSandbox.execInteractive.mockResolvedValue(mockSession);
-
-      vi.mocked(acp.ClientSideConnection.prototype.initialize).mockResolvedValue({ protocolVersion: '0.1' } as never);
-      vi.mocked(acp.ClientSideConnection.prototype.newSession).mockResolvedValue({ sessionId: 'acp-1' } as never);
-      vi.mocked(acp.ClientSideConnection.prototype.prompt).mockReturnValue(neverResolve() as never);
-      vi.mocked(acp.ClientSideConnection.prototype.cancel).mockResolvedValue(undefined as never);
-      vi.mocked(acp.ndJsonStream).mockReturnValue({} as never);
-
-      // Push stderr before creating session so it's available when timeout fires
-      const stderrEvent: ExecStreamEvent = { stream: 'stderr', data: Buffer.from('some noisy stderr output') };
-      if (eventResolve) {
-        const r = eventResolve;
-        eventResolve = undefined;
-        r({ value: stderrEvent, done: false });
-      } else {
-        events.push(stderrEvent);
-      }
-
-      const session = await manager.createSession({
-        sandboxName: 'test-sandbox',
-        prompt: 'hello',
-        agentId: 'openclaw',
-      });
-
-      await vi.waitFor(() => {
-        expect(acp.ClientSideConnection.prototype.prompt).toHaveBeenCalled();
-      });
+      // The agent emits stderr noise but never answers the prompt, so the inactivity timer fires.
+      mockExec.pushStderr('some noisy stderr output');
+      // Let the output loop record the stderr line before the timeout fires.
+      await vi.advanceTimersByTimeAsync(0);
 
       vi.advanceTimersByTime(TIMEOUT_MS);
 
       await vi.waitFor(async () => {
         const sessions = await manager.listSessions();
-        const updated = sessions.find(s => s.id === session.id);
+        const updated = sessions.find(s => s.id === sessionId);
         assert(updated);
         expect(updated.status).toBe('error');
         assert(updated.error);
@@ -1733,8 +1685,8 @@ describe('AcpSessionManager', () => {
       // Advance to just before the timeout, then send a session update to reset the timer
       vi.advanceTimersByTime(TIMEOUT_MS - 1_000);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (manager as any).handleSessionUpdate(sessionId, {
+      manager.triggerSessionUpdate(sessionId, {
+        sessionId: 'acp-1',
         update: {
           sessionUpdate: 'agent_message_chunk',
           messageId: 'msg-1',
@@ -1766,13 +1718,12 @@ describe('AcpSessionManager', () => {
       const { sessionId } = await setupSessionWithConnection();
 
       // Simulate a permission request which should pause the timer
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const handlePermission = (manager as any).handlePermissionRequest.bind(manager);
-      const permissionPromise = handlePermission(sessionId, {
+      const permissionPromise = manager.triggerPermissionRequest(sessionId, {
+        sessionId: 'acp-1',
         toolCall: { toolCallId: 'tc-1', title: 'Run command' },
         options: [
-          { name: 'Allow', kind: 'allow', optionId: 'opt-allow' },
-          { name: 'Deny', kind: 'deny', optionId: 'opt-deny' },
+          { name: 'Allow', kind: 'allow_once', optionId: 'opt-allow' },
+          { name: 'Deny', kind: 'reject_once', optionId: 'opt-deny' },
         ],
       });
 
@@ -1915,6 +1866,55 @@ describe('AcpSessionManager', () => {
       assert(session);
       expect(session.status).toBe('cancelled');
       expect(session.error).toBeUndefined();
+    });
+  });
+
+  // A session that already failed (e.g. a follow-up error) must keep its error when the
+  // agent process later exits: the done/stream-error handlers skip sessions already in 'error'.
+  describe('process exit after error status', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    test('does not flip an errored session to completed when the process later exits 0', async () => {
+      const { sessionId, mockExec } = await setupSdkSession({ promptError: new Error('original prompt failure') });
+
+      await vi.waitFor(async () => {
+        const s = (await manager.listSessions()).find(x => x.id === sessionId);
+        assert(s);
+        expect(s.status).toBe('error');
+        expect(s.error).toContain('original prompt failure');
+      });
+
+      mockExec.end(0);
+      await vi.advanceTimersByTimeAsync(0);
+
+      const after = (await manager.listSessions()).find(x => x.id === sessionId);
+      assert(after);
+      expect(after.status).toBe('error');
+      expect(after.error).toContain('original prompt failure');
+    });
+
+    test('does not overwrite an errored session message with stderr when the process later exits non-zero', async () => {
+      const { sessionId, mockExec } = await setupSdkSession({ promptError: new Error('original prompt failure') });
+
+      await vi.waitFor(async () => {
+        const s = (await manager.listSessions()).find(x => x.id === sessionId);
+        assert(s);
+        expect(s.status).toBe('error');
+      });
+
+      mockExec.pushStderr('late noisy stderr');
+      await vi.advanceTimersByTimeAsync(0);
+      mockExec.end(1);
+      await vi.advanceTimersByTimeAsync(0);
+
+      const after = (await manager.listSessions()).find(x => x.id === sessionId);
+      assert(after);
+      expect(after.status).toBe('error');
+      assert(after.error);
+      expect(after.error).toContain('original prompt failure');
+      expect(after.error).not.toContain('noisy stderr');
     });
   });
 
