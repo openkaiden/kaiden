@@ -38,11 +38,17 @@ jobs:
   workspace-e2e:
     name: Fedora 44 workspace provider E2E
     runs-on: ubuntu-24.04
-    # Scheduled runs only on the upstream repo (forks lack TEST_FARM_TOKEN and
-    # would fail nightly); manual dispatch stays available everywhere.
-    if: github.event_name != 'schedule' || github.repository == 'openkaiden/kaiden'
+    # Run only on the upstream repo: forks lack TEST_FARM_TOKEN and the
+    # openkaiden/* allow-list means a fork dispatch could only test upstream
+    # code anyway, so it could only fail.
+    if: github.repository == 'openkaiden/kaiden'
     timeout-minutes: 240
+    env:
+      TESTING_FARM_COMPOSE: Fedora-44
     steps:
+      - name: Check out workflow scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Resolve source repository and ref
         id: source
         env:
@@ -50,40 +56,7 @@ jobs:
           INPUT_REF: ${{ inputs.ref }}
           CURRENT_REPOSITORY: ${{ github.repository }}
           CURRENT_REF: ${{ github.ref_name }}
-        run: |
-          repository="${INPUT_REPOSITORY:-$CURRENT_REPOSITORY}"
-          ref="${INPUT_REF:-$CURRENT_REF}"
-          if [[ ! "$repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-            echo "::error::Repository must use owner/repo format"
-            exit 1
-          fi
-          # Provider secrets are exposed to the tmt plan/script of the repository
-          # under test, so only allow repositories from the upstream org.
-          if [[ "$repository" != openkaiden/* ]]; then
-            echo "::error::Only openkaiden/* repositories may run this workflow"
-            exit 1
-          fi
-          # Reject refs/pull/* (a fork's PR head would run untrusted code with
-          # the provider secrets) and anything that could smuggle shell syntax.
-          if [[ "$ref" =~ [[:space:]] || "$ref" == *";"* || "$ref" == -* || "$ref" == refs/pull/* ]]; then
-            echo "::error::Ref must be a branch, tag, or SHA (no refs/pull/*, whitespace, ';', or leading '-')"
-            exit 1
-          fi
-          # Resolve to an immutable commit SHA so the Testing Farm plan checkout
-          # and the script's own fetch test the same source even if the branch
-          # moves between the two resolutions.
-          sha="$(git ls-remote "https://github.com/${repository}.git" "$ref" | awk 'NR==1{print $1}')"
-          if [ -z "$sha" ]; then
-            if [[ "$ref" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
-              sha="$ref"
-            else
-              echo "::error::Could not resolve ref '$ref' to a commit SHA"
-              exit 1
-            fi
-          fi
-          echo "repository=$repository" >> "$GITHUB_OUTPUT"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "Testing $repository at $sha ($ref) on Fedora 44"
+        run: .github/scripts/testing-farm/resolve-source.sh
 
       - name: Submit workspace provider tests to Testing Farm
         uses: sclorg/testing-farm-as-github-action@230555baceb860aa468d216f1822974836b965d1 # v4
@@ -93,13 +66,15 @@ jobs:
           git_ref: ${{ steps.source.outputs.sha }}
           tmt_plan_regex: workspace-provider
           tmt_path: tests/tmt
-          compose: Fedora-44
+          compose: ${{ env.TESTING_FARM_COMPOSE }}
           arch: x86_64
           variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.sha }}
           # Masked provider credentials; without them every scenario with a
           # requiredResource calls test.skip and the job reports a false green.
           secrets: ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }};OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }};GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }};MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}
-          # The action polls for ~(timeout x 4) minutes (timeout x 2 iterations,
-          # 120s each), so keep it well under the job timeout-minutes (240) to
-          # return a Testing Farm result link instead of GitHub killing the job.
+          # The action polls for ~(timeout x 4) minutes: it runs timeout x 2
+          # iterations 120s apart (see the pinned action source,
+          # src/action.ts:205-233 at commit 230555b). 50 -> ~200m, kept under the
+          # job timeout-minutes (240) so a result link is returned instead of
+          # GitHub killing the job.
           timeout: 50

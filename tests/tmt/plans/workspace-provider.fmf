@@ -27,20 +27,19 @@ prepare:
   - name: Install system dependencies
     how: shell
     script: |
-      # passt provides pasta: OpenShell fails closed unless Podman reports
+      # System-level install via sudo (the suite itself runs as the unprivileged
+      # Testing Farm user), mirroring the podman-desktop Testing Farm plan. passt
+      # provides pasta: OpenShell fails closed unless Podman reports
       # rootlessNetworkCmd=pasta, so install it explicitly rather than rely on
       # podman's transitive deps.
-      dnf install -y alsa-lib at-spi2-atk atk cairo cups-libs git gtk3 libdrm libX11 libXcomposite libXdamage libXext libXfixes libXi libXrandr libXScrnSaver libXtst mesa-libgbm nss pango passt podman xdg-utils xorg-x11-server-Xvfb
+      sudo dnf install -y alsa-lib at-spi2-atk atk cairo cups-libs git gtk3 libdrm libX11 libXcomposite libXdamage libXext libXfixes libXi libXrandr libXScrnSaver libXtst mesa-libgbm nss pango passt podman xdg-utils xorg-x11-server-Xvfb
   - name: Enable Podman socket
     how: shell
     script: |
-      # OpenShell needs a rootless Podman whose network backend is pasta. Enable
-      # the user socket and require that the active Podman reports
-      # RootlessNetworkCmd=pasta. This also acts as a guard: if Testing Farm runs
-      # this plan as root (making Podman rootful) the field is empty/missing and
-      # the step fails fast with a clear message rather than deep in the E2E run.
-      # If that happens, the plan must be switched to run as an unprivileged user
-      # (create one + loginctl enable-linger), mirroring the Linux e2e-test-job.
+      # Mirror the podman-desktop Testing Farm plan: enable the user (rootless)
+      # Podman socket, then require that Podman reports RootlessNetworkCmd=pasta
+      # (OpenShell needs it) and fail fast here if it is missing rather than deep
+      # in the E2E run.
       systemctl --user enable --now podman.socket
       podman info
       rootless_cmd="$(podman info --format '{{.Host.RootlessNetworkCmd}}' 2>/dev/null || true)"

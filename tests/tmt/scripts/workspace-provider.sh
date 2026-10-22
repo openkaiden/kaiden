@@ -23,8 +23,9 @@ set -euo pipefail
 
 repo_dir="$(mktemp -d /tmp/kaiden-e2e.XXXXXX)"
 test_data_dir="$TMT_TEST_DATA"
-# tmt_path=tests/tmt scopes plan discovery to the tmt tree, which does not contain
-# the application source needed to build and run Kaiden. Clone the full repo here.
+# Testing Farm checks out the repo for tmt, but with tmt_path=tests/tmt the tmt
+# metadata tree ($TMT_TREE) is tests/tmt, not a build-ready source root at a
+# stable path. Clone the pinned SHA into a clean workdir to build Kaiden.
 git clone --filter=blob:none --no-checkout "https://github.com/${KAIDEN_REPOSITORY}.git" "$repo_dir"
 git -C "$repo_dir" fetch --depth 1 origin "$KAIDEN_REF"
 git -C "$repo_dir" checkout --detach FETCH_HEAD
@@ -43,18 +44,21 @@ if [ "$arch" != "x86_64" ]; then
   exit 1
 fi
 
+# Install Node into /usr/local and enable corepack with sudo (system-level setup),
+# then run the suite as the unprivileged Testing Farm user so Podman is rootless —
+# mirroring the podman-desktop Testing Farm plan.
 node_version="$(tr -d '[:space:]' < .nvmrc)"
 node_tarball="node-v${node_version}-linux-x64.tar.xz"
 node_base="https://nodejs.org/dist/v${node_version}"
-# Verify the tarball against the official checksum before extracting it as root.
+# Verify the tarball against the official checksum before extracting it.
 curl --fail --silent --show-error --location -O "${node_base}/${node_tarball}"
 curl --fail --silent --show-error --location -O "${node_base}/SHASUMS256.txt"
 grep " ${node_tarball}\$" SHASUMS256.txt | sha256sum -c -
-tar -xJ --strip-components=1 -C /usr/local -f "${node_tarball}"
+sudo tar -xJ --strip-components=1 -C /usr/local -f "${node_tarball}"
 rm -f "${node_tarball}" SHASUMS256.txt
 # corepack reads the pinned pnpm version from package.json's packageManager field,
 # so there is nothing to hardcode here.
-corepack enable
+sudo corepack enable
 node --version
 pnpm --version
 
