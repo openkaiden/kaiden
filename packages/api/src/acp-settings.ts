@@ -19,4 +19,11 @@
 export enum AcpSettings {
   SectionName = 'acp',
   MaxAttachmentFileSizeMB = 'maxAttachmentFileSize',
+  PromptTimeoutSeconds = 'promptTimeoutSeconds',
 }
+
+/**
+ * Default inactivity timeout (in seconds) for ACP prompt calls. Shared between the
+ * configuration registration and the runtime fallback to avoid two sources of truth.
+ */
+export const ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT = 300;
