@@ -63,25 +63,39 @@ jobs:
             echo "::error::Only openkaiden/* repositories may run this workflow"
             exit 1
           fi
-          if [[ "$ref" =~ [[:space:]] || "$ref" == *";"* || "$ref" == -* ]]; then
-            echo "::error::Ref must not contain whitespace, semicolons, or start with a dash"
+          # Reject refs/pull/* (a fork's PR head would run untrusted code with
+          # the provider secrets) and anything that could smuggle shell syntax.
+          if [[ "$ref" =~ [[:space:]] || "$ref" == *";"* || "$ref" == -* || "$ref" == refs/pull/* ]]; then
+            echo "::error::Ref must be a branch, tag, or SHA (no refs/pull/*, whitespace, ';', or leading '-')"
             exit 1
           fi
+          # Resolve to an immutable commit SHA so the Testing Farm plan checkout
+          # and the script's own fetch test the same source even if the branch
+          # moves between the two resolutions.
+          sha="$(git ls-remote "https://github.com/${repository}.git" "$ref" | awk 'NR==1{print $1}')"
+          if [ -z "$sha" ]; then
+            if [[ "$ref" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+              sha="$ref"
+            else
+              echo "::error::Could not resolve ref '$ref' to a commit SHA"
+              exit 1
+            fi
+          fi
           echo "repository=$repository" >> "$GITHUB_OUTPUT"
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
-          echo "Testing $repository at $ref on Fedora 44"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Testing $repository at $sha ($ref) on Fedora 44"
 
       - name: Submit workspace provider tests to Testing Farm
         uses: sclorg/testing-farm-as-github-action@230555baceb860aa468d216f1822974836b965d1 # v4
         with:
           api_key: ${{ secrets.TEST_FARM_TOKEN }}
           git_url: https://github.com/${{ steps.source.outputs.repository }}.git
-          git_ref: ${{ steps.source.outputs.ref }}
+          git_ref: ${{ steps.source.outputs.sha }}
           tmt_plan_regex: workspace-provider
           tmt_path: tests/tmt
           compose: Fedora-44
           arch: x86_64
-          variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.ref }}
+          variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.sha }}
           # Masked provider credentials; without them every scenario with a
           # requiredResource calls test.skip and the job reports a false green.
           secrets: ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }};OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }};GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }};MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}

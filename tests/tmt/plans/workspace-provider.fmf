@@ -34,10 +34,15 @@ prepare:
   - name: Enable Podman socket
     how: shell
     script: |
+      # OpenShell needs a rootless Podman whose network backend is pasta. Enable
+      # the user socket and require that the active Podman reports
+      # RootlessNetworkCmd=pasta. This also acts as a guard: if Testing Farm runs
+      # this plan as root (making Podman rootful) the field is empty/missing and
+      # the step fails fast with a clear message rather than deep in the E2E run.
+      # If that happens, the plan must be switched to run as an unprivileged user
+      # (create one + loginctl enable-linger), mirroring the Linux e2e-test-job.
       systemctl --user enable --now podman.socket
       podman info
-      # OpenShell fails closed unless rootless Podman reports pasta networking,
-      # so assert it here to fail fast instead of midway through the E2E suite.
       rootless_cmd="$(podman info --format '{{.Host.RootlessNetworkCmd}}' 2>/dev/null || true)"
       echo "rootlessNetworkCmd=${rootless_cmd:-missing}"
       if [ "${rootless_cmd}" != "pasta" ]; then

@@ -22,5 +22,3 @@ test: bash ../scripts/workspace-provider.sh
 # timeout-minutes (240), so a run that overshoots still returns a Testing Farm
 # result instead of being killed by the outer GitHub job: 180m < ~200m < 240m.
 duration: 180m
-require:
-  - podman

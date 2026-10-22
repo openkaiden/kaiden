@@ -35,6 +35,14 @@ if [[ ! -f .nvmrc ]]; then
   exit 1
 fi
 
+# This plan pins arch: x86_64; fail clearly if it ever lands on another guest
+# rather than failing later on the hardcoded linux-x64 Node tarball.
+arch="$(uname -m)"
+if [ "$arch" != "x86_64" ]; then
+  echo "workspace-provider plan supports x86_64 only (got ${arch})" >&2
+  exit 1
+fi
+
 node_version="$(tr -d '[:space:]' < .nvmrc)"
 node_tarball="node-v${node_version}-linux-x64.tar.xz"
 node_base="https://nodejs.org/dist/v${node_version}"
