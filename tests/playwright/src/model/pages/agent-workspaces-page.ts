@@ -170,6 +170,10 @@ export class AgentWorkspacesPage extends BaseTablePage {
     if (!row) {
       return;
     }
+    const removeButton = row.getByRole('button', { name: 'Remove workspace' });
+    if (await removeButton.isDisabled()) {
+      return;
+    }
     await this.removeWorkspace(name);
   }
 
@@ -180,9 +184,16 @@ export class AgentWorkspacesPage extends BaseTablePage {
   ): Promise<void> {
     const displayStatus = status.charAt(0).toUpperCase() + status.slice(1);
     const row = this.table.getByRole('row').filter({ hasText: name });
+    const errorDialog = this.page.getByText(/Error while creating workspace/i);
     await expect
       .poll(
         async () => {
+          if (await errorDialog.isVisible()) {
+            const detail = (await errorDialog.textContent()) ?? 'unknown error';
+            const okButton = this.page.getByRole('button', { name: 'OK' });
+            if (await okButton.isVisible()) await okButton.click();
+            throw new Error(`Workspace creation failed: ${detail}`);
+          }
           const statusText = await row.getByText(displayStatus, { exact: true }).count();
           return statusText > 0;
         },
