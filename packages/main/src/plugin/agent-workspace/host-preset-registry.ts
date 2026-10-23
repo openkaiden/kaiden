@@ -17,8 +17,9 @@
  ***********************************************************************/
 
 import type { HostPreset } from '@openkaiden/api';
-import { inject, injectable } from 'inversify';
+import { inject, injectable, postConstruct } from 'inversify';
 
+import { IPCHandle } from '/@/plugin/api.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 
 import { Disposable } from '../types/disposable.js';
@@ -27,7 +28,17 @@ import { Disposable } from '../types/disposable.js';
 export class HostPresetRegistry {
   private readonly presets = new Map<string, HostPreset>();
 
-  constructor(@inject(ApiSenderType) private readonly apiSender: ApiSenderType) {}
+  constructor(
+    @inject(ApiSenderType) private readonly apiSender: ApiSenderType,
+    @inject(IPCHandle) private readonly ipcHandle: IPCHandle,
+  ) {}
+
+  @postConstruct()
+  init(): void {
+    this.ipcHandle('host-preset-registry:getHostPresets', async (): Promise<ReadonlyArray<HostPreset>> => {
+      return this.getHostPresets();
+    });
+  }
 
   registerHostPreset(preset: HostPreset): Disposable {
     if (this.presets.has(preset.id)) {
