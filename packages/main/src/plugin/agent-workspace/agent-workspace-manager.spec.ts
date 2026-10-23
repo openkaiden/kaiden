@@ -105,6 +105,7 @@ function mockSdkListSandboxes(
     labels: Record<string, string>;
     resourceVersion: string;
   }[] = TEST_SDK_REFS,
+  additionalGatewayRefs: typeof refs = [],
 ): void {
   const gateways: GatewayInfo[] = [TEST_GATEWAY, ADDITIONAL_GATEWAY];
   vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue(gateways);
@@ -122,7 +123,7 @@ function mockSdkListSandboxes(
           sandbox: {
             ...sdkSandbox,
             list: vi.fn().mockReturnValue({
-              all: vi.fn().mockResolvedValue([]),
+              all: vi.fn().mockResolvedValue(additionalGatewayRefs),
             }),
           },
         } as unknown as OpenShellClient);
@@ -1863,6 +1864,57 @@ describe('deleteOpenshellSandbox', () => {
     await manager.deleteOpenshellSandbox('my-workspace', 'kaiden');
 
     expect(secretManager.remove).toHaveBeenCalledWith('my-workspace-secret', 'kaiden');
+  });
+
+  test('uses the given labels without listing the sandboxes again', async () => {
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+
+    await manager.deleteOpenshellSandbox('my-workspace', 'kaiden', { [SECRET_LABEL]: 'given-secret' });
+
+    expect(openshellGatewayStateManager.listGateways).not.toHaveBeenCalled();
+    expect(secretManager.remove).toHaveBeenCalledWith('given-secret', 'kaiden');
+  });
+});
+
+describe('findOpenshellSandboxes', () => {
+  test('returns the Kaiden workspaces with that name and their gateway', async () => {
+    mockSdkListSandboxes([
+      { id: 'ws-1', name: 'my-workspace', phase: 'ready', labels: {}, resourceVersion: '1' },
+      { id: 'ws-2', name: 'other', phase: 'ready', labels: {}, resourceVersion: '1' },
+    ]);
+
+    const found = await manager.findOpenshellSandboxes('my-workspace');
+
+    expect(found).toEqual([
+      { sandbox: expect.objectContaining({ id: 'ws-1', name: 'my-workspace' }), gateway: 'kaiden' },
+    ]);
+  });
+
+  test('returns a match per gateway when the name exists on several', async () => {
+    const ref = { id: 'ws-1', name: 'my-workspace', phase: 'ready', labels: {}, resourceVersion: '1' };
+    mockSdkListSandboxes([ref], [{ ...ref, id: 'ws-2' }]);
+
+    const found = await manager.findOpenshellSandboxes('my-workspace');
+
+    expect(found.map(match => [match.sandbox.id, match.gateway])).toEqual([
+      ['ws-1', TEST_GATEWAY.name],
+      ['ws-2', ADDITIONAL_GATEWAY.name],
+    ]);
+  });
+
+  test('only searches the given gateway', async () => {
+    const ref = { id: 'ws-1', name: 'my-workspace', phase: 'ready', labels: {}, resourceVersion: '1' };
+    mockSdkListSandboxes([ref], [{ ...ref, id: 'ws-2' }]);
+
+    const found = await manager.findOpenshellSandboxes('my-workspace', ADDITIONAL_GATEWAY.name);
+
+    expect(found.map(match => [match.sandbox.id, match.gateway])).toEqual([['ws-2', ADDITIONAL_GATEWAY.name]]);
+  });
+
+  test('returns nothing when no workspace has that name', async () => {
+    mockSdkListSandboxes([{ id: 'ws-2', name: 'other', phase: 'ready', labels: {}, resourceVersion: '1' }]);
+
+    expect(await manager.findOpenshellSandboxes('my-workspace', 'kaiden')).toEqual([]);
   });
 });
 

@@ -191,6 +191,12 @@ export interface GatewaySandboxes {
   sandboxes: SandboxInfo[];
 }
 
+/** A sandbox found by name, with the name of the gateway that runs it. */
+export interface SandboxMatch {
+  sandbox: SandboxInfo;
+  gateway: string;
+}
+
 export const OpenshellProfileCredentialSchema = z.looseObject({
   name: z.string(),
   required: z.boolean(),
