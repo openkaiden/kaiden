@@ -51,7 +51,7 @@ import {
 
 import gatewayConfigTemplate from './openshell-gateway.toml.template?raw';
 
-const DEFAULT_PORT = 17670;
+const DEFAULT_PORT = 29670;
 const DEFAULT_BIND_ADDRESS = '127.0.0.1';
 const HEALTH_CHECK_INTERVAL_MS = 1000;
 const MAX_HEALTH_CHECK_ATTEMPTS = 30;
