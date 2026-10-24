@@ -532,37 +532,52 @@ describe('activate', () => {
       expect(written.mcp['minimal']).not.toHaveProperty('environment');
     });
 
-    test('maps vertexai to anthropic provider with correct config and env vars', async () => {
+    test('routes vertexai to the native google-vertex provider', async () => {
       await activate(extensionContextMock);
       const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
 
       const configFile = createConfigFile();
-      const workspace = {
-        environment: [] as { name: string; value: string }[],
-      };
-      const context: AgentWorkspaceContext = {
-        model: {
-          llmMetadata: { name: 'vertexai' },
-          model: { label: 'claude-sonnet-4-20250514' },
-          endpoint: 'https://custom.vertex.example.com',
-        },
-        configurationFiles: [configFile],
-        workspace,
-      };
-
-      await agent.preWorkspaceStart(context);
+      await agent.preWorkspaceStart(
+        createContext([configFile], { provider: 'vertexai', modelLabel: 'claude-sonnet-4-20250514' }),
+      );
 
       const written = JSON.parse(configFile.updateMock.mock.calls[0]![0] as string);
-      expect(written.model).toBe('anthropic/claude-sonnet-4-20250514');
-      expect(written.provider.anthropic.npm).toBe('@ai-sdk/anthropic');
-      expect(written.provider.anthropic.options.baseURL).toBe('https://custom.vertex.example.com');
+      expect(written.model).toBe('vertex-anthropic/claude-sonnet-4-20250514');
+      expect(written.provider['vertex-anthropic']).toEqual({
+        name: 'vertex-anthropic',
+        npm: '@ai-sdk/google-vertex/anthropic',
+        options: {
+          accessToken: '{env:GOOGLE_VERTEX_AI_TOKEN}',
+        },
+        models: {
+          'claude-sonnet-4-20250514': { _launch: true, name: 'claude-sonnet-4-20250514' },
+        },
+      });
+      expect(written.provider).not.toHaveProperty('anthropic');
       expect(written.provider).not.toHaveProperty('vertexai');
-
-      expect(workspace.environment).toContainEqual({ name: 'ANTHROPIC_BASE_URL', value: 'https://inference.local/v1' });
-      expect(workspace.environment).toContainEqual({ name: 'ANTHROPIC_API_KEY', value: 'unused' });
     });
 
-    test('adds Vertex AI environment variables when using vertexai model', async () => {
+    test('merges existing google-vertex options and always refreshes the access token for vertexai', async () => {
+      await activate(extensionContextMock);
+      const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
+
+      const existingConfig = JSON.stringify({
+        provider: {
+          'google-vertex': {
+            options: { project: 'my-project', location: 'us-east1', accessKey: 'stale-token' },
+          },
+        },
+      });
+      const configFile = createConfigFile(existingConfig);
+      await agent.preWorkspaceStart(createContext([configFile], { provider: 'vertexai', modelLabel: 'claude-opus' }));
+
+      const written = JSON.parse(configFile.updateMock.mock.calls[0]![0] as string);
+      expect(written.provider['vertex-anthropic'].options).toEqual({
+        accessToken: '{env:GOOGLE_VERTEX_AI_TOKEN}',
+      });
+    });
+
+    test('does not inject the removed local inference endpoint env vars for vertexai', async () => {
       await activate(extensionContextMock);
       const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
 
@@ -582,11 +597,10 @@ describe('activate', () => {
 
       await agent.preWorkspaceStart(context);
 
-      expect(workspace.environment).toContainEqual({ name: 'ANTHROPIC_BASE_URL', value: 'https://inference.local/v1' });
-      expect(workspace.environment).toContainEqual({ name: 'ANTHROPIC_API_KEY', value: 'unused' });
+      expect(workspace.environment).toEqual([]);
     });
 
-    test('does not add Vertex AI environment variables for non-vertexai models', async () => {
+    test('does not modify workspace environment for non-vertexai models', async () => {
       await activate(extensionContextMock);
       const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
 
@@ -606,63 +620,7 @@ describe('activate', () => {
 
       await agent.preWorkspaceStart(context);
 
-      expect(workspace.environment).toHaveLength(1);
       expect(workspace.environment).toEqual([{ name: 'SOME_OTHER_VAR', value: 'value' }]);
-    });
-
-    test('replaces existing Vertex AI environment variables', async () => {
-      await activate(extensionContextMock);
-      const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
-
-      const workspace = {
-        environment: [
-          { name: 'ANTHROPIC_BASE_URL', value: 'https://api.anthropic.com' },
-          { name: 'ANTHROPIC_API_KEY', value: 'mykey' },
-        ],
-      };
-
-      const configFile = createConfigFile();
-      const context: AgentWorkspaceContext = {
-        model: {
-          llmMetadata: { name: 'vertexai' },
-          model: { label: 'claude-sonnet-4-20250514' },
-        },
-        configurationFiles: [configFile],
-        workspace,
-      };
-
-      await agent.preWorkspaceStart(context);
-
-      const anthropicBaseURL = workspace.environment.filter(e => e.name === 'ANTHROPIC_BASE_URL');
-      const anthropicKey = workspace.environment.filter(e => e.name === 'ANTHROPIC_API_KEY');
-
-      expect(anthropicBaseURL).toHaveLength(1);
-      expect(anthropicBaseURL[0]).toEqual({ name: 'ANTHROPIC_BASE_URL', value: 'https://inference.local/v1' });
-      expect(anthropicKey).toHaveLength(1);
-      expect(anthropicKey[0]).toEqual({ name: 'ANTHROPIC_API_KEY', value: 'unused' });
-    });
-
-    test('initializes workspace environment array when undefined for vertexai', async () => {
-      await activate(extensionContextMock);
-      const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
-
-      const workspace = {} as { environment?: { name: string; value: string }[] };
-
-      const configFile = createConfigFile();
-      const context: AgentWorkspaceContext = {
-        model: {
-          llmMetadata: { name: 'vertexai' },
-          model: { label: 'claude-sonnet-4-20250514' },
-        },
-        configurationFiles: [configFile],
-        workspace,
-      };
-
-      await agent.preWorkspaceStart(context);
-
-      expect(workspace.environment).toBeDefined();
-      expect(workspace.environment).toContainEqual({ name: 'ANTHROPIC_BASE_URL', value: 'https://inference.local/v1' });
-      expect(workspace.environment).toContainEqual({ name: 'ANTHROPIC_API_KEY', value: 'unused' });
     });
   });
 });
