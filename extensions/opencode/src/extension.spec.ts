@@ -532,7 +532,7 @@ describe('activate', () => {
       expect(written.mcp['minimal']).not.toHaveProperty('environment');
     });
 
-    test('routes vertexai to the native google-vertex provider', async () => {
+    test('routes vertexai to the native vertex-anthropic provider', async () => {
       await activate(extensionContextMock);
       const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
 
@@ -557,14 +557,14 @@ describe('activate', () => {
       expect(written.provider).not.toHaveProperty('vertexai');
     });
 
-    test('merges existing google-vertex options and always refreshes the access token for vertexai', async () => {
+    test('merges existing vertex-anthropic options and always refreshes the access token for vertexai', async () => {
       await activate(extensionContextMock);
       const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
 
       const existingConfig = JSON.stringify({
         provider: {
-          'google-vertex': {
-            options: { project: 'my-project', location: 'us-east1', accessKey: 'stale-token' },
+          'vertex-anthropic': {
+            options: { project: 'my-project', location: 'us-east1', accessToken: 'stale-token' },
           },
         },
       });
@@ -573,6 +573,8 @@ describe('activate', () => {
 
       const written = JSON.parse(configFile.updateMock.mock.calls[0]![0] as string);
       expect(written.provider['vertex-anthropic'].options).toEqual({
+        project: 'my-project',
+        location: 'us-east1',
         accessToken: '{env:GOOGLE_VERTEX_AI_TOKEN}',
       });
     });

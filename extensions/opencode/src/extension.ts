@@ -64,7 +64,7 @@ const NATIVE_PROVIDER_SDKS: Record<string, string> = {
 };
 
 // Kaiden's internal llmMetadata name for Vertex AI connections. OpenCode has a
-// native "google-vertex" provider, so these are routed to it rather than through
+// native "vertex-anthropic" provider, so these are routed to it rather than through
 // the generic openai-compatible path.
 const VERTEXAI_LLM_METADATA_NAME = 'vertexai';
 const VERTEX_PROVIDER_ID = 'vertex-anthropic';
@@ -117,7 +117,7 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
       if (provider === VERTEXAI_LLM_METADATA_NAME) {
         // Vertex AI is served directly by Google: OpenShell injects a refreshed
         // bearer token and the project/region as environment variables into the
-        // sandbox, and OpenCode's native google-vertex provider talks to the real
+        // sandbox, and OpenCode's native vertex-anthropic provider talks to the real
         // *-aiplatform.googleapis.com endpoint. No local inference gateway is used.
         config.model = `${VERTEX_PROVIDER_ID}/${modelName}`;
 
