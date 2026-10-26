@@ -187,7 +187,7 @@ const configurationRegistry = {
 
 const providerRegistry = {
   getInferenceConnectionCredentials: vi.fn(),
-  getInferenceConnection: vi.fn(),
+  getInferenceConnectionFromModel: vi.fn(),
   getProvider: vi.fn(),
 } as unknown as ProviderRegistry;
 

@@ -109,7 +109,7 @@ Object.defineProperty(mockProvider, 'extensionId', { value: 'kaiden.openai' });
 let gatewayStartCallback: (() => void) | undefined;
 
 const providerRegistry = {
-  getInferenceConnection: vi.fn(),
+  getInferenceConnectionFromModel: vi.fn(),
   getProvider: vi.fn(),
 } as unknown as ProviderRegistry;
 
@@ -373,7 +373,7 @@ describe('ensureSecretForSandbox', () => {
 
   test('creates sandbox-named secret when none exists', async () => {
     mockRaw.listProviders.mockResolvedValue({ providers: [] });
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
+    vi.mocked(providerRegistry.getInferenceConnectionFromModel).mockReturnValue({
       connection: mockConnection,
       providerId: 'kaiden.openai',
     });
@@ -426,7 +426,7 @@ describe('ensureSecretForSandbox', () => {
 
   test('profile rolled back if create secret fails', async () => {
     mockRaw.listProviders.mockResolvedValue({ providers: [] });
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue({
+    vi.mocked(providerRegistry.getInferenceConnectionFromModel).mockReturnValue({
       connection: mockConnection,
       providerId: 'kaiden.openai',
     });
@@ -485,7 +485,7 @@ describe('ensureSecretForSandbox', () => {
 
   test('returns undefined when no inference connection exists', async () => {
     mockRaw.listProviders.mockResolvedValue({ providers: [] });
-    vi.mocked(providerRegistry.getInferenceConnection).mockReturnValue(undefined);
+    vi.mocked(providerRegistry.getInferenceConnectionFromModel).mockReturnValue(undefined);
 
     const result = await manager.ensureSecretForSandbox('my-sandbox', 'unknown::model::', 'claude');
 
