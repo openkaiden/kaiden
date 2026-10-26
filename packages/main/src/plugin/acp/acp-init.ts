@@ -40,7 +40,7 @@ export class AcpInit {
         },
         [`${AcpSettings.SectionName}.${AcpSettings.PromptTimeoutSeconds}`]: {
           description:
-            'Inactivity timeout (in seconds) for ACP prompt calls. The session is cancelled if the agent produces no activity within this period. Set to 0 to disable.',
+            'Inactivity timeout (in seconds) for ACP prompt calls. If the agent produces no activity within this period, the prompt is cancelled and the session is marked as failed. Set to 0 to disable.',
           type: 'number',
           default: ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT,
           minimum: 0,

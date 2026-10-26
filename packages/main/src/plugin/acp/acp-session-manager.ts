@@ -318,18 +318,14 @@ export class AcpSessionManager {
     return info;
   }
 
-  private async promptWithTimeout(
-    session: AcpSession,
-    params: { sessionId: string; prompt: acp.ContentBlock[] },
-  ): Promise<Awaited<ReturnType<acp.ClientSideConnection['prompt']>>> {
+  private async promptWithTimeout(session: AcpSession, params: acp.PromptRequest): Promise<acp.PromptResponse> {
     session.promptTimeoutMs = this.getPromptTimeoutMs();
 
     if (session.promptTimeoutMs <= 0) {
       return session.connection.prompt(params);
     }
 
-    type PromptResult = Awaited<ReturnType<acp.ClientSideConnection['prompt']>>;
-    const timeoutPromise = new Promise<PromptResult>((_, reject) => {
+    const timeoutPromise = new Promise<acp.PromptResponse>((_, reject) => {
       session.promptTimeoutReject = reject;
     });
     this.resetInactivityTimer(session);
@@ -958,8 +954,11 @@ export class AcpSessionManager {
         debugLifecycle(`${session.info.sandboxName} connection died during prompt, reconnecting...`);
         await this.reconnectSession(sessionId);
         try {
+          if (!session.acpSessionId) {
+            throw new Error(`no ACP session id after reconnecting session ${sessionId}`);
+          }
           const result = await this.promptWithTimeout(session, {
-            sessionId: session.acpSessionId!,
+            sessionId: session.acpSessionId,
             prompt: contentBlocks,
           });
           if (result.stopReason === 'end_turn' || result.stopReason === 'cancelled') {

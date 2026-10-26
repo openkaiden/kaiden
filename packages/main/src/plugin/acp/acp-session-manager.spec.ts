@@ -1750,7 +1750,7 @@ describe('AcpSessionManager', () => {
         requestId,
         type: 'permission',
         data: { optionId: 'opt-allow' },
-      } as never);
+      });
 
       await permissionPromise;
 
