@@ -18,7 +18,7 @@
 
 import type { AgentConfigurationFile, AgentWorkspaceContext, Disposable, ExtensionContext } from '@openkaiden/api';
 import { agents } from '@openkaiden/api';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { activate, OPENCODE_CONFIG_PATH } from './extension';
 
@@ -571,7 +571,9 @@ describe('activate', () => {
       const configFile = createConfigFile(existingConfig);
       await agent.preWorkspaceStart(createContext([configFile], { provider: 'vertexai', modelLabel: 'claude-opus' }));
 
-      const written = JSON.parse(configFile.updateMock.mock.calls[0]![0] as string);
+      const call = configFile.updateMock.mock.calls[0];
+      assert(call);
+      const written = JSON.parse(call[0]);
       expect(written.provider['vertex-anthropic'].options).toEqual({
         project: 'my-project',
         location: 'us-east1',
