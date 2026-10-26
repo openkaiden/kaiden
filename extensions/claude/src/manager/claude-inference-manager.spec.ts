@@ -29,7 +29,12 @@ import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import { PROVIDER_ID } from '/@/claude-extension';
 import { ClaudeProviderSymbol, SecretStorageSymbol } from '/@/inject/symbol';
 
-import { ClaudeInferenceManager, type StoredConnection, TOKENS_KEY } from './claude-inference-manager';
+import {
+  ClaudeInferenceManager,
+  OPENSHELL_PROFILE_ID,
+  type StoredConnection,
+  TOKENS_KEY,
+} from './claude-inference-manager';
 
 vi.mock(import('node:crypto'), async importOriginal => {
   const actual = await importOriginal();
@@ -404,11 +409,26 @@ describe('workspace configuration', () => {
     const connection = vi.mocked(PROVIDER_MOCK.registerInferenceProviderConnection).mock.calls[0][0];
     expect(configuration.getConfiguration).toHaveBeenCalledWith(undefined, connection);
 
-    expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('claude.connection._type', PROVIDER_ID);
+    expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('claude.connection._type', OPENSHELL_PROFILE_ID);
     expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith(
       'claude.connection.ANTHROPIC_API_KEY',
       `${PROVIDER_ID}:fake-uuid-1:token`,
     );
+  });
+
+  test('setConnectionConfiguration sets _type to openshell profile id, not provider id', async () => {
+    const manager = await createManager();
+    await manager.init();
+
+    const mock = vi.mocked(PROVIDER_MOCK.setInferenceProviderConnectionFactory);
+    const create = mock.mock.calls[0][0].create;
+
+    await create({
+      'claude.factory.apiKey': 'test-key',
+    });
+
+    expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('claude.connection._type', OPENSHELL_PROFILE_ID);
+    expect(CONFIG_UPDATE_MOCK).not.toHaveBeenCalledWith('claude.connection._type', PROVIDER_ID);
   });
 
   test('should set workspace configuration for each restored connection', async () => {
@@ -424,7 +444,7 @@ describe('workspace configuration', () => {
     expect(SECRET_STORAGE_MOCK.store).toHaveBeenCalledWith(`${PROVIDER_ID}:id-1:token`, 'key1');
     expect(SECRET_STORAGE_MOCK.store).toHaveBeenCalledWith(`${PROVIDER_ID}:id-2:token`, 'key2');
 
-    expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('claude.connection._type', PROVIDER_ID);
+    expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('claude.connection._type', OPENSHELL_PROFILE_ID);
     expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('claude.connection.ANTHROPIC_API_KEY', `${PROVIDER_ID}:id-1:token`);
     expect(CONFIG_UPDATE_MOCK).toHaveBeenCalledWith('claude.connection.ANTHROPIC_API_KEY', `${PROVIDER_ID}:id-2:token`);
   });

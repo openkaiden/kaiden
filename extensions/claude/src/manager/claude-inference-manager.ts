@@ -34,6 +34,8 @@ import { inject, injectable } from 'inversify';
 import { PROVIDER_ID } from '/@/claude-extension';
 import { ClaudeProviderSymbol, SecretStorageSymbol } from '/@/inject/symbol';
 
+export const OPENSHELL_PROFILE_ID = 'anthropic';
+
 export const TOKENS_KEY = 'claude:tokens';
 
 const DEFAULT_BASE_URL = 'https://api.anthropic.com';
@@ -115,7 +117,7 @@ export class ClaudeInferenceManager {
     await this.secrets.store(secretName, token);
 
     const config = configuration.getConfiguration(undefined, connection);
-    await config.update('claude.connection._type', PROVIDER_ID);
+    await config.update('claude.connection._type', OPENSHELL_PROFILE_ID);
     await config.update('claude.connection.ANTHROPIC_API_KEY', secretName);
   }
 
