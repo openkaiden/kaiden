@@ -2217,7 +2217,9 @@ export class ProviderRegistry {
     return undefined;
   }
 
-  getInferenceConnection(modelId: string): { connection: InferenceProviderConnection; providerId: string } | undefined {
+  getInferenceConnectionFromModel(
+    modelId: string,
+  ): { connection: InferenceProviderConnection; providerId: string } | undefined {
     const [metadataName = '', modelLabel = '', endpoint = ''] = modelId.split('::');
 
     for (const provider of this.providers.values()) {

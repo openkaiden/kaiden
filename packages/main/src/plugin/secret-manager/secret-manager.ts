@@ -146,7 +146,7 @@ export class SecretManager {
     agentCommand: string,
     gateway?: string,
   ): Promise<SandboxSecretResult | undefined> {
-    const info = this.providerRegistry.getInferenceConnection(modelId);
+    const info = this.providerRegistry.getInferenceConnectionFromModel(modelId);
     if (!info) return undefined;
 
     return this.createSecretForSandbox(sandboxName, info.providerId, info.connection, agentCommand, gateway);
