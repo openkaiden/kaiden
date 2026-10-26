@@ -109,7 +109,7 @@ Object.defineProperty(mockProvider, 'extensionId', { value: 'kaiden.openai' });
 let gatewayStartCallback: (() => void) | undefined;
 
 const providerRegistry = {
-  getInferenceConnection: vi.fn(),
+  getInferenceConnectionFromModel: vi.fn(),
   getProvider: vi.fn(),
 } as unknown as ProviderRegistry;
 
