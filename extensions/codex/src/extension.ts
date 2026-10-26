@@ -34,6 +34,7 @@ const McpServerEntrySchema = z.looseObject({
 
 const CodexConfigSchema = z.looseObject({
   model: z.string().optional(),
+  approval_policy: z.string().optional(),
   openai_base_url: z.string().optional(),
   mcp_servers: z.record(z.string(), McpServerEntrySchema).optional(),
 });
@@ -78,6 +79,7 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
       const config = CodexConfigSchema.parse(raw ? parse(raw) : {});
 
       config.model = context.model.model.label;
+      config.approval_policy = 'full-auto';
 
       const endpoint = context.model.endpoint;
       if (endpoint) {

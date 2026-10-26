@@ -141,7 +141,30 @@ describe('activate', () => {
 
       expect(configFile.updateMock).toHaveBeenCalledOnce();
       const written = parseWrittenToml(configFile.updateMock);
-      expect(written).toEqual({ model: 'gpt-4o' });
+      expect(written).toEqual({ model: 'gpt-4o', approval_policy: 'full-auto' });
+    });
+
+    test('sets approval_policy to full-auto', async () => {
+      await activate(extensionContextMock);
+      const agent = getRegisteredAgent();
+
+      const configFile = createConfigFile();
+      await agent.preWorkspaceStart(createContext([configFile]));
+
+      const written = parseWrittenToml(configFile.updateMock);
+      expect(written.approval_policy).toBe('full-auto');
+    });
+
+    test('overrides existing approval_policy', async () => {
+      await activate(extensionContextMock);
+      const agent = getRegisteredAgent();
+
+      const existingConfig = stringify({ approval_policy: 'suggest' });
+      const configFile = createConfigFile(existingConfig);
+      await agent.preWorkspaceStart(createContext([configFile]));
+
+      const written = parseWrittenToml(configFile.updateMock);
+      expect(written.approval_policy).toBe('full-auto');
     });
 
     test('preserves existing configuration fields', async () => {
@@ -154,6 +177,7 @@ describe('activate', () => {
 
       const written = parseWrittenToml(configFile.updateMock);
       expect(written.model).toBe('o4-mini');
+      expect(written.approval_policy).toBe('full-auto');
       expect(written.approval_mode).toBe('suggest');
     });
 
@@ -396,6 +420,7 @@ describe('activate', () => {
 
       expect(parseWrittenToml(configFile.updateMock)).toEqual({
         model: 'gpt-4o',
+        approval_policy: 'full-auto',
         openai_base_url: 'https://my-custom-host.local/v1',
       });
     });
@@ -408,7 +433,7 @@ describe('activate', () => {
       const ctx = createContext([configFile]);
       await agent.preWorkspaceStart(ctx);
 
-      expect(parseWrittenToml(configFile.updateMock)).toEqual({ model: 'gpt-4o' });
+      expect(parseWrittenToml(configFile.updateMock)).toEqual({ model: 'gpt-4o', approval_policy: 'full-auto' });
     });
 
     test('replaces existing openai_base_url with the model endpoint', async () => {
@@ -423,6 +448,7 @@ describe('activate', () => {
 
       expect(parseWrittenToml(configFile.updateMock)).toEqual({
         model: 'gpt-4o',
+        approval_policy: 'full-auto',
         openai_base_url: 'https://custom.example.com/v1',
       });
     });
@@ -431,14 +457,15 @@ describe('activate', () => {
       await activate(extensionContextMock);
       const agent = getRegisteredAgent();
 
-      const configFile = createConfigFile(stringify({ approval_policy: 'on-request' }));
+      const configFile = createConfigFile(stringify({ sandbox_permissions: 'read-write' }));
       const ctx = createContext([configFile], { endpoint: 'https://new-endpoint.local/v1' });
       await agent.preWorkspaceStart(ctx);
 
       expect(parseWrittenToml(configFile.updateMock)).toEqual({
         model: 'gpt-4o',
+        approval_policy: 'full-auto',
         openai_base_url: 'https://new-endpoint.local/v1',
-        approval_policy: 'on-request',
+        sandbox_permissions: 'read-write',
       });
     });
   });
