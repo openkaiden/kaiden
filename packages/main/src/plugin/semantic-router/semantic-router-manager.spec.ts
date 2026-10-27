@@ -21,7 +21,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 import type { SemanticRouterFactory } from '@openkaiden/api';
-import { beforeEach, expect, test, vi } from 'vitest';
+import { assert, beforeEach, expect, test, vi } from 'vitest';
 
 import type { IPCHandle } from '/@/plugin/api.js';
 import type { Directories } from '/@/plugin/directories.js';
@@ -329,11 +329,12 @@ test('create calls semantic router factory when a provider has one', async () =>
     name: 'my-router',
     config: expect.any(String),
   });
-  const callArgs = vi.mocked(factory.create).mock.calls[0]!;
+  const callArgs = vi.mocked(factory.create).mock.calls[0];
+  assert(callArgs);
   expect(JSON.parse(callArgs[0].config)).toMatchObject({ name: 'my-router' });
-  expect(result.connection).toEqual({ providerId: 'provider-1', connectionId: 'test-connection-id' });
+  expect(result.connection).toEqual({ providerInternalId: 'provider-1', connectionId: 'test-connection-id' });
   expect(manager.findByName('my-router')?.connection).toEqual({
-    providerId: 'provider-1',
+    providerInternalId: 'provider-1',
     connectionId: 'test-connection-id',
   });
 });
