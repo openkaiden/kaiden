@@ -836,6 +836,25 @@ describe('createLocalGateway', () => {
     );
   });
 
+  test('sets state_dir for named vm gateway to a short path', async () => {
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.116'));
+
+    await gateway.createLocalGateway({
+      name: 'local-dev',
+      bindAddress: '127.0.0.1',
+      port: 17675,
+      driver: 'vm',
+    });
+
+    const storageDirectory = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev');
+    expect(writeFile).toHaveBeenCalledWith(
+      join(storageDirectory, 'gateway.toml'),
+      expect.stringContaining('state_dir = "/tmp/kaiden-vm-local-dev"'),
+      'utf-8',
+    );
+    expect(mkdir).toHaveBeenCalledWith('/tmp/kaiden-vm-local-dev', { recursive: true, mode: 0o700 });
+  });
+
   test('cleans up the process and registration when startup fails', async () => {
     const proc = createMockChildProcess();
     Object.defineProperty(proc, 'exitCode', { get: () => 1 });
@@ -2192,6 +2211,37 @@ describe('gateway config generation', () => {
     expect(writtenContent).toContain('[openshell.drivers.vm]');
     expect(writtenContent).not.toContain('enable_bind_mounts');
     expect(writtenContent).not.toContain('supervisor_image');
+  });
+
+  test('sets state_dir for vm driver to a short path within macOS sun_path limit', async () => {
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.116'));
+
+    await gateway.start({ driver: 'vm' });
+
+    const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
+    expect(writtenContent).toContain('state_dir = "/tmp/kaiden-vm-kaiden-local"');
+    // Verify the full socket path fits within the macOS sun_path limit of 104 bytes
+    const socketSuffix = '/openshell/vm-driver/run/compute-driver.sock';
+    const fullSocketPath = `/tmp/kaiden-vm-kaiden-local${socketSuffix}`;
+    expect(fullSocketPath.length).toBeLessThan(104);
+  });
+
+  test('creates the vm state directory with restricted permissions', async () => {
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.116'));
+
+    await gateway.start({ driver: 'vm' });
+
+    expect(mkdir).toHaveBeenCalledWith('/tmp/kaiden-vm-kaiden-local', { recursive: true, mode: 0o700 });
+  });
+
+  test('does not set state_dir for podman driver', async () => {
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
+
+    await gateway.start({ driver: 'podman' });
+
+    const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
+    expect(writtenContent).not.toContain('state_dir');
+    expect(mkdir).not.toHaveBeenCalledWith('/tmp/kaiden-vm-kaiden-local', expect.anything());
   });
 
   test('defaults to Podman when no gateway is available', async () => {

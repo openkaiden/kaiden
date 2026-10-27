@@ -63,7 +63,10 @@ const DEFAULT_GATEWAY_NAME = KAIDEN_LOCAL_GATEWAY_NAME;
 
 const GatewayConfigSchema = z.object({
   openshell: z.object({
-    drivers: z.record(z.string(), z.object({ enable_bind_mounts: z.boolean().optional() })),
+    drivers: z.record(
+      z.string(),
+      z.object({ enable_bind_mounts: z.boolean().optional(), state_dir: z.string().optional() }),
+    ),
   }),
 });
 
@@ -383,7 +386,7 @@ export class OpenshellGateway implements IAsyncDisposable {
       throw new Error('openshell-gateway binary not registered in CLI tool registry');
     }
     const storageDirectory = this.getGatewayStorageDirectory(name);
-    const configPath = await this.createNamedGatewayConfig(binaryPath, storageDirectory, driver, signal);
+    const configPath = await this.createNamedGatewayConfig(binaryPath, storageDirectory, name, driver, signal);
     const gateway = this.getOrCreateGatewayBookkeeping(name);
     gateway.port = port;
     gateway.bindAddress = bindAddress;
@@ -1028,10 +1031,15 @@ export class OpenshellGateway implements IAsyncDisposable {
       const configPath = join(storageDirectory, 'gateway.toml');
       await mkdir(storageDirectory, { recursive: true });
       await this.generateCerts(binaryPath, storageDirectory, signal);
+      const vmStateDir = driver === 'vm' ? this.getVmStateDir(DEFAULT_GATEWAY_NAME) : undefined;
+      if (vmStateDir) {
+        await mkdir(vmStateDir, { recursive: true, mode: 0o700 });
+      }
       const config = Mustache.render(gatewayConfigTemplate, {
         supervisorImage: image,
         supportsContainerSettings: driver !== 'vm',
         gatewayDir: storageDirectory,
+        vmStateDir,
         q: '"',
         driver,
       });
@@ -1144,6 +1152,20 @@ export class OpenshellGateway implements IAsyncDisposable {
     return join(this.directories.getDataDirectory(), 'openshell-gateways', name);
   }
 
+  /**
+   * Returns a short directory path for the VM driver's state files.
+   *
+   * The VM compute-driver socket path is
+   * `<state_dir>/openshell/vm-driver/run/compute-driver.sock` (45 chars of
+   * suffix).  macOS limits Unix socket paths to 104 bytes.  Using
+   * `XDG_STATE_HOME` under the Kaiden data directory easily exceeds this on
+   * macOS.  A fixed `/tmp`-based path keeps the full socket path well within
+   * the limit.
+   */
+  private getVmStateDir(name: string): string {
+    return join('/tmp', `kaiden-vm-${name}`);
+  }
+
   private isMigrationError(output: string): boolean {
     return output.includes('migration error');
   }
@@ -1159,6 +1181,7 @@ export class OpenshellGateway implements IAsyncDisposable {
   private async createNamedGatewayConfig(
     binaryPath: string,
     storageDirectory: string,
+    name: string,
     driver: LocalGatewayDriver,
     signal: AbortSignal,
   ): Promise<string> {
@@ -1173,6 +1196,10 @@ export class OpenshellGateway implements IAsyncDisposable {
       const message = err instanceof Error ? err.message : String(err);
       console.warn(`[openshell-gateway] unable to detect version for supervisor pinning: ${message}`);
     }
+    const vmStateDir = driver === 'vm' ? this.getVmStateDir(name) : undefined;
+    if (vmStateDir) {
+      await mkdir(vmStateDir, { recursive: true, mode: 0o700 });
+    }
     signal.throwIfAborted();
     await writeFile(
       configPath,
@@ -1180,6 +1207,7 @@ export class OpenshellGateway implements IAsyncDisposable {
         supervisorImage,
         supportsContainerSettings: driver !== 'vm',
         gatewayDir: storageDirectory,
+        vmStateDir,
         q: '"',
         driver,
       }),

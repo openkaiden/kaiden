@@ -12,6 +12,9 @@ enable_bind_mounts = true
 supervisor_image = "{{{supervisorImage}}}"
 {{/supervisorImage}}
 {{/supportsContainerSettings}}
+{{#vmStateDir}}
+state_dir = "{{{vmStateDir}}}"
+{{/vmStateDir}}
 {{/driver}}
 {{^driver}}
 [openshell.drivers.podman]
