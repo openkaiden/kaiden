@@ -63,9 +63,12 @@ const NATIVE_PROVIDER_SDKS: Record<string, string> = {
   anthropic: '@ai-sdk/anthropic',
 };
 
-const PROVIDER_ALIASES: Record<string, string> = {
-  vertexai: 'anthropic',
-};
+// Kaiden's internal llmMetadata name for Vertex AI connections. OpenCode has a
+// native "vertex-anthropic" provider, so these are routed to it rather than through
+// the generic openai-compatible path.
+const VERTEXAI_LLM_METADATA_NAME = 'vertexai';
+const VERTEX_PROVIDER_ID = 'vertex-anthropic';
+const VERTEX_PROVIDER_NPM = '@ai-sdk/google-vertex/anthropic';
 
 // OpenCode built-in provider IDs whose custom loaders call sdk.responses()
 // unconditionally. Using these IDs with @ai-sdk/openai-compatible causes
@@ -100,22 +103,6 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
       return true;
     },
     async preWorkspaceStart(context: AgentWorkspaceContext): Promise<void> {
-      if (context.model.llmMetadata?.name === 'vertexai') {
-        const envVars = [
-          { name: 'ANTHROPIC_BASE_URL', value: 'https://inference.local/v1' },
-          { name: 'ANTHROPIC_API_KEY', value: 'unused' },
-        ];
-
-        context.workspace.environment ??= [];
-        for (const envVar of envVars) {
-          const index = context.workspace.environment.findIndex(e => e.name === envVar.name);
-          if (index >= 0) {
-            context.workspace.environment.splice(index, 1);
-          }
-          context.workspace.environment.push(envVar);
-        }
-      }
-
       const configFile = context.configurationFiles.find(f => f.path === OPENCODE_CONFIG_PATH);
       if (!configFile) {
         return;
@@ -124,11 +111,32 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
       const config = OpenCodeConfigSchema.parse(JSON.parse(await configFile.read()));
 
       const modelName = context.model.model.label;
-      const providerName = context.model.llmMetadata?.name;
-      const provider = providerName ? (PROVIDER_ALIASES[providerName] ?? providerName) : undefined;
+      const provider = context.model.llmMetadata?.name;
       const endpoint = context.model.endpoint;
 
-      if (provider) {
+      if (provider === VERTEXAI_LLM_METADATA_NAME) {
+        // Vertex AI is served directly by Google: OpenShell injects a refreshed
+        // bearer token and the project/region as environment variables into the
+        // sandbox, and OpenCode's native vertex-anthropic provider talks to the real
+        // *-aiplatform.googleapis.com endpoint. No local inference gateway is used.
+        config.model = `${VERTEX_PROVIDER_ID}/${modelName}`;
+
+        const providers = config.provider ?? {};
+        const providerEntry = providers[VERTEX_PROVIDER_ID] ?? {};
+
+        providerEntry.name = VERTEX_PROVIDER_ID;
+        providerEntry.npm = VERTEX_PROVIDER_NPM;
+        providerEntry.options = {
+          ...providerEntry.options,
+          accessToken: '{env:GOOGLE_VERTEX_AI_TOKEN}',
+        };
+
+        providerEntry.models ??= {};
+        providerEntry.models[modelName] ??= { _launch: true, name: modelName };
+
+        providers[VERTEX_PROVIDER_ID] = providerEntry;
+        config.provider = providers;
+      } else if (provider) {
         if ((!NATIVE_PROVIDERS.has(provider) || provider in NATIVE_PROVIDER_SDKS) && endpoint) {
           const npm = NATIVE_PROVIDER_SDKS[provider] ?? '@ai-sdk/openai-compatible';
 

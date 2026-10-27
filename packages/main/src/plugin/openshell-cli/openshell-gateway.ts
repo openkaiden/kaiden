@@ -51,7 +51,7 @@ import {
 
 import gatewayConfigTemplate from './openshell-gateway.toml.template?raw';
 
-const DEFAULT_PORT = 17670;
+const DEFAULT_PORT = 29670;
 const DEFAULT_BIND_ADDRESS = '127.0.0.1';
 const HEALTH_CHECK_INTERVAL_MS = 1000;
 const MAX_HEALTH_CHECK_ATTEMPTS = 30;
@@ -374,6 +374,15 @@ export class OpenshellGateway implements IAsyncDisposable {
     const gateways = await this.gatewayManager.listGateways();
     if (gateways.some(gw => gw.metadata.name === name)) {
       throw new Error(`A gateway named "${name}" is already registered`);
+    }
+    // A stopped gateway frees its port at the OS level but keeps its registration.
+    const portOwner = gateways.find(
+      gw =>
+        (!gw.metadata.is_remote || this.isLocalEndpoint(gw.metadata.gateway_endpoint)) &&
+        this.getEndpointPort(gw.metadata.gateway_endpoint) === port,
+    );
+    if (portOwner) {
+      throw new Error(`Port ${port} is already assigned to gateway "${portOwner.metadata.name}"`);
     }
     await isFreePort(port);
     signal.throwIfAborted();

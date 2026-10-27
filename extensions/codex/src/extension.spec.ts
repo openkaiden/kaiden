@@ -141,7 +141,19 @@ describe('activate', () => {
 
       expect(configFile.updateMock).toHaveBeenCalledOnce();
       const written = parseWrittenToml(configFile.updateMock);
-      expect(written).toEqual({ model: 'gpt-4o' });
+      expect(written).toEqual({
+        model: 'gpt-4o',
+        model_provider: 'kaiden',
+        projects: { '/sandbox': { trust_level: 'trusted' } },
+        model_providers: {
+          kaiden: {
+            name: 'kaiden',
+            base_url: 'https://api.openai.com/v1',
+            env_key: 'OPENAI_API_KEY',
+            wire_api: 'responses',
+          },
+        },
+      });
     });
 
     test('preserves existing configuration fields', async () => {
@@ -155,6 +167,36 @@ describe('activate', () => {
       const written = parseWrittenToml(configFile.updateMock);
       expect(written.model).toBe('o4-mini');
       expect(written.approval_mode).toBe('suggest');
+    });
+
+    test('marks the workspace sources folder as trusted', async () => {
+      await activate(extensionContextMock);
+      const agent = getRegisteredAgent();
+
+      const configFile = createConfigFile();
+      await agent.preWorkspaceStart(createContext([configFile]));
+
+      expect(parseWrittenToml(configFile.updateMock).projects).toEqual({ '/sandbox': { trust_level: 'trusted' } });
+    });
+
+    test('overrides an untrusted workspace sources folder and preserves other projects', async () => {
+      await activate(extensionContextMock);
+      const agent = getRegisteredAgent();
+
+      const configFile = createConfigFile(
+        stringify({
+          projects: {
+            '/sandbox': { trust_level: 'untrusted', extra: 'kept' },
+            '/other': { trust_level: 'untrusted' },
+          },
+        }),
+      );
+      await agent.preWorkspaceStart(createContext([configFile]));
+
+      expect(parseWrittenToml(configFile.updateMock).projects).toEqual({
+        '/sandbox': { trust_level: 'trusted', extra: 'kept' },
+        '/other': { trust_level: 'untrusted' },
+      });
     });
 
     test('rejects invalid TOML', async () => {
@@ -386,7 +428,7 @@ describe('activate', () => {
       });
     });
 
-    test('writes openai_base_url when model has a custom endpoint', async () => {
+    test('writes custom model provider reading OPENAI_API_KEY with the model endpoint', async () => {
       await activate(extensionContextMock);
       const agent = getRegisteredAgent();
 
@@ -396,49 +438,85 @@ describe('activate', () => {
 
       expect(parseWrittenToml(configFile.updateMock)).toEqual({
         model: 'gpt-4o',
-        openai_base_url: 'https://my-custom-host.local/v1',
+        model_provider: 'kaiden',
+        projects: { '/sandbox': { trust_level: 'trusted' } },
+        model_providers: {
+          kaiden: {
+            name: 'kaiden',
+            base_url: 'https://my-custom-host.local/v1',
+            env_key: 'OPENAI_API_KEY',
+            wire_api: 'responses',
+          },
+        },
       });
     });
 
-    test('does not write openai_base_url when no endpoint is provided', async () => {
+    test('does not write openai_base_url for the built-in provider', async () => {
       await activate(extensionContextMock);
       const agent = getRegisteredAgent();
 
       const configFile = createConfigFile();
-      const ctx = createContext([configFile]);
+      const ctx = createContext([configFile], { endpoint: 'https://my-custom-host.local/v1' });
       await agent.preWorkspaceStart(ctx);
 
-      expect(parseWrittenToml(configFile.updateMock)).toEqual({ model: 'gpt-4o' });
+      expect(parseWrittenToml(configFile.updateMock).openai_base_url).toBeUndefined();
     });
 
-    test('replaces existing openai_base_url with the model endpoint', async () => {
+    test('replaces existing model provider settings with the model endpoint', async () => {
       await activate(extensionContextMock);
       const agent = getRegisteredAgent();
 
       const configFile = createConfigFile(
-        stringify({ model: 'old-model', openai_base_url: 'https://old-endpoint.local/v1' }),
+        stringify({
+          model: 'old-model',
+          model_provider: 'other',
+          model_providers: {
+            kaiden: { name: 'kaiden', base_url: 'https://old-endpoint.local/v1', env_key: 'OLD_KEY' },
+          },
+        }),
       );
       const ctx = createContext([configFile], { endpoint: 'https://custom.example.com/v1' });
       await agent.preWorkspaceStart(ctx);
 
-      expect(parseWrittenToml(configFile.updateMock)).toEqual({
-        model: 'gpt-4o',
-        openai_base_url: 'https://custom.example.com/v1',
+      const written = parseWrittenToml(configFile.updateMock);
+      expect(written.model_provider).toBe('kaiden');
+      expect(written.model_providers).toEqual({
+        kaiden: {
+          name: 'kaiden',
+          base_url: 'https://custom.example.com/v1',
+          env_key: 'OPENAI_API_KEY',
+          wire_api: 'responses',
+        },
       });
     });
 
-    test('preserves other configuration when writing openai_base_url', async () => {
+    test('preserves other model providers and configuration when writing the model provider', async () => {
       await activate(extensionContextMock);
       const agent = getRegisteredAgent();
 
-      const configFile = createConfigFile(stringify({ approval_policy: 'on-request' }));
+      const configFile = createConfigFile(
+        stringify({
+          approval_policy: 'on-request',
+          model_providers: { other: { name: 'other', base_url: 'https://other.local/v1' } },
+        }),
+      );
       const ctx = createContext([configFile], { endpoint: 'https://new-endpoint.local/v1' });
       await agent.preWorkspaceStart(ctx);
 
       expect(parseWrittenToml(configFile.updateMock)).toEqual({
         model: 'gpt-4o',
-        openai_base_url: 'https://new-endpoint.local/v1',
         approval_policy: 'on-request',
+        model_provider: 'kaiden',
+        projects: { '/sandbox': { trust_level: 'trusted' } },
+        model_providers: {
+          other: { name: 'other', base_url: 'https://other.local/v1' },
+          kaiden: {
+            name: 'kaiden',
+            base_url: 'https://new-endpoint.local/v1',
+            env_key: 'OPENAI_API_KEY',
+            wire_api: 'responses',
+          },
+        },
       });
     });
   });

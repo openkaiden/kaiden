@@ -24,6 +24,13 @@ import { z } from 'zod';
 export const CODEX_CONFIG_PATH = '.codex/config.toml';
 export const CODEX_AUTH_PATH = '.codex/auth.json';
 
+// Codex's built-in `openai` provider ignores OPENAI_API_KEY from the environment,
+// so a custom provider with `env_key` is needed for the key injected by the sandbox to be sent.
+const CODEX_MODEL_PROVIDER_ID = 'kaiden';
+const OPENAI_API_KEY_ENV = 'OPENAI_API_KEY';
+const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const WORKSPACE_SOURCES_PATH = '/sandbox';
+
 const McpServerEntrySchema = z.looseObject({
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
@@ -32,10 +39,23 @@ const McpServerEntrySchema = z.looseObject({
   http_headers: z.record(z.string(), z.string()).optional(),
 });
 
+const ModelProviderEntrySchema = z.looseObject({
+  name: z.string().optional(),
+  base_url: z.string().optional(),
+  env_key: z.string().optional(),
+  wire_api: z.string().optional(),
+});
+
+const ProjectEntrySchema = z.looseObject({
+  trust_level: z.string().optional(),
+});
+
 const CodexConfigSchema = z.looseObject({
   model: z.string().optional(),
-  openai_base_url: z.string().optional(),
+  model_provider: z.string().optional(),
+  model_providers: z.record(z.string(), ModelProviderEntrySchema).optional(),
   mcp_servers: z.record(z.string(), McpServerEntrySchema).optional(),
+  projects: z.record(z.string(), ProjectEntrySchema).optional(),
 });
 
 export async function activate(extensionContext: ExtensionContext): Promise<void> {
@@ -79,10 +99,20 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
 
       config.model = context.model.model.label;
 
-      const endpoint = context.model.endpoint;
-      if (endpoint) {
-        config.openai_base_url = endpoint;
-      }
+      config.model_provider = CODEX_MODEL_PROVIDER_ID;
+      config.model_providers = {
+        ...config.model_providers,
+        [CODEX_MODEL_PROVIDER_ID]: {
+          name: CODEX_MODEL_PROVIDER_ID,
+          base_url: context.model.endpoint ?? DEFAULT_OPENAI_BASE_URL,
+          env_key: OPENAI_API_KEY_ENV,
+          wire_api: 'responses',
+        },
+      };
+
+      const projects = config.projects ?? {};
+      projects[WORKSPACE_SOURCES_PATH] = { ...projects[WORKSPACE_SOURCES_PATH], trust_level: 'trusted' };
+      config.projects = projects;
 
       const mcpServers = context.workspace.mcp?.servers;
       const mcpCommands = context.workspace.mcp?.commands;

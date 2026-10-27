@@ -414,8 +414,6 @@ export class ExtensionLoader implements IAsyncDisposable {
     return this.configurationRegistry
       .getConfiguration(ExtensionLoaderSettings.SectionName)
       .get<string[]>(ExtensionLoaderSettings.Disabled, [
-        'kaiden.openai',
-        'kaiden.codex',
         'kaiden.goose',
         'kaiden.gemini',
         'kaiden.cursor',

@@ -101,7 +101,7 @@ export class SemanticRouterManager {
           config: JSON.stringify(parsed),
         });
         entry.connection = {
-          providerId: factoryResult.internalId,
+          providerInternalId: factoryResult.internalId,
           connectionId: semanticRouter.connectionId,
         };
       } catch (err: unknown) {
