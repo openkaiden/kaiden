@@ -541,7 +541,9 @@ describe('activate', () => {
         createContext([configFile], { provider: 'vertexai', modelLabel: 'claude-sonnet-4-20250514' }),
       );
 
-      const written = JSON.parse(configFile.updateMock.mock.calls[0]![0] as string);
+      const call = configFile.updateMock.mock.calls[0];
+      assert(call);
+      const written = JSON.parse(call[0]);
       expect(written.model).toBe('vertex-anthropic/claude-sonnet-4-20250514');
       expect(written.provider['vertex-anthropic']).toEqual({
         name: 'vertex-anthropic',
