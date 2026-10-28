@@ -63,6 +63,7 @@ import type {
   OpenshellBindMount,
   OpenshellUpload,
   SandboxInfo,
+  SandboxMatch,
 } from '/@api/openshell-gateway-info.js';
 import {
   AGENT_LABEL,
@@ -788,10 +789,23 @@ export class AgentWorkspaceManager implements Disposable {
     }
   }
 
-  async deleteOpenshellSandbox(name: string, gateway: string): Promise<void> {
+  /** Kaiden workspaces named `name` on `gateway`, or on every gateway when it is omitted. */
+  async findOpenshellSandboxes(name: string, gateway?: string): Promise<SandboxMatch[]> {
     const workspaces = await this.listOpenshellSandboxes(gateway);
-    const workspace = workspaces.flatMap(entry => entry.sandboxes).find(ws => ws.name === name);
-    await this.deleteWorkspace(name, gateway, workspace?.labels);
+    return workspaces.flatMap(entry =>
+      entry.sandboxes
+        .filter(sandbox => sandbox.name === name)
+        .map(sandbox => ({ sandbox, gateway: entry.gateway.name })),
+    );
+  }
+
+  /**
+   * Delete a Kaiden workspace and its linked secret, profile, config dir and terminals.
+   * Callers that already looked the workspace up pass its labels to skip a second listing.
+   */
+  async deleteOpenshellSandbox(name: string, gateway: string, labels?: Record<string, string>): Promise<void> {
+    const workspaceLabels = labels ?? (await this.findOpenshellSandboxes(name, gateway))[0]?.sandbox.labels;
+    await this.deleteWorkspace(name, gateway, workspaceLabels);
   }
 
   async shellInAgentWorkspace(
