@@ -1,0 +1,59 @@
+#
+# Copyright (C) 2026 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+summary: Run Kaiden workspace provider E2E tests on Fedora
+discover:
+  how: fmf
+execute:
+  how: tmt
+environment:
+  # Unprivileged user the suite runs as (created in prepare, used by the test).
+  KAIDEN_TEST_USER: kaiden
+provision:
+  hardware:
+    memory: '>= 16 GiB'
+prepare:
+  - name: Install system dependencies
+    how: shell
+    script: |
+      # Prepare runs as root, mirroring the podman-desktop Testing Farm plan.
+      # passt provides pasta: OpenShell fails closed unless Podman reports
+      # rootlessNetworkCmd=pasta, so install it explicitly rather than rely on
+      # podman's transitive deps.
+      dnf install -y alsa-lib at-spi2-atk atk cairo cups-libs gcc-c++ git gtk3 libdrm libX11 libXcomposite libXdamage libXext libXfixes libXi libXrandr libXScrnSaver libXtst mesa-libgbm nss pango passt podman xdg-utils xorg-x11-server-Xvfb
+  - name: Enable rootless Podman for an unprivileged user
+    how: shell
+    script: |
+      # Testing Farm runs prepare and tests as root, which makes Podman rootful,
+      # but OpenShell needs rootless Podman with pasta. Create the unprivileged
+      # user the test script re-runs as, start its systemd user session via
+      # lingering, and enable its rootless Podman socket.
+      user="$KAIDEN_TEST_USER"
+      id "$user" >/dev/null 2>&1 || useradd --create-home "$user"
+      loginctl enable-linger "$user"
+      uid="$(id -u "$user")"
+      for _ in $(seq 30); do [ -S "/run/user/$uid/bus" ] && break; sleep 1; done
+      as_user() { runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" "$@"; }
+      as_user systemctl --user enable --now podman.socket
+      as_user podman info
+      rootless="$(as_user podman info --format '{{.Host.Security.Rootless}}')"
+      rootless_cmd="$(as_user podman info --format '{{.Host.RootlessNetworkCmd}}')"
+      echo "rootless=${rootless} rootlessNetworkCmd=${rootless_cmd}"
+      if [ "${rootless}" != "true" ] || [ "${rootless_cmd}" != "pasta" ]; then
+        echo "OpenShell requires rootless Podman with rootlessNetworkCmd=pasta" >&2
+        exit 1
+      fi

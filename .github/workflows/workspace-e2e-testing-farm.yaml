@@ -1,0 +1,92 @@
+#
+# Copyright (C) 2026 Red Hat, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: workspace e2e tests (Testing Farm)
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or full SHA of openkaiden/kaiden to test; defaults to the dispatch ref'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  workspace-e2e:
+    name: Fedora 44 workspace provider E2E
+    runs-on: ubuntu-24.04
+    # Run only on the upstream repo: forks lack TEST_FARM_TOKEN and the
+    # openkaiden/* allow-list means a fork dispatch could only test upstream
+    # code anyway, so it could only fail.
+    if: github.repository == 'openkaiden/kaiden'
+    timeout-minutes: 240
+    env:
+      TESTING_FARM_COMPOSE: Fedora-44
+    steps:
+      - name: Check out workflow scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve source repository and ref
+        id: source
+        env:
+          INPUT_REF: ${{ inputs.ref }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+          CURRENT_REF: ${{ github.ref_name }}
+        run: .github/scripts/testing-farm/resolve-source.sh
+
+      - name: Submit workspace provider tests to Testing Farm
+        id: tf
+        uses: sclorg/testing-farm-as-github-action@230555baceb860aa468d216f1822974836b965d1 # v4
+        with:
+          api_key: ${{ secrets.TEST_FARM_TOKEN }}
+          git_url: https://github.com/${{ steps.source.outputs.repository }}.git
+          git_ref: ${{ steps.source.outputs.sha }}
+          tmt_plan_regex: workspace-provider
+          tmt_path: tests/tmt
+          compose: ${{ env.TESTING_FARM_COMPOSE }}
+          arch: x86_64
+          variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.sha }}
+          # Covered providers only; see tests/tmt/scripts/workspace-provider.sh.
+          secrets: OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }};GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          # The action polls for ~timeout x 4 minutes (~200m), between the test
+          # duration (180m) and the job timeout (240m).
+          timeout: 50
+
+      # Public ranch artifacts are reachable from GitHub: fetch the sanitized
+      # Playwright JUnit report and publish it to the job summary.
+      - name: Download Playwright JUnit report from Testing Farm
+        if: ${{ !cancelled() && steps.tf.outputs.test_log_url != '' }}
+        env:
+          TF_ARTIFACTS_URL: ${{ steps.tf.outputs.test_log_url }}
+        run: .github/scripts/testing-farm/download-junit.sh
+
+      - name: Publish test report
+        if: ${{ !cancelled() && hashFiles('junit-playwright-results.xml') != '' }}
+        uses: mikepenz/action-junit-report@6ef3fdcfcd5f0b5d14df3e659ef19b8c6820f93d # v6
+        with:
+          include_passed: true
+          detailed_summary: true
+          annotate_only: true
+          require_tests: true
+          report_paths: junit-playwright-results.xml
