@@ -281,19 +281,43 @@ describe('ClaudeExtension', () => {
       const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
       expect(written.customApiKeyResponses).toEqual({
         approved: ['existing', ANTHROPIC_KEY_SUFFIX_PLACEHOLDER],
-        rejected: ['other'],
+        rejected: ['unused', 'other'],
       });
     });
 
-    test('approves the unused placeholder key for Vertex AI models', async () => {
+    test('does not approve any API key for Vertex AI models', async () => {
+      await claudeExtension.activate();
+      const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
+
+      const updateMock = vi.fn();
+      const configFile: AgentConfigurationFile = {
+        path: CLAUDE_JSON_PATH,
+        read: vi.fn().mockResolvedValue('{}'),
+        update: updateMock,
+      };
+
+      await agent.preWorkspaceStart({
+        model: {
+          llmMetadata: { name: 'vertexai' },
+          model: { label: 'claude-sonnet-4-20250514' },
+        },
+        configurationFiles: [configFile],
+        workspace: {},
+      });
+
+      const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
+      expect(written.customApiKeyResponses).toBeUndefined();
+    });
+
+    test('preserves existing custom API key responses for Vertex AI models', async () => {
       await claudeExtension.activate();
       const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
 
       const updateMock = vi.fn();
       const existing = JSON.stringify({
         customApiKeyResponses: {
-          approved: ['existing'],
-          rejected: ['unused', 'other'],
+          approved: ['existing-key'],
+          rejected: ['old-key'],
         },
       });
       const configFile: AgentConfigurationFile = {
@@ -313,8 +337,8 @@ describe('ClaudeExtension', () => {
 
       const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
       expect(written.customApiKeyResponses).toEqual({
-        approved: ['existing', 'unused'],
-        rejected: ['other'],
+        approved: ['existing-key'],
+        rejected: ['old-key'],
       });
     });
 

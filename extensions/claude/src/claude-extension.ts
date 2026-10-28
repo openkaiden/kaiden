@@ -218,21 +218,17 @@ export class ClaudeExtension {
           projects[WORKSPACE_SOURCES_PATH] = project;
           config.projects = projects;
 
-          // Claude Code tracks a placeholder 'unused' key in Vertex AI
-          // workspaces (#2472) because the vertex-ai provider profile injects
-          // ANTHROPIC_AUTH_TOKEN, never ANTHROPIC_API_KEY. Every other
-          // workspace gets the ANTHROPIC_KEY_SUFFIX_PLACEHOLDER, replaced
-          // with the real key suffix by the approve-key.sh setup script.
-          const vertexAi = context.model.llmMetadata?.name === 'vertexai';
-          config.customApiKeyResponses = {
-            approved: Array.from(
-              new Set([
-                ...(config.customApiKeyResponses?.approved ?? []),
-                vertexAi ? 'unused' : ANTHROPIC_KEY_SUFFIX_PLACEHOLDER,
-              ]),
-            ),
-            rejected: config.customApiKeyResponses?.rejected?.filter(response => response !== 'unused') ?? [],
-          };
+          // Approve the API key through the suffix placeholder replaced by
+          // the approve-key.sh setup script; Vertex AI workspaces authenticate
+          // through ANTHROPIC_AUTH_TOKEN and are skipped by the script.
+          if (context.model.llmMetadata?.name !== 'vertexai') {
+            config.customApiKeyResponses = {
+              approved: Array.from(
+                new Set([...(config.customApiKeyResponses?.approved ?? []), ANTHROPIC_KEY_SUFFIX_PLACEHOLDER]),
+              ),
+              rejected: config.customApiKeyResponses?.rejected ?? [],
+            };
+          }
 
           const mcpServers = context.workspace.mcp?.servers;
           const mcpCommands = context.workspace.mcp?.commands;
