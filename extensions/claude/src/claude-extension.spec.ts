@@ -19,9 +19,16 @@
 import type { AgentConfigurationFile, AgentWorkspaceContext, ExtensionContext } from '@openkaiden/api';
 import { agents, openshell } from '@openkaiden/api';
 import type { Container } from 'inversify';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { CLAUDE_JSON_PATH, CLAUDE_SETTINGS_PATH, ClaudeExtension } from '/@/claude-extension';
+import {
+  ANTHROPIC_KEY_SUFFIX_PLACEHOLDER,
+  API_KEY_SUFFIX_LENGTH,
+  APPROVE_KEY_SCRIPT_PATH,
+  CLAUDE_JSON_PATH,
+  CLAUDE_SETTINGS_PATH,
+  ClaudeExtension,
+} from '/@/claude-extension';
 import { ClaudeInferenceManager } from '/@/manager/claude-inference-manager';
 import { ClaudeSkillsManager } from '/@/manager/claude-skills-manager';
 
@@ -105,13 +112,30 @@ describe('ClaudeExtension', () => {
     expect(ClaudeInferenceManager.prototype.dispose).toHaveBeenCalled();
   });
 
-  test('registers agent with configuration files', async () => {
+  test('registers agent with configuration files including approve-key script', async () => {
     await claudeExtension.activate();
 
     const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
-    expect(agent.configurationFiles).toHaveLength(2);
+    expect(agent.configurationFiles).toHaveLength(3);
     expect(agent.configurationFiles[0]!.path).toBe(CLAUDE_SETTINGS_PATH);
     expect(agent.configurationFiles[1]!.path).toBe(CLAUDE_JSON_PATH);
+
+    const scriptFile = agent.configurationFiles[2];
+    assert(scriptFile);
+    expect(scriptFile.path).toBe(APPROVE_KEY_SCRIPT_PATH);
+
+    const scriptContent = await scriptFile.read();
+    expect(scriptContent).toContain(`$HOME/${CLAUDE_JSON_PATH}`);
+    expect(scriptContent).toContain(ANTHROPIC_KEY_SUFFIX_PLACEHOLDER);
+    expect(scriptContent).toContain(`ANTHROPIC_API_KEY: -${API_KEY_SUFFIX_LENGTH}`);
+    expect(scriptContent).toContain('CLAUDE_CODE_USE_VERTEX');
+  });
+
+  test('setupCommand invokes the uploaded approve-key script with bash', async () => {
+    await claudeExtension.activate();
+
+    const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
+    expect(agent.setupCommand).toBe(`bash $HOME/${APPROVE_KEY_SCRIPT_PATH}`);
   });
 
   test('activate registers openshell profile', async () => {
@@ -230,12 +254,12 @@ describe('ClaudeExtension', () => {
       expect(written.hasCompletedOnboarding).toBe(true);
       expect(written.projects['/sandbox'].hasTrustDialogAccepted).toBe(true);
       expect(written.customApiKeyResponses).toEqual({
-        approved: ['unused'],
+        approved: [ANTHROPIC_KEY_SUFFIX_PLACEHOLDER],
         rejected: [],
       });
     });
 
-    test('approves unused Claude API key response in .claude.json', async () => {
+    test('approves the API key suffix placeholder in .claude.json', async () => {
       await claudeExtension.activate();
       const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
 
@@ -253,6 +277,39 @@ describe('ClaudeExtension', () => {
       };
 
       await agent.preWorkspaceStart(createContext([configFile]));
+
+      const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
+      expect(written.customApiKeyResponses).toEqual({
+        approved: ['existing', ANTHROPIC_KEY_SUFFIX_PLACEHOLDER],
+        rejected: ['other'],
+      });
+    });
+
+    test('approves the unused placeholder key for Vertex AI models', async () => {
+      await claudeExtension.activate();
+      const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
+
+      const updateMock = vi.fn();
+      const existing = JSON.stringify({
+        customApiKeyResponses: {
+          approved: ['existing'],
+          rejected: ['unused', 'other'],
+        },
+      });
+      const configFile: AgentConfigurationFile = {
+        path: CLAUDE_JSON_PATH,
+        read: vi.fn().mockResolvedValue(existing),
+        update: updateMock,
+      };
+
+      await agent.preWorkspaceStart({
+        model: {
+          llmMetadata: { name: 'vertexai' },
+          model: { label: 'claude-sonnet-4-20250514' },
+        },
+        configurationFiles: [configFile],
+        workspace: {},
+      });
 
       const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
       expect(written.customApiKeyResponses).toEqual({
