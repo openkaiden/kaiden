@@ -15,6 +15,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { randomUUID } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 
 import { type Disposable, env, type ExtensionContext, type Provider, provider } from '@openkaiden/api';
@@ -40,7 +41,6 @@ export class PodmanAiLabExtension {
   #extensionContext: ExtensionContext;
   #currentModels: string[] = [];
   #connectionDisposable: Disposable | undefined;
-  #connectionIdCounter = 0;
   #interval: NodeJS.Timeout | undefined;
   #abortController: AbortController | undefined;
 
@@ -123,7 +123,7 @@ export class PodmanAiLabExtension {
         const host = getContainerReachableHost();
         const sdk = createOllama({ baseURL: `http://localhost:${AI_LAB_API_PORT}/api` });
         const disposable = aiLabProvider.registerInferenceProviderConnection({
-          id: String(this.#connectionIdCounter++),
+          id: randomUUID(),
           name: 'podman-ai-lab',
           type: 'local',
           llmMetadata: { name: 'ollama' },

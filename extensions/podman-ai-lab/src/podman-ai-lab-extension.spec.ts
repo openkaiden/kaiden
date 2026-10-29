@@ -16,6 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { randomUUID } from 'node:crypto';
 import type { NetworkInterfaceInfo } from 'node:os';
 import { networkInterfaces } from 'node:os';
 
@@ -27,6 +28,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PodmanAiLabExtension } from './podman-ai-lab-extension';
 
+vi.mock(import('node:crypto'));
 vi.mock(import('node:os'));
 vi.mock(import('@openkaiden/api'));
 vi.mock(import('ollama-ai-provider-v2'));
@@ -50,6 +52,7 @@ describe('PodmanAiLabExtension', () => {
       dispose: vi.fn(),
     } as unknown as Provider;
     vi.resetAllMocks();
+    vi.mocked(randomUUID).mockReturnValue('00000000-0000-0000-0000-000000000000');
     vi.mocked(networkInterfaces).mockReturnValue({
       eth0: [{ address: '192.168.1.100', family: 'IPv4', internal: false } as NetworkInterfaceInfo],
     });
@@ -114,7 +117,9 @@ describe('PodmanAiLabExtension', () => {
     expect(vi.mocked(aiLabProvider.updateStatus)).toHaveBeenCalledWith('stopped');
   });
 
-  test('should unregister and register new connection if models change', async () => {
+  test('should dispose old connection and register new one if models change', async () => {
+    const firstDispose = vi.fn();
+    vi.mocked(aiLabProvider.registerInferenceProviderConnection).mockReturnValue({ dispose: firstDispose });
     const models = [{ name: 'm1' }];
     const handlers = [
       http.get('http://localhost:10434/api/ps', () => {
@@ -125,8 +130,10 @@ describe('PodmanAiLabExtension', () => {
     server.listen();
     await extension.activate();
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledTimes(1);
+    expect(firstDispose).not.toHaveBeenCalled();
     models.push({ name: 'm2' });
     await extension.updateModelsAndStatus(aiLabProvider);
+    expect(firstDispose).toHaveBeenCalled();
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledTimes(2);
   });
 
