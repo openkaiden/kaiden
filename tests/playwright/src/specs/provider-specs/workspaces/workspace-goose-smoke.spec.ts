@@ -28,7 +28,7 @@ test.describe
       workspaceName: 'goose-openai',
       agent: CODING_AGENT.GOOSE,
       requiredResource: 'openai',
-      selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
+      selectModel: async createPage => createPage.searchAndSelectDefault('gpt-4.1-mini'),
       terminalReadyPatterns: TERMINAL_READY_PATTERNS.GOOSE,
       promptTest: {
         prompt: 'what is 123+456? reply with just the number',
@@ -45,7 +45,7 @@ test.describe
       agent: CODING_AGENT.GOOSE,
       requiredResource: 'openai',
       noProjectFolder: true,
-      selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
+      selectModel: async createPage => createPage.searchAndSelectDefault('gpt-4.1-mini'),
       terminalReadyPatterns: TERMINAL_READY_PATTERNS.GOOSE,
       promptTest: {
         prompt: 'what is 123+456? reply with just the number',

@@ -233,9 +233,9 @@ export const CODING_AGENTS = Object.values(CODING_AGENT);
 export type CodingAgent = (typeof CODING_AGENT)[keyof typeof CODING_AGENT];
 
 export const TERMINAL_READY_PATTERNS = {
-  OPENCODE: [/Ask anything/i, /opencode/i],
+  OPENCODE: [/Ask anything/i],
   CLAUDE: [/Claude Code/],
-  COPILOT: [/Copilot/i],
+  COPILOT: [/GitHub Copilot/],
   GOOSE: [/goose/i],
   OPENCLAW: [/openclaw/i],
 } as const;
