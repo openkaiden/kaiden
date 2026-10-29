@@ -46,7 +46,7 @@ test.describe
       workspaceName: 'openclaw-openai',
       agent: CODING_AGENT.OPENCLAW,
       requiredResource: 'openai',
-      selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
+      selectModel: async createPage => createPage.searchAndSelectDefault('gpt-4.1-mini'),
       terminalReadyPatterns: TERMINAL_READY_PATTERNS.OPENCLAW,
       prePrompts: [{ command: 'talk to agent', expectedResponse: /agent/i }],
       promptTest: {
@@ -64,7 +64,7 @@ test.describe
       agent: CODING_AGENT.OPENCLAW,
       requiredResource: 'openai',
       noProjectFolder: true,
-      selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
+      selectModel: async createPage => createPage.searchAndSelectDefault('gpt-4.1-mini'),
       terminalReadyPatterns: TERMINAL_READY_PATTERNS.OPENCLAW,
       prePrompts: [{ command: 'talk to agent', expectedResponse: /agent/i }],
       promptTest: {

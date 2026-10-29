@@ -28,7 +28,7 @@ test.describe
       workspaceName: 'opencode-openai',
       agent: CODING_AGENT.OPENCODE,
       requiredResource: 'openai',
-      selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
+      selectModel: async createPage => createPage.searchAndSelectDefault('gpt-4.1-mini'),
       terminalReadyPatterns: TERMINAL_READY_PATTERNS.OPENCODE,
       promptTimeout: TIMEOUTS.MODEL_RESPONSE,
       promptTest: {
@@ -46,7 +46,7 @@ test.describe
       agent: CODING_AGENT.OPENCODE,
       requiredResource: 'openai',
       noProjectFolder: true,
-      selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
+      selectModel: async createPage => createPage.searchAndSelectDefault('gpt-4.1-mini'),
       terminalReadyPatterns: TERMINAL_READY_PATTERNS.OPENCODE,
       promptTimeout: TIMEOUTS.MODEL_RESPONSE,
       promptTest: {

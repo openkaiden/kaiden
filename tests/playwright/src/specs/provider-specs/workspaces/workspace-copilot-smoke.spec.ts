@@ -28,7 +28,7 @@ test.describe
       workspaceName: 'copilot-openai',
       agent: CODING_AGENT.COPILOT,
       requiredResource: 'openai',
-      selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
+      selectModel: async createPage => createPage.searchAndSelectDefault('gpt-4.1-mini'),
       terminalReadyPatterns: TERMINAL_READY_PATTERNS.COPILOT,
       promptTest: {
         prompt: 'what is 123+456? reply with just the number',
