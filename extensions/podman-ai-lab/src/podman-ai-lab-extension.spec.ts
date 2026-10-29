@@ -1,5 +1,5 @@
 /**********************************************************************
- * Copyright (C) 2025 Red Hat, Inc.
+ * Copyright (C) 2026 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,9 @@ import { networkInterfaces } from 'node:os';
 import type { ExtensionContext, Provider } from '@openkaiden/api';
 import { env, provider } from '@openkaiden/api';
 import { http, HttpResponse } from 'msw';
-import { setupServer, type SetupServerApi } from 'msw/node';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { setupServer } from 'msw/node';
+import { createOllama } from 'ollama-ai-provider-v2';
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PodmanAiLabExtension } from './podman-ai-lab-extension';
 
@@ -43,35 +44,40 @@ describe('PodmanAiLabExtension', () => {
   let extensionContext: ExtensionContext;
   let aiLabProvider: Provider;
   let extension: TestPodmanAiLabExtension;
-  let server: SetupServerApi | undefined = undefined;
+
+  const server = setupServer();
+
+  beforeAll(() => {
+    server.listen({ onUnhandledRequest: 'error' });
+  });
 
   beforeEach(() => {
+    server.resetHandlers();
+    vi.resetAllMocks();
     aiLabProvider = {
       updateStatus: vi.fn(),
       registerInferenceProviderConnection: vi.fn(),
       dispose: vi.fn(),
     } as unknown as Provider;
-    vi.resetAllMocks();
     vi.mocked(randomUUID).mockReturnValue('00000000-0000-0000-0000-000000000000');
     vi.mocked(networkInterfaces).mockReturnValue({
       eth0: [{ address: '192.168.1.100', family: 'IPv4', internal: false } as NetworkInterfaceInfo],
     });
     vi.mocked(provider.createProvider).mockReturnValue(aiLabProvider);
+    vi.mocked(env).isWindows = false;
     extensionContext = { subscriptions: [] } as unknown as ExtensionContext;
     extension = new TestPodmanAiLabExtension(extensionContext);
   });
 
-  afterEach(() => {
-    server?.close();
+  afterAll(() => {
+    server.close();
   });
 
   test('should use local IP endpoint on Windows', async () => {
     vi.mocked(env).isWindows = true;
-    const handlers = [
+    server.use(
       http.get('http://localhost:10434/api/ps', () => HttpResponse.json({ models: [{ name: 'm1' }, { name: 'm2' }] })),
-    ];
-    server = setupServer(...handlers);
-    server.listen({ onUnhandledRequest: 'error' });
+    );
     await extension.activate();
     expect(vi.mocked(provider.createProvider)).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'Podman AI Lab', id: 'podman-ai-lab' }),
@@ -84,12 +90,9 @@ describe('PodmanAiLabExtension', () => {
   });
 
   test('should use localhost endpoint on macOS/Linux', async () => {
-    vi.mocked(env).isWindows = false;
-    const handlers = [
+    server.use(
       http.get('http://localhost:10434/api/ps', () => HttpResponse.json({ models: [{ name: 'm1' }, { name: 'm2' }] })),
-    ];
-    server = setupServer(...handlers);
-    server.listen({ onUnhandledRequest: 'error' });
+    );
     await extension.activate();
     expect(vi.mocked(aiLabProvider.registerInferenceProviderConnection)).toHaveBeenCalledWith(
       expect.objectContaining({ endpoint: 'http://localhost:10434' }),
@@ -97,22 +100,18 @@ describe('PodmanAiLabExtension', () => {
   });
 
   test('should set status to stopped if fetch fails', async () => {
-    const handlers = [
+    server.use(
       http.get('http://localhost:10434/api/ps', () => {
         throw new Error('fail');
       }),
-    ];
-    server = setupServer(...handlers);
-    server.listen({ onUnhandledRequest: 'error' });
+    );
     await extension.activate();
     expect(vi.mocked(aiLabProvider.updateStatus)).toHaveBeenCalledWith('stopped');
     expect(vi.mocked(aiLabProvider.registerInferenceProviderConnection)).not.toHaveBeenCalled();
   });
 
   test('should set status to stopped on non-ok response', async () => {
-    const handlers = [http.get('http://localhost:10434/api/ps', () => new HttpResponse(null, { status: 503 }))];
-    server = setupServer(...handlers);
-    server.listen({ onUnhandledRequest: 'error' });
+    server.use(http.get('http://localhost:10434/api/ps', () => new HttpResponse(null, { status: 503 })));
     await extension.activate();
     expect(vi.mocked(aiLabProvider.updateStatus)).toHaveBeenCalledWith('stopped');
   });
@@ -121,13 +120,11 @@ describe('PodmanAiLabExtension', () => {
     const firstDispose = vi.fn();
     vi.mocked(aiLabProvider.registerInferenceProviderConnection).mockReturnValue({ dispose: firstDispose });
     const models = [{ name: 'm1' }];
-    const handlers = [
+    server.use(
       http.get('http://localhost:10434/api/ps', () => {
         return HttpResponse.json({ models });
       }),
-    ];
-    server = setupServer(...handlers);
-    server.listen();
+    );
     await extension.activate();
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledTimes(1);
     expect(firstDispose).not.toHaveBeenCalled();
@@ -138,25 +135,19 @@ describe('PodmanAiLabExtension', () => {
   });
 
   test('should not re-register connection if models are unchanged', async () => {
-    const handlers = [
+    server.use(
       http.get('http://localhost:10434/api/ps', () => HttpResponse.json({ models: [{ name: 'm1' }, { name: 'm2' }] })),
-    ];
-    server = setupServer(...handlers);
-    server.listen();
+    );
     await extension.activate();
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledTimes(1);
     await extension.updateModelsAndStatus(aiLabProvider);
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledTimes(1);
   });
 
-  test('should register connection with ollama llmMetadata and local type', async () => {
-    vi.mocked(env).isWindows = false;
-    const handlers = [
-      http.get('http://localhost:10434/api/ps', () => HttpResponse.json({ models: [{ name: 'granite3' }] })),
-    ];
-    server = setupServer(...handlers);
-    server.listen({ onUnhandledRequest: 'error' });
+  test('should register connection with ollama SDK baseURL and llmMetadata', async () => {
+    server.use(http.get('http://localhost:10434/api/ps', () => HttpResponse.json({ models: [{ name: 'granite3' }] })));
     await extension.activate();
+    expect(vi.mocked(createOllama)).toHaveBeenCalledWith({ baseURL: 'http://localhost:10434/api' });
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'podman-ai-lab',
@@ -168,29 +159,37 @@ describe('PodmanAiLabExtension', () => {
   });
 
   test('should handle empty models array from daemon', async () => {
-    const handlers = [http.get('http://localhost:10434/api/ps', () => HttpResponse.json({ models: [] }))];
-    server = setupServer(...handlers);
-    server.listen({ onUnhandledRequest: 'error' });
+    server.use(http.get('http://localhost:10434/api/ps', () => HttpResponse.json({ models: [] })));
     await extension.activate();
     expect(vi.mocked(aiLabProvider.updateStatus)).toHaveBeenCalledWith('started');
     expect(aiLabProvider.registerInferenceProviderConnection).not.toHaveBeenCalled();
   });
 
   test('should handle malformed response gracefully', async () => {
-    const handlers = [http.get('http://localhost:10434/api/ps', () => HttpResponse.json({ unexpected: 'data' }))];
-    server = setupServer(...handlers);
-    server.listen({ onUnhandledRequest: 'error' });
+    server.use(http.get('http://localhost:10434/api/ps', () => HttpResponse.json({ unexpected: 'data' })));
     await extension.activate();
     expect(vi.mocked(aiLabProvider.updateStatus)).toHaveBeenCalledWith('started');
     expect(aiLabProvider.registerInferenceProviderConnection).not.toHaveBeenCalled();
   });
 
+  test('should filter out model entries with non-string names', async () => {
+    server.use(
+      http.get('http://localhost:10434/api/ps', () =>
+        HttpResponse.json({ models: [{ name: 'valid-model' }, { foo: 1 }, { name: 42 }, null] }),
+      ),
+    );
+    await extension.activate();
+    expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        models: [{ label: 'valid-model' }],
+      }),
+    );
+  });
+
   test('should dispose connection and clear state on deactivate', async () => {
     const disposeFn = vi.fn();
     vi.mocked(aiLabProvider.registerInferenceProviderConnection).mockReturnValue({ dispose: disposeFn });
-    const handlers = [http.get('http://localhost:10434/api/ps', () => HttpResponse.json({ models: [{ name: 'm1' }] }))];
-    server = setupServer(...handlers);
-    server.listen();
+    server.use(http.get('http://localhost:10434/api/ps', () => HttpResponse.json({ models: [{ name: 'm1' }] })));
     await extension.activate();
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledTimes(1);
 

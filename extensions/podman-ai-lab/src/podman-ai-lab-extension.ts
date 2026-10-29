@@ -1,5 +1,5 @@
 /**********************************************************************
- * Copyright (C) 2025 Red Hat, Inc.
+ * Copyright (C) 2026 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,23 +21,11 @@ import { networkInterfaces } from 'node:os';
 import { type Disposable, env, type ExtensionContext, type Provider, provider } from '@openkaiden/api';
 import { createOllama } from 'ollama-ai-provider-v2';
 
-const AI_LAB_API_PORT = 10434;
-const POLL_INTERVAL_MS = 30_000;
-
-function getContainerReachableHost(): string {
-  if (env.isWindows) {
-    for (const entries of Object.values(networkInterfaces())) {
-      for (const entry of entries ?? []) {
-        if (!entry.internal) {
-          return entry.family === 'IPv6' ? `[${entry.address}]` : entry.address;
-        }
-      }
-    }
-  }
-  return 'localhost';
-}
-
 export class PodmanAiLabExtension {
+  protected static readonly AI_LAB_API_PORT = 10434;
+  protected static readonly POLL_INTERVAL_MS = 30_000;
+  protected static readonly DAEMON_BASE_URL = `http://localhost:${PodmanAiLabExtension.AI_LAB_API_PORT}`;
+
   #extensionContext: ExtensionContext;
   #currentModels: string[] = [];
   #connectionDisposable: Disposable | undefined;
@@ -46,6 +34,22 @@ export class PodmanAiLabExtension {
 
   constructor(extensionContext: ExtensionContext) {
     this.#extensionContext = extensionContext;
+  }
+
+  // WSL2: host.containers.internal doesn't reach Windows loopback.
+  // Use the first non-internal address (the WSL2 gateway-facing NIC).
+  // Requires the AI Lab daemon to be bound to a non-loopback interface.
+  #getContainerReachableHost(): string {
+    if (env.isWindows) {
+      for (const entries of Object.values(networkInterfaces())) {
+        for (const entry of entries ?? []) {
+          if (!entry.internal) {
+            return entry.family === 'IPv6' ? `[${entry.address}]` : entry.address;
+          }
+        }
+      }
+    }
+    return 'localhost';
   }
 
   async activate(): Promise<void> {
@@ -68,7 +72,7 @@ export class PodmanAiLabExtension {
       this.updateModelsAndStatus(aiLabProvider).catch((error: unknown) => {
         console.error('Error updating Podman AI Lab models and status:', error);
       });
-    }, POLL_INTERVAL_MS);
+    }, PodmanAiLabExtension.POLL_INTERVAL_MS);
   }
 
   protected async updateModelsAndStatus(aiLabProvider: Provider): Promise<void> {
@@ -78,19 +82,22 @@ export class PodmanAiLabExtension {
     let models: Array<{ name: string }> = [];
     let running = true;
     try {
-      const res = await fetch(`http://localhost:${AI_LAB_API_PORT}/api/ps`, { signal });
+      const res = await fetch(`${PodmanAiLabExtension.DAEMON_BASE_URL}/api/ps`, { signal });
       if (!res.ok) {
         throw new Error(`HTTP error, status: ${res.status}`);
       }
       const data: unknown = await res.json();
-      models =
-        data !== null && typeof data === 'object' && 'models' in data
-          ? Array.isArray(data.models)
-            ? (data.models as Array<{ name: string }>)
-            : []
-          : [];
+      let rawModels: unknown[] = [];
+      if (data !== null && typeof data === 'object' && 'models' in data && Array.isArray(data.models)) {
+        rawModels = data.models;
+      }
+      models = rawModels.filter(
+        (entry): entry is { name: string } =>
+          typeof entry === 'object' && entry !== null && 'name' in entry && typeof entry.name === 'string',
+      );
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
+      console.debug('Podman AI Lab daemon unreachable:', err);
       running = false;
       models = [];
     }
@@ -120,14 +127,14 @@ export class PodmanAiLabExtension {
       }
       this.#currentModels = newModelNames;
       if (newModelNames.length > 0) {
-        const host = getContainerReachableHost();
-        const sdk = createOllama({ baseURL: `http://localhost:${AI_LAB_API_PORT}/api` });
-        const disposable = aiLabProvider.registerInferenceProviderConnection({
+        const host = this.#getContainerReachableHost();
+        const sdk = createOllama({ baseURL: `${PodmanAiLabExtension.DAEMON_BASE_URL}/api` });
+        this.#connectionDisposable = aiLabProvider.registerInferenceProviderConnection({
           id: randomUUID(),
           name: 'podman-ai-lab',
           type: 'local',
           llmMetadata: { name: 'ollama' },
-          endpoint: `http://${host}:${AI_LAB_API_PORT}`,
+          endpoint: `http://${host}:${PodmanAiLabExtension.AI_LAB_API_PORT}`,
           sdk,
           status() {
             return 'started';
@@ -137,8 +144,6 @@ export class PodmanAiLabExtension {
             return {};
           },
         });
-        this.#connectionDisposable = disposable;
-        this.#extensionContext.subscriptions.push(disposable);
       }
     }
   }

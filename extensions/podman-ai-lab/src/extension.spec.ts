@@ -1,5 +1,5 @@
 /**********************************************************************
- * Copyright (C) 2025 Red Hat, Inc.
+ * Copyright (C) 2026 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ let extensionContextMock: ExtensionContext;
 vi.mock(import('./podman-ai-lab-extension'));
 
 beforeEach(() => {
-  vi.restoreAllMocks();
   vi.resetAllMocks();
 
   extensionContextMock = {} as ExtensionContext;
