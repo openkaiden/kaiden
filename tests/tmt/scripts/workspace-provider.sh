@@ -108,8 +108,10 @@ cleanup() {
     dest="$test_data_dir/playwright-output"
     mkdir -p "$dest"
     # Allow-list only the plain-text reports the sanitizer can redact
-    # (test-results.json, junit-results.xml, *.log). Everything else is dropped
-    # by default: traces, videos and screenshots embed the typed-in keys, the
+    # (test-results.json, junit-results.xml, *.log) plus the final failure.png.
+    # The failure screenshot is a single frame and the provider key inputs are
+    # password fields, so it never shows a key in clear text. Everything else is
+    # dropped by default: traces and videos capture every typed-in key, the
     # HTML report embeds the data as base64, and error-context.md holds page
     # snapshots — none can be reliably redacted.
     while IFS= read -r -d '' file; do
@@ -117,7 +119,7 @@ cleanup() {
       mkdir -p "$dest/$(dirname "$rel")"
       cp "$file" "$dest/$rel"
     done < <(find tests/playwright/output -type f \
-      \( -name 'test-results.json' -o -name 'junit-results.xml' -o -name '*.log' \) -print0)
+      \( -name 'test-results.json' -o -name 'junit-results.xml' -o -name '*.log' -o -name 'failure.png' \) -print0)
     # Fail closed: if redaction fails, drop the artifacts rather than publish
     # unredacted provider keys.
     if ! SECRETS_FILE="$secrets_file" bash .github/scripts/pde2e/sanitize-collected-logs.sh "$dest"; then
