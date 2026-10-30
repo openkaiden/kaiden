@@ -32,6 +32,46 @@ export const CLAUDE_SETTINGS_PATH = '.claude/settings.json';
 export const CLAUDE_JSON_PATH = '.claude.json';
 const WORKSPACE_SOURCES_PATH = '/sandbox';
 
+export const APPROVE_KEY_SCRIPT_PATH = '.claude/approve-key.sh';
+
+/** Number of trailing characters of the API key that Claude Code shows and tracks. */
+export const API_KEY_SUFFIX_LENGTH = 20;
+
+/**
+ * Placeholder written into the approved customApiKeyResponses by
+ * preWorkspaceStart; the approve-key script replaces it with the real key
+ * suffix at sandbox runtime.
+ */
+export const ANTHROPIC_KEY_SUFFIX_PLACEHOLDER = '__ANTHROPIC_API_KEY_SUFFIX__';
+
+/**
+ * Runs inside the sandbox through the agent setupCommand after creation.
+ * It replaces the ANTHROPIC_KEY_SUFFIX_PLACEHOLDER written by
+ * preWorkspaceStart with the last API_KEY_SUFFIX_LENGTH characters of the
+ * provider-injected ANTHROPIC_API_KEY (the whole key when it is shorter,
+ * matching Claude Code's suffix semantics), so Claude Code does not prompt
+ * for API key confirmation. Vertex AI workspaces are skipped: they
+ * authenticate through ANTHROPIC_AUTH_TOKEN and never receive
+ * ANTHROPIC_API_KEY. Plain bash only: the agent image ships no node, jq or
+ * python. Any failure exits non-zero, which fails the workspace creation.
+ */
+const APPROVE_KEY_SCRIPT = `#!/bin/bash
+set -e
+if [ -n "\${ANTHROPIC_API_KEY:-}" ] && [ "\${CLAUDE_CODE_USE_VERTEX:-}" != "1" ]; then
+  CLAUDE_JSON="$HOME/${CLAUDE_JSON_PATH}"
+  content="$(<"$CLAUDE_JSON")"
+  if [[ "$content" != *"${ANTHROPIC_KEY_SUFFIX_PLACEHOLDER}"* ]]; then
+    echo "approve-key: ${ANTHROPIC_KEY_SUFFIX_PLACEHOLDER} not found in $CLAUDE_JSON" >&2
+    exit 1
+  fi
+  suffix="$ANTHROPIC_API_KEY"
+  if [ "\${#ANTHROPIC_API_KEY}" -gt ${API_KEY_SUFFIX_LENGTH} ]; then
+    suffix="\${ANTHROPIC_API_KEY: -${API_KEY_SUFFIX_LENGTH}}"
+  fi
+  printf '%s\\n' "\${content//${ANTHROPIC_KEY_SUFFIX_PLACEHOLDER}/$suffix}" > "$CLAUDE_JSON"
+fi
+`;
+
 function jsonCodec<T extends z.ZodType>(schema: T): z.ZodCodec<z.ZodString, T> {
   return z.codec(z.string(), schema, {
     decode: (jsonString, ctx) => {
@@ -114,6 +154,7 @@ export class ClaudeExtension {
         'ghcr.io/openkaiden/openshell-image-claude@sha256:38ddd7700da24f8102430613c8b1d0568c875ee0788ceda2ff79c465070774d9',
       acp: { command: 'claude-agent-acp', args: [] },
       tags: ['Cloud'],
+      setupCommand: `bash $HOME/${APPROVE_KEY_SCRIPT_PATH}`,
       configurationFiles: [
         {
           path: CLAUDE_SETTINGS_PATH,
@@ -125,6 +166,12 @@ export class ClaudeExtension {
           path: CLAUDE_JSON_PATH,
           async read(): Promise<string> {
             return '{}';
+          },
+        },
+        {
+          path: APPROVE_KEY_SCRIPT_PATH,
+          async read(): Promise<string> {
+            return APPROVE_KEY_SCRIPT;
           },
         },
       ],
@@ -171,10 +218,17 @@ export class ClaudeExtension {
           projects[WORKSPACE_SOURCES_PATH] = project;
           config.projects = projects;
 
-          config.customApiKeyResponses = {
-            approved: Array.from(new Set([...(config.customApiKeyResponses?.approved ?? []), 'unused'])),
-            rejected: config.customApiKeyResponses?.rejected?.filter(response => response !== 'unused') ?? [],
-          };
+          // Approve the API key through the suffix placeholder replaced by
+          // the approve-key.sh setup script; Vertex AI workspaces authenticate
+          // through ANTHROPIC_AUTH_TOKEN and are skipped by the script.
+          if (context.model.llmMetadata?.name !== 'vertexai') {
+            config.customApiKeyResponses = {
+              approved: Array.from(
+                new Set([...(config.customApiKeyResponses?.approved ?? []), ANTHROPIC_KEY_SUFFIX_PLACEHOLDER]),
+              ),
+              rejected: config.customApiKeyResponses?.rejected ?? [],
+            };
+          }
 
           const mcpServers = context.workspace.mcp?.servers;
           const mcpCommands = context.workspace.mcp?.commands;

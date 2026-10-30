@@ -5534,6 +5534,18 @@ declare module '@openkaiden/api' {
      * ${HOME}/path1/path2
      */
     readonly destinationSkillsFolder: string;
+    /**
+     * Optional shell command executed inside the sandbox with `bash -c` once
+     * the sandbox is created and ready; the agent base image must provide
+     * bash. The command runs after the agent configuration files are
+     * uploaded and before the agent session starts, so it may read them. A
+     * non-zero exit code fails the workspace creation and the sandbox is
+     * deleted; the command must finish within 60 seconds. Use this for
+     * one-time setup that needs runtime context (e.g. environment variables
+     * resolved by the provider system) which is not available during
+     * {@link preWorkspaceStart}. Defaults to running no command.
+     */
+    readonly setupCommand?: string;
     isSupportedModelType?(type: ModelType): boolean | Promise<boolean>;
     preWorkspaceStart(context: AgentWorkspaceContext): Promise<void>;
   }
