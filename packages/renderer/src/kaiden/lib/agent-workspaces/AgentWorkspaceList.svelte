@@ -15,10 +15,12 @@ import {
 import GatewayFilterDropdown from '/@/kaiden/lib/gateways/GatewayFilterDropdown.svelte';
 import {
   allOpenshellSandboxes,
+  clearSandboxActionError,
   filteredOpenshellSandboxes,
   type SandboxInfoWithGateway,
   searchPattern as sandboxSearchPattern,
   selectedGateway as sandboxSelectedGateway,
+  setSandboxActionError,
 } from '/@/kaiden/stores/openshell-sandboxes';
 import { withBulkConfirmation } from '/@/lib/actions/BulkActions';
 import NotificationsBox from '/@/lib/dashboard/NotificationsBox.svelte';
@@ -64,10 +66,11 @@ async function deleteSelectedSandboxes(): Promise<void> {
   bulkDeleteInProgress = true;
   await Promise.all(
     selectedSandboxes.map(async sandbox => {
+      clearSandboxActionError(sandbox.id);
       try {
         await window.deleteOpenshellSandbox(sandbox.name, sandbox.gatewayName);
-      } catch (error) {
-        console.error(`error while removing workspace ${sandbox.name}`, error);
+      } catch (error: unknown) {
+        setSandboxActionError(sandbox.id, String(error));
       }
     }),
   );
