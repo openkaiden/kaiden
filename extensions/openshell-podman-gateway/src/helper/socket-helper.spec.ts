@@ -189,4 +189,21 @@ describe('SocketHelper', () => {
 
     await expect(socketHelper.getSocketPath(dockerode)).rejects.toThrow('socket not found');
   });
+
+  test('should strip unix:// prefix from an already fetched info', () => {
+    const info = structuredClone(fakeInfo);
+    info.host.remoteSocket.path = 'unix:///run/user/1000/podman/podman.sock';
+
+    expect(socketHelper.getSocketPathFromInfo(info)).toBe('/run/user/1000/podman/podman.sock');
+  });
+
+  test.each([
+    { rootless: true, expected: '/home/user/.local' },
+    { rootless: false, expected: '/root/.local' },
+  ])('should return $expected as local data dir when rootless is $rootless', ({ rootless, expected }) => {
+    const info = structuredClone(fakeInfo);
+    info.host.security.rootless = rootless;
+
+    expect(socketHelper.getLocalDataDir(info)).toBe(expected);
+  });
 });
