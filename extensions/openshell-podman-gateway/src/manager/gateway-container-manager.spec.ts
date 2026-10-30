@@ -16,8 +16,9 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { CliToolInfo } from '@openkaiden/api';
-import { cli, env, process as processApi } from '@openkaiden/api';
+import { join } from 'node:path';
+
+import { env } from '@openkaiden/api';
 import type { ContainerExtensionAPI, EndpointConnection } from '@openkaiden/container-extension-api';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import DockerModem from 'docker-modem';
@@ -29,7 +30,12 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { SocketHelper } from '/@/helper/socket-helper';
 import { ContainerExtensionAPISymbol, ExtensionContextSymbol } from '/@/inject/symbol';
 
-import { convertToWslPath, GATEWAY_IMAGE, GatewayContainerManager } from './gateway-container-manager';
+import {
+  convertToWslPath,
+  GATEWAY_IMAGE,
+  GatewayContainerManager,
+  getOpenshellGatewaysDir,
+} from './gateway-container-manager';
 
 vi.mock('node:fs/promises', () => ({
   rm: vi.fn().mockResolvedValue(undefined),
@@ -104,10 +110,18 @@ beforeEach(async () => {
   gatewayContainerManager = await container.getAsync<GatewayContainerManager>(GatewayContainerManager);
 });
 
-function setupCliMock(path?: string): void {
-  const toolInfo = path ? [{ name: 'openshell', path } as CliToolInfo] : [];
-  vi.mocked(cli).all = toolInfo as unknown as readonly CliToolInfo[];
-  vi.mocked(cli.onDidChange).mockReturnValue(disposableMock);
+async function expectGatewayMetadata(endpoint: string | RegExp): Promise<void> {
+  const { writeFile: writeFileMock } = await import('node:fs/promises');
+  const call = vi.mocked(writeFileMock).mock.calls.find(c => String(c[0]).endsWith('metadata.json'));
+  expect(call).toBeDefined();
+  expect(call![0]).toBe(join(getOpenshellGatewaysDir(), 'kaiden-podman', 'metadata.json'));
+  expect(JSON.parse(String(call![1]))).toEqual({
+    name: 'kaiden-podman',
+    gateway_endpoint: typeof endpoint === 'string' ? endpoint : expect.stringMatching(endpoint),
+    is_remote: false,
+    gateway_port: 0,
+    auth_mode: 'plaintext',
+  });
 }
 
 function setupFollowProgress(): void {
@@ -128,9 +142,7 @@ describe('GatewayContainerManager', () => {
 
   test('should register onEndpointsChanged listener on Windows', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 
@@ -149,9 +161,7 @@ describe('GatewayContainerManager', () => {
   test('should retry setup when endpoints become available', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
     vi.mocked(containerExtensionAPIMock.getEndpoints).mockReturnValueOnce([]);
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 
@@ -166,8 +176,6 @@ describe('GatewayContainerManager', () => {
 
   test('should start existing stopped container', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     vi.mocked(Dockerode.prototype.listContainers).mockResolvedValue([
       {
@@ -189,8 +197,6 @@ describe('GatewayContainerManager', () => {
 
   test('should use existing running container without starting', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     vi.mocked(Dockerode.prototype.listContainers).mockResolvedValue([
       {
@@ -211,9 +217,7 @@ describe('GatewayContainerManager', () => {
 
   test('should create new container when none exists', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 
@@ -231,9 +235,7 @@ describe('GatewayContainerManager', () => {
 
   test('should create container with correct port configuration', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 
@@ -249,8 +251,6 @@ describe('GatewayContainerManager', () => {
       '--port',
       String(port),
       '--disable-tls',
-      '--drivers',
-      'podman',
       '--bind-address',
       '0.0.0.0',
       '--log-level',
@@ -263,32 +263,19 @@ describe('GatewayContainerManager', () => {
     });
   });
 
-  test('should register gateway with CLI after container is running', async () => {
+  test('should register gateway metadata after container is running', async () => {
+    const { mkdir: mkdirMock } = await import('node:fs/promises');
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 
-    expect(processApi.exec).toHaveBeenCalledWith('/usr/bin/openshell', ['gateway', 'remove', 'kaiden']);
-    expect(processApi.exec).toHaveBeenCalledWith(
-      '/usr/bin/openshell',
-      expect.arrayContaining([
-        'gateway',
-        'add',
-        expect.stringMatching(/^http:\/\/localhost:\d+$/),
-        '--name',
-        'kaiden',
-        '--local',
-      ]),
-    );
+    expect(mkdirMock).toHaveBeenCalledWith(join(getOpenshellGatewaysDir(), 'kaiden-podman'), { recursive: true });
+    await expectGatewayMetadata(/^http:\/\/localhost:\d+$/);
   });
 
   test('should register gateway with existing container port', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     vi.mocked(Dockerode.prototype.listContainers).mockResolvedValue([
       {
@@ -303,65 +290,31 @@ describe('GatewayContainerManager', () => {
 
     await gatewayContainerManager.init();
 
-    expect(processApi.exec).toHaveBeenCalledWith('/usr/bin/openshell', [
-      'gateway',
-      'add',
-      'http://localhost:54321',
-      '--name',
-      'kaiden',
-      '--local',
-    ]);
+    await expectGatewayMetadata('http://localhost:54321');
   });
 
-  test('should defer entire setup when CLI is not available', async () => {
+  test('should handle metadata write errors gracefully', async () => {
+    const { writeFile: writeFileMock } = await import('node:fs/promises');
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock();
     setupFollowProgress();
-
-    let onDidChangeCallback: (() => void) | undefined;
-    vi.mocked(cli.onDidChange).mockImplementation((cb: () => void) => {
-      onDidChangeCallback = cb;
-      return disposableMock;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(writeFileMock).mockImplementation(async path => {
+      if (String(path).endsWith('metadata.json')) {
+        throw new Error('access denied');
+      }
     });
 
     await gatewayContainerManager.init();
 
-    expect(cli.onDidChange).toHaveBeenCalled();
-    expect(Dockerode.prototype.listContainers).not.toHaveBeenCalled();
-    expect(Dockerode.prototype.createContainer).not.toHaveBeenCalled();
-    expect(processApi.exec).not.toHaveBeenCalled();
-
-    setupCliMock('/usr/bin/openshell');
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
-
-    onDidChangeCallback?.();
-
-    await vi.waitFor(() => {
-      expect(Dockerode.prototype.listContainers).toHaveBeenCalled();
-      expect(processApi.exec).toHaveBeenCalledWith('/usr/bin/openshell', expect.arrayContaining(['gateway', 'add']));
-    });
-  });
-
-  test('should ignore errors when removing non-existent gateway', async () => {
-    Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
-    setupFollowProgress();
-
-    vi.mocked(processApi.exec)
-      .mockRejectedValueOnce(new Error('gateway not found'))
-      .mockResolvedValue({ stdout: '', stderr: '', command: '' });
-
-    await gatewayContainerManager.init();
-
-    expect(processApi.exec).toHaveBeenCalledWith('/usr/bin/openshell', ['gateway', 'remove', 'kaiden']);
-    expect(processApi.exec).toHaveBeenCalledWith('/usr/bin/openshell', expect.arrayContaining(['gateway', 'add']));
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('failed to register gateway'),
+      expect.any(Error),
+    );
   });
 
   test('should not run setup twice (idempotency)', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 
@@ -391,8 +344,6 @@ describe('GatewayContainerManager', () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
     vi.spyOn(console, 'error').mockImplementation(() => {});
     setupFollowProgress();
-    setupCliMock('/usr/bin/openshell');
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     vi.mocked(Dockerode.prototype.listContainers).mockResolvedValue([
       {
@@ -418,13 +369,12 @@ describe('GatewayContainerManager', () => {
 
     await gatewayContainerManager.init();
 
-    expect(processApi.exec).not.toHaveBeenCalled();
+    const { writeFile: writeFileMock } = await import('node:fs/promises');
+    expect(vi.mocked(writeFileMock).mock.calls.some(c => String(c[0]).endsWith('metadata.json'))).toBe(false);
   });
 
   test('should find container on second endpoint', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     const endpoint2: EndpointConnection = {
       path: '/test/path2',
@@ -450,20 +400,11 @@ describe('GatewayContainerManager', () => {
 
     expect(Dockerode.prototype.listContainers).toHaveBeenCalledTimes(2);
     expect(Dockerode.prototype.createContainer).not.toHaveBeenCalled();
-    expect(processApi.exec).toHaveBeenCalledWith('/usr/bin/openshell', [
-      'gateway',
-      'add',
-      'http://localhost:9999',
-      '--name',
-      'kaiden',
-      '--local',
-    ]);
+    await expectGatewayMetadata('http://localhost:9999');
   });
 
   test('should stop searching once container is found on first endpoint', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     const endpoint2: EndpointConnection = {
       path: '/test/path2',
@@ -491,9 +432,7 @@ describe('GatewayContainerManager', () => {
 
   test('should create on first endpoint when no container found on any endpoint', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     const endpoint2: EndpointConnection = {
       path: '/test/path2',
@@ -512,9 +451,7 @@ describe('GatewayContainerManager', () => {
 
   test('should generate certs before starting gateway container', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 
@@ -544,9 +481,7 @@ describe('GatewayContainerManager', () => {
 
   test('should wait for cert container to exit and remove it', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 
@@ -560,9 +495,7 @@ describe('GatewayContainerManager', () => {
     const tarMock = await import('tar');
 
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 
@@ -577,9 +510,7 @@ describe('GatewayContainerManager', () => {
     const { writeFile: writeFileMock } = await import('node:fs/promises');
 
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 
@@ -589,27 +520,23 @@ describe('GatewayContainerManager', () => {
     );
   });
 
-  test('should generate gateway config with non-expiring JWTs (ttl_secs = 0)', async () => {
+  test('should generate gateway config using the podman compute driver', async () => {
     const { writeFile: writeFileMock } = await import('node:fs/promises');
 
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 
     expect(writeFileMock).toHaveBeenCalledWith(
       expect.stringContaining('gateway.toml'),
-      expect.stringContaining('ttl_secs = 0'),
+      expect.stringContaining('compute_driver = "podman"'),
     );
   });
 
   test('should mount gateway directory to /kaiden in gateway container', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 
@@ -629,9 +556,7 @@ describe('GatewayContainerManager', () => {
 
   test('should include --config in gateway container Cmd', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
-    setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
-    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
     await gatewayContainerManager.init();
 

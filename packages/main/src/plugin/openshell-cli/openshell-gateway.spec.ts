@@ -35,7 +35,7 @@ import type { Proxy as ProxyService } from '/@/plugin/proxy.js';
 import type { NotificationRegistry } from '/@/plugin/tasks/notification-registry.js';
 import { Exec } from '/@/plugin/util/exec.js';
 import { getFreePort, isFreePort } from '/@/plugin/util/port.js';
-import { isLinux, isMac } from '/@/util.js';
+import { isLinux, isMac, isWindows } from '/@/util.js';
 import type { CliToolInfo } from '/@api/cli-tool-info.js';
 import type { ListedGateway } from '/@api/openshell-gateway-info.js';
 
@@ -500,6 +500,42 @@ describe('init', () => {
     await gateway.init();
 
     expect(spawn).not.toHaveBeenCalled();
+  });
+
+  test('does not auto-start local gateway on Windows when no gateways exist', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.mocked(isWindows).mockReturnValue(true);
+    vi.mocked(gatewayManager.listGateways).mockResolvedValue([]);
+    vi.mocked(gatewayManager.health).mockRejectedValue(new Error('connection refused'));
+    const startListener = vi.fn();
+    const failedListener = vi.fn();
+    gateway.onDidGatewayStart(startListener);
+    gateway.onDidGatewayInitFailed(failedListener);
+
+    await gateway.init();
+
+    expect(spawn).not.toHaveBeenCalled();
+    expect(gatewayManager.removeGateway).toHaveBeenCalledWith('kaiden-local');
+    expect(startListener).not.toHaveBeenCalled();
+    expect(failedListener).not.toHaveBeenCalled();
+    expect(notificationRegistry.addNotification).not.toHaveBeenCalled();
+  });
+
+  test('reuses orphan gateway on default port on Windows', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.mocked(isWindows).mockReturnValue(true);
+    vi.mocked(gatewayManager.listGateways).mockResolvedValue([]);
+    const startListener = vi.fn();
+    gateway.onDidGatewayStart(startListener);
+
+    await gateway.init();
+
+    expect(spawn).not.toHaveBeenCalled();
+    expect(gatewayManager.addGateway).toHaveBeenCalledWith(
+      'kaiden-local',
+      expect.objectContaining({ gateway_endpoint: 'http://127.0.0.1:29670' }),
+    );
+    expect(startListener).toHaveBeenCalledOnce();
   });
 });
 
