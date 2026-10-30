@@ -17,7 +17,13 @@
  ***********************************************************************/
 
 import { expect, test } from '/@/fixtures/provider-fixtures';
-import { CODING_AGENT, FILE_ACCESS_LEVEL, NETWORK_ACCESS_LEVEL, TERMINAL_READY_PATTERNS } from '/@/model/core/types';
+import {
+  CODING_AGENT,
+  FILE_ACCESS_LEVEL,
+  NETWORK_ACCESS_LEVEL,
+  OPENAI_SMOKE_MODEL,
+  TERMINAL_READY_PATTERNS,
+} from '/@/model/core/types';
 
 // Sandbox matrix lifecycle tests — see .agents/skills/playwright-testing/workspace-provider-e2e.md
 import {
@@ -38,7 +44,7 @@ const AGENT_SETUPS: SandboxAgentSetup[] = [
     agent: CODING_AGENT.OPENCODE,
     requiredResource: 'openai',
     workspacePrefix: 'opencode',
-    selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
+    selectModel: async createPage => createPage.searchAndSelectModel(OPENAI_SMOKE_MODEL),
     terminalReadyPatterns: TERMINAL_READY_PATTERNS.OPENCODE,
     promptTest: {
       prompt: 'what is 123+456? reply with just the number',

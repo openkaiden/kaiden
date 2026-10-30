@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import { expect, test } from '/@/fixtures/provider-fixtures';
-import { CODING_AGENT, TERMINAL_READY_PATTERNS } from '/@/model/core/types';
+import { CODING_AGENT, OPENAI_SMOKE_MODEL, TERMINAL_READY_PATTERNS } from '/@/model/core/types';
 
 import { registerWorkspaceLifecycleTests } from './helpers/workspace-lifecycle-helper';
 
@@ -28,7 +28,7 @@ test.describe
       workspaceName: 'copilot-openai',
       agent: CODING_AGENT.COPILOT,
       requiredResource: 'openai',
-      selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
+      selectModel: async createPage => createPage.searchAndSelectModel(OPENAI_SMOKE_MODEL),
       terminalReadyPatterns: TERMINAL_READY_PATTERNS.COPILOT,
       promptTest: {
         prompt: 'what is 123+456? reply with just the number',

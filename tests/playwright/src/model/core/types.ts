@@ -233,12 +233,17 @@ export const CODING_AGENTS = Object.values(CODING_AGENT);
 export type CodingAgent = (typeof CODING_AGENT)[keyof typeof CODING_AGENT];
 
 export const TERMINAL_READY_PATTERNS = {
-  OPENCODE: [/Ask anything/i, /opencode/i],
+  // Placeholder of OpenCode's input box, drawn only once the TUI accepts input (checked on OpenCode 2.0.22).
+  OPENCODE: [/Ask anything/i],
   CLAUDE: [/Claude Code/],
-  COPILOT: [/Copilot/i],
+  // Case-sensitive on purpose: /copilot/i also matches the echoed COPILOT_PROVIDER_API_KEY launch command.
+  COPILOT: [/GitHub Copilot/],
   GOOSE: [/goose/i],
   OPENCLAW: [/openclaw/i],
 } as const;
+
+// OpenAI model selected by the workspace smoke specs; update here when OpenAI retires it.
+export const OPENAI_SMOKE_MODEL = 'gpt-4.1-mini';
 
 export const ENABLED_CODING_AGENTS = [
   CODING_AGENT.OPENCODE,

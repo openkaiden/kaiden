@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import { expect, test } from '/@/fixtures/provider-fixtures';
-import { CODING_AGENT, TERMINAL_READY_PATTERNS } from '/@/model/core/types';
+import { CODING_AGENT, OPENAI_SMOKE_MODEL, TERMINAL_READY_PATTERNS } from '/@/model/core/types';
 
 import { registerWorkspaceLifecycleTests } from './helpers/workspace-lifecycle-helper';
 
@@ -46,7 +46,7 @@ test.describe
       workspaceName: 'openclaw-openai',
       agent: CODING_AGENT.OPENCLAW,
       requiredResource: 'openai',
-      selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
+      selectModel: async createPage => createPage.searchAndSelectModel(OPENAI_SMOKE_MODEL),
       terminalReadyPatterns: TERMINAL_READY_PATTERNS.OPENCLAW,
       prePrompts: [{ command: 'talk to agent', expectedResponse: /agent/i }],
       promptTest: {
@@ -64,7 +64,7 @@ test.describe
       agent: CODING_AGENT.OPENCLAW,
       requiredResource: 'openai',
       noProjectFolder: true,
-      selectModel: async createPage => createPage.searchAndSelectDefault('chat'),
+      selectModel: async createPage => createPage.searchAndSelectModel(OPENAI_SMOKE_MODEL),
       terminalReadyPatterns: TERMINAL_READY_PATTERNS.OPENCLAW,
       prePrompts: [{ command: 'talk to agent', expectedResponse: /agent/i }],
       promptTest: {

@@ -414,6 +414,11 @@ export class AgentWorkspaceCreatePage extends BasePage {
     return this.selectDefaultModel();
   }
 
+  async searchAndSelectModel(modelLabel: string): Promise<string> {
+    await this.searchModel(modelLabel);
+    return this.selectRadio(this.page.getByRole('radio', { name: `Use ${modelLabel}`, exact: true }));
+  }
+
   async isModelCatalogVisible(): Promise<boolean> {
     return (await this.getModelTableRows().count()) > 0;
   }
