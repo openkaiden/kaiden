@@ -53,6 +53,22 @@ openshellSandboxesEventStore.setup();
 
 export interface SandboxInfoWithGateway extends SandboxInfo {
   gatewayName: string;
+  actionError?: string;
+}
+
+// Errors from UI actions (e.g. delete) keyed by sandbox id, kept apart from backend data so they survive refreshes
+const sandboxActionErrors: Writable<ReadonlyMap<string, string>> = writable(new Map());
+
+export function setSandboxActionError(id: string, error: string): void {
+  sandboxActionErrors.update(errors => new Map(errors).set(id, error));
+}
+
+export function clearSandboxActionError(id: string): void {
+  sandboxActionErrors.update(errors => {
+    const updated = new Map(errors);
+    updated.delete(id);
+    return updated;
+  });
 }
 
 // Workaround: the Podman driver's event watcher can briefly report a sandbox as
@@ -62,7 +78,7 @@ export interface SandboxInfoWithGateway extends SandboxInfo {
 const deletingSandboxIds = new Set<string>();
 
 // Derived store: flatten all sandboxes across gateways and add gateway name for easier UI consumption
-export const allOpenshellSandboxes = derived(openshellSandboxes, $sandboxes => {
+export const allOpenshellSandboxes = derived([openshellSandboxes, sandboxActionErrors], ([$sandboxes, $errors]) => {
   const flattened: SandboxInfoWithGateway[] = [];
   const currentIds = new Set<string>();
   for (const gatewaySandboxes of $sandboxes) {
@@ -78,6 +94,7 @@ export const allOpenshellSandboxes = derived(openshellSandboxes, $sandboxes => {
         ...sandbox,
         phase,
         gatewayName: gatewaySandboxes.gateway.name,
+        actionError: $errors.get(sandbox.id),
       });
     }
   }
