@@ -536,6 +536,20 @@ export function initExposure(): void {
     },
   );
 
+  contextBridge.exposeInMainWorld(
+    'approveDraftPolicyChunk',
+    async (sandboxId: string, chunkId: string): Promise<void> => {
+      return ipcInvoke('draft-policy:approveChunk', sandboxId, chunkId);
+    },
+  );
+
+  contextBridge.exposeInMainWorld(
+    'rejectDraftPolicyChunk',
+    async (sandboxId: string, chunkId: string): Promise<void> => {
+      return ipcInvoke('draft-policy:rejectChunk', sandboxId, chunkId);
+    },
+  );
+
   contextBridge.exposeInMainWorld('createSecret', async (options: SecretCreateOptions): Promise<SecretName> => {
     return ipcInvoke('secret-manager:create', options);
   });

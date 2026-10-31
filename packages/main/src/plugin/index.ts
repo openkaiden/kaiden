@@ -60,6 +60,8 @@ import { AgentWorkspaceManager } from '/@/plugin/agent-workspace/agent-workspace
 import { HostPresetRegistry } from '/@/plugin/agent-workspace/host-preset-registry.js';
 import { IPCHandle, IPCMainOn, WebContentsType } from '/@/plugin/api.js';
 import { ContainerfileParser } from '/@/plugin/containerfile-parser.js';
+import { DraftPolicyWatcher } from '/@/plugin/draft-policy/draft-policy-watcher.js';
+import { SandboxDenialLogParser } from '/@/plugin/draft-policy/sandbox-denial-log-parser.js';
 import { ExtensionApiVersion } from '/@/plugin/extension/extension-api-version.js';
 import { ExtensionLoader } from '/@/plugin/extension/extension-loader.js';
 import { ExtensionWatcher } from '/@/plugin/extension/extension-watcher.js';
@@ -620,6 +622,8 @@ export class PluginSystem {
     container.bind<OpenshellPolicyManager>(OpenshellPolicyManager).toSelf();
     container.bind<OpenshellGatewayManager>(OpenshellGatewayManager).toSelf().inSingletonScope();
     container.bind<OpenshellSdkClientManager>(OpenshellSdkClientManager).toSelf().inSingletonScope();
+    container.bind<DraftPolicyWatcher>(DraftPolicyWatcher).toSelf().inSingletonScope();
+    container.bind<SandboxDenialLogParser>(SandboxDenialLogParser).toSelf().inSingletonScope();
     container.bind<OpenshellGateway>(OpenshellGateway).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayStateManager>(OpenshellGatewayStateManager).toSelf().inSingletonScope();
     container.bind<OpenshellImageBuilder>(OpenshellImageBuilder).toSelf().inSingletonScope();
@@ -724,6 +728,9 @@ export class PluginSystem {
 
     const mcpManager = container.get<MCPManager>(MCPManager);
     mcpManager.init();
+
+    const draftPolicyWatcher = container.get<DraftPolicyWatcher>(DraftPolicyWatcher);
+    draftPolicyWatcher.init();
 
     const agentWorkspaceManager = container.get<AgentWorkspaceManager>(AgentWorkspaceManager);
     agentWorkspaceManager.init();

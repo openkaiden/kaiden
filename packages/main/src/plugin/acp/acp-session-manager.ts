@@ -29,6 +29,7 @@ import { inject, injectable, preDestroy } from 'inversify';
 
 import { AgentRegistry } from '/@/plugin/agent-registry.js';
 import { Directories } from '/@/plugin/directories.js';
+import { DraftPolicyWatcher } from '/@/plugin/draft-policy/draft-policy-watcher.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { mapSdkSandboxRef } from '/@/plugin/openshell-cli/openshell-sdk-sandbox-mapper.js';
@@ -46,6 +47,9 @@ import type {
 } from '/@api/acp-session-info.js';
 import type { AgentInfo } from '/@api/agent-info.js';
 import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
+import type { IDisposable } from '/@api/disposable.js';
+import type { DraftPolicyChunk, DraftPolicyFlowEvent } from '/@api/draft-policy-info.js';
+import { isDraftPolicyEvent } from '/@api/draft-policy-info.js';
 import type { SandboxInfo } from '/@api/openshell-gateway-info.js';
 import { AGENT_LABEL } from '/@api/openshell-gateway-info.js';
 
@@ -83,12 +87,15 @@ interface AcpSession {
   connectionClosed: boolean;
   agentCommand: string[];
   gatewayName?: string;
+  // Reference-counted draft-policy watch lease: shared with the workspace watch when both exist
+  draftPolicyWatch?: IDisposable;
 }
 
 @injectable()
 export class AcpSessionManager {
   private sessions = new Map<string, AcpSession>();
   private renameLocks = new Map<string, Promise<void>>();
+  private draftPolicyListener?: IDisposable;
 
   constructor(
     @inject(ApiSenderType) private readonly apiSender: ApiSenderType,
@@ -96,11 +103,34 @@ export class AcpSessionManager {
     @inject(AgentRegistry) private readonly agentRegistry: AgentRegistry,
     @inject(Directories) private readonly directories: Directories,
     @inject(OpenshellSdkClientManager) private readonly sdkClientManager: OpenshellSdkClientManager,
+    @inject(DraftPolicyWatcher) private readonly draftPolicyWatcher: DraftPolicyWatcher,
   ) {}
 
   async init(): Promise<void> {
     await this.loadFromDisk();
     await this.validateSandboxes();
+
+    // The session only carries the current draft policy state, not a log of updates: the
+    // watcher fires on every refetch, so appending would grow a long session without bound.
+    // The snapshot is replaced in place and stripped before persisting to disk.
+    this.draftPolicyListener = this.draftPolicyWatcher.onDraftPolicyUpdate(event => {
+      const chunks = this.draftPolicyWatcher.getAllChunks(event.sandboxId);
+      for (const session of this.sessions.values()) {
+        if (session.info.sandboxId !== event.sandboxId) continue;
+        this.emitEvent(session.info.id, this.applyDraftPolicySnapshot(session, chunks));
+      }
+    });
+  }
+
+  private applyDraftPolicySnapshot(session: AcpSession, chunks: DraftPolicyChunk[]): DraftPolicyFlowEvent {
+    const snapshot: DraftPolicyFlowEvent = { kind: 'draft_policy_update', chunks, timestamp: Date.now() };
+    const existingIndex = session.events.findIndex(isDraftPolicyEvent);
+    if (existingIndex === -1) {
+      session.events.push(snapshot);
+    } else {
+      session.events[existingIndex] = snapshot;
+    }
+    return snapshot;
   }
 
   async resolveAgentCommand(
@@ -253,6 +283,18 @@ export class AcpSessionManager {
     const clientImpl = this.createClientImpl(sessionId);
     const connection = new acp.ClientSideConnection((_agent: acp.Agent) => clientImpl, stream);
 
+    // Sandboxes created through a workspace are watched by AgentWorkspaceManager. ACP can also
+    // target a ready sandbox that no workspace manages (the agent is resolved from
+    // options.agentId), so acquire the watch here as well. DraftPolicyWatcher reference-counts
+    // subscriptions, so both consumers share one sandbox stream. Watching is best effort: it must
+    // not prevent the session from starting.
+    let draftPolicyWatch: IDisposable | undefined;
+    try {
+      draftPolicyWatch = await this.draftPolicyWatcher.watchSandbox(sandbox.id, sandbox.name, gatewayName);
+    } catch (err: unknown) {
+      console.warn(`[ACP ${sandbox.name}] unable to watch draft policy:`, err);
+    }
+
     const session: AcpSession = {
       info,
       execSession,
@@ -265,9 +307,16 @@ export class AcpSessionManager {
       connectionClosed: false,
       agentCommand: command,
       gatewayName,
+      draftPolicyWatch,
     };
 
     this.sessions.set(sessionId, session);
+
+    const allChunks = this.draftPolicyWatcher.getAllChunks(sandbox.id);
+    if (allChunks.length > 0) {
+      this.emitEvent(sessionId, this.applyDraftPolicySnapshot(session, allChunks));
+    }
+
     this.saveToDisk(sessionId).catch((err: unknown) => {
       console.error(`[ACP] Failed to persist session "${sessionId}":`, err);
     });
@@ -583,7 +632,7 @@ export class AcpSessionManager {
           messageId?: string | null;
         };
         if (rawUpdate.sessionUpdate === 'agent_thought_chunk' && rawUpdate.content?.type === 'text') {
-          const lastEvent = session.events.at(-1);
+          const lastEvent = session.events.findLast(e => !isDraftPolicyEvent(e));
           const existing = lastEvent?.kind === 'thinking' ? lastEvent : undefined;
           if (existing) {
             existing.text += rawUpdate.content.text;
@@ -1137,6 +1186,7 @@ export class AcpSessionManager {
 
     this.closeExecSession(session);
 
+    session.draftPolicyWatch?.dispose();
     this.sessions.delete(sessionId);
     await this.removeFromDisk(sessionId);
     this.apiSender.send('acp-session-update');
@@ -1196,8 +1246,10 @@ export class AcpSessionManager {
         pending.reject(new Error('Manager disposing'));
       }
       this.closeExecSession(session);
+      session.draftPolicyWatch?.dispose();
     }
     this.sessions.clear();
+    this.draftPolicyListener?.dispose();
   }
 
   private async loadFromDisk(): Promise<void> {
@@ -1226,7 +1278,7 @@ export class AcpSessionManager {
           info.updatedAt = Date.now();
         }
 
-        const events = data.events ?? [];
+        const events = (data.events ?? []).filter(e => !isDraftPolicyEvent(e));
 
         // Mark any unresolved permission requests as expired so the UI
         // shows them as inactive instead of rendering dead buttons.
@@ -1290,7 +1342,7 @@ export class AcpSessionManager {
     }
     const data = {
       info: session.info,
-      events: session.events,
+      events: session.events.filter(e => !isDraftPolicyEvent(e)),
       acpSessionId: session.acpSessionId,
       agentCommand: session.agentCommand,
       gatewayName: session.gatewayName,

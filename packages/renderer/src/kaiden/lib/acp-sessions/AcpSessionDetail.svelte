@@ -5,6 +5,9 @@ import { toast } from '@zerodevx/svelte-toast';
 import { untrack } from 'svelte';
 import { router } from 'tinro';
 
+import { mergePolicyChunks } from '/@/kaiden/lib/network-approval/merge-policy-chunks';
+import NetworkApprovalBadge from '/@/kaiden/lib/network-approval/NetworkApprovalBadge.svelte';
+import NetworkApprovalPanel from '/@/kaiden/lib/network-approval/NetworkApprovalPanel.svelte';
 import { acpSessions, acpSessionsEventStoreInfo } from '/@/kaiden/stores/acp-sessions.svelte';
 import { agentInfos } from '/@/kaiden/stores/agents';
 import { allOpenshellSandboxes } from '/@/kaiden/stores/openshell-sandboxes';
@@ -18,6 +21,7 @@ import type {
   AcpSlashCommand,
 } from '/@api/acp-session-info';
 import { AcpSettings } from '/@api/acp-settings';
+import { isDraftPolicyEvent } from '/@api/draft-policy-info';
 import { AGENT_LABEL } from '/@api/openshell-gateway-info';
 
 import { ACP_SESSION_STATUS_COLORS, getStatusDotClass, isWorkspaceUnavailable } from './acp-session-status';
@@ -127,6 +131,75 @@ const showInputArea = $derived(
         session?.status === 'waiting_input' ||
         session?.status === 'completed')),
 );
+
+const transcriptEvents = $derived(events.filter(e => !isDraftPolicyEvent(e)));
+
+const allPolicyChunks = $derived(mergePolicyChunks(events));
+const pendingPolicyChunkIds = $derived(
+  new Set(allPolicyChunks.filter(c => c.status === 'pending').map(c => c.chunkId)),
+);
+const pendingPolicyCount = $derived(pendingPolicyChunkIds.size);
+
+interface PolicyPanelState {
+  sessionId: string;
+  manuallyOpened: boolean;
+  dismissedChunkIds: Set<string>;
+}
+
+function createPolicyPanelState(id: string): PolicyPanelState {
+  return { sessionId: id, manuallyOpened: false, dismissedChunkIds: new Set() };
+}
+
+// Only the initial value is captured here: currentPolicyPanelState re-seeds the state when the
+// sessionId prop changes.
+let policyPanelState = $state<PolicyPanelState>(createPolicyPanelState(untrack(() => sessionId)));
+
+// The panel state belongs to a single session: a sessionId prop change must never inherit the
+// previous session's dismissal or manual open state.
+const currentPolicyPanelState = $derived(
+  policyPanelState.sessionId === sessionId ? policyPanelState : createPolicyPanelState(sessionId),
+);
+
+const policyPanelOpen = $derived(
+  currentPolicyPanelState.manuallyOpened ||
+    Array.from(pendingPolicyChunkIds).some(id => !currentPolicyPanelState.dismissedChunkIds.has(id)),
+);
+
+function updatePolicyPanelState(update: (state: PolicyPanelState) => void): void {
+  if (policyPanelState.sessionId !== sessionId) {
+    policyPanelState = createPolicyPanelState(sessionId);
+  }
+  update(policyPanelState);
+}
+
+function dismissPolicyPanel(): void {
+  updatePolicyPanelState(state => {
+    state.manuallyOpened = false;
+    state.dismissedChunkIds = new Set(pendingPolicyChunkIds);
+  });
+}
+
+function togglePolicyPanel(): void {
+  if (policyPanelOpen) {
+    dismissPolicyPanel();
+  } else {
+    updatePolicyPanelState(state => {
+      state.manuallyOpened = true;
+    });
+  }
+}
+
+function approvePolicyChunk(chunkId: string): Promise<void> {
+  const sandboxId = session?.sandboxId;
+  if (!sandboxId) return Promise.reject(new Error('Sandbox is not available'));
+  return window.approveDraftPolicyChunk(sandboxId, chunkId);
+}
+
+function rejectPolicyChunk(chunkId: string): Promise<void> {
+  const sandboxId = session?.sandboxId;
+  if (!sandboxId) return Promise.reject(new Error('Sandbox is not available'));
+  return window.rejectDraftPolicyChunk(sandboxId, chunkId);
+}
 
 const slashQuery = $derived(
   followUpText.startsWith('/') && !followUpText.includes(' ') ? followUpText.slice(1) : undefined,
@@ -757,6 +830,8 @@ function handleKeyDown(e: KeyboardEvent): void {
 }
 </script>
 
+<div class="flex h-full">
+<div class="flex flex-col flex-1 min-w-0 min-h-0">
 <!-- Header bar -->
 <div class="flex items-center justify-between px-4 py-2 border-b border-[var(--pd-content-divider)]">
   <div class="flex items-center gap-2 min-w-0">
@@ -772,6 +847,7 @@ function handleKeyDown(e: KeyboardEvent): void {
       <span class="text-xs text-[var(--pd-content-text)] opacity-50 shrink-0"
         >({session.sandboxName}{#if workspaceUnavailable}, unavailable{/if})</span>
     {/if}
+    <NetworkApprovalBadge pendingCount={pendingPolicyCount} totalCount={allPolicyChunks.length} onclick={togglePolicyPanel} />
   </div>
   <div class="flex items-center gap-2 shrink-0">
     {#if session?.cost}
@@ -785,13 +861,13 @@ function handleKeyDown(e: KeyboardEvent): void {
 <!-- Events flow -->
 <div class="flex-1 min-h-0 overflow-auto p-4 {isDraft && readySandboxes.length > 0 ? 'flex flex-col justify-end' : ''}" bind:this={flowContainer}>
   <div class="flex flex-col gap-3 max-w-4xl mx-auto">
-    {#each events as event, i (i)}
+    {#each transcriptEvents as event, i (i)}
       {#if event.kind === 'prompt'}
         <AcpFlowPrompt {event} />
       {:else if event.kind === 'agent_message'}
         <AcpFlowAgentMessage {event} />
       {:else if event.kind === 'thinking'}
-        {@const nextEvent = events[i + 1]}
+        {@const nextEvent = transcriptEvents[i + 1]}
         {@const isThinkingComplete = !!nextEvent || session?.status !== 'running'}
         {@const thinkingDurationMs = nextEvent ? nextEvent.timestamp - event.timestamp : undefined}
         <AcpFlowThinking {event} isComplete={isThinkingComplete} durationMs={thinkingDurationMs} />
@@ -1044,3 +1120,14 @@ function handleKeyDown(e: KeyboardEvent): void {
     </div>
   </div>
 {/if}
+</div>
+
+{#if policyPanelOpen && allPolicyChunks.length > 0}
+  <NetworkApprovalPanel
+    chunks={allPolicyChunks}
+    onApprove={approvePolicyChunk}
+    onReject={rejectPolicyChunk}
+    onClose={dismissPolicyPanel}
+  />
+{/if}
+</div>

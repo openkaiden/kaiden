@@ -33,6 +33,7 @@ import * as configWriter from '/@/plugin/agent-workspace/workspace-config-writer
 import type { IPCHandle } from '/@/plugin/api.js';
 import type { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
 import type { Directories } from '/@/plugin/directories.js';
+import type { DraftPolicyWatcher } from '/@/plugin/draft-policy/draft-policy-watcher.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
@@ -231,6 +232,18 @@ const directories = {
   getAgentWorkspacesConfigDirectory: vi.fn().mockReturnValue('/mock/data/agent-workspaces'),
 } as unknown as Directories;
 
+// DraftPolicyWatcher.onDraftPolicyUpdate is an Emitter event field, which an automocked class does
+// not provide: use an explicit class-typed double (same shape as in acp-session-manager.spec.ts).
+const draftPolicyWatcher = {
+  watchSandbox: vi.fn(),
+  unwatchSandbox: vi.fn(),
+  getAllChunks: vi.fn(),
+  approveDraftChunk: vi.fn(),
+  rejectDraftChunk: vi.fn(),
+  onDraftPolicyUpdate: vi.fn(),
+  dispose: vi.fn(),
+} as unknown as DraftPolicyWatcher;
+
 function mockEnoent(): NodeJS.ErrnoException {
   const err: NodeJS.ErrnoException = new Error('ENOENT');
   err.code = 'ENOENT';
@@ -277,6 +290,7 @@ beforeEach(() => {
   } as unknown as ReturnType<IConfigurationRegistry['getConfiguration']>);
   vi.mocked(configurationRegistry.getConfigurationProperties).mockReturnValue({});
   vi.mocked(directories.getAgentWorkspacesConfigDirectory).mockReturnValue('/mock/data/agent-workspaces');
+  vi.mocked(draftPolicyWatcher.watchSandbox).mockResolvedValue({ dispose: vi.fn() });
   vi.mocked(lstat).mockImplementation(async path => {
     const value = String(path);
     const isDirectory =
@@ -314,6 +328,7 @@ beforeEach(() => {
     openshellPolicyManager,
     openshellNetworkPolicy,
     TEST_SHELL_COMMAND,
+    draftPolicyWatcher,
   );
   manager.init();
 });
@@ -1812,6 +1827,27 @@ describe('remove', () => {
 
     expect(secretManager.remove).not.toHaveBeenCalled();
   });
+
+  test('stops draft policy watch for the sandbox being removed', async () => {
+    mockSdkListSandboxes();
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+    const watchDispose = vi.fn();
+    vi.mocked(draftPolicyWatcher.watchSandbox).mockResolvedValue({ dispose: watchDispose });
+
+    const terminalHandler = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(call => call[0] === 'agent-workspace:terminal')?.[1] as (
+      _listener: unknown,
+      id: string,
+      onDataId: number,
+    ) => Promise<number>;
+    await terminalHandler({}, 'ws-1', 1);
+    await vi.waitFor(() => expect(draftPolicyWatcher.watchSandbox).toHaveBeenCalled());
+
+    await manager.remove('ws-1', 'kaiden');
+
+    expect(watchDispose).toHaveBeenCalled();
+  });
 });
 
 describe('deleteOpenshellSandbox', () => {
@@ -1862,6 +1898,48 @@ describe('deleteOpenshellSandbox', () => {
     await manager.deleteOpenshellSandbox('my-workspace', 'kaiden');
 
     expect(secretManager.remove).toHaveBeenCalledWith('my-workspace-secret', 'kaiden');
+  });
+
+  test('stops draft policy watch for the sandbox being deleted', async () => {
+    mockSdkListSandboxes([{ id: 'ws-mw', name: 'my-workspace', phase: 'ready', labels: {}, resourceVersion: '1' }]);
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+    const watchDispose = vi.fn();
+    vi.mocked(draftPolicyWatcher.watchSandbox).mockResolvedValue({ dispose: watchDispose });
+
+    const terminalHandler = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(call => call[0] === 'agent-workspace:terminal')?.[1] as (
+      _listener: unknown,
+      id: string,
+      onDataId: number,
+    ) => Promise<number>;
+    await terminalHandler({}, 'ws-mw', 1);
+    await vi.waitFor(() => expect(draftPolicyWatcher.watchSandbox).toHaveBeenCalled());
+
+    await manager.deleteOpenshellSandbox('my-workspace', 'kaiden');
+
+    expect(watchDispose).toHaveBeenCalled();
+  });
+
+  test('keeps draft policy watch alive when sandbox deletion fails', async () => {
+    mockSdkListSandboxes([{ id: 'ws-mw', name: 'my-workspace', phase: 'ready', labels: {}, resourceVersion: '1' }]);
+    vi.mocked(sdkSandbox.delete).mockRejectedValue(new Error('deletion failed'));
+    const watchDispose = vi.fn();
+    vi.mocked(draftPolicyWatcher.watchSandbox).mockResolvedValue({ dispose: watchDispose });
+
+    const terminalHandler = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(call => call[0] === 'agent-workspace:terminal')?.[1] as (
+      _listener: unknown,
+      id: string,
+      onDataId: number,
+    ) => Promise<number>;
+    await terminalHandler({}, 'ws-mw', 1);
+    await vi.waitFor(() => expect(draftPolicyWatcher.watchSandbox).toHaveBeenCalled());
+
+    await expect(manager.deleteOpenshellSandbox('my-workspace', 'kaiden')).rejects.toThrow('deletion failed');
+
+    expect(watchDispose).not.toHaveBeenCalled();
   });
 });
 

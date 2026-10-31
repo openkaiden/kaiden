@@ -20,15 +20,18 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import * as acp from '@agentclientprotocol/sdk';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { AgentRegistry } from '/@/plugin/agent-registry.js';
 import type { Directories } from '/@/plugin/directories.js';
+import type { DraftPolicyEvent, DraftPolicyWatcher } from '/@/plugin/draft-policy/draft-policy-watcher.js';
 import type { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import type { AcpSessionCreateOptions, AcpSessionInfo } from '/@api/acp-session-info.js';
 import type { AgentInfo } from '/@api/agent-info.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
+import type { DraftPolicyChunk, DraftPolicyFlowEvent } from '/@api/draft-policy-info.js';
+import { isDraftPolicyEvent } from '/@api/draft-policy-info.js';
 import { AGENT_LABEL, type SandboxInfo } from '/@api/openshell-gateway-info.js';
 
 import { AcpSessionManager } from './acp-session-manager.js';
@@ -78,6 +81,18 @@ const directories: Directories = {
   getAgentWorkspacesConfigDirectory: vi.fn(),
 } as unknown as Directories;
 
+// onDraftPolicyUpdate is an Emitter event field, so automocking the class would leave it
+// undefined: keep an explicit class-typed double instead.
+const draftPolicyWatcher = {
+  watchSandbox: vi.fn(),
+  unwatchSandbox: vi.fn(),
+  getAllChunks: vi.fn(),
+  approveDraftChunk: vi.fn(),
+  rejectDraftChunk: vi.fn(),
+  onDraftPolicyUpdate: vi.fn(),
+  dispose: vi.fn(),
+} as unknown as DraftPolicyWatcher;
+
 function createSandbox(overrides?: Partial<SandboxInfo>): SandboxInfo {
   return {
     id: 'sandbox-1',
@@ -109,7 +124,17 @@ describe('AcpSessionManager', () => {
     mockSandboxList.mockReturnValue({
       all: vi.fn().mockResolvedValue([]),
     });
-    manager = new AcpSessionManager(apiSender, openshellCli, agentRegistry, directories, openshellSdkClientManager);
+    vi.mocked(draftPolicyWatcher.watchSandbox).mockResolvedValue({ dispose: vi.fn() });
+    vi.mocked(draftPolicyWatcher.getAllChunks).mockReturnValue([]);
+    vi.mocked(draftPolicyWatcher.onDraftPolicyUpdate).mockReturnValue({ dispose: vi.fn() });
+    manager = new AcpSessionManager(
+      apiSender,
+      openshellCli,
+      agentRegistry,
+      directories,
+      openshellSdkClientManager,
+      draftPolicyWatcher,
+    );
   });
 
   describe('resolveAgentCommand', () => {
@@ -1492,6 +1517,230 @@ describe('AcpSessionManager', () => {
       expect(connection.initialize).toHaveBeenCalled();
       expect(connection.newSession).toHaveBeenCalled();
       expect(connection.prompt).not.toHaveBeenCalled();
+    });
+
+    test('starts a draft policy watch for a sandbox not created by a workspace', async () => {
+      setupConnectionMocks();
+
+      await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+
+      expect(draftPolicyWatcher.watchSandbox).toHaveBeenCalledWith('sandbox-1', 'test-sandbox', undefined);
+    });
+
+    test('forwards the gateway name when starting the draft policy watch', async () => {
+      setupConnectionMocks();
+      mockSandboxList.mockReturnValue({
+        all: vi.fn().mockResolvedValue([
+          {
+            id: 'sandbox-1',
+            name: 'test-sandbox',
+            phase: 'ready',
+            labels: { gateway: 'remote' },
+            resourceVersion: '1',
+          },
+        ]),
+      });
+
+      await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+
+      expect(draftPolicyWatcher.watchSandbox).toHaveBeenCalledWith('sandbox-1', 'test-sandbox', 'remote');
+    });
+
+    test('releases the draft policy watch when the session is deleted', async () => {
+      setupConnectionMocks();
+      const watchDispose = vi.fn();
+      vi.mocked(draftPolicyWatcher.watchSandbox).mockResolvedValue({ dispose: watchDispose });
+
+      const session = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+      await manager.deleteSession(session.id);
+
+      expect(watchDispose).toHaveBeenCalled();
+    });
+
+    test('creates the session even when the draft policy watch cannot start', async () => {
+      setupConnectionMocks();
+      vi.mocked(draftPolicyWatcher.watchSandbox).mockRejectedValue(new Error('gateway unavailable'));
+
+      const session = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+
+      const sessions = await manager.listSessions();
+      expect(sessions.find(s => s.id === session.id)).toBeDefined();
+    });
+  });
+
+  describe('draft policy global listener', () => {
+    test('registers a global listener on init', async () => {
+      await manager.init();
+
+      expect(draftPolicyWatcher.onDraftPolicyUpdate).toHaveBeenCalled();
+    });
+
+    test('routes draft policy events to matching sessions', async () => {
+      const { existsSync } = await import('node:fs');
+      const { readdir, readFile, writeFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(writeFile).mockResolvedValue();
+      vi.mocked(readdir).mockResolvedValue(['s-route.json' as never]);
+      vi.mocked(readFile).mockResolvedValue(
+        JSON.stringify({
+          info: {
+            id: 's-route',
+            sandboxName: 'sb',
+            sandboxId: 'sb-id',
+            prompt: 'hello',
+            status: 'running',
+            createdAt: 1000,
+            updatedAt: 2000,
+          },
+          events: [],
+        }),
+      );
+
+      mockSandboxList.mockReturnValue({
+        all: vi.fn().mockResolvedValue([{ id: 'sb-id', name: 'sb', phase: 'ready', labels: {}, resourceVersion: '1' }]),
+      });
+
+      const pendingChunk: DraftPolicyChunk = {
+        chunkId: 'c1',
+        ruleName: 'allow_example_443',
+        status: 'pending',
+        host: 'example.com',
+        port: 443,
+        binaries: ['/**'],
+        rationale: 'Host not in allow list',
+        hasSecurityNotes: false,
+        isL7: false,
+      };
+      vi.mocked(draftPolicyWatcher.getAllChunks).mockReturnValue([pendingChunk]);
+
+      let capturedListener: ((event: DraftPolicyEvent) => void) | undefined;
+      vi.mocked(draftPolicyWatcher.onDraftPolicyUpdate).mockImplementation(
+        (listener: (event: DraftPolicyEvent) => void) => {
+          capturedListener = listener;
+          return { dispose: vi.fn() };
+        },
+      );
+
+      await manager.init();
+
+      assert(capturedListener);
+      capturedListener({ sandboxId: 'sb-id', sandboxName: 'sb', chunks: [pendingChunk] });
+
+      const sessions = await manager.listSessions();
+      const session = sessions.find(s => s.id === 's-route');
+      assert(session);
+      const events = manager.getSessionEvents('s-route');
+      const draftEvent = events.find((e): e is DraftPolicyFlowEvent => isDraftPolicyEvent(e));
+      assert(draftEvent);
+      expect(draftEvent.chunks).toEqual([pendingChunk]);
+    });
+
+    test('replaces the draft policy snapshot instead of appending a new event', async () => {
+      const { existsSync } = await import('node:fs');
+      const { readdir, readFile, writeFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(writeFile).mockResolvedValue();
+      vi.mocked(readdir).mockResolvedValue(['s-snapshot.json' as never]);
+      vi.mocked(readFile).mockResolvedValue(
+        JSON.stringify({
+          info: {
+            id: 's-snapshot',
+            sandboxName: 'sb',
+            sandboxId: 'sb-id',
+            prompt: 'hello',
+            status: 'running',
+            createdAt: 1000,
+            updatedAt: 2000,
+          },
+          events: [],
+        }),
+      );
+
+      mockSandboxList.mockReturnValue({
+        all: vi.fn().mockResolvedValue([{ id: 'sb-id', name: 'sb', phase: 'ready', labels: {}, resourceVersion: '1' }]),
+      });
+
+      const pendingChunk: DraftPolicyChunk = {
+        chunkId: 'c1',
+        ruleName: 'allow_example_443',
+        status: 'pending',
+        host: 'example.com',
+        port: 443,
+        binaries: ['/**'],
+        rationale: 'Host not in allow list',
+        hasSecurityNotes: false,
+        isL7: false,
+      };
+      const approvedChunk: DraftPolicyChunk = { ...pendingChunk, status: 'approved' };
+      vi.mocked(draftPolicyWatcher.getAllChunks).mockReturnValue([pendingChunk]);
+
+      let capturedListener: ((event: DraftPolicyEvent) => void) | undefined;
+      vi.mocked(draftPolicyWatcher.onDraftPolicyUpdate).mockImplementation(
+        (listener: (event: DraftPolicyEvent) => void) => {
+          capturedListener = listener;
+          return { dispose: vi.fn() };
+        },
+      );
+
+      await manager.init();
+      assert(capturedListener);
+      capturedListener({ sandboxId: 'sb-id', sandboxName: 'sb', chunks: [pendingChunk] });
+
+      vi.mocked(draftPolicyWatcher.getAllChunks).mockReturnValue([approvedChunk]);
+      capturedListener({ sandboxId: 'sb-id', sandboxName: 'sb', chunks: [approvedChunk] });
+
+      const draftEvents = manager.getSessionEvents('s-snapshot').filter(e => isDraftPolicyEvent(e));
+      expect(draftEvents).toHaveLength(1);
+      const snapshot = draftEvents[0];
+      assert(snapshot);
+      expect(snapshot.chunks).toEqual([approvedChunk]);
+    });
+
+    test('seeds pre-existing chunks into session events on createSession', async () => {
+      const pendingChunk = {
+        chunkId: 'pre-1',
+        ruleName: 'allow_example_443',
+        status: 'pending' as const,
+        host: 'example.com',
+        port: 443,
+        binaries: ['/**'],
+        rationale: 'Host not in allow list',
+        hasSecurityNotes: false,
+        isL7: false,
+      };
+      vi.mocked(draftPolicyWatcher.getAllChunks).mockReturnValue([pendingChunk]);
+
+      const { sessionId } = await setupSdkSession();
+
+      const events = manager.getSessionEvents(sessionId);
+      const draftEvent = events.find(e => isDraftPolicyEvent(e));
+      assert(draftEvent);
+      expect(draftEvent.chunks).toHaveLength(1);
+      expect(draftEvent.chunks[0]?.chunkId).toBe('pre-1');
+    });
+
+    test('disposes listener on manager dispose', async () => {
+      const listenerDispose = vi.fn();
+      vi.mocked(draftPolicyWatcher.onDraftPolicyUpdate).mockReturnValue({ dispose: listenerDispose });
+
+      await manager.init();
+      manager.dispose();
+
+      expect(listenerDispose).toHaveBeenCalled();
+    });
+  });
+
+  describe('draft policy watch leases', () => {
+    test('releases every session watch lease on manager dispose', async () => {
+      const watchDispose = vi.fn();
+      vi.mocked(draftPolicyWatcher.watchSandbox).mockResolvedValue({ dispose: watchDispose });
+      await setupSdkSession();
+
+      manager.dispose();
+
+      expect(watchDispose).toHaveBeenCalledTimes(1);
     });
   });
 
