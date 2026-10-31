@@ -18,17 +18,22 @@
 
 import { isDeepStrictEqual } from 'node:util';
 
-import type { Disposable } from '@openkaiden/api';
+import { create } from '@bufbuild/protobuf';
+import { ProviderProfileImportItemSchema } from '@nvidia/openshell-sdk/raw';
+import type { Disposable, ProviderProfile } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
 
 import { Emitter } from '/@/plugin/events/emitter.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
+import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
+import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
 import { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { IDisposable } from '/@api/disposable.js';
 import type { Event } from '/@api/event.js';
 import type { GatewayInfo, GatewayProcessState, LocalGatewayDriver } from '/@api/openshell-gateway-info.js';
 
 import { OpenshellGatewayManager } from './openshell-gateway-manager.js';
+import { OpenshellSdkClientManager } from './openshell-sdk-client-manager.js';
 
 const OPENSHELL_CONFIGURATION_SECTION = 'openshell';
 const GATEWAY_POLL_INTERVAL_CONFIGURATION = 'gateway.pollInterval';
@@ -36,6 +41,8 @@ const GATEWAY_POLL_INTERVAL_CONFIGURATION_KEY = `${OPENSHELL_CONFIGURATION_SECTI
 const DEFAULT_GATEWAY_POLL_INTERVAL_SECONDS = 5;
 const MIN_GATEWAY_POLL_INTERVAL_SECONDS = 1;
 const MAX_GATEWAY_POLL_INTERVAL_SECONDS = 60 * 60;
+const KAIDEN_OWNED_ANNOTATION = 'ai.openkaiden.kaiden.owned-by';
+const KAIDEN_OWNED_VALUE = 'kaiden';
 
 @injectable()
 export class OpenshellGatewayStateManager implements Disposable {
@@ -57,6 +64,10 @@ export class OpenshellGatewayStateManager implements Disposable {
     private readonly configurationRegistry: IConfigurationRegistry,
     @inject(OpenshellGateway)
     private readonly openshellGateway: OpenshellGateway,
+    @inject(OpenShellRegistry)
+    private readonly registry: OpenShellRegistry,
+    @inject(OpenshellSdkClientManager)
+    private readonly sdkClientManager: OpenshellSdkClientManager,
   ) {}
 
   init(): void {
@@ -155,7 +166,7 @@ export class OpenshellGatewayStateManager implements Disposable {
               ? reportedDriver
               : undefined;
           const processState: GatewayProcessState | undefined = this.deriveProcessState(pid, true);
-          return {
+          const gateway: GatewayInfo = {
             ...base,
             ...(driver ? { driver } : {}),
             gatewayState: {
@@ -164,6 +175,11 @@ export class OpenshellGatewayStateManager implements Disposable {
               ...(processState ? { process: processState } : {}),
             },
           };
+          const previous = this.#gateways.get(gateway.name);
+          if (!previous?.gatewayState?.reachable) {
+            await this.synchronizeProfiles(gateway.name);
+          }
+          return gateway;
         } catch {
           const processState: GatewayProcessState | undefined = this.deriveProcessState(pid, false);
           return {
@@ -181,6 +197,50 @@ export class OpenshellGatewayStateManager implements Disposable {
     if (this.hasChanged(nextGateways)) {
       this.#gateways = nextGateways;
       this.#onDidUpdateGateways.fire(this.listGateways());
+    }
+  }
+
+  private async synchronizeProfiles(gatewayName: string): Promise<void> {
+    try {
+      const client = await this.sdkClientManager.getClient(gatewayName);
+      const { profiles: gatewayProfiles } = await client.raw.listProviderProfiles({
+        workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+      });
+      const internalProfiles = this.registry.getProfiles();
+      const ownedProfiles = gatewayProfiles.filter(
+        profile => profile.annotations[KAIDEN_OWNED_ANNOTATION] === KAIDEN_OWNED_VALUE,
+      );
+      const internalById = new Map(internalProfiles.map(profile => [profile.id, profile]));
+      const ownedById = new Map(ownedProfiles.map(profile => [profile.id, profile]));
+      const profilesToImport = internalProfiles.filter(profile => !ownedById.has(profile.id));
+      const profilesToDelete = ownedProfiles.filter(profile => !internalById.has(profile.id));
+
+      if (profilesToImport.length > 0) {
+        const response = await client.raw.importProviderProfiles({
+          workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+          profiles: profilesToImport.map(profile => {
+            const importedProfile: ProviderProfile = {
+              ...profile,
+              annotations: { ...profile.annotations, [KAIDEN_OWNED_ANNOTATION]: KAIDEN_OWNED_VALUE },
+            };
+            return create(ProviderProfileImportItemSchema, { profile: importedProfile, source: 'kaiden' });
+          }),
+        });
+        if (!response.imported) {
+          throw new Error(`OpenShell rejected provider profile import for gateway '${gatewayName}'`);
+        }
+      }
+
+      await Promise.all(
+        profilesToDelete.map(profile =>
+          client.raw.deleteProviderProfile({
+            id: profile.id,
+            workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+          }),
+        ),
+      );
+    } catch (err: unknown) {
+      console.error(`[openshell-gateway-state] failed to synchronize provider profiles on gateway ${gatewayName}`, err);
     }
   }
 

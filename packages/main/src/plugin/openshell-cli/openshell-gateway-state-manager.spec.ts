@@ -16,14 +16,30 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { create } from '@bufbuild/protobuf';
+import type { OpenShellClient } from '@nvidia/openshell-sdk';
+import {
+  DeleteProviderProfileResponseSchema,
+  ImportProviderProfilesResponseSchema,
+  ListProviderProfilesResponseSchema,
+  ProviderProfileImportItemSchema,
+  ProviderProfileSchema,
+} from '@nvidia/openshell-sdk/raw';
+import type { ProviderProfile } from '@openkaiden/api';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
+import { OpenshellGatewayConfig } from '/@/plugin/openshell-cli/openshell-gateway-config.js';
+import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
+import { Properties } from '/@/plugin/util/properties.js';
+import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { ListedGateway } from '/@api/openshell-gateway-info.js';
 
+import { OpenShellRegistry } from '../openshell-registry.js';
 import { OpenshellGateway } from './openshell-gateway.js';
 import type { OpenshellGatewayManager } from './openshell-gateway-manager.js';
 import { OpenshellGatewayStateManager } from './openshell-gateway-state-manager.js';
+import { OpenshellSdkClientManager } from './openshell-sdk-client-manager.js';
 
 function listed(name: string, endpoint: string): ListedGateway {
   return {
@@ -38,6 +54,9 @@ const gatewayManager = {
   getActiveGateway: vi.fn(),
 } as unknown as OpenshellGatewayManager;
 vi.mock(import('./openshell-gateway.js'));
+vi.mock(import('../openshell-registry.js'));
+vi.mock(import('./openshell-sdk-client-manager.js'));
+vi.mock(import('./openshell-gateway-config.js'));
 let openshellGateway: OpenshellGateway;
 let pollInterval = 5;
 let configurationChangeCallback: ((event: { key: string }) => void) | undefined;
@@ -50,6 +69,19 @@ const configurationRegistry = {
 } as unknown as IConfigurationRegistry;
 
 let manager: OpenshellGatewayStateManager;
+const apiSender: ApiSenderType = {
+  send: vi.fn(),
+  receive: vi.fn(),
+};
+const registry = new OpenShellRegistry(apiSender, new Properties());
+let sdkClientManager: OpenshellSdkClientManager;
+const sdkClient = {
+  raw: {
+    listProviderProfiles: vi.fn(),
+    importProviderProfiles: vi.fn(),
+    deleteProviderProfile: vi.fn(),
+  },
+} as unknown as OpenShellClient;
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -66,7 +98,23 @@ beforeEach(() => {
   vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(undefined);
   vi.mocked(openshellGateway.canStopGateway).mockReturnValue(false);
   vi.mocked(gatewayManager.getActiveGateway).mockResolvedValue(undefined);
-  manager = new OpenshellGatewayStateManager(gatewayManager, configurationRegistry, openshellGateway);
+  vi.mocked(registry.getProfiles).mockReturnValue([]);
+  vi.mocked(sdkClient.raw.listProviderProfiles).mockResolvedValue(
+    create(ListProviderProfilesResponseSchema, { profiles: [] }),
+  );
+  vi.mocked(sdkClient.raw.importProviderProfiles).mockResolvedValue(
+    create(ImportProviderProfilesResponseSchema, { imported: true, diagnostics: [] }),
+  );
+  vi.mocked(sdkClient.raw.deleteProviderProfile).mockResolvedValue(create(DeleteProviderProfileResponseSchema, {}));
+  sdkClientManager = new OpenshellSdkClientManager(gatewayManager, new OpenshellGatewayConfig());
+  vi.mocked(sdkClientManager.getClient).mockResolvedValue(sdkClient);
+  manager = new OpenshellGatewayStateManager(
+    gatewayManager,
+    configurationRegistry,
+    openshellGateway,
+    registry,
+    sdkClientManager,
+  );
 });
 
 afterEach(() => {
@@ -123,6 +171,59 @@ test('builds a cached snapshot from registrations and runtime information', asyn
       gatewayState: { reachable: true, health: 'degraded' },
     },
   ]);
+});
+
+test('synchronizes profiles only when a gateway transitions from unreachable to reachable', async () => {
+  vi.mocked(registry.getProfiles).mockReturnValue([{ id: 'internal' } as ProviderProfile]);
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://localhost:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo)
+    .mockRejectedValueOnce(new Error('unreachable'))
+    .mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+
+  await manager.refresh();
+  expect(sdkClientManager.getClient).not.toHaveBeenCalled();
+  await manager.refresh();
+
+  expect(sdkClientManager.getClient).toHaveBeenCalledWith('local');
+  expect(sdkClient.raw.listProviderProfiles).toHaveBeenCalledWith({
+    workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+  });
+  expect(sdkClient.raw.importProviderProfiles).toHaveBeenCalledWith({
+    profiles: [
+      create(ProviderProfileImportItemSchema, {
+        profile: create(ProviderProfileSchema, {
+          id: 'internal',
+          annotations: { 'ai.openkaiden.kaiden.owned-by': 'kaiden' },
+        }),
+        source: 'kaiden',
+      }),
+    ],
+    workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+  });
+});
+
+test('deletes stale owned profiles and preserves unowned gateway profiles', async () => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://localhost:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo)
+    .mockRejectedValueOnce(new Error('unreachable'))
+    .mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+  vi.mocked(sdkClient.raw.listProviderProfiles).mockResolvedValue(
+    create(ListProviderProfilesResponseSchema, {
+      profiles: [
+        { id: 'stale', annotations: { 'ai.openkaiden.kaiden.owned-by': 'kaiden' } },
+        { id: 'user-profile', annotations: {} },
+      ],
+    }),
+  );
+
+  await manager.refresh();
+  await manager.refresh();
+
+  expect(sdkClient.raw.deleteProviderProfile).toHaveBeenCalledExactlyOnceWith({
+    id: 'stale',
+    workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+  });
+  expect(sdkClient.raw.importProviderProfiles).not.toHaveBeenCalled();
 });
 
 test('marks a gateway unreachable when runtime information cannot be retrieved', async () => {
