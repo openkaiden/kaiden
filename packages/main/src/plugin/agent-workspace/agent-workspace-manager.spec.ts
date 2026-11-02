@@ -923,7 +923,7 @@ describe('create – OpenShell mode', () => {
     test.each([
       'podman',
       'docker',
-    ] as const)('mounts project and skills but uploads mutable agent config using %s', async driver => {
+    ] as const)('mounts project but uploads skills and agent config using %s', async driver => {
       vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([
         {
           canStop: false,
@@ -949,21 +949,14 @@ describe('create – OpenShell mode', () => {
       expect(getSandboxUploads()).toEqual([
         { local: expect.any(String), remote: '.claude/settings.json' },
         { local: expect.any(String), remote: '.claude.json' },
+        { local: '/home/user/.kaiden/skills/github', remote: '.claude/skills' },
       ]);
       expect(vi.mocked(sdkSandbox.create).mock.calls[0]?.[0]?.rawSpec?.template).toEqual(
         expect.objectContaining({
           image: mockAgent.baseImage,
           driverConfig: {
             [driver]: {
-              mounts: [
-                { type: 'bind', source: '/tmp/my-project', target: '/sandbox/my-project', read_only: false },
-                {
-                  type: 'bind',
-                  source: '/home/user/.kaiden/skills/github',
-                  target: '/sandbox/.claude/skills/github',
-                  read_only: true,
-                },
-              ],
+              mounts: [{ type: 'bind', source: '/tmp/my-project', target: '/sandbox/my-project', read_only: false }],
             },
           },
         }),

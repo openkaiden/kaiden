@@ -304,13 +304,10 @@ export class AgentWorkspaceManager implements Disposable {
     const skillUploads = await this.buildOpenshellSkillUploads(options.skills, agent.destinationSkillsFolder);
 
     const workspaceFiles = await this.buildOpenshellFilesystem(options.sourcePath, workspace, supportsMounts);
-    const skillFiles = await partitionOpenshellUploads(skillUploads, { supportsMounts, readOnly: true });
-    const uploads = this.dedupeOpenshellUploads([
-      ...configurationUploads,
-      ...skillFiles.uploads,
-      ...workspaceFiles.uploads,
-    ]);
-    const mounts = dedupeOpenshellMounts([...workspaceFiles.mounts, ...skillFiles.mounts]);
+    // Skills are always uploaded: bind mounting them would make the container runtime create the missing
+    // skills folder parents (e.g. ~/.claude) as root, so agent config uploads into them would fail.
+    const uploads = this.dedupeOpenshellUploads([...configurationUploads, ...skillUploads, ...workspaceFiles.uploads]);
+    const mounts = dedupeOpenshellMounts(workspaceFiles.mounts);
 
     const env = workspace.environment
       ?.filter(entry => typeof entry.value === 'string' && entry.value !== '')

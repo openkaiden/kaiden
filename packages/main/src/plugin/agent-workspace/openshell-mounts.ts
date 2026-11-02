@@ -35,7 +35,7 @@ export function resolveOpenshellMountTarget(path: string): string | undefined {
 
 export async function partitionOpenshellUploads(
   uploads: OpenshellUpload[],
-  { supportsMounts, readOnly = false }: { supportsMounts: boolean; readOnly?: boolean },
+  { supportsMounts }: { supportsMounts: boolean },
 ): Promise<{ uploads: OpenshellUpload[]; mounts: OpenshellBindMount[] }> {
   if (!supportsMounts) {
     return { uploads, mounts: [] };
@@ -50,7 +50,7 @@ export async function partitionOpenshellUploads(
         : upload.remote;
     const target = resolveOpenshellMountTarget(destination);
     if (target) {
-      mounts.push({ type: 'bind', source: upload.local, target, read_only: readOnly });
+      mounts.push({ type: 'bind', source: upload.local, target, read_only: false });
     } else {
       remainingUploads.push(upload);
     }

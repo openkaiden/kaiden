@@ -48,6 +48,11 @@ export type LocalGatewayDriver = 'vm' | 'podman' | 'docker';
 
 export const KAIDEN_LOCAL_GATEWAY_NAME = 'kaiden-local';
 
+/** Gateway types, as reported by the OpenShell CLI in `openshell gateway list`. */
+export const GatewayTypeSchema = z.enum(['local', 'remote', 'cloud']);
+
+export type GatewayType = z.output<typeof GatewayTypeSchema>;
+
 export const GatewayInfoSchema = z.object({
   name: z.string(),
   endpoint: z.string(),
@@ -57,7 +62,7 @@ export const GatewayInfoSchema = z.object({
   /** True when this Kaiden instance manages the gateway and it is stopped and unreachable, so it can be started. */
   canStart: z.boolean(),
   auth: z.string().optional(),
-  type: z.string().optional(),
+  type: GatewayTypeSchema.optional(),
   source: z.string().optional(),
   is_remote: z.boolean().optional(),
   remote_host: z.string().nullable().optional(),

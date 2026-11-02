@@ -27,7 +27,13 @@ import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { IDisposable } from '/@api/disposable.js';
 import type { Event } from '/@api/event.js';
-import type { GatewayInfo, GatewayProcessState, LocalGatewayDriver } from '/@api/openshell-gateway-info.js';
+import type {
+  GatewayInfo,
+  GatewayMetadata,
+  GatewayProcessState,
+  GatewayType,
+  LocalGatewayDriver,
+} from '/@api/openshell-gateway-info.js';
 import { MIN_GATEWAY_VERSION } from '/@api/openshell-gateway-info.js';
 
 import { OpenshellGatewayManager } from './openshell-gateway-manager.js';
@@ -41,6 +47,9 @@ const MAX_GATEWAY_POLL_INTERVAL_SECONDS = 60 * 60;
 
 @injectable()
 export class OpenshellGatewayStateManager implements Disposable {
+  /** Auth mode the OpenShell CLI labels as a `cloud` gateway. */
+  private static readonly CLOUD_AUTH_MODE = 'cloudflare_jwt';
+
   #gateways = new Map<string, GatewayInfo>();
   #initialized = false;
   #ready = false;
@@ -144,6 +153,7 @@ export class OpenshellGatewayStateManager implements Disposable {
           name: listed.metadata.name,
           endpoint: listed.metadata.gateway_endpoint,
           active: listed.metadata.name === activeGatewayName,
+          type: this.getGatewayType(listed.metadata),
           source: listed.source,
           is_remote: listed.metadata.is_remote,
           canStop: this.openshellGateway.canStopGateway(listed.metadata.name),
@@ -222,6 +232,14 @@ export class OpenshellGatewayStateManager implements Disposable {
       }
       return { pidReadFailed: true };
     }
+  }
+
+  /** Same labels the OpenShell CLI reports as `type` in `openshell gateway list`. */
+  private getGatewayType(metadata: GatewayMetadata): GatewayType {
+    if (metadata.auth_mode === OpenshellGatewayStateManager.CLOUD_AUTH_MODE) {
+      return 'cloud';
+    }
+    return metadata.is_remote ? 'remote' : 'local';
   }
 
   private deriveProcessState(
