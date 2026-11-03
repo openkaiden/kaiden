@@ -26,6 +26,7 @@ import { ClaudeInferenceManager } from '/@/manager/claude-inference-manager';
 import { ClaudeSkillsManager } from '/@/manager/claude-skills-manager';
 
 import anthropicProfileYaml from './anthropic.yaml?raw';
+import approveKeyScript from './approve-key.sh?raw';
 
 export const PROVIDER_ID = 'claude';
 export const CLAUDE_SETTINGS_PATH = '.claude/settings.json';
@@ -76,6 +77,17 @@ const ClaudeJsonCodec = jsonCodec(
 );
 
 export class ClaudeExtension {
+  /** Path of the approve-key script uploaded as a configuration file. */
+  protected static readonly APPROVE_KEY_SCRIPT_PATH: string = '.claude/approve-key.sh';
+
+  /**
+   * Placeholder written into the approved customApiKeyResponses by
+   * preWorkspaceStart; the approve-key.sh script replaces it with the real
+   * key suffix at sandbox runtime.
+   */
+  protected static readonly ANTHROPIC_KEY_SUFFIX_PLACEHOLDER: string = '__ANTHROPIC_API_KEY_SUFFIX__';
+
+  private static readonly VERTEX_AI_MODEL_TYPE = 'vertexai';
   #extensionContext: ExtensionContext;
 
   #inversifyBinding: InversifyBinding | undefined;
@@ -114,6 +126,7 @@ export class ClaudeExtension {
         'ghcr.io/openkaiden/openshell-image-claude@sha256:38ddd7700da24f8102430613c8b1d0568c875ee0788ceda2ff79c465070774d9',
       acp: { command: 'claude-agent-acp', args: [] },
       tags: ['Cloud'],
+      setupCommand: `bash $HOME/${ClaudeExtension.APPROVE_KEY_SCRIPT_PATH}`,
       configurationFiles: [
         {
           path: CLAUDE_SETTINGS_PATH,
@@ -127,12 +140,19 @@ export class ClaudeExtension {
             return '{}';
           },
         },
+        {
+          path: ClaudeExtension.APPROVE_KEY_SCRIPT_PATH,
+          async read(): Promise<string> {
+            return approveKeyScript;
+          },
+        },
       ],
       destinationSkillsFolder: '${HOME}/.claude/skills',
-      isSupportedModelType: (type): boolean => type.name === 'anthropic' || type.name === 'vertexai',
+      isSupportedModelType: (type): boolean =>
+        type.name === 'anthropic' || type.name === ClaudeExtension.VERTEX_AI_MODEL_TYPE,
       async preWorkspaceStart(context: AgentWorkspaceContext): Promise<void> {
         // Handle Vertex AI model configuration
-        if (context.model.llmMetadata?.name === 'vertexai') {
+        if (context.model.llmMetadata?.name === ClaudeExtension.VERTEX_AI_MODEL_TYPE) {
           // Add Claude Code-specific environment variables for Vertex AI
           const claudeEnvVars = [
             { name: 'CLAUDE_CODE_USE_VERTEX', value: '1' },
@@ -171,8 +191,19 @@ export class ClaudeExtension {
           projects[WORKSPACE_SOURCES_PATH] = project;
           config.projects = projects;
 
+          // Claude Code tracks a placeholder 'unused' key in Vertex AI
+          // workspaces (#2472) because the vertex-ai provider profile injects
+          // ANTHROPIC_AUTH_TOKEN, never ANTHROPIC_API_KEY. Every other
+          // workspace gets the ANTHROPIC_KEY_SUFFIX_PLACEHOLDER, replaced
+          // with the real key suffix by the approve-key.sh setup script.
+          const vertexAi = context.model.llmMetadata?.name === ClaudeExtension.VERTEX_AI_MODEL_TYPE;
           config.customApiKeyResponses = {
-            approved: Array.from(new Set([...(config.customApiKeyResponses?.approved ?? []), 'unused'])),
+            approved: Array.from(
+              new Set([
+                ...(config.customApiKeyResponses?.approved ?? []),
+                vertexAi ? 'unused' : ClaudeExtension.ANTHROPIC_KEY_SUFFIX_PLACEHOLDER,
+              ]),
+            ),
             rejected: config.customApiKeyResponses?.rejected?.filter(response => response !== 'unused') ?? [],
           };
 
