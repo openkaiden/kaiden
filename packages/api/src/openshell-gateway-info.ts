@@ -54,6 +54,8 @@ export const GatewayInfoSchema = z.object({
   active: z.boolean().optional(),
   /** True when this Kaiden instance spawned the gateway process and it is still running. */
   canStop: z.boolean(),
+  /** True when this Kaiden instance manages the gateway and it is stopped and unreachable, so it can be started. */
+  canStart: z.boolean(),
   auth: z.string().optional(),
   type: z.string().optional(),
   source: z.string().optional(),

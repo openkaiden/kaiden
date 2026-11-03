@@ -65,6 +65,7 @@ describe('isUsableGateway', () => {
     name: 'gw',
     endpoint: 'http://localhost',
     canStop: false,
+    canStart: false,
     gatewayState: state,
   });
 

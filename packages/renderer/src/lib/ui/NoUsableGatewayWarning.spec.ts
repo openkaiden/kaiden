@@ -67,6 +67,7 @@ test('shows a warning when all discoverable gateways are unreachable', () => {
   openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'stale-local',
       endpoint: 'http://127.0.0.1:17670',
       gatewayState: { reachable: false, health: 'unknown', compatible: true },
@@ -80,7 +81,9 @@ test('shows a warning when all discoverable gateways are unreachable', () => {
 });
 
 test('shows a warning when a gateway reachability state is unavailable', () => {
-  openshellGateways.set([{ canStop: false, name: 'loading-local', endpoint: 'http://127.0.0.1:17670' }]);
+  openshellGateways.set([
+    { canStop: false, canStart: false, name: 'loading-local', endpoint: 'http://127.0.0.1:17670' },
+  ]);
   openshellGatewaysReady.set(true);
 
   render(NoUsableGatewayWarning);
@@ -113,6 +116,7 @@ test('hides the warning when a gateway becomes available', async () => {
   openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://127.0.0.1:17670',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -128,6 +132,7 @@ test('shows a warning with minimum version when all gateways are below the minim
       name: 'gw1',
       endpoint: 'http://127.0.0.1:17670',
       canStop: false,
+      canStart: false,
       version: '0.0.100',
       gatewayState: { reachable: true, health: 'healthy', compatible: false },
     },
@@ -147,6 +152,7 @@ test('hides the warning when a compatible gateway exists', () => {
       name: 'gw1',
       endpoint: 'http://127.0.0.1:17670',
       canStop: false,
+      canStart: false,
       version: MIN_GATEWAY_VERSION,
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },

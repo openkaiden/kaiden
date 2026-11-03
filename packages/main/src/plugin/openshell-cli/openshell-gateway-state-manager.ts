@@ -49,6 +49,7 @@ export class OpenshellGatewayStateManager implements Disposable {
   #refreshQueued = false;
   #configurationChangeDisposable: IDisposable | undefined;
   #warnedGateways = new Set<string>();
+  #pidReadFailedGateways = new Set<string>();
 
   readonly #onDidUpdateGateways = new Emitter<readonly GatewayInfo[]>();
   readonly onDidUpdateGateways: Event<readonly GatewayInfo[]> = this.#onDidUpdateGateways.event;
@@ -146,10 +147,11 @@ export class OpenshellGatewayStateManager implements Disposable {
           source: listed.source,
           is_remote: listed.metadata.is_remote,
           canStop: this.openshellGateway.canStopGateway(listed.metadata.name),
+          canStart: false,
           remote_host: listed.metadata.remote_host ?? undefined,
           resolved_host: listed.metadata.resolved_host ?? undefined,
         };
-        const pid = await this.openshellGateway.getGatewayPid(base).catch(() => undefined);
+        const { pid, pidReadFailed } = await this.readGatewayPid(base);
         try {
           const runtimeInfo = await this.gatewayManager.getGatewayInfo(listed.metadata.name);
           const reportedDriver = runtimeInfo.compute_drivers[0]?.capabilities.driver_name;
@@ -157,7 +159,7 @@ export class OpenshellGatewayStateManager implements Disposable {
             reportedDriver === 'vm' || reportedDriver === 'podman' || reportedDriver === 'docker'
               ? reportedDriver
               : undefined;
-          const processState: GatewayProcessState | undefined = this.deriveProcessState(pid, true);
+          const processState: GatewayProcessState | undefined = this.deriveProcessState(pid, true, pidReadFailed);
           return {
             ...base,
             ...(driver ? { driver } : {}),
@@ -170,9 +172,11 @@ export class OpenshellGatewayStateManager implements Disposable {
             },
           };
         } catch {
-          const processState: GatewayProcessState | undefined = this.deriveProcessState(pid, false);
+          const processState: GatewayProcessState | undefined = this.deriveProcessState(pid, false, pidReadFailed);
+          const canStart = !pidReadFailed && pid === undefined && (await this.openshellGateway.canStartGateway(base));
           return {
             ...base,
+            canStart,
             gatewayState: {
               reachable: false,
               health: 'unknown' as const,
@@ -203,7 +207,31 @@ export class OpenshellGatewayStateManager implements Disposable {
     return gte(parsed, MIN_GATEWAY_VERSION);
   }
 
-  private deriveProcessState(pid: number | undefined, reachable: boolean): GatewayProcessState | undefined {
+  // Warns once per failure streak so a persistently unreadable PID file does not log on every poll.
+  private async readGatewayPid(gateway: GatewayInfo): Promise<{ pid?: number; pidReadFailed: boolean }> {
+    try {
+      const pid = await this.openshellGateway.getGatewayPid(gateway);
+      this.#pidReadFailedGateways.delete(gateway.name);
+      return { pid, pidReadFailed: false };
+    } catch (err: unknown) {
+      if (!this.#pidReadFailedGateways.has(gateway.name)) {
+        this.#pidReadFailedGateways.add(gateway.name);
+        console.warn(
+          `[openshell-gateway-state] cannot verify whether gateway "${gateway.name}" is running: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      return { pidReadFailed: true };
+    }
+  }
+
+  private deriveProcessState(
+    pid: number | undefined,
+    reachable: boolean,
+    pidReadFailed: boolean,
+  ): GatewayProcessState | undefined {
+    if (pidReadFailed) {
+      return { status: 'unknown' };
+    }
     if (pid !== undefined) {
       return { pid, status: 'running' };
     }
@@ -238,6 +266,7 @@ export class OpenshellGatewayStateManager implements Disposable {
     this.#configurationChangeDisposable?.dispose();
     this.#configurationChangeDisposable = undefined;
     this.#warnedGateways.clear();
+    this.#pidReadFailedGateways.clear();
     this.#onDidUpdateGateways.dispose();
   }
 }

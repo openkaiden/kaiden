@@ -67,6 +67,7 @@ beforeEach(() => {
   });
   vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(undefined);
   vi.mocked(openshellGateway.canStopGateway).mockReturnValue(false);
+  vi.mocked(openshellGateway.canStartGateway).mockResolvedValue(false);
   vi.mocked(gatewayManager.getActiveGateway).mockResolvedValue(undefined);
   manager = new OpenshellGatewayStateManager(gatewayManager, configurationRegistry, openshellGateway);
 });
@@ -87,6 +88,67 @@ test('publishes stop capability changes independently of gateway health', async 
   expect(manager.listGateways()).toEqual([expect.objectContaining({ canStop: false })]);
 });
 
+test.each([
+  { reachable: false, pid: undefined, canStartGateway: true, expected: true },
+  { reachable: true, pid: undefined, canStartGateway: true, expected: false },
+  { reachable: false, pid: 1234, canStartGateway: true, expected: false },
+  { reachable: false, pid: undefined, canStartGateway: false, expected: false },
+])('offers start only for stopped managed gateways: %o', async ({ reachable, pid, canStartGateway, expected }) => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://localhost:17670')]);
+  if (reachable) {
+    vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+  } else {
+    vi.mocked(gatewayManager.getGatewayInfo).mockRejectedValue(new Error('unreachable'));
+  }
+  vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(pid);
+  vi.mocked(openshellGateway.canStartGateway).mockResolvedValue(canStartGateway);
+  await manager.refresh();
+  const [gateway] = manager.listGateways();
+  assert(gateway);
+  expect(gateway.canStart).toBe(expected);
+});
+
+test('withholds start and reports an unknown process when the PID cannot be read', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://localhost:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockRejectedValue(new Error('unreachable'));
+  vi.mocked(openshellGateway.getGatewayPid).mockRejectedValue(new Error('EACCES: permission denied'));
+  vi.mocked(openshellGateway.canStartGateway).mockResolvedValue(true);
+
+  await manager.refresh();
+  await manager.refresh();
+
+  const [gateway] = manager.listGateways();
+  assert(gateway);
+  expect(gateway.canStart).toBe(false);
+  expect(gateway.gatewayState?.process).toEqual({ status: 'unknown' });
+  expect(warn).toHaveBeenCalledOnce();
+  expect(warn).toHaveBeenCalledWith(
+    '[openshell-gateway-state] cannot verify whether gateway "local" is running: EACCES: permission denied',
+  );
+});
+
+test('offers start again once the PID can be read', async () => {
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://localhost:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockRejectedValue(new Error('unreachable'));
+  vi.mocked(openshellGateway.getGatewayPid).mockRejectedValueOnce(new Error('EACCES: permission denied'));
+  vi.mocked(openshellGateway.canStartGateway).mockResolvedValue(true);
+
+  await manager.refresh();
+  await manager.refresh();
+
+  expect(openshellGateway.canStartGateway).toHaveBeenCalledWith(
+    expect.objectContaining({ name: 'local', endpoint: 'http://localhost:17670', is_remote: false }),
+  );
+  expect(manager.listGateways()).toEqual([
+    expect.objectContaining({
+      canStart: true,
+      gatewayState: expect.objectContaining({ process: { status: 'not-running' } }),
+    }),
+  ]);
+});
+
 test('builds a cached snapshot from registrations and runtime information', async () => {
   vi.mocked(gatewayManager.listGateways).mockResolvedValue([
     listed('local', 'http://127.0.0.1:17670'),
@@ -105,6 +167,7 @@ test('builds a cached snapshot from registrations and runtime information', asyn
     {
       name: 'local',
       canStop: false,
+      canStart: false,
       endpoint: 'http://127.0.0.1:17670',
       active: true,
       source: 'user',
@@ -116,6 +179,7 @@ test('builds a cached snapshot from registrations and runtime information', asyn
     {
       name: 'remote',
       canStop: false,
+      canStart: false,
       endpoint: 'https://gateway.example.com',
       active: false,
       source: 'user',
@@ -225,6 +289,7 @@ test('marks a gateway unreachable when runtime information cannot be retrieved',
     {
       name: 'stopped',
       canStop: false,
+      canStart: false,
       endpoint: 'http://127.0.0.1:17671',
       active: false,
       source: 'user',
@@ -413,6 +478,7 @@ test('includes process state with running pid when gateway is reachable', async 
     {
       name: 'local',
       canStop: false,
+      canStart: false,
       endpoint: 'http://127.0.0.1:17670',
       active: true,
       source: 'user',
@@ -442,6 +508,7 @@ test('includes process state with running pid when gateway is unreachable', asyn
     {
       name: 'local',
       canStop: false,
+      canStart: false,
       endpoint: 'http://127.0.0.1:17670',
       active: true,
       source: 'user',
@@ -471,6 +538,7 @@ test('includes not-running process state when gateway is unreachable and no pid'
     {
       name: 'local',
       canStop: false,
+      canStart: false,
       endpoint: 'http://127.0.0.1:17670',
       active: true,
       source: 'user',
@@ -499,6 +567,7 @@ test('omits process state when gateway is reachable and no pid', async () => {
     {
       name: 'remote',
       canStop: false,
+      canStart: false,
       endpoint: 'https://gateway.example.com',
       active: true,
       source: 'user',

@@ -20,8 +20,8 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import type { WriteStream } from 'node:fs';
-import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import { access, mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -150,7 +150,7 @@ export class OpenshellGateway implements IAsyncDisposable {
       const activeGatewayName = await this.gatewayManager.getActiveGateway();
       await Promise.all(
         localGateways.map(async gw => {
-          if (this.isCreatedGateway(gw.metadata.name) && !(await this.isGatewayHealthy(gw.metadata.name))) {
+          if ((await this.isCreatedGateway(gw.metadata.name)) && !(await this.isGatewayHealthy(gw.metadata.name))) {
             try {
               await this.startCreatedGateway(gw.metadata.name, gw.metadata.gateway_endpoint);
             } catch (err: unknown) {
@@ -434,12 +434,23 @@ export class OpenshellGateway implements IAsyncDisposable {
     this._onDidGatewayStart.fire();
   }
 
-  private isCreatedGateway(name: string): boolean {
-    return (
-      name !== DEFAULT_GATEWAY_NAME &&
-      GATEWAY_NAME_PATTERN.test(name) &&
-      existsSync(join(this.getGatewayStorageDirectory(name), 'gateway.toml'))
-    );
+  private async isCreatedGateway(name: string): Promise<boolean> {
+    if (name === DEFAULT_GATEWAY_NAME || !GATEWAY_NAME_PATTERN.test(name)) {
+      return false;
+    }
+    try {
+      await access(join(this.getGatewayStorageDirectory(name), 'gateway.toml'));
+      return true;
+    } catch (err: unknown) {
+      if (!this.isFileNotFoundError(err)) {
+        console.warn(`[openshell-gateway] failed to check gateway.toml for "${name}":`, err);
+      }
+      return false;
+    }
+  }
+
+  private isFileNotFoundError(err: unknown): boolean {
+    return err instanceof Error && 'code' in err && err.code === 'ENOENT';
   }
 
   async supportsMounts(gateway: GatewayInfo): Promise<boolean> {
@@ -764,6 +775,17 @@ export class OpenshellGateway implements IAsyncDisposable {
     await this.stopAndDrainGateway(name);
   }
 
+  async canStartGateway(gateway: GatewayInfo): Promise<boolean> {
+    if (gateway.is_remote || !this.isLocalEndpoint(gateway.endpoint) || !this.getGatewayBinaryPath()) {
+      return false;
+    }
+    const bookkeeping = this.#gatewayBookkeeping.get(gateway.name);
+    if (bookkeeping?.process || bookkeeping?.startups.size) {
+      return false;
+    }
+    return gateway.name === DEFAULT_GATEWAY_NAME || this.isCreatedGateway(gateway.name);
+  }
+
   // Cancels any in-flight startup, then waits for both the process exit and the startup to settle.
   protected async stopAndDrainGateway(name: string): Promise<void> {
     const startups = [...(this.#gatewayBookkeeping.get(name)?.startups ?? [])];
@@ -857,8 +879,12 @@ export class OpenshellGateway implements IAsyncDisposable {
         }
         return pid;
       }
-    } catch {
-      return undefined;
+    } catch (err: unknown) {
+      if (this.isFileNotFoundError(err)) {
+        return undefined;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to read the PID file of gateway "${name}": ${message}`, { cause: err });
     }
   }
 
