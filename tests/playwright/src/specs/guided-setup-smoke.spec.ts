@@ -19,13 +19,12 @@
 import { bindGuidedSetupSession, expect, test } from '/@/fixtures/guided-setup-fixture';
 import { CODING_AGENT, ENABLED_CODING_AGENTS, WIZARD_STEP } from '/@/model/core/types';
 import { NavigationBar } from '/@/model/navigation/navigation';
-import { isLocalRuntimeAvailable, resolveAgentModelConnectionFor } from '/@/model/pages/agent-model-setup';
+import { resolveAgentModelConnectionFor } from '/@/model/pages/agent-model-setup';
 import { AgentWorkspacesPage } from '/@/model/pages/agent-workspaces-page';
 import { GuidedSetupPage } from '/@/model/pages/guided-setup-page';
 import {
   completeGuidedSetupFor,
   describeAgentOnboarding,
-  describeIfAvailable,
   expectDefaultsInWorkspaceWizard,
 } from '/@/model/pages/guided-setup-workflow';
 
@@ -177,61 +176,18 @@ test.describe('Guided setup smoke', { tag: '@smoke' }, () => {
     });
   });
 
-  describeAgentOnboarding(CODING_AGENT.COPILOT, 'GitHub Copilot onboarding', () => {
-    describeIfAvailable(
-      isLocalRuntimeAvailable(),
-      'local model',
-      'OLLAMA_ENABLED or RAMALAMA_ENABLED is required for this test',
-      () => {
-        test.skip(
-          !!process.env.GITHUB_ACTIONS && process.platform !== 'linux' && !process.env.PODMAN_ENABLED,
-          'Requires an OpenShell gateway with the Podman driver, which is not available on macOS/Windows GitHub Actions runners',
-        );
+  describeAgentOnboarding(CODING_AGENT.CODEX, 'Codex onboarding', () => {
+    test.describe('Onboarding - complete Codex (one app)', () => {
+      test.describe.configure({ mode: 'serial' });
+      const session = bindGuidedSetupSession();
 
-        const session = bindGuidedSetupSession();
-
-        test('[OGS-FLOW-02] Guided setup onboarding completes for GitHub Copilot (local model) and reaches dashboard', async () => {
-          const guidedSetup = new GuidedSetupPage(session.page!);
-          await guidedSetup.startFromWelcome();
-          await guidedSetup.completeAgentModelFor(CODING_AGENT.COPILOT);
-          await guidedSetup.complete();
-          await guidedSetup.expectDashboardVisible();
-        });
-      },
-    );
-
-    describeIfAvailable(
-      !!resolveAgentModelConnectionFor(CODING_AGENT.COPILOT, 'openai'),
-      'API provider (OpenAI)',
-      'OPENAI_API_KEY is required for this test',
-      () => {
-        const session = bindGuidedSetupSession();
-
-        test('[OGS-FLOW-02] Guided setup onboarding completes for GitHub Copilot (OpenAI) and reaches dashboard', async () => {
-          const guidedSetup = new GuidedSetupPage(session.page!);
-          await guidedSetup.startFromWelcome();
-          await guidedSetup.completeAgentModelFor(CODING_AGENT.COPILOT, 'openai');
-          await guidedSetup.complete();
-          await guidedSetup.expectDashboardVisible();
-        });
-      },
-    );
-
-    describeIfAvailable(
-      !!resolveAgentModelConnectionFor(CODING_AGENT.COPILOT, 'claude'),
-      'API provider (Claude)',
-      'ANTHROPIC_API_KEY is required for this test',
-      () => {
-        const session = bindGuidedSetupSession();
-
-        test('[OGS-FLOW-02] Guided setup onboarding completes for GitHub Copilot (Claude) and reaches dashboard', async () => {
-          const guidedSetup = new GuidedSetupPage(session.page!);
-          await guidedSetup.startFromWelcome();
-          await guidedSetup.completeAgentModelFor(CODING_AGENT.COPILOT, 'claude');
-          await guidedSetup.complete();
-          await guidedSetup.expectDashboardVisible();
-        });
-      },
-    );
+      test('[OGS-FLOW-02] Guided setup onboarding completes for Codex and reaches dashboard', async () => {
+        const guidedSetup = new GuidedSetupPage(session.page!);
+        await guidedSetup.startFromWelcome();
+        await guidedSetup.completeAgentModelFor(CODING_AGENT.CODEX);
+        await guidedSetup.complete();
+        await guidedSetup.expectDashboardVisible();
+      });
+    });
   });
 });
