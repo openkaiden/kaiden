@@ -18,7 +18,7 @@
 
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { findMatchInLeaves } from './search-util';
+import { findMatchInLeaves, matchesAllTokens } from './search-util';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -96,4 +96,29 @@ test('should expect valid match with complex object and case', async () => {
 
   // should not match on key name
   expect(findMatchInLeaves(object, 'hello')).toBe(false);
+});
+
+test.each<[text: string, query: string, expected: boolean]>([
+  ['gpt-5-chat openai', 'chat-5', true],
+  ['gpt-5-chat openai', 'chat 5 openai', true],
+  ['gpt-5-chat openai', 'chat-6', false],
+  ['chatgpt-4o-latest', 'chat-5', false],
+])('matchesAllTokens(%s, %s) is %s', (text, query, expected) => {
+  expect(matchesAllTokens(text, query)).toBe(expected);
+});
+
+test.each([
+  'chat latest',
+  'chat-latest',
+  'chat_latest',
+])('matchesAllTokens should split the query on whitespace, hyphens and underscores: %s', query => {
+  expect(matchesAllTokens('chatgpt-4o-latest', query)).toBe(true);
+});
+
+test('matchesAllTokens should ignore case', () => {
+  expect(matchesAllTokens('GPT-5-Chat', 'cHaT-5')).toBe(true);
+});
+
+test('matchesAllTokens should match everything with an empty query', () => {
+  expect(matchesAllTokens('gpt-5-chat', '')).toBe(true);
 });

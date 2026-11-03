@@ -5,6 +5,7 @@ import { Icon } from '@podman-desktop/ui-svelte/icons';
 
 import { modelSelectionKey } from '/@/kaiden/stores/model-catalog';
 import { handleNavigation } from '/@/navigation';
+import { matchesAllTokens } from '/@/stores/search-util';
 import { NavigationPage } from '/@api/navigation-page';
 
 import type { CatalogModelInfo } from './models-utils';
@@ -75,14 +76,7 @@ function isSelected(key: string): boolean {
 }
 
 function filterBySearch(allModels: CatalogModelInfo[], term: string): CatalogModelInfo[] {
-  if (!term.trim()) return allModels;
-  const q = term.trim().toLowerCase();
-  return allModels.filter(
-    m =>
-      m.label.toLowerCase().includes(q) ||
-      m.providerName.toLowerCase().includes(q) ||
-      m.connectionName.toLowerCase().includes(q),
-  );
+  return allModels.filter(m => matchesAllTokens([m.label, m.providerName, m.connectionName].join(' '), term));
 }
 
 function getKey(model: CatalogModelInfo): string {

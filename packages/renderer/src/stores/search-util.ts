@@ -16,6 +16,30 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+/**
+ * Splits a query into lowercase keywords on whitespace, hyphens and underscores.
+ */
+function splitTokens(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/[\s_-]+/)
+    .filter(Boolean);
+}
+
+/**
+ * Checks whether every keyword of the query appears in the given text, in any order.
+ *
+ * Matching is case-insensitive and substring-based; an empty query matches everything.
+ */
+export function matchesAllTokens(text: string, query: string): boolean {
+  const tokens = splitTokens(query);
+  if (tokens.length === 0) {
+    return true;
+  }
+  const normalizedText = text.toLowerCase();
+  return tokens.every(token => normalizedText.includes(token));
+}
+
 // Search if a given query is present in the leaves of a given object
 export function findMatchInLeaves(object: unknown, query: string): boolean {
   if (typeof object === 'string') {
