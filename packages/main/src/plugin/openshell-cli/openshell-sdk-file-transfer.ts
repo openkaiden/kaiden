@@ -67,9 +67,10 @@ interface RemoteResult {
  * - larger archives are staged as part files in the sandbox, one short exec
  *   per part, then concatenated into `tar xf -` and removed.
  *
- * Like the CLI, directories inside a Git work tree only include the files
- * reported by `git ls-files -co --exclude-standard` (i.e. `.gitignore` rules
- * apply).
+ * Like the CLI, a directory is extracted as `<dest>/<basename>/...` (not
+ * flattened into `<dest>`), and directories inside a Git work tree only include
+ * the files reported by `git ls-files -co --exclude-standard` (i.e.
+ * `.gitignore` rules apply).
  */
 @injectable()
 export class OpenshellSdkFileTransfer {
@@ -96,6 +97,7 @@ export class OpenshellSdkFileTransfer {
     }
 
     const gitFiles = stat.isDirectory() ? await this.#listGitFiles(localPath) : undefined;
+    const archivePrefix = stat.isDirectory() ? this.#directoryPrefix(localPath) : '';
     if (gitFiles?.length === 0) {
       throw new Error(
         `Git filtering selected no files for "${localPath}": the directory is empty or all its files are ignored`,
@@ -108,7 +110,7 @@ export class OpenshellSdkFileTransfer {
     const archive = pack();
     const producing = (async (): Promise<void> => {
       try {
-        await this.#writeArchive(archive, localPath, stat, archiveName, gitFiles);
+        await this.#writeArchive(archive, localPath, stat, archiveName, archivePrefix, gitFiles);
         archive.finalize();
       } catch (err: unknown) {
         archive.destroy(err instanceof Error ? err : new Error(String(err)));
@@ -309,18 +311,32 @@ export class OpenshellSdkFileTransfer {
     }
   }
 
+  /**
+   * Like `cp -r` and the CLI, a directory is extracted as `<dest>/<basename>/...`.
+   * Paths without a meaningful basename (such as the filesystem root) have no
+   * prefix, so their contents are extracted directly into `<dest>`.
+   */
+  #directoryPrefix(dirPath: string): string {
+    const name = basename(dirPath);
+    return name === '.' || name === '..' ? '' : name;
+  }
+
   async #writeArchive(
     archive: Pack,
     localPath: string,
     stat: Stats,
     archiveName: string | undefined,
+    archivePrefix: string,
     gitFiles: string[] | undefined,
   ): Promise<void> {
     if (stat.isDirectory()) {
+      if (archivePrefix) {
+        await this.#addEntry(archive, { name: `${archivePrefix}/`, type: 'directory' });
+      }
       if (gitFiles) {
-        await this.#addFileListToArchive(archive, localPath, gitFiles);
+        await this.#addFileListToArchive(archive, localPath, gitFiles, archivePrefix);
       } else {
-        await this.#addDirectoryToArchive(archive, localPath, '');
+        await this.#addDirectoryToArchive(archive, localPath, archivePrefix);
       }
     } else if (stat.isSymbolicLink()) {
       const linkTarget = await readlink(localPath);
@@ -334,9 +350,10 @@ export class OpenshellSdkFileTransfer {
     }
   }
 
-  async #addFileListToArchive(archive: Pack, root: string, files: string[]): Promise<void> {
+  async #addFileListToArchive(archive: Pack, root: string, files: string[], prefix: string): Promise<void> {
     for (const relativePath of files) {
       const fullPath = join(root, relativePath);
+      const archivePath = prefix ? `${prefix}/${relativePath}` : relativePath;
       let entryStat: Stats;
       try {
         entryStat = await lstat(fullPath);
@@ -351,13 +368,13 @@ export class OpenshellSdkFileTransfer {
 
       if (entryStat.isSymbolicLink()) {
         const linkTarget = await readlink(fullPath);
-        await this.#addEntry(archive, { name: relativePath, type: 'symlink', linkname: linkTarget });
+        await this.#addEntry(archive, { name: archivePath, type: 'symlink', linkname: linkTarget });
       } else if (entryStat.isDirectory()) {
         // Git lists a submodule as a single path.
-        await this.#addEntry(archive, { name: `${relativePath}/`, type: 'directory' });
-        await this.#addDirectoryToArchive(archive, fullPath, relativePath);
+        await this.#addEntry(archive, { name: `${archivePath}/`, type: 'directory' });
+        await this.#addDirectoryToArchive(archive, fullPath, archivePath);
       } else if (entryStat.isFile()) {
-        await this.#addFileToArchive(archive, fullPath, relativePath, entryStat);
+        await this.#addFileToArchive(archive, fullPath, archivePath, entryStat);
       }
     }
   }

@@ -192,6 +192,12 @@ function mockProjectTree(): void {
   });
 }
 
+function mockDirectoryRoot(root: string): void {
+  vi.mocked(lstat).mockImplementation(async (path: Parameters<typeof lstat>[0]) =>
+    asPosix(path) === root ? mockDirStat() : mockFileStat(),
+  );
+}
+
 function mockLargeFile(size: number): Buffer {
   const content = Buffer.alloc(size, 'y');
   vi.mocked(lstat).mockResolvedValue(mockFileStat(size));
@@ -362,9 +368,10 @@ describe('directory uploads', () => {
     expect(scripts()).toEqual([`mkdir -p -- '/sandbox/project' && tar xf - -C '/sandbox/project'`]);
     const entries = await readArchive(stdinOf(sessions[0]));
     expect(entries.map(entry => [entry.name, entry.type])).toEqual([
-      ['readme.md', 'file'],
-      ['sub/', 'directory'],
-      ['sub/nested.ts', 'file'],
+      ['project/', 'directory'],
+      ['project/readme.md', 'file'],
+      ['project/sub/', 'directory'],
+      ['project/sub/nested.ts', 'file'],
     ]);
   });
 
@@ -375,7 +382,12 @@ describe('directory uploads', () => {
     await transfer.uploadToSandbox('my-sandbox', '/local/project', '/sandbox/project');
 
     const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => entry.name)).toEqual(['readme.md', 'sub/', 'sub/nested.ts']);
+    expect(entries.map(entry => entry.name)).toEqual([
+      'project/',
+      'project/readme.md',
+      'project/sub/',
+      'project/sub/nested.ts',
+    ]);
   });
 
   test('only archives files git reports when the directory is in a git work tree', async () => {
@@ -389,8 +401,9 @@ describe('directory uploads', () => {
     expect(readFile).toHaveBeenCalledWith(join('/local/project', 'sub/nested.ts'));
     const entries = await readArchive(stdinOf(sessions[0]));
     expect(entries.map(entry => [entry.name, entry.content])).toEqual([
-      ['readme.md', 'file-content'],
-      ['sub/nested.ts', 'file-content'],
+      ['project/', ''],
+      ['project/readme.md', 'file-content'],
+      ['project/sub/nested.ts', 'file-content'],
     ]);
   });
 
@@ -410,7 +423,7 @@ describe('directory uploads', () => {
     await transfer.uploadToSandbox('my-sandbox', '/local/project', '/sandbox/project');
 
     const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => entry.name)).toEqual(['kept.txt']);
+    expect(entries.map(entry => entry.name)).toEqual(['project/', 'project/kept.txt']);
   });
 
   test('refuses to upload when git filtering selects no files', async () => {
@@ -442,7 +455,31 @@ describe('directory uploads', () => {
 
     expect(readlink).toHaveBeenCalledWith(join('/local/project', 'link.txt'));
     const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries).toEqual([{ name: 'link.txt', type: 'symlink', linkname: '../target.txt', content: '' }]);
+    expect(entries.map(entry => [entry.name, entry.type, entry.linkname])).toEqual([
+      ['project/', 'directory', null],
+      ['project/link.txt', 'symlink', '../target.txt'],
+    ]);
+  });
+
+  test('extracts a directory as <dest>/<basename> whatever the destination', async () => {
+    mockDirectoryRoot('/local/skills/my-skill');
+    vi.mocked(readdir).mockResolvedValue([dirent('SKILL.md', 'file')] as never);
+
+    await transfer.uploadToSandbox('my-sandbox', '/local/skills/my-skill', '.claude/skills');
+
+    expect(scripts()).toEqual([`mkdir -p -- '.claude/skills' && tar xf - -C '.claude/skills'`]);
+    const entries = await readArchive(stdinOf(sessions[0]));
+    expect(entries.map(entry => entry.name)).toEqual(['my-skill/', 'my-skill/SKILL.md']);
+  });
+
+  test('extracts the contents directly into dest when the directory has no basename', async () => {
+    mockDirectoryRoot('/');
+    vi.mocked(readdir).mockResolvedValue([dirent('readme.md', 'file')] as never);
+
+    await transfer.uploadToSandbox('my-sandbox', '/', '/sandbox/project');
+
+    const entries = await readArchive(stdinOf(sessions[0]));
+    expect(entries.map(entry => entry.name)).toEqual(['readme.md']);
   });
 });
 
