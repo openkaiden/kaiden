@@ -25,7 +25,7 @@ import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { AgentRegistry } from '/@/plugin/agent-registry.js';
 import type { Directories } from '/@/plugin/directories.js';
 import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
-import type { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
+import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
 import type { AcpSessionCreateOptions, AcpSessionInfo } from '/@api/acp-session-info.js';
 import { ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT } from '/@api/acp-settings.js';
 import type { AgentInfo } from '/@api/agent-info.js';
@@ -53,15 +53,14 @@ class TestAcpSessionManager extends AcpSessionManager {
 vi.mock(import('node:fs'));
 vi.mock(import('node:fs/promises'));
 vi.mock(import('@agentclientprotocol/sdk'));
+vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-file-transfer.js'));
 
 const apiSender: ApiSenderType = {
   send: vi.fn(),
   receive: vi.fn(),
 };
 
-const openshellSdkFileTransfer: OpenshellSdkFileTransfer = {
-  uploadToSandbox: vi.fn(),
-} as unknown as OpenshellSdkFileTransfer;
+const openshellSdkFileTransfer: OpenshellSdkFileTransfer = Object.create(OpenshellSdkFileTransfer.prototype);
 
 const mockSandboxList = vi.fn();
 const sdkSandbox = {
