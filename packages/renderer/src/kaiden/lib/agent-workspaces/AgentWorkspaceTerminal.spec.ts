@@ -31,7 +31,7 @@ import type { GatewaySandboxes } from '/@api/openshell-gateway-info';
 import AgentWorkspaceTerminal from './AgentWorkspaceTerminal.svelte';
 
 const workspace: GatewaySandboxes = {
-  gateway: { canStop: false, name: 'kaiden', endpoint: 'http://localhost:18080' },
+  gateway: { canStop: false, canStart: false, name: 'kaiden', endpoint: 'http://localhost:18080' },
   sandboxes: [
     {
       id: 'ws-1',

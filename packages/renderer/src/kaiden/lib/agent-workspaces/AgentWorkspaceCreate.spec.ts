@@ -179,6 +179,7 @@ beforeEach(() => {
   vi.mocked(openshellGatewaysStore).openshellGateways = writable([
     {
       canStop: false,
+      canStart: false,
       name: 'kaiden',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -263,6 +264,7 @@ test('Expect gateway selector defaults to the active OpenShell gateway when mult
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: false,
@@ -270,6 +272,7 @@ test('Expect gateway selector defaults to the active OpenShell gateway when mult
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: true,
@@ -297,6 +300,7 @@ test('Expect selected gateway included when creating a workspace', async () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -304,6 +308,7 @@ test('Expect selected gateway included when creating a workspace', async () => {
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
@@ -323,8 +328,8 @@ test('Expect selected gateway included when creating a workspace', async () => {
 
 test('does not offer gateways while their reachability state is unavailable', () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
-    { canStop: false, name: 'local', endpoint: 'http://localhost:17670', active: true },
-    { canStop: false, name: 'remote', endpoint: 'https://remote.example.com', active: false },
+    { canStop: false, canStart: false, name: 'local', endpoint: 'http://localhost:17670', active: true },
+    { canStop: false, canStart: false, name: 'remote', endpoint: 'https://remote.example.com', active: false },
   ]);
 
   render(AgentWorkspaceCreate);
@@ -337,6 +342,7 @@ test('does not offer unreachable gateways for workspace creation', () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -344,6 +350,7 @@ test('does not offer unreachable gateways for workspace creation', () => {
     },
     {
       canStop: false,
+      canStart: false,
       name: 'stopped',
       endpoint: 'http://localhost:17671',
       active: false,
@@ -351,6 +358,7 @@ test('does not offer unreachable gateways for workspace creation', () => {
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
@@ -371,6 +379,7 @@ test('does not offer version-incompatible gateways for workspace creation', () =
       name: 'compatible-1',
       endpoint: 'http://localhost:17670',
       canStop: false,
+      canStart: false,
       active: true,
       version: MIN_GATEWAY_VERSION,
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -379,6 +388,7 @@ test('does not offer version-incompatible gateways for workspace creation', () =
       name: 'compatible-2',
       endpoint: 'http://localhost:17672',
       canStop: false,
+      canStart: false,
       active: false,
       version: MIN_GATEWAY_VERSION,
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -387,6 +397,7 @@ test('does not offer version-incompatible gateways for workspace creation', () =
       name: 'outdated',
       endpoint: 'http://localhost:17671',
       canStop: false,
+      canStart: false,
       active: false,
       version: '0.0.100',
       gatewayState: { reachable: true, health: 'healthy', compatible: false },
@@ -395,6 +406,7 @@ test('does not offer version-incompatible gateways for workspace creation', () =
       name: 'no-version',
       endpoint: 'https://remote.example.com',
       canStop: false,
+      canStart: false,
       active: false,
       gatewayState: { reachable: true, health: 'healthy', compatible: false },
     },
@@ -412,6 +424,7 @@ test('user-selected gateway is preserved across store updates', async () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -419,6 +432,7 @@ test('user-selected gateway is preserved across store updates', async () => {
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
@@ -436,6 +450,7 @@ test('user-selected gateway is preserved across store updates', async () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -443,6 +458,7 @@ test('user-selected gateway is preserved across store updates', async () => {
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
@@ -459,6 +475,7 @@ test('falls back to active gateway when selected gateway becomes unreachable', a
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -466,6 +483,7 @@ test('falls back to active gateway when selected gateway becomes unreachable', a
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
@@ -473,6 +491,7 @@ test('falls back to active gateway when selected gateway becomes unreachable', a
     },
     {
       canStop: false,
+      canStart: false,
       name: 'extra',
       endpoint: 'https://extra.example.com',
       active: false,
@@ -487,6 +506,7 @@ test('falls back to active gateway when selected gateway becomes unreachable', a
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -494,6 +514,7 @@ test('falls back to active gateway when selected gateway becomes unreachable', a
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,
@@ -501,6 +522,7 @@ test('falls back to active gateway when selected gateway becomes unreachable', a
     },
     {
       canStop: false,
+      canStart: false,
       name: 'extra',
       endpoint: 'https://extra.example.com',
       active: false,
@@ -517,6 +539,7 @@ test('clears selected gateway when all gateways become unreachable', async () =>
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -530,6 +553,7 @@ test('clears selected gateway when all gateways become unreachable', async () =>
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -749,6 +773,7 @@ test('Expect secrets listed from the selected gateway', async () => {
   vi.mocked(openshellGatewaysStore).openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:17670',
       active: true,
@@ -756,6 +781,7 @@ test('Expect secrets listed from the selected gateway', async () => {
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com',
       active: false,

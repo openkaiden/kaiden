@@ -79,6 +79,7 @@ test('Expect gateway filter dropdown is not shown when there is only one connect
   openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -93,12 +94,14 @@ test('Expect gateway filter dropdown is shown when there are multiple connected 
   const gateways: GatewayInfo[] = [
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -118,12 +121,14 @@ test('Expect selecting a gateway filters the secrets list', async () => {
   openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -149,12 +154,14 @@ test('Expect "All" option shows all secrets', async () => {
   openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -183,12 +190,14 @@ test('Expect combined gateway and search filters are applied together', async ()
   openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -217,12 +226,14 @@ test('Expect empty screen when selected gateway has no secrets', async () => {
   openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -245,12 +256,14 @@ test('Expect "Show all gateways" restores the full secrets list', async () => {
   openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },

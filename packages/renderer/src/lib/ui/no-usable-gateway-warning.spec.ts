@@ -26,6 +26,7 @@ const usable: GatewayInfo = {
   name: 'gw',
   endpoint: 'http://localhost',
   canStop: false,
+  canStart: false,
   version: MIN_GATEWAY_VERSION,
   gatewayState: { reachable: true, health: 'healthy', compatible: true },
 };
@@ -34,6 +35,7 @@ const incompatible: GatewayInfo = {
   name: 'old',
   endpoint: 'http://localhost',
   canStop: false,
+  canStart: false,
   version: '0.0.1',
   gatewayState: { reachable: true, health: 'healthy', compatible: false },
 };
@@ -42,6 +44,7 @@ const unreachable: GatewayInfo = {
   name: 'down',
   endpoint: 'http://localhost',
   canStop: false,
+  canStart: false,
   gatewayState: { reachable: false, health: 'unknown', compatible: true },
 };
 

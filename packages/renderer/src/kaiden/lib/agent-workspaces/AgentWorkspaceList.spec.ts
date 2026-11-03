@@ -60,7 +60,7 @@ test('Expect stat cards show zero counts when empty', () => {
 test('Expect stat cards show correct counts with workspaces', () => {
   const workspaces: GatewaySandboxes[] = [
     {
-      gateway: { canStop: false, name: 'kaiden', endpoint: 'http://localhost:18080' },
+      gateway: { canStop: false, canStart: false, name: 'kaiden', endpoint: 'http://localhost:18080' },
       sandboxes: [
         {
           id: 'ws-1',
@@ -72,7 +72,7 @@ test('Expect stat cards show correct counts with workspaces', () => {
       ],
     },
     {
-      gateway: { canStop: false, name: 'kaiden', endpoint: 'http://localhost:18080' },
+      gateway: { canStop: false, canStart: false, name: 'kaiden', endpoint: 'http://localhost:18080' },
       sandboxes: [
         {
           id: 'ws-2',
@@ -134,6 +134,7 @@ test('Expect gateway filter dropdown is not shown when there is only one connect
   openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -148,12 +149,14 @@ test('Expect gateway filter dropdown is shown when there are multiple connected 
   const gateways: GatewayInfo[] = [
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -171,11 +174,11 @@ test('Expect gateway filter dropdown is shown when there are multiple connected 
 test('Expect selecting a gateway filters the workspace list', async () => {
   const workspaces: GatewaySandboxes[] = [
     {
-      gateway: { canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      gateway: { canStop: false, canStart: false, name: 'local', endpoint: 'http://localhost:18080' },
       sandboxes: [{ id: 'ws-1', name: 'local-workspace', phase: 'Ready', created_at: Date.now().toString() }],
     },
     {
-      gateway: { canStop: false, name: 'remote', endpoint: 'https://remote.example.com:18080' },
+      gateway: { canStop: false, canStart: false, name: 'remote', endpoint: 'https://remote.example.com:18080' },
       sandboxes: [{ id: 'ws-2', name: 'remote-workspace', phase: 'Ready', created_at: Date.now().toString() }],
     },
   ];
@@ -184,12 +187,14 @@ test('Expect selecting a gateway filters the workspace list', async () => {
   openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -213,11 +218,11 @@ test('Expect selecting a gateway filters the workspace list', async () => {
 test('Expect "All" option shows all workspaces', async () => {
   const workspaces: GatewaySandboxes[] = [
     {
-      gateway: { canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      gateway: { canStop: false, canStart: false, name: 'local', endpoint: 'http://localhost:18080' },
       sandboxes: [{ id: 'ws-1', name: 'local-workspace', phase: 'Ready', created_at: Date.now().toString() }],
     },
     {
-      gateway: { canStop: false, name: 'remote', endpoint: 'https://remote.example.com:18080' },
+      gateway: { canStop: false, canStart: false, name: 'remote', endpoint: 'https://remote.example.com:18080' },
       sandboxes: [{ id: 'ws-2', name: 'remote-workspace', phase: 'Ready', created_at: Date.now().toString() }],
     },
   ];
@@ -226,12 +231,14 @@ test('Expect "All" option shows all workspaces', async () => {
   openshellGateways.set([
     {
       canStop: false,
+      canStart: false,
       name: 'local',
       endpoint: 'http://localhost:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
     {
       canStop: false,
+      canStart: false,
       name: 'remote',
       endpoint: 'https://remote.example.com:18080',
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
@@ -258,7 +265,7 @@ test('Expect "All" option shows all workspaces', async () => {
 test('Expect checkboxes rendered for each workspace', async () => {
   const workspaces: GatewaySandboxes[] = [
     {
-      gateway: { canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      gateway: { canStop: false, canStart: false, name: 'local', endpoint: 'http://localhost:18080' },
       sandboxes: [
         { id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() },
         { id: 'ws-2', name: 'workspace-2', phase: 'Ready', created_at: Date.now().toString() },
@@ -279,7 +286,7 @@ test('Expect checkboxes rendered for each workspace', async () => {
 test('Expect checkbox disabled for workspace in Deleting phase', async () => {
   const workspaces: GatewaySandboxes[] = [
     {
-      gateway: { canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      gateway: { canStop: false, canStart: false, name: 'local', endpoint: 'http://localhost:18080' },
       sandboxes: [
         { id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() },
         { id: 'ws-2', name: 'workspace-2', phase: 'Deleting', created_at: Date.now().toString() },
@@ -300,7 +307,7 @@ test('Expect checkbox disabled for workspace in Deleting phase', async () => {
 test('Expect bulk delete button appears after selecting a workspace', async () => {
   const workspaces: GatewaySandboxes[] = [
     {
-      gateway: { canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      gateway: { canStop: false, canStart: false, name: 'local', endpoint: 'http://localhost:18080' },
       sandboxes: [{ id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() }],
     },
   ];
@@ -321,7 +328,7 @@ test('Expect bulk delete button appears after selecting a workspace', async () =
 test('Expect user confirmation for bulk delete when required', async () => {
   const workspaces: GatewaySandboxes[] = [
     {
-      gateway: { canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      gateway: { canStop: false, canStart: false, name: 'local', endpoint: 'http://localhost:18080' },
       sandboxes: [{ id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() }],
     },
   ];
