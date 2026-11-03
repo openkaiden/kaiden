@@ -37,7 +37,7 @@ import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/opens
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
-import type { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
+import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import type { TaskManager } from '/@/plugin/tasks/task-manager.js';
@@ -63,6 +63,7 @@ vi.mock(import('node:os'));
 vi.mock(import('js-yaml'));
 vi.mock(import('yaml'));
 vi.mock(import('/@/plugin/openshell-cli/openshell-policy-manager.js'));
+vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-file-transfer.js'));
 
 const TEST_SHELL_COMMAND = ['/test/shell'];
 
@@ -144,9 +145,7 @@ const apiSender: ApiSenderType = {
   receive: vi.fn(),
 };
 const ipcHandle: IPCHandle = vi.fn();
-const openshellSdkFileTransfer = {
-  uploadToSandbox: vi.fn(),
-} as unknown as OpenshellSdkFileTransfer;
+const openshellSdkFileTransfer: OpenshellSdkFileTransfer = Object.create(OpenshellSdkFileTransfer.prototype);
 const sdkSandbox = {
   create: vi.fn(),
   delete: vi.fn(),

@@ -23,6 +23,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 
 import type { ExecInteractiveSessionControl, ExecStreamEvent, OpenShellClient } from '@nvidia/openshell-sdk';
+import { SdkError } from '@nvidia/openshell-sdk';
 import { extract } from 'tar-stream';
 import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -36,9 +37,18 @@ vi.mock(import('node:fs/promises'));
 vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-client-manager.js'));
 vi.mock(import('/@/plugin/util/exec.js'));
 
+/** Exposes the protected constants of the class under test, so the spec reads the real values. */
+class TestOpenshellSdkFileTransfer extends OpenshellSdkFileTransfer {
+  static readonly maxRetries = OpenshellSdkFileTransfer.MAX_RETRIES;
+  static readonly partBytes = OpenshellSdkFileTransfer.UPLOAD_PART_BYTES;
+  static readonly stdinChunkBytes = OpenshellSdkFileTransfer.STDIN_CHUNK_BYTES;
+  static readonly stagingRoot = OpenshellSdkFileTransfer.REMOTE_STAGING_ROOT;
+  static readonly unavailable = OpenshellSdkFileTransfer.GRPC_UNAVAILABLE;
+}
+
+const { maxRetries, partBytes, stdinChunkBytes, stagingRoot, unavailable } = TestOpenshellSdkFileTransfer;
+
 const FILE_CONTENT = Buffer.from('file-content');
-const PART_BYTES = 2 * 1024 * 1024;
-const STAGING_DIR = /^'\/tmp\/kaiden-upload-[0-9a-f-]{36}'$/;
 
 let transfer: OpenshellSdkFileTransfer;
 let sdkClientManager: OpenshellSdkClientManager;
@@ -84,6 +94,16 @@ function scripts(): string[] {
     assert(script);
     return script;
   });
+}
+
+function stagingDirOf(script: string | undefined): string {
+  const stagingDir = /^mkdir -p -- ('[^']+') && cat > /.exec(script ?? '')?.[1];
+  assert(stagingDir);
+  return stagingDir;
+}
+
+function unavailableError(): SdkError {
+  return new SdkError('rpc', 'connect ECONNREFUSED', { connectCode: unavailable });
 }
 
 function stdinOf(session: ExecInteractiveSessionControl | undefined): Buffer {
@@ -207,6 +227,7 @@ function mockLargeFile(size: number): Buffer {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.useRealTimers();
   sessions = [];
   sessionOptions = (): SessionOptions => ({});
   execInteractive = vi
@@ -216,11 +237,11 @@ beforeEach(() => {
       sessions.push(session);
       return session;
     });
-  sdkClientManager = new OpenshellSdkClientManager(undefined!, undefined!);
+  sdkClientManager = Object.create(OpenshellSdkClientManager.prototype);
   vi.mocked(sdkClientManager.getClient).mockResolvedValue({
     sandbox: { execInteractive },
   } as unknown as OpenShellClient);
-  exec = new Exec(undefined!);
+  exec = Object.create(Exec.prototype);
   vi.mocked(exec.exec).mockRejectedValue(
     gitError('fatal: not a git repository (or any of the parent directories): .git'),
   );
@@ -341,12 +362,13 @@ describe('home directory destinations', () => {
   });
 
   test('extracts staged uploads into the expanded home directory', async () => {
-    mockLargeFile(3 * 1024 * 1024);
+    mockLargeFile(1.5 * partBytes);
 
     await transfer.uploadToSandbox('my-sandbox', '/local/huge.bin', '~/data/');
 
-    expect(scripts().at(-2)).toMatch(
-      /^mkdir -p -- "\$HOME"\/'data\/' && cat '\/tmp\/kaiden-upload-[0-9a-f-]{36}'\/part-\* \| tar xf - -C "\$HOME"\/'data\/'$/,
+    const all = scripts();
+    expect(all.at(-2)).toBe(
+      `mkdir -p -- "$HOME"/'data/' && cat ${stagingDirOf(all[0])}/part-* | tar xf - -C "$HOME"/'data/'`,
     );
   });
 });
@@ -357,14 +379,11 @@ describe('directory uploads', () => {
 
     await transfer.uploadToSandbox('my-sandbox', '/local/project', '/sandbox/project');
 
-    expect(exec.exec).toHaveBeenCalledWith('git', [
-      '-C',
-      '/local/project',
-      'ls-files',
-      '-co',
-      '--exclude-standard',
-      '-z',
-    ]);
+    expect(exec.exec).toHaveBeenCalledWith(
+      'git',
+      ['-C', '/local/project', 'ls-files', '-co', '--exclude-standard', '-z'],
+      { env: { LC_ALL: 'C' } },
+    );
     expect(scripts()).toEqual([`mkdir -p -- '/sandbox/project' && tar xf - -C '/sandbox/project'`]);
     const entries = await readArchive(stdinOf(sessions[0]));
     expect(entries.map(entry => [entry.name, entry.type])).toEqual([
@@ -485,7 +504,7 @@ describe('directory uploads', () => {
 
 describe('staged uploads of archives larger than one part', () => {
   test('stages parts of at most 2 MiB, extracts them in order, then removes the staging directory', async () => {
-    const content = mockLargeFile(5 * 1024 * 1024);
+    const content = mockLargeFile(2.5 * partBytes);
 
     await transfer.uploadToSandbox('my-sandbox', '/local/huge.bin', '/remote/huge.bin');
 
@@ -493,9 +512,8 @@ describe('staged uploads of archives larger than one part', () => {
     const all = scripts();
     expect(all).toHaveLength(5);
 
-    const stagingDir = /^mkdir -p -- ('[^']+') && cat > '[^']+'\/part-000000$/.exec(all[0] ?? '')?.[1];
-    assert(stagingDir);
-    expect(stagingDir).toMatch(STAGING_DIR);
+    const stagingDir = stagingDirOf(all[0]);
+    expect(stagingDir.startsWith(`'${stagingRoot}/kaiden-upload-`)).toBe(true);
     expect(all).toEqual([
       `mkdir -p -- ${stagingDir} && cat > ${stagingDir}/part-000000`,
       `mkdir -p -- ${stagingDir} && cat > ${stagingDir}/part-000001`,
@@ -505,7 +523,7 @@ describe('staged uploads of archives larger than one part', () => {
     ]);
 
     const parts = sessions.slice(0, 3).map(session => stdinOf(session));
-    expect(parts.map(part => part.length)).toEqual([PART_BYTES, PART_BYTES, content.length + 1536 - 2 * PART_BYTES]);
+    expect(parts.map(part => part.length)).toEqual([partBytes, partBytes, content.length + 1536 - 2 * partBytes]);
     expect(stdinOf(sessions[3])).toHaveLength(0);
     const entries = await readArchive(Buffer.concat(parts));
     expect(entries).toHaveLength(1);
@@ -514,16 +532,16 @@ describe('staged uploads of archives larger than one part', () => {
   });
 
   test('writes stdin in chunks of at most 64 KiB', async () => {
-    mockLargeFile(3 * 1024 * 1024);
+    mockLargeFile(1.5 * partBytes);
 
     await transfer.uploadToSandbox('my-sandbox', '/local/huge.bin', '/remote/huge.bin');
 
     const chunkSizes = sessions.flatMap(session => vi.mocked(session.write).mock.calls.map(([data]) => data.length));
-    expect(Math.max(...chunkSizes)).toBe(64 * 1024);
+    expect(Math.max(...chunkSizes)).toBe(stdinChunkBytes);
   });
 
   test('removes the staging directory and reports the failure when a part cannot be staged', async () => {
-    mockLargeFile(5 * 1024 * 1024);
+    mockLargeFile(2.5 * partBytes);
     sessionOptions = (script): SessionOptions =>
       script.endsWith('part-000001') ? { exitCode: 1, stderr: 'cat: write error: No space left on device' } : {};
 
@@ -533,11 +551,11 @@ describe('staged uploads of archives larger than one part', () => {
 
     const all = scripts();
     expect(all).toHaveLength(3);
-    expect(all.at(-1)).toMatch(/^rm -rf -- '\/tmp\/kaiden-upload-[0-9a-f-]{36}'$/);
+    expect(all.at(-1)).toBe(`rm -rf -- ${stagingDirOf(all[0])}`);
   });
 
   test('still reports the upload result when removing the staging directory fails', async () => {
-    mockLargeFile(3 * 1024 * 1024);
+    mockLargeFile(1.5 * partBytes);
     sessionOptions = (script): SessionOptions => (script.startsWith('rm -rf') ? { exitCode: 1 } : {});
 
     await transfer.uploadToSandbox('my-sandbox', '/local/huge.bin', '/remote/huge.bin');
@@ -581,32 +599,43 @@ describe('errors and retries', () => {
     expect(execInteractive).toHaveBeenCalledOnce();
   });
 
-  test('retries an exec on transient connection errors', async () => {
-    vi.mocked(execInteractive).mockRejectedValueOnce(new Error('connect ECONNREFUSED'));
+  test('retries an exec when the gateway is unavailable', async () => {
+    vi.useFakeTimers();
+    vi.mocked(execInteractive).mockRejectedValueOnce(unavailableError());
 
-    await transfer.uploadToSandbox('my-sandbox', '/local/file.txt', '/remote/file.txt');
+    const upload = transfer.uploadToSandbox('my-sandbox', '/local/file.txt', '/remote/file.txt');
+    await vi.runAllTimersAsync();
+    await upload;
 
     expect(execInteractive).toHaveBeenCalledTimes(2);
     const entries = await readArchive(stdinOf(sessions[0]));
     expect(entries.map(entry => entry.name)).toEqual(['file.txt']);
   });
 
-  test('does not retry on non-transient errors', async () => {
-    vi.mocked(execInteractive).mockRejectedValue(new Error('sandbox not found'));
+  test.each([
+    { title: 'a plain error that mentions a connection', error: new Error('connect ECONNREFUSED') },
+    { title: 'a message that merely contains "connect"', error: new Error('client disconnected') },
+    { title: 'an SDK error with another status', error: new SdkError('not_found', 'sandbox not found') },
+  ])('does not retry $title', async ({ error }) => {
+    vi.mocked(execInteractive).mockRejectedValue(error);
 
     await expect(transfer.uploadToSandbox('my-sandbox', '/local/file.txt', '/remote/file.txt')).rejects.toThrow(
-      'sandbox not found',
+      error.message,
     );
     expect(execInteractive).toHaveBeenCalledOnce();
   });
 
-  test('throws after max retries on persistent transient errors', async () => {
-    vi.mocked(execInteractive).mockRejectedValue(new Error('connect ECONNREFUSED'));
+  test('throws after max retries while the gateway stays unavailable', async () => {
+    vi.useFakeTimers();
+    vi.mocked(execInteractive).mockRejectedValue(unavailableError());
 
-    await expect(transfer.uploadToSandbox('my-sandbox', '/local/file.txt', '/remote/file.txt')).rejects.toThrow(
-      'connect ECONNREFUSED',
-    );
-    expect(execInteractive).toHaveBeenCalledTimes(3);
+    const upload = expect(
+      transfer.uploadToSandbox('my-sandbox', '/local/file.txt', '/remote/file.txt'),
+    ).rejects.toThrow('connect ECONNREFUSED');
+    await vi.runAllTimersAsync();
+    await upload;
+
+    expect(execInteractive).toHaveBeenCalledTimes(maxRetries);
   });
 
   test('throws on archive build error without starting a remote command', async () => {
@@ -617,7 +646,7 @@ describe('errors and retries', () => {
   });
 
   test('stops producing the archive when a staged upload fails', async () => {
-    mockLargeFile(9 * 1024 * 1024);
+    mockLargeFile(4.5 * partBytes);
     sessionOptions = (script): SessionOptions => (script.endsWith('part-000000') ? { exitCode: 1 } : {});
 
     await expect(transfer.uploadToSandbox('my-sandbox', '/local/huge.bin', '/remote/huge.bin')).rejects.toThrow(

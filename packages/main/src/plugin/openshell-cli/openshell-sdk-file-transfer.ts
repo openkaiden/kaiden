@@ -24,25 +24,13 @@ import { basename, join, posix } from 'node:path';
 import type { Writable } from 'node:stream';
 
 import type { OpenShellClient } from '@nvidia/openshell-sdk';
+import { SdkError } from '@nvidia/openshell-sdk';
 import { inject, injectable } from 'inversify';
 import type { Headers, Pack } from 'tar-stream';
 import { pack } from 'tar-stream';
 
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { Exec } from '/@/plugin/util/exec.js';
-
-const MAX_RETRIES = 3;
-const INITIAL_BACKOFF_MS = 500;
-const SMALL_FILE_THRESHOLD = 1024 * 1024;
-const STDIN_CHUNK_BYTES = 64 * 1024;
-/**
- * Archive bytes sent per exec. Exec stdin has no flow control: the sandbox
- * supervisor kills the command (exit 74, "process stdin buffer is full") once
- * more than 4 MiB is waiting for the process to read it. Keeping every exec's
- * stdin well below that budget makes overflow impossible.
- */
-const UPLOAD_PART_BYTES = 2 * 1024 * 1024;
-const REMOTE_STAGING_ROOT = '/tmp';
 
 interface UploadTarget {
   client: OpenShellClient;
@@ -62,7 +50,7 @@ interface RemoteResult {
  *
  * The archive is produced as a stream (with backpressure) and sent as stdin
  * of remote commands through the SDK's `execInteractive` with `tty: false`:
- * - archives up to {@link UPLOAD_PART_BYTES} are extracted by a single
+ * - archives up to {@link OpenshellSdkFileTransfer.UPLOAD_PART_BYTES} are extracted by a single
  *   `tar xf -` exec;
  * - larger archives are staged as part files in the sandbox, one short exec
  *   per part, then concatenated into `tar xf -` and removed.
@@ -74,6 +62,21 @@ interface RemoteResult {
  */
 @injectable()
 export class OpenshellSdkFileTransfer {
+  protected static readonly MAX_RETRIES = 3;
+  protected static readonly INITIAL_BACKOFF_MS = 500;
+  protected static readonly SMALL_FILE_THRESHOLD = 1024 * 1024;
+  protected static readonly STDIN_CHUNK_BYTES = 64 * 1024;
+  /**
+   * Archive bytes sent per exec. Exec stdin has no flow control: the sandbox
+   * supervisor kills the command (exit 74, "process stdin buffer is full") once
+   * more than 4 MiB is waiting for the process to read it. Keeping every exec's
+   * stdin well below that budget makes overflow impossible.
+   */
+  protected static readonly UPLOAD_PART_BYTES = 2 * 1024 * 1024;
+  protected static readonly REMOTE_STAGING_ROOT = '/tmp';
+  /** gRPC status `UNAVAILABLE` (connect-es `Code.Unavailable`, which the SDK does not re-export). */
+  protected static readonly GRPC_UNAVAILABLE = 14;
+
   constructor(
     @inject(OpenshellSdkClientManager)
     private readonly sdkClientManager: OpenshellSdkClientManager,
@@ -155,7 +158,9 @@ export class OpenshellSdkFileTransfer {
       return;
     }
 
-    const stagingDir = this.#shellEscape(`${REMOTE_STAGING_ROOT}/kaiden-upload-${randomUUID()}`);
+    const stagingDir = this.#shellEscape(
+      `${OpenshellSdkFileTransfer.REMOTE_STAGING_ROOT}/kaiden-upload-${randomUUID()}`,
+    );
     try {
       await this.#stagePart(target, stagingDir, 0, first.value);
       await this.#stagePart(target, stagingDir, 1, second.value);
@@ -201,7 +206,7 @@ export class OpenshellSdkFileTransfer {
     }
   }
 
-  /** Splits the archive stream into buffers of {@link UPLOAD_PART_BYTES} (the last one may be shorter). */
+  /** Splits the archive stream into buffers of {@link OpenshellSdkFileTransfer.UPLOAD_PART_BYTES} (the last one may be shorter). */
   async *#readParts(archive: Pack): AsyncGenerator<Buffer, void, void> {
     let buffered: Buffer[] = [];
     let size = 0;
@@ -209,10 +214,10 @@ export class OpenshellSdkFileTransfer {
       const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
       buffered.push(data);
       size += data.length;
-      while (size >= UPLOAD_PART_BYTES) {
+      while (size >= OpenshellSdkFileTransfer.UPLOAD_PART_BYTES) {
         const all = Buffer.concat(buffered, size);
-        yield all.subarray(0, UPLOAD_PART_BYTES);
-        const rest = all.subarray(UPLOAD_PART_BYTES);
+        yield all.subarray(0, OpenshellSdkFileTransfer.UPLOAD_PART_BYTES);
+        const rest = all.subarray(OpenshellSdkFileTransfer.UPLOAD_PART_BYTES);
         buffered = rest.length > 0 ? [rest] : [];
         size = rest.length;
       }
@@ -244,10 +249,10 @@ export class OpenshellSdkFileTransfer {
         return await this.#execOnce(target, script, stdin);
       } catch (err: unknown) {
         const error = err instanceof Error ? err : new Error(String(err));
-        if (!this.#isRetryable(error) || attempt >= MAX_RETRIES) {
+        if (!this.#isRetryable(error) || attempt >= OpenshellSdkFileTransfer.MAX_RETRIES) {
           throw error;
         }
-        const backoff = INITIAL_BACKOFF_MS * 2 ** (attempt - 1);
+        const backoff = OpenshellSdkFileTransfer.INITIAL_BACKOFF_MS * 2 ** (attempt - 1);
         console.warn(
           `[openshell-file-transfer] ${operation} attempt ${attempt} failed for "${target.sandboxName}:${target.dest}", retrying in ${backoff}ms:`,
           error.message,
@@ -274,8 +279,8 @@ export class OpenshellSdkFileTransfer {
     })();
 
     try {
-      for (let offset = 0; offset < stdin.length; offset += STDIN_CHUNK_BYTES) {
-        session.write(stdin.subarray(offset, offset + STDIN_CHUNK_BYTES));
+      for (let offset = 0; offset < stdin.length; offset += OpenshellSdkFileTransfer.STDIN_CHUNK_BYTES) {
+        session.write(stdin.subarray(offset, offset + OpenshellSdkFileTransfer.STDIN_CHUNK_BYTES));
       }
     } catch (err: unknown) {
       // The remote command exited before consuming stdin (e.g. mkdir failed);
@@ -296,7 +301,10 @@ export class OpenshellSdkFileTransfer {
    */
   async #listGitFiles(dir: string): Promise<string[] | undefined> {
     try {
-      const result = await this.exec.exec('git', ['-C', dir, 'ls-files', '-co', '--exclude-standard', '-z']);
+      const result = await this.exec.exec('git', ['-C', dir, 'ls-files', '-co', '--exclude-standard', '-z'], {
+        // Git translates its messages; the "not a git repository" check below relies on the English text.
+        env: { LC_ALL: 'C' },
+      });
       return result.stdout.split('\0').filter(path => path.length > 0);
     } catch (err: unknown) {
       const stderr = err instanceof Error && 'stderr' in err && typeof err.stderr === 'string' ? err.stderr : '';
@@ -399,7 +407,7 @@ export class OpenshellSdkFileTransfer {
   }
 
   async #addFileToArchive(archive: Pack, filePath: string, archivePath: string, stat: Stats): Promise<void> {
-    if (stat.size <= SMALL_FILE_THRESHOLD) {
+    if (stat.size <= OpenshellSdkFileTransfer.SMALL_FILE_THRESHOLD) {
       const content = await readFile(filePath);
       await this.#addEntry(
         archive,
@@ -484,10 +492,8 @@ export class OpenshellSdkFileTransfer {
     return `'${value.replace(/'/g, escapedQuote)}'`;
   }
 
+  /** Retries only when the gateway or the connection to it is unavailable, as the SDK does for log watching. */
   #isRetryable(err: Error): boolean {
-    const msg = err.message.toLowerCase();
-    return (
-      msg.includes('connect') || msg.includes('unavailable') || msg.includes('deadline') || msg.includes('rst_stream')
-    );
+    return err instanceof SdkError && err.connectCode === OpenshellSdkFileTransfer.GRPC_UNAVAILABLE;
   }
 }
