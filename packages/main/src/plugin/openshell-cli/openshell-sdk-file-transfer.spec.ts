@@ -19,6 +19,7 @@
 import type { Stats } from 'node:fs';
 import { createReadStream } from 'node:fs';
 import { lstat, readdir, readFile, readlink } from 'node:fs/promises';
+import { join } from 'node:path';
 import { Readable } from 'node:stream';
 
 import type { ExecInteractiveSessionControl, ExecStreamEvent, OpenShellClient } from '@nvidia/openshell-sdk';
@@ -162,20 +163,25 @@ function dirent(name: string, kind: 'file' | 'dir' | 'symlink'): MockDirent {
   };
 }
 
+/** Paths built by the code under test use the platform separator; the mocks key on POSIX-style paths. */
+function asPosix(path: unknown): string {
+  return String(path).replaceAll('\\', '/');
+}
+
 function gitError(stderr: string, message = 'Command execution failed with exit code 128'): Error {
   return Object.assign(new Error(message), { stderr });
 }
 
 function mockProjectTree(): void {
   vi.mocked(lstat).mockImplementation(async (path: Parameters<typeof lstat>[0]) => {
-    const p = String(path);
+    const p = asPosix(path);
     if (p === '/local/project' || p === '/local/project/sub') {
       return mockDirStat();
     }
     return mockFileStat();
   });
   vi.mocked(readdir).mockImplementation(async (path: Parameters<typeof readdir>[0]) => {
-    const p = String(path);
+    const p = asPosix(path);
     if (p === '/local/project') {
       return [dirent('readme.md', 'file'), dirent('sub', 'dir')] as never;
     }
@@ -331,8 +337,8 @@ describe('directory uploads', () => {
     await transfer.uploadToSandbox('my-sandbox', '/local/project', '/sandbox/project');
 
     expect(readdir).not.toHaveBeenCalled();
-    expect(readFile).toHaveBeenCalledWith('/local/project/readme.md');
-    expect(readFile).toHaveBeenCalledWith('/local/project/sub/nested.ts');
+    expect(readFile).toHaveBeenCalledWith(join('/local/project', 'readme.md'));
+    expect(readFile).toHaveBeenCalledWith(join('/local/project', 'sub/nested.ts'));
     const entries = await readArchive(stdinOf(sessions[0]));
     expect(entries.map(entry => [entry.name, entry.content])).toEqual([
       ['readme.md', 'file-content'],
@@ -343,7 +349,7 @@ describe('directory uploads', () => {
   test('skips files git tracks that are missing on disk', async () => {
     vi.mocked(exec.exec).mockResolvedValue({ command: 'git', stdout: 'gone.txt\0kept.txt\0', stderr: '' });
     vi.mocked(lstat).mockImplementation(async (path: Parameters<typeof lstat>[0]) => {
-      const p = String(path);
+      const p = asPosix(path);
       if (p === '/local/project') {
         return mockDirStat();
       }
@@ -386,7 +392,7 @@ describe('directory uploads', () => {
 
     await transfer.uploadToSandbox('my-sandbox', '/local/project', '/remote/dest');
 
-    expect(readlink).toHaveBeenCalledWith('/local/project/link.txt');
+    expect(readlink).toHaveBeenCalledWith(join('/local/project', 'link.txt'));
     const entries = await readArchive(stdinOf(sessions[0]));
     expect(entries).toEqual([{ name: 'link.txt', type: 'symlink', linkname: '../target.txt', content: '' }]);
   });
