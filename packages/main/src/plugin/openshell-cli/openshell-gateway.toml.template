@@ -10,18 +10,19 @@ compute_driver = "{{{driver}}}"
 {{^driver}}
 [openshell.drivers.podman]
 {{/driver}}
-{{#supportsContainerSettings}}
 # Bind mount settings. Each one relaxes an OpenShell default. They are only written for gateways
 # Kaiden starts, which listen on 127.0.0.1 and allow unauthenticated users, so any local process can
 # request host mounts. See openkaiden/kaiden#3150.
 
-# Lets sandboxes bind mount host paths (project folder, skills) instead of uploading copies.
+# Lets sandboxes bind mount host paths (project folder) instead of uploading copies.
+# The VM driver supports them since OpenShell 0.1.5 (NVIDIA/OpenShell#3463).
 enable_bind_mounts = true
 # Since OpenShell 0.1.0: accepts driver config (such as mounts) from the caller's sandbox spec.
 allow_driver_config = true
 # Since OpenShell 0.1.0: admission rejects resources it cannot label, including host bind mounts.
 # Disabling it turns off label-based protection for external resources on this gateway.
 resource_admission = { enabled = false }
+{{#supportsContainerSettings}}
 {{#supervisorImage}}
 supervisor_image = "{{{supervisorImage}}}"
 {{/supervisorImage}}
@@ -29,6 +30,11 @@ supervisor_image = "{{{supervisorImage}}}"
 {{#vmStateDir}}
 state_dir = '''{{{vmStateDir}}}'''
 {{/vmStateDir}}
+{{#vmSandboxIdentity}}
+# A VM sandbox can only create files in a read-write bind mount when its UID/GID match the gateway user's.
+sandbox_uid = {{uid}}
+sandbox_gid = {{gid}}
+{{/vmSandboxIdentity}}
 
 [openshell.gateway.auth]
 allow_unauthenticated_users = true

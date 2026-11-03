@@ -903,6 +903,27 @@ describe('createLocalGateway', () => {
     });
   });
 
+  // process.geteuid() and process.getegid() don't exist on Windows, so they can't be stubbed there.
+  test.skipIf(process.platform === 'win32')(
+    'runs named VM gateway sandboxes as the gateway user on Linux',
+    async () => {
+      vi.mocked(isLinux).mockReturnValue(true);
+      vi.spyOn(process, 'geteuid').mockReturnValue(1234);
+      vi.spyOn(process, 'getegid').mockReturnValue(1235);
+      vi.mocked(spawn).mockReturnValue(createMockChildProcess());
+      vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.1.5'));
+
+      await gateway.createLocalGateway({ name: 'local-dev', bindAddress: '127.0.0.1', port: 17675, driver: 'vm' });
+
+      const configPath = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev', 'gateway.toml');
+      const writtenContent = vi.mocked(writeFile).mock.calls.find(([path]) => path === configPath)?.[1];
+      assert(typeof writtenContent === 'string');
+      expect(parseToml(writtenContent)).toMatchObject({
+        openshell: { drivers: { vm: { sandbox_uid: 1234, sandbox_gid: 1235 } } },
+      });
+    },
+  );
+
   test('keeps distinct bounded VM driver state_dirs for long gateway names with a shared prefix', async () => {
     vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.116'));
 
@@ -918,12 +939,16 @@ describe('createLocalGateway', () => {
     expect(stateDirs).toEqual([
       expect.objectContaining({
         openshell: expect.objectContaining({
-          drivers: { vm: { state_dir: join(KAIDEN_DATA_DIRECTORY, 'state', 'customer-36c32574') } },
+          drivers: {
+            vm: expect.objectContaining({ state_dir: join(KAIDEN_DATA_DIRECTORY, 'state', 'customer-36c32574') }),
+          },
         }),
       }),
       expect.objectContaining({
         openshell: expect.objectContaining({
-          drivers: { vm: { state_dir: join(KAIDEN_DATA_DIRECTORY, 'state', 'customer-a0c7b50c') } },
+          drivers: {
+            vm: expect.objectContaining({ state_dir: join(KAIDEN_DATA_DIRECTORY, 'state', 'customer-a0c7b50c') }),
+          },
         }),
       }),
     ]);
@@ -1711,6 +1736,7 @@ describe('supportsMounts', () => {
   test.each([
     'podman',
     'docker',
+    'vm',
   ] as const)('returns true when the managed %s gateway config enables bind mounts', async driver => {
     vi.mocked(readFile).mockResolvedValue(`[openshell.drivers.${driver}]\n${BIND_MOUNT_DRIVER_SETTINGS}`);
 
@@ -1942,6 +1968,11 @@ describe('supportsMounts (non-managed gateways)', () => {
   });
 
   test('returns false for a non-managed local gateway with vm driver', async () => {
+    vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
+      status: 'healthy',
+      compute_drivers: [{ name: 'vm', capabilities: { driver_name: 'vm' } }],
+    });
+
     await expect(
       gateway.supportsMounts({
         canStop: false,
@@ -1952,8 +1983,7 @@ describe('supportsMounts (non-managed gateways)', () => {
         driver: 'vm',
       }),
     ).resolves.toBe(false);
-    expect(readFile).not.toHaveBeenCalled();
-    expect(gatewayManager.getGatewayInfo).not.toHaveBeenCalled();
+    expect(gatewayManager.getGatewayInfo).toHaveBeenCalledWith('external-gw');
   });
 
   test('returns false when getGatewayInfo fails for a non-managed gateway', async () => {
@@ -2673,7 +2703,7 @@ describe('gateway config generation', () => {
     expect(writtenContent).toContain(`compute_driver = "${driver}"`);
   });
 
-  test('honors an explicit VM driver and omits container settings even when the active driver is Podman', async () => {
+  test('honors an explicit VM driver, enables bind mounts and omits container settings even when the active driver is Podman', async () => {
     vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.116'));
     vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
       status: 'healthy',
@@ -2685,9 +2715,57 @@ describe('gateway config generation', () => {
     const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
     expect(writtenContent).toContain('compute_driver = "vm"');
     expect(writtenContent).toContain('[openshell.drivers.vm]');
-    expect(writtenContent).not.toContain('enable_bind_mounts');
     expect(writtenContent).not.toContain('supervisor_image');
+    expect(parseToml(writtenContent)).toMatchObject({
+      openshell: {
+        drivers: {
+          vm: { enable_bind_mounts: true, allow_driver_config: true, resource_admission: { enabled: false } },
+        },
+      },
+    });
   });
+
+  // process.geteuid() and process.getegid() don't exist on Windows, so they can't be stubbed there.
+  test.skipIf(process.platform === 'win32').each([
+    {
+      platform: 'Linux',
+      linux: true,
+      uid: 1234,
+      gid: 1235,
+      driver: 'vm',
+      expected: { sandbox_uid: 1234, sandbox_gid: 1235 },
+    },
+    {
+      platform: 'Linux with primary group 0',
+      linux: true,
+      uid: 1234,
+      gid: 0,
+      driver: 'vm',
+      expected: { sandbox_uid: 1234, sandbox_gid: 0 },
+    },
+    { platform: 'Linux as root', linux: true, uid: 0, gid: 0, driver: 'vm', expected: undefined },
+    { platform: 'macOS', linux: false, uid: 501, gid: 20, driver: 'vm', expected: undefined },
+    { platform: 'Linux', linux: true, uid: 1234, gid: 1235, driver: 'podman', expected: undefined },
+  ] as const)(
+    'runs $driver sandboxes as the gateway user on $platform: $expected',
+    async ({ linux, uid, gid, driver, expected }) => {
+      vi.mocked(isLinux).mockReturnValue(linux);
+      vi.spyOn(process, 'geteuid').mockReturnValue(uid);
+      vi.spyOn(process, 'getegid').mockReturnValue(gid);
+      vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.1.5'));
+
+      await gateway.start({ driver });
+
+      const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1];
+      assert(typeof writtenContent === 'string');
+      if (expected) {
+        expect(parseToml(writtenContent)).toMatchObject({ openshell: { drivers: { vm: expected } } });
+      } else {
+        expect(writtenContent).not.toContain('sandbox_uid');
+        expect(writtenContent).not.toContain('sandbox_gid');
+      }
+    },
+  );
 
   test.each([
     KAIDEN_DATA_DIRECTORY,
