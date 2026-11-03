@@ -297,6 +297,54 @@ describe('single exec uploads', () => {
   });
 });
 
+describe('home directory destinations', () => {
+  test.each([
+    { dest: '~', extractDir: `"$HOME"` },
+    { dest: '~/', extractDir: `"$HOME"/''` },
+    { dest: '~/.config/app', extractDir: `"$HOME"/'.config/app'` },
+    { dest: `~/it's here`, extractDir: `"$HOME"/'it'\\''s here'` },
+  ])('expands a leading ~ for directory dest "$dest"', async ({ dest, extractDir }) => {
+    vi.mocked(lstat).mockResolvedValue(mockDirStat());
+    vi.mocked(readdir).mockResolvedValue([] as never);
+
+    await transfer.uploadToSandbox('my-sandbox', '/local/project', dest);
+
+    expect(scripts()).toEqual([`mkdir -p -- ${extractDir} && tar xf - -C ${extractDir}`]);
+  });
+
+  test('extracts a file uploaded to ~/name into $HOME under that name', async () => {
+    await transfer.uploadToSandbox('my-sandbox', '/local/gitconfig', '~/.gitconfig');
+
+    expect(scripts()).toEqual([`mkdir -p -- "$HOME" && tar xf - -C "$HOME"`]);
+    const entries = await readArchive(stdinOf(sessions[0]));
+    expect(entries.map(entry => entry.name)).toEqual(['.gitconfig']);
+  });
+
+  test.each([
+    '/remote/~backup',
+    '~other/dir',
+    'dir/~/sub',
+    '.config/~',
+  ])('does not expand a ~ that is not a leading ~ or ~/ in "%s"', async dest => {
+    vi.mocked(lstat).mockResolvedValue(mockDirStat());
+    vi.mocked(readdir).mockResolvedValue([] as never);
+
+    await transfer.uploadToSandbox('my-sandbox', '/local/project', dest);
+
+    expect(scripts()).toEqual([`mkdir -p -- '${dest}' && tar xf - -C '${dest}'`]);
+  });
+
+  test('extracts staged uploads into the expanded home directory', async () => {
+    mockLargeFile(3 * 1024 * 1024);
+
+    await transfer.uploadToSandbox('my-sandbox', '/local/huge.bin', '~/data/');
+
+    expect(scripts().at(-2)).toMatch(
+      /^mkdir -p -- "\$HOME"\/'data\/' && cat '\/tmp\/kaiden-upload-[0-9a-f-]{36}'\/part-\* \| tar xf - -C "\$HOME"\/'data\/'$/,
+    );
+  });
+});
+
 describe('directory uploads', () => {
   test('archives every entry when the directory is outside a git work tree', async () => {
     mockProjectTree();

@@ -137,7 +137,7 @@ export class OpenshellSdkFileTransfer {
   }
 
   async #sendArchive(target: UploadTarget, archive: Pack, extractDir: string): Promise<void> {
-    const escapedDir = this.#shellEscape(extractDir);
+    const escapedDir = this.#remotePath(extractDir);
     const parts = this.#readParts(archive);
 
     const extractFromStdin = `mkdir -p -- ${escapedDir} && tar xf - -C ${escapedDir}`;
@@ -445,6 +445,21 @@ export class OpenshellSdkFileTransfer {
       entry.once('drain', onDrain);
       entry.once('close', onClose);
     });
+  }
+
+  /**
+   * Quotes a sandbox path for `sh`. A leading `~` or `~/` is expanded to the
+   * sandbox user's home through `$HOME` (a quoted `~` is not expanded by the
+   * shell and would create a literal `~` directory); the rest is escaped.
+   */
+  #remotePath(path: string): string {
+    if (path === '~') {
+      return '"$HOME"';
+    }
+    if (path.startsWith('~/')) {
+      return `"$HOME"/${this.#shellEscape(path.slice(2))}`;
+    }
+    return this.#shellEscape(path);
   }
 
   #shellEscape(value: string): string {
