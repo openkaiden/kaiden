@@ -1,9 +1,6 @@
 <script lang="ts">
 import { Button, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
-import { onMount } from 'svelte';
 
-import type { CardSelectorOption } from '/@/lib/ui/CardSelector.svelte';
-import CardSelector from '/@/lib/ui/CardSelector.svelte';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import PasswordInput from '/@/lib/ui/PasswordInput.svelte';
 import { handleNavigation } from '/@/navigation';
@@ -11,29 +8,14 @@ import { NavigationPage } from '/@api/navigation-page';
 import type { OpenshellProfile } from '/@api/openshell-gateway-info';
 import type { SecretCreateOptions } from '/@api/secret-info';
 
-import { getServiceIcon } from './secret-vault-utils';
+import SecretTypeSelector from './SecretTypeSelector.svelte';
 
-let services = $state<OpenshellProfile[]>([]);
-let loading = $state(true);
-
-let type = $state('');
+let selectedProfile = $state<OpenshellProfile | undefined>();
+let type = $derived(selectedProfile?.id ?? '');
 let name = $state('');
 let saving = $state(false);
 let error = $state('');
 let credentialValues = $state<Record<string, string>>({});
-
-let serviceMap = $derived(new Map(services.map(s => [s.id, s])));
-
-let typeOptions = $derived<CardSelectorOption[]>(
-  services.map(s => ({
-    title: s.display_name,
-    badge: s.display_name,
-    value: s.id,
-    icon: getServiceIcon(s.id),
-  })),
-);
-
-let selectedProfile = $derived(serviceMap.get(type));
 
 $effect(() => {
   type;
@@ -52,21 +34,10 @@ let title = $derived(selectedProfile ? `${selectedProfile.display_name} Secret` 
 let subtitle = $derived(selectedProfile?.description ?? '');
 
 let canSave = $derived.by(() => {
-  if (loading) return false;
   if (!name.trim()) return false;
   if (!selectedProfile) return false;
   const creds = selectedProfile.credentials ?? [];
   return creds.filter(c => c.required).every(c => credentialValues[c.name]?.trim());
-});
-
-onMount(async () => {
-  try {
-    services = (await window.listSecretServices()).filter(s => s.credentials?.length);
-  } catch (err: unknown) {
-    console.error('Failed to load secret services', err);
-  } finally {
-    loading = false;
-  }
 });
 
 function cancel(): void {
@@ -113,16 +84,11 @@ async function addSecret(): Promise<void> {
       <div class="bg-(--pd-content-card-bg) py-6">
         <div class="flex flex-col px-6 max-w-4xl mx-auto space-y-5">
 
-          {#if loading}
-            <p class="text-sm text-(--pd-content-card-text) opacity-70">Loading secret types…</p>
-          {:else}
-            <CardSelector
-              label="Secret type"
-              options={typeOptions}
-              bind:selected={type}
-              required
-            />
-          {/if}
+          <SecretTypeSelector
+            onSelect={(profile: OpenshellProfile | undefined): void => {
+              selectedProfile = profile;
+            }}
+          />
 
           <div>
             <h1 class="text-2xl font-bold text-(--pd-modal-text)">{title}</h1>
