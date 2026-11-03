@@ -83,6 +83,8 @@ const MOUNT_HOME_PREFIX = '$HOME';
 // Timeouts for sandbox startup and deletion cleanup for sdk.
 const SANDBOX_READY_TIMEOUT_SECONDS = 300;
 const SANDBOX_DELETE_TIMEOUT_SECONDS = 120;
+const SANDBOX_SETUP_COMMAND_TIMEOUT_SECONDS = 60;
+const SANDBOX_SETUP_COMMAND_ERROR_OUTPUT_MAX_LENGTH = 200;
 const DEFAULT_TERMINAL_SCROLLBACK = 1000;
 
 export interface AgentTerminalClient {
@@ -366,6 +368,22 @@ export class AgentWorkspaceManager implements Disposable {
 
       const tPolicy = performance.now();
       console.log(`[workspace-timing] updatePolicy: ${(tPolicy - tSandbox).toFixed(0)}ms`);
+
+      if (agent.setupCommand) {
+        const execResult = await sdkClient.sandbox.exec(sandboxName, ['bash', '-c', agent.setupCommand], {
+          timeoutSecs: SANDBOX_SETUP_COMMAND_TIMEOUT_SECONDS,
+        });
+        if (execResult.exitCode !== 0) {
+          const stderr = execResult.stderr.toString().trim();
+          const stdout = execResult.stdout.toString().trim();
+          const output = (stderr.length > 0 ? stderr : stdout).slice(0, SANDBOX_SETUP_COMMAND_ERROR_OUTPUT_MAX_LENGTH);
+          const detail = output.length > 0 ? `: ${output}` : '';
+          throw new Error(
+            `setup command failed in sandbox "${sandboxName}" with exit code ${execResult.exitCode}${detail}`,
+          );
+        }
+        console.log(`[workspace-timing] setupCommand: ${(performance.now() - tPolicy).toFixed(0)}ms`);
+      }
 
       // the agent lifecycle belongs to the workspace: start it now so the terminal only has to attach
       try {

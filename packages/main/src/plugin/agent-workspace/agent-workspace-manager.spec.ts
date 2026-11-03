@@ -144,6 +144,7 @@ const sdkSandbox = {
   list: vi.fn(),
   waitDeleted: vi.fn(),
   waitReady: vi.fn(),
+  exec: vi.fn(),
   execInteractive: vi.fn(),
 };
 const openshellSdkClientManager = {
@@ -253,6 +254,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(openshellSdkClientManager.getClient).mockResolvedValue({ sandbox: sdkSandbox } as never);
   sdkSandbox.waitReady.mockResolvedValue({ id: 'ws-created', name: 'my-sandbox' });
+  sdkSandbox.exec.mockResolvedValue({ exitCode: 0, stdout: Buffer.from(''), stderr: Buffer.from('') });
   sdkSandbox.execInteractive.mockImplementation(async () => createMockExecSession().session);
   vi.mocked(taskManager.createTask).mockReturnValue(mockTask);
   mockTask.state = '' as TaskState;
@@ -1130,6 +1132,78 @@ describe('create – OpenShell mode', () => {
 
     expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
+  });
+
+  test('runs setupCommand via sandbox exec after uploads and before the agent session', async () => {
+    vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({
+      ...mockAgent,
+      setupCommand: 'echo hello',
+    });
+    const options = {
+      ...defaultOptions,
+      network: { mode: 'deny' as const, hosts: ['registry.npmjs.org'] },
+    };
+
+    await manager.create(options);
+
+    expect(sdkSandbox.exec).toHaveBeenCalledWith('my-sandbox', ['bash', '-c', 'echo hello'], { timeoutSecs: 60 });
+    const uploadOrder = vi.mocked(openshellCli.uploadToSandbox).mock.invocationCallOrder[0];
+    const policyOrder = vi.mocked(openshellPolicyManager.updatePolicy).mock.invocationCallOrder[0];
+    const execOrder = vi.mocked(sdkSandbox.exec).mock.invocationCallOrder[0];
+    const sessionOrder = vi.mocked(sdkSandbox.execInteractive).mock.invocationCallOrder[0];
+    assert(uploadOrder);
+    assert(policyOrder);
+    assert(execOrder);
+    assert(sessionOrder);
+    expect(uploadOrder).toBeLessThan(execOrder);
+    expect(policyOrder).toBeLessThan(execOrder);
+    expect(execOrder).toBeLessThan(sessionOrder);
+  });
+
+  test('does not exec setupCommand when agent has no setupCommand', async () => {
+    await manager.create(defaultOptions);
+
+    expect(sdkSandbox.exec).not.toHaveBeenCalled();
+  });
+
+  test('deletes sandbox and rethrows when the setup command fails', async () => {
+    vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({
+      ...mockAgent,
+      setupCommand: 'exit 1',
+    });
+    vi.mocked(sdkSandbox.exec).mockResolvedValue({
+      exitCode: 1,
+      stdout: Buffer.from(''),
+      stderr: Buffer.from('boom'),
+    });
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+
+    await expect(manager.create(defaultOptions)).rejects.toThrow(
+      'setup command failed in sandbox "my-sandbox" with exit code 1: boom',
+    );
+
+    expect(sdkSandbox.delete).toHaveBeenCalledWith('my-sandbox');
+    expect(sdkSandbox.waitDeleted).toHaveBeenCalledWith('my-sandbox', 120);
+  });
+
+  test('includes truncated stdout in the error when the setup command fails without stderr', async () => {
+    vi.mocked(agentRegistry.getAgentRegistration).mockReturnValue({
+      ...mockAgent,
+      setupCommand: 'exit 1',
+    });
+    vi.mocked(sdkSandbox.exec).mockResolvedValue({
+      exitCode: 1,
+      stdout: Buffer.from(`${'a'.repeat(200)}${'Z'.repeat(100)}`),
+      stderr: Buffer.from(''),
+    });
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+
+    const error = await manager.create(defaultOptions).catch((err: unknown) => err);
+
+    assert(error instanceof Error);
+    expect(error.message).toContain(`exit code 1: ${'a'.repeat(200)}`);
+    expect(error.message).not.toContain('Z');
+    expect(sdkSandbox.delete).toHaveBeenCalledWith('my-sandbox');
   });
 
   test('deletes sandbox and rethrows when updatePolicy fails', async () => {
