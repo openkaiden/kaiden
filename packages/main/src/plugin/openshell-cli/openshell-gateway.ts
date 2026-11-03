@@ -485,10 +485,6 @@ export class OpenshellGateway implements IAsyncDisposable {
     if (!GATEWAY_NAME_PATTERN.test(gateway.name)) {
       return undefined;
     }
-    // Only Podman and Docker support bind mounts, so other known drivers skip the file read.
-    if (gateway.driver !== undefined && gateway.driver !== 'podman' && gateway.driver !== 'docker') {
-      return false;
-    }
     const configPath = join(this.getGatewayStorageDirectory(gateway.name), GATEWAY_CONFIG_FILENAME);
     try {
       const config = GatewayConfigSchema.parse(parseToml(await readFile(configPath, 'utf-8')));
@@ -1129,6 +1125,7 @@ export class OpenshellGateway implements IAsyncDisposable {
         supervisorImage: image,
         supportsContainerSettings: driver !== 'vm',
         vmStateDir: this.getVmDriverStateDirectory(DEFAULT_GATEWAY_NAME, driver),
+        vmSandboxIdentity: this.getVmSandboxIdentity(driver),
         gatewayDir: storageDirectory,
         q: '"',
         driver,
@@ -1255,6 +1252,23 @@ export class OpenshellGateway implements IAsyncDisposable {
     return join(this.directories.getDataDirectory(), VM_DRIVER_STATE_FOLDER, `${name.slice(0, 8)}-${hash}`);
   }
 
+  /**
+   * On Linux with a non-root gateway, a VM sandbox can only create files in a read-write bind
+   * mount when its UID/GID match the gateway user's, so new VM sandboxes run as that user.
+   */
+  private getVmSandboxIdentity(driver: LocalGatewayDriver): { uid: number; gid: number } | undefined {
+    if (driver !== 'vm' || !isLinux()) {
+      return undefined;
+    }
+    // Numeric IDs need no passwd lookup, unlike os.userInfo(), so users without a passwd entry work too.
+    const uid = process.geteuid?.();
+    const gid = process.getegid?.();
+    if (uid === undefined || gid === undefined || uid === 0) {
+      return undefined;
+    }
+    return { uid, gid };
+  }
+
   private isMigrationError(output: string): boolean {
     return output.includes('migration error');
   }
@@ -1292,6 +1306,7 @@ export class OpenshellGateway implements IAsyncDisposable {
         supervisorImage,
         supportsContainerSettings: driver !== 'vm',
         vmStateDir: this.getVmDriverStateDirectory(name, driver),
+        vmSandboxIdentity: this.getVmSandboxIdentity(driver),
         gatewayDir: storageDirectory,
         q: '"',
         driver,
