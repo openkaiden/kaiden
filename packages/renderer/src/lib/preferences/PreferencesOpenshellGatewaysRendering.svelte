@@ -7,8 +7,8 @@ import EngineIcon from '/@/lib/ui/EngineIcon.svelte';
 import { extensionInfos } from '/@/stores/extensions';
 import { type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME } from '/@api/openshell-gateway-info';
 
-import { GatewayStopAction } from './gateway-stop-action.svelte';
-import GatewayStopButton from './GatewayStopButton.svelte';
+import { GatewayAction } from './gateway-action.svelte';
+import GatewayLifecycleButton from './GatewayLifecycleButton.svelte';
 import PreferencesOpenshellGatewayCreate from './PreferencesOpenshellGatewayCreate.svelte';
 import SettingsPage from './SettingsPage.svelte';
 
@@ -20,7 +20,7 @@ let openshellStarted: boolean = $derived(
 let activeGateway: GatewayInfo | undefined = $derived($openshellGateways.find(g => g.active));
 let otherGateways: GatewayInfo[] = $derived($openshellGateways.filter(g => !g.active));
 let showCreateGateway = $state(false);
-const stopAction = new GatewayStopAction();
+const stopAction = new GatewayAction(name => window.stopOpenshellGateway(name));
 
 function openCreateGateway(): void {
   showCreateGateway = true;
@@ -145,7 +145,7 @@ function getDetails(gateway: GatewayInfo): string {
               {getTypeBadge(activeGateway)}
             </span>
             <span class="text-sm text-(--pd-content-card-text) opacity-70">{getDetails(activeGateway)}</span>
-            <GatewayStopButton gateway={activeGateway} {stopAction} />
+            <GatewayLifecycleButton gateway={activeGateway} {stopAction} />
           </div>
         </div>
       </div>
@@ -172,7 +172,7 @@ function getDetails(gateway: GatewayInfo): string {
                   {getTypeBadge(gateway)}
                 </span>
                 <span class="text-sm text-(--pd-content-card-text) opacity-70">{getDetails(gateway)}</span>
-                <GatewayStopButton {gateway} {stopAction} />
+                <GatewayLifecycleButton {gateway} {stopAction} />
               </div>
             </div>
           {/each}

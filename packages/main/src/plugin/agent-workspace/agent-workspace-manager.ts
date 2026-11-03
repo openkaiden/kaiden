@@ -769,13 +769,24 @@ export class AgentWorkspaceManager implements Disposable {
   }
 
   async stopOpenshellGateway(name: string): Promise<void> {
-    const task = this.taskManager.createTask({ title: `Stopping gateway "${name}"` });
+    await this.runGatewayLifecycleTask(name, { verb: 'stop', title: 'Stopping', past: 'stopped' }, () =>
+      this.openshellGateway.stopManagedGateway(name),
+    );
+  }
+
+  // Runs a gateway lifecycle operation as a task, then refreshes gateway state and workspace rows.
+  private async runGatewayLifecycleTask(
+    name: string,
+    labels: { verb: string; title: string; past: string },
+    operation: () => Promise<void>,
+  ): Promise<void> {
+    const task = this.taskManager.createTask({ title: `${labels.title} gateway "${name}"` });
     task.state = 'running';
     task.status = 'in-progress';
-    let stopped = false;
+    let completed = false;
     try {
-      await this.openshellGateway.stopManagedGateway(name);
-      stopped = true;
+      await operation();
+      completed = true;
       try {
         await this.openshellGatewayStateManager.refresh();
       } finally {
@@ -785,9 +796,9 @@ export class AgentWorkspaceManager implements Disposable {
     } catch (err: unknown) {
       const detail = err instanceof Error ? err.message : String(err);
       task.status = 'failure';
-      task.error = stopped
-        ? `Gateway "${name}" stopped, but failed to refresh gateway state: ${detail}`
-        : `Failed to stop gateway "${name}": ${detail}`;
+      task.error = completed
+        ? `Gateway "${name}" ${labels.past}, but failed to refresh gateway state: ${detail}`
+        : `Failed to ${labels.verb} gateway "${name}": ${detail}`;
       console.error(task.error);
       throw new Error(task.error, { cause: err });
     } finally {

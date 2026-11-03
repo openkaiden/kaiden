@@ -18,22 +18,25 @@
 
 import { SvelteMap } from 'svelte/reactivity';
 
-export class GatewayStopAction {
-  stoppingGateways = $state<string[]>([]);
+// Tracks a per-gateway lifecycle operation: pending gateways and the last error for each.
+export class GatewayAction {
+  pendingGateways = $state<string[]>([]);
   errors = new SvelteMap<string, string>();
 
-  async stop(name: string): Promise<void> {
-    if (this.stoppingGateways.includes(name)) return;
-    this.stoppingGateways = [...this.stoppingGateways, name];
+  constructor(private readonly operation: (name: string) => Promise<void>) {}
+
+  async run(name: string): Promise<void> {
+    if (this.pendingGateways.includes(name)) return;
+    this.pendingGateways = [...this.pendingGateways, name];
     this.errors.delete(name);
     try {
-      await window.stopOpenshellGateway(name);
+      await this.operation(name);
     } catch (err: unknown) {
       const error = err instanceof Error ? err.message : String(err);
       this.errors.set(name, error);
       console.error(error);
     } finally {
-      this.stoppingGateways = this.stoppingGateways.filter(gateway => gateway !== name);
+      this.pendingGateways = this.pendingGateways.filter(gateway => gateway !== name);
     }
   }
 }

@@ -18,51 +18,51 @@
 
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { GatewayStopAction } from './gateway-stop-action.svelte';
+import { GatewayAction } from './gateway-action.svelte';
 
-let action: GatewayStopAction;
+let action: GatewayAction;
 
 beforeEach(() => {
   vi.resetAllMocks();
-  action = new GatewayStopAction();
+  action = new GatewayAction(name => window.stopOpenshellGateway(name));
 });
 
-test('deduplicates pending requests while allowing different gateways to stop', async () => {
+test('deduplicates pending requests while allowing different gateways to run', async () => {
   const pending = Promise.withResolvers<void>();
   vi.mocked(window.stopOpenshellGateway).mockReturnValue(pending.promise);
-  const first = action.stop('first');
-  await action.stop('first');
-  const second = action.stop('second');
-  expect(action.stoppingGateways).toEqual(['first', 'second']);
+  const first = action.run('first');
+  await action.run('first');
+  const second = action.run('second');
+  expect(action.pendingGateways).toEqual(['first', 'second']);
   expect(window.stopOpenshellGateway).toHaveBeenCalledTimes(2);
   pending.resolve();
   await Promise.all([first, second]);
-  expect(action.stoppingGateways).toEqual([]);
+  expect(action.pendingGateways).toEqual([]);
   expect([...action.errors]).toEqual([]);
 });
 
 test.each([new Error('Denied'), 'Denied'])('clears pending state after failure and permits retry: %s', async error => {
   vi.mocked(window.stopOpenshellGateway).mockRejectedValueOnce(error);
-  await action.stop('local');
+  await action.run('local');
   expect(action.errors.get('local')).toBe('Denied');
-  expect(action.stoppingGateways).toEqual([]);
+  expect(action.pendingGateways).toEqual([]);
   vi.mocked(window.stopOpenshellGateway).mockResolvedValue(undefined);
-  await action.stop('local');
+  await action.run('local');
   expect([...action.errors]).toEqual([]);
-  expect(action.stoppingGateways).toEqual([]);
+  expect(action.pendingGateways).toEqual([]);
   expect(window.stopOpenshellGateway).toHaveBeenCalledTimes(2);
 });
 
-test('keeps gateway failures when stopping another gateway and clears only the retried gateway error', async () => {
+test('keeps gateway failures when running another gateway and clears only the retried gateway error', async () => {
   vi.mocked(window.stopOpenshellGateway).mockRejectedValueOnce(new Error('First gateway failed'));
-  await action.stop('first');
+  await action.run('first');
 
   const second = Promise.withResolvers<void>();
   vi.mocked(window.stopOpenshellGateway).mockReturnValueOnce(second.promise);
-  const stoppingSecond = action.stop('second');
+  const runningSecond = action.run('second');
   expect([...action.errors]).toEqual([['first', 'First gateway failed']]);
   second.reject(new Error('Second gateway failed'));
-  await stoppingSecond;
+  await runningSecond;
   expect([...action.errors]).toEqual([
     ['first', 'First gateway failed'],
     ['second', 'Second gateway failed'],
@@ -70,10 +70,10 @@ test('keeps gateway failures when stopping another gateway and clears only the r
 
   const retry = Promise.withResolvers<void>();
   vi.mocked(window.stopOpenshellGateway).mockReturnValueOnce(retry.promise);
-  const retryingFirst = action.stop('first');
+  const retryingFirst = action.run('first');
   expect([...action.errors]).toEqual([['second', 'Second gateway failed']]);
   retry.resolve();
   await retryingFirst;
   expect([...action.errors]).toEqual([['second', 'Second gateway failed']]);
-  expect(action.stoppingGateways).toEqual([]);
+  expect(action.pendingGateways).toEqual([]);
 });

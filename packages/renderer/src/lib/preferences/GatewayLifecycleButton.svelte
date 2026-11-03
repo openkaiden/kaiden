@@ -23,24 +23,29 @@ import { faStop } from '@fortawesome/free-solid-svg-icons';
 import ListItemButtonIcon from '/@/lib/ui/ListItemButtonIcon.svelte';
 import type { GatewayInfo } from '/@api/openshell-gateway-info';
 
-import type { GatewayStopAction } from './gateway-stop-action.svelte';
+import type { GatewayAction } from './gateway-action.svelte';
 
 interface Props {
   gateway: GatewayInfo;
-  stopAction: GatewayStopAction;
+  stopAction: GatewayAction;
 }
 
 let { gateway, stopAction }: Props = $props();
 
-const stopping = $derived(stopAction.stoppingGateways.includes(gateway.name));
+const control = $derived.by(() => {
+  if (gateway.canStop) {
+    return { title: `Stop gateway ${gateway.name}`, icon: faStop, action: stopAction };
+  }
+  return undefined;
+});
 </script>
 
-{#if gateway.canStop}
+{#if control}
   <div class="ml-auto shrink-0">
     <ListItemButtonIcon
-      title="Stop gateway {gateway.name}"
-      icon={faStop}
-      inProgress={stopping}
-      onClick={(): Promise<void> => stopAction.stop(gateway.name)} />
+      title={control.title}
+      icon={control.icon}
+      inProgress={control.action.pendingGateways.includes(gateway.name)}
+      onClick={(): Promise<void> => control.action.run(gateway.name)} />
   </div>
 {/if}
