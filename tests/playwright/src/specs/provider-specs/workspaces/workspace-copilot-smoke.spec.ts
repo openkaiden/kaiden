@@ -21,6 +21,8 @@ import { CODING_AGENT, OPENAI_SMOKE_MODEL, TERMINAL_READY_PATTERNS } from '/@/mo
 
 import { registerWorkspaceLifecycleTests } from './helpers/workspace-lifecycle-helper';
 
+test.skip(true, 'GitHub Copilot is not part of the 0.4.0 release');
+
 test.describe
   .serial('GitHub Copilot agent workspace with OpenAI model', { tag: '@workspace-provider' }, () => {
     registerWorkspaceLifecycleTests(test, expect, {

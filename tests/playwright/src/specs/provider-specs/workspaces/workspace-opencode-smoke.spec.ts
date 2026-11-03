@@ -58,6 +58,8 @@ test.describe
 
 test.describe
   .serial('OpenCode agent workspace with Gemini model', { tag: '@workspace-provider' }, () => {
+    test.skip(true, 'Gemini is not part of the 0.4.0 release');
+
     registerWorkspaceLifecycleTests(test, expect, {
       testIdPrefix: 'WKS-GEMINI',
       workspaceName: 'opencode-gemini',
