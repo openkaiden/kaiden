@@ -74,13 +74,13 @@ let preparingSandbox = $state('');
 let failedSandbox = $state('');
 
 $effect(() => {
-  if (!isDraft || !selectedSandboxName || !draftCanSend) return;
+  if (!isDraft || !selectedSandbox || !draftCanSend) return;
   if (preparingSandbox === selectedSandboxName) return;
   if (failedSandbox === selectedSandboxName) return;
   preparingSandbox = selectedSandboxName;
   const agentId = draftEffectiveAgentId || undefined;
   window
-    .createAcpSession({ sandboxName: selectedSandboxName, agentId })
+    .createAcpSession({ sandboxName: selectedSandbox.name, gatewayName: selectedSandbox.gatewayName, agentId })
     .then(newSession => {
       router.goto(`/acp-sessions/${encodeURIComponent(newSession.id)}`);
     })
@@ -679,11 +679,12 @@ async function handleSendFollowUp(): Promise<void> {
       ? pendingAttachments.map(a => ({ filePath: a.filePath, fileName: a.fileName, mimeType: a.mimeType }))
       : undefined;
 
-  if (isDraft && selectedSandboxName) {
+  if (isDraft && selectedSandbox) {
     try {
       sendError = undefined;
       const newSession = await window.createAcpSession({
-        sandboxName: selectedSandboxName,
+        sandboxName: selectedSandbox.name,
+        gatewayName: selectedSandbox.gatewayName,
         prompt: textToSend,
         agentId: draftEffectiveAgentId || undefined,
       });

@@ -214,6 +214,8 @@ export interface AcpFlowCostUpdateEvent {
 
 export interface AcpSessionCreateOptions {
   sandboxName: string;
+  /** OpenShell gateway hosting the sandbox. */
+  gatewayName: string;
   prompt?: string;
   agentId?: string;
 }

@@ -117,7 +117,12 @@ describe('AcpSessionManager', () => {
       const agent = createAgentInfo();
       vi.mocked(agentRegistry.getAgent).mockResolvedValue(agent);
 
-      const options: AcpSessionCreateOptions = { sandboxName: 'sb', prompt: 'hello', agentId: 'openclaw' };
+      const options: AcpSessionCreateOptions = {
+        sandboxName: 'sb',
+        gatewayName: 'test-gateway',
+        prompt: 'hello',
+        agentId: 'openclaw',
+      };
       const sandbox = createSandbox();
 
       const result = await manager.resolveAgentCommand(options, sandbox);
@@ -131,7 +136,7 @@ describe('AcpSessionManager', () => {
       const agent = createAgentInfo({ id: 'copilot', command: 'copilot', acp: { args: ['--acp'] } });
       vi.mocked(agentRegistry.getAgent).mockResolvedValue(agent);
 
-      const options: AcpSessionCreateOptions = { sandboxName: 'sb', prompt: 'hello' };
+      const options: AcpSessionCreateOptions = { sandboxName: 'sb', gatewayName: 'test-gateway', prompt: 'hello' };
       const sandbox = createSandbox({ labels: { [AGENT_LABEL]: 'copilot' } });
 
       const result = await manager.resolveAgentCommand(options, sandbox);
@@ -148,7 +153,12 @@ describe('AcpSessionManager', () => {
       });
       vi.mocked(agentRegistry.getAgent).mockResolvedValue(agent);
 
-      const options: AcpSessionCreateOptions = { sandboxName: 'sb', prompt: 'hello', agentId: 'claude' };
+      const options: AcpSessionCreateOptions = {
+        sandboxName: 'sb',
+        gatewayName: 'test-gateway',
+        prompt: 'hello',
+        agentId: 'claude',
+      };
       const sandbox = createSandbox();
 
       const result = await manager.resolveAgentCommand(options, sandbox);
@@ -160,7 +170,12 @@ describe('AcpSessionManager', () => {
       const agent = createAgentInfo({ id: 'openclaw', command: 'openclaw' });
       vi.mocked(agentRegistry.getAgent).mockResolvedValue(agent);
 
-      const options: AcpSessionCreateOptions = { sandboxName: 'sb', prompt: 'hello', agentId: 'openclaw' };
+      const options: AcpSessionCreateOptions = {
+        sandboxName: 'sb',
+        gatewayName: 'test-gateway',
+        prompt: 'hello',
+        agentId: 'openclaw',
+      };
       const sandbox = createSandbox({ labels: { [AGENT_LABEL]: 'copilot' } });
 
       const result = await manager.resolveAgentCommand(options, sandbox);
@@ -170,7 +185,7 @@ describe('AcpSessionManager', () => {
     });
 
     test('throws when no agent specified and no sandbox label', async () => {
-      const options: AcpSessionCreateOptions = { sandboxName: 'sb', prompt: 'hello' };
+      const options: AcpSessionCreateOptions = { sandboxName: 'sb', gatewayName: 'test-gateway', prompt: 'hello' };
       const sandbox = createSandbox();
 
       await expect(manager.resolveAgentCommand(options, sandbox)).rejects.toThrow('No agent specified');
@@ -179,7 +194,12 @@ describe('AcpSessionManager', () => {
     test('throws when agent not found in registry', async () => {
       vi.mocked(agentRegistry.getAgent).mockResolvedValue(undefined);
 
-      const options: AcpSessionCreateOptions = { sandboxName: 'sb', prompt: 'hello', agentId: 'unknown' };
+      const options: AcpSessionCreateOptions = {
+        sandboxName: 'sb',
+        gatewayName: 'test-gateway',
+        prompt: 'hello',
+        agentId: 'unknown',
+      };
       const sandbox = createSandbox();
 
       await expect(manager.resolveAgentCommand(options, sandbox)).rejects.toThrow('Agent "unknown" not found');
@@ -189,7 +209,12 @@ describe('AcpSessionManager', () => {
       const agent = createAgentInfo({ id: 'claude', name: 'Claude Code', acp: undefined });
       vi.mocked(agentRegistry.getAgent).mockResolvedValue(agent);
 
-      const options: AcpSessionCreateOptions = { sandboxName: 'sb', prompt: 'hello', agentId: 'claude' };
+      const options: AcpSessionCreateOptions = {
+        sandboxName: 'sb',
+        gatewayName: 'test-gateway',
+        prompt: 'hello',
+        agentId: 'claude',
+      };
       const sandbox = createSandbox();
 
       await expect(manager.resolveAgentCommand(options, sandbox)).rejects.toThrow(
@@ -878,6 +903,22 @@ describe('AcpSessionManager', () => {
   });
 
   describe('sandbox validation during init', () => {
+    function sessionFile(id: string, gatewayName?: string): string {
+      return JSON.stringify({
+        info: {
+          id,
+          sandboxName: 'my-sandbox',
+          sandboxId: 'stale-id',
+          prompt: 'hello',
+          status: 'completed',
+          createdAt: 1000,
+          updatedAt: 2000,
+        },
+        events: [],
+        gatewayName,
+      });
+    }
+
     test('marks sessions with missing sandboxes', async () => {
       const { existsSync } = await import('node:fs');
       const { readdir, readFile } = await import('node:fs/promises');
@@ -976,6 +1017,83 @@ describe('AcpSessionManager', () => {
 
       const sessions = await manager.listSessions();
       expect(sessions[0]!.sandboxId).toBeUndefined();
+    });
+
+    test('validates each session against the sandboxes of its own gateway', async () => {
+      const { existsSync } = await import('node:fs');
+      const { readdir, readFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readdir).mockResolvedValue(['s1.json' as never, 's2.json' as never]);
+      vi.mocked(readFile).mockImplementation(async path =>
+        String(path).endsWith('s1.json') ? sessionFile('s1', 'gw-a') : sessionFile('s2', 'gw-b'),
+      );
+      vi.mocked(openshellSdkClientManager.getClient).mockImplementation(async gatewayName => {
+        const id = gatewayName === 'gw-a' ? 'id-a' : 'id-b';
+        const all = vi
+          .fn()
+          .mockResolvedValue([{ id, name: 'my-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' }]);
+        return { sandbox: { list: vi.fn().mockReturnValue({ all }) } } as never;
+      });
+
+      await manager.init();
+
+      const sessions = await manager.listSessions();
+      expect(sessions.find(s => s.id === 's1')?.sandboxId).toBe('id-a');
+      expect(sessions.find(s => s.id === 's2')?.sandboxId).toBe('id-b');
+      expect(openshellSdkClientManager.getClient).not.toHaveBeenCalledWith(undefined);
+    });
+
+    test('validates legacy sessions without gateway on the default gateway', async () => {
+      const { existsSync } = await import('node:fs');
+      const { readdir, readFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readdir).mockResolvedValue(['s1.json' as never, 's2.json' as never]);
+      vi.mocked(readFile).mockImplementation(async path =>
+        String(path).endsWith('s1.json') ? sessionFile('s1') : sessionFile('s2', 'gw-a'),
+      );
+      vi.mocked(openshellSdkClientManager.getClient).mockImplementation(async gatewayName => {
+        const id = gatewayName === 'gw-a' ? 'id-a' : 'id-default';
+        const all = vi
+          .fn()
+          .mockResolvedValue([{ id, name: 'my-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' }]);
+        return { sandbox: { list: vi.fn().mockReturnValue({ all }) } } as never;
+      });
+
+      await manager.init();
+
+      const sessions = await manager.listSessions();
+      expect(sessions.find(s => s.id === 's1')?.sandboxId).toBe('id-default');
+      expect(sessions.find(s => s.id === 's2')?.sandboxId).toBe('id-a');
+      expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith(undefined);
+      expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith('gw-a');
+    });
+
+    test('still validates other gateways when one gateway fails', async () => {
+      const { existsSync } = await import('node:fs');
+      const { readdir, readFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readdir).mockResolvedValue(['s1.json' as never, 's2.json' as never]);
+      vi.mocked(readFile).mockImplementation(async path =>
+        String(path).endsWith('s1.json') ? sessionFile('s1', 'gw-a') : sessionFile('s2', 'gw-b'),
+      );
+      vi.mocked(openshellSdkClientManager.getClient).mockImplementation(async gatewayName => {
+        if (gatewayName === 'gw-a') {
+          throw new Error('gateway gw-a unreachable');
+        }
+        const all = vi
+          .fn()
+          .mockResolvedValue([{ id: 'id-b', name: 'my-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' }]);
+        return { sandbox: { list: vi.fn().mockReturnValue({ all }) } } as never;
+      });
+
+      await manager.init();
+
+      const sessions = await manager.listSessions();
+      expect(sessions.find(s => s.id === 's1')?.sandboxId).toBe('stale-id');
+      expect(sessions.find(s => s.id === 's2')?.sandboxId).toBe('id-b');
     });
 
     test('handles listSandboxes failure gracefully', async () => {
@@ -1358,6 +1476,7 @@ describe('AcpSessionManager', () => {
 
     const options: AcpSessionCreateOptions = {
       sandboxName: 'test-sandbox',
+      gatewayName: 'test-gateway',
       prompt: 'hello',
       agentId: 'openclaw',
     };
@@ -1438,10 +1557,42 @@ describe('AcpSessionManager', () => {
       return mockConnection;
     }
 
+    test('looks up the sandbox and runs the agent on the requested gateway', async () => {
+      setupConnectionMocks();
+      const remoteSandbox = {
+        list: vi.fn().mockReturnValue({
+          all: vi
+            .fn()
+            .mockResolvedValue([
+              { id: 'sandbox-1', name: 'test-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' },
+            ]),
+        }),
+        execInteractive: vi.fn(sdkSandbox.execInteractive.getMockImplementation()),
+      };
+      vi.mocked(openshellSdkClientManager.getClient).mockImplementation(async gatewayName =>
+        gatewayName === 'remote' ? ({ sandbox: remoteSandbox } as never) : ({ sandbox: sdkSandbox } as never),
+      );
+
+      await manager.createSession({ sandboxName: 'test-sandbox', gatewayName: 'remote', agentId: 'openclaw' });
+
+      expect(remoteSandbox.list).toHaveBeenCalled();
+      expect(remoteSandbox.execInteractive).toHaveBeenCalledWith(
+        'test-sandbox',
+        expect.arrayContaining(['openclaw']),
+        expect.anything(),
+      );
+      expect(sdkSandbox.list).not.toHaveBeenCalled();
+      expect(sdkSandbox.execInteractive).not.toHaveBeenCalled();
+    });
+
     test('names a prompt-less session after its sandbox', async () => {
       setupConnectionMocks();
 
-      const session = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+      const session = await manager.createSession({
+        sandboxName: 'test-sandbox',
+        gatewayName: 'test-gateway',
+        agentId: 'openclaw',
+      });
 
       expect(session.name).toBe('test-sandbox');
       expect(session.prompt).toBe('');
@@ -1450,9 +1601,21 @@ describe('AcpSessionManager', () => {
     test('appends a numeric suffix for further prompt-less sessions on the same sandbox', async () => {
       setupConnectionMocks();
 
-      const first = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
-      const second = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
-      const third = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+      const first = await manager.createSession({
+        sandboxName: 'test-sandbox',
+        gatewayName: 'test-gateway',
+        agentId: 'openclaw',
+      });
+      const second = await manager.createSession({
+        sandboxName: 'test-sandbox',
+        gatewayName: 'test-gateway',
+        agentId: 'openclaw',
+      });
+      const third = await manager.createSession({
+        sandboxName: 'test-sandbox',
+        gatewayName: 'test-gateway',
+        agentId: 'openclaw',
+      });
 
       expect(first.name).toBe('test-sandbox');
       expect(second.name).toBe('test-sandbox (2)');
@@ -1464,6 +1627,7 @@ describe('AcpSessionManager', () => {
 
       const session = await manager.createSession({
         sandboxName: 'test-sandbox',
+        gatewayName: 'test-gateway',
         prompt: 'hello',
         agentId: 'openclaw',
       });
@@ -1475,7 +1639,11 @@ describe('AcpSessionManager', () => {
     test('omits the prompt flow event when created without a prompt', async () => {
       setupConnectionMocks();
 
-      const session = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+      const session = await manager.createSession({
+        sandboxName: 'test-sandbox',
+        gatewayName: 'test-gateway',
+        agentId: 'openclaw',
+      });
 
       expect(manager.getSessionEvents(session.id)).toHaveLength(0);
     });
@@ -1483,7 +1651,11 @@ describe('AcpSessionManager', () => {
     test('fetches capabilities then leaves the session idle without sending a prompt', async () => {
       const connection = setupConnectionMocks();
 
-      const session = await manager.createSession({ sandboxName: 'test-sandbox', agentId: 'openclaw' });
+      const session = await manager.createSession({
+        sandboxName: 'test-sandbox',
+        gatewayName: 'test-gateway',
+        agentId: 'openclaw',
+      });
 
       await vi.waitFor(async () => {
         const sessions = await manager.listSessions();

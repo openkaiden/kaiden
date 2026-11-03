@@ -536,9 +536,12 @@ export function initExposure(): void {
     },
   );
 
-  contextBridge.exposeInMainWorld('createSecret', async (options: SecretCreateOptions): Promise<SecretName> => {
-    return ipcInvoke('secret-manager:create', options);
-  });
+  contextBridge.exposeInMainWorld(
+    'createSecret',
+    async (options: SecretCreateOptions, gateway?: string): Promise<SecretName> => {
+      return ipcInvoke('secret-manager:create', options, gateway);
+    },
+  );
 
   contextBridge.exposeInMainWorld('listSecrets', async (gateway?: string): Promise<GatewaySecretInfo[]> => {
     return ipcInvoke('secret-manager:list', gateway);
@@ -548,8 +551,8 @@ export function initExposure(): void {
     return ipcInvoke('secret-manager:remove', name, gateway);
   });
 
-  contextBridge.exposeInMainWorld('listSecretServices', async (): Promise<OpenshellProfile[]> => {
-    return ipcInvoke('secret-manager:list-services');
+  contextBridge.exposeInMainWorld('listSecretServices', async (gateway?: string): Promise<OpenshellProfile[]> => {
+    return ipcInvoke('secret-manager:list-services', gateway);
   });
 
   contextBridge.exposeInMainWorld('listSkills', async (): Promise<Array<SkillInfo>> => {

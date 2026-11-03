@@ -1,6 +1,4 @@
 <script lang="ts">
-import { onMount } from 'svelte';
-
 import type { CardSelectorOption } from '/@/lib/ui/CardSelector.svelte';
 import CardSelector from '/@/lib/ui/CardSelector.svelte';
 import type { OpenshellProfile } from '/@api/openshell-gateway-info';
@@ -8,13 +6,22 @@ import type { OpenshellProfile } from '/@api/openshell-gateway-info';
 import { getServiceIcon } from './secret-vault-utils';
 
 interface Props {
+  gateway: string;
   onSelect: (profile: OpenshellProfile | undefined) => void;
 }
 
-let { onSelect }: Props = $props();
+let { gateway, onSelect }: Props = $props();
 
-let services = $state<OpenshellProfile[]>([]);
-let loading = $state(true);
+async function loadServices(gatewayName: string): Promise<OpenshellProfile[]> {
+  try {
+    return (await window.listSecretServices(gatewayName)).filter(s => s.credentials?.length);
+  } catch (err: unknown) {
+    console.error(`Failed to load secret services for gateway ${gatewayName}`, err);
+    return [];
+  }
+}
+
+let services = $derived(await loadServices(gateway));
 let selected = $state('');
 
 let serviceMap = $derived(new Map(services.map(s => [s.id, s])));
@@ -28,24 +35,10 @@ let typeOptions = $derived<CardSelectorOption[]>(
   })),
 );
 
-onMount(async () => {
-  try {
-    services = (await window.listSecretServices()).filter(s => s.credentials?.length);
-  } catch (err: unknown) {
-    console.error('Failed to load secret services', err);
-  } finally {
-    loading = false;
-  }
-});
-
 function select(value: string): void {
   selected = value;
   onSelect(serviceMap.get(value));
 }
 </script>
 
-{#if loading}
-  <p class="text-sm text-(--pd-content-card-text) opacity-70">Loading secret types…</p>
-{:else}
-  <CardSelector label="Secret type" options={typeOptions} bind:selected={(): string => selected, select} required />
-{/if}
+<CardSelector label="Secret type" options={typeOptions} bind:selected={(): string => selected, select} required />

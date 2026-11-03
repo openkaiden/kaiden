@@ -1,16 +1,25 @@
 <script lang="ts">
 import { Button, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
 
+import { openshellGateways, openshellGatewaysReady } from '/@/kaiden/stores/openshell-gateways';
 import FormPage from '/@/lib/ui/FormPage.svelte';
 import PasswordInput from '/@/lib/ui/PasswordInput.svelte';
+import { selectGateway } from '/@/lib/ui/select-gateway';
 import { handleNavigation } from '/@/navigation';
 import { NavigationPage } from '/@api/navigation-page';
-import type { OpenshellProfile } from '/@api/openshell-gateway-info';
+import { isUsableGateway, type OpenshellProfile } from '/@api/openshell-gateway-info';
 import type { SecretCreateOptions } from '/@api/secret-info';
 
 import SecretTypeSelector from './SecretTypeSelector.svelte';
 
-let selectedProfile = $state<OpenshellProfile | undefined>();
+let gateways = $derived($openshellGateways.filter(isUsableGateway));
+let gateway = $derived(selectGateway(gateways));
+
+// Reading `gateway` is intentional: the selected secret type is reset when the gateway changes.
+let selectedProfile = $derived.by((): OpenshellProfile | undefined => {
+  gateway;
+  return undefined;
+});
 let type = $derived(selectedProfile?.id ?? '');
 let name = $state('');
 let saving = $state(false);
@@ -34,6 +43,7 @@ let title = $derived(selectedProfile ? `${selectedProfile.display_name} Secret` 
 let subtitle = $derived(selectedProfile?.description ?? '');
 
 let canSave = $derived.by(() => {
+  if (!gateway) return false;
   if (!name.trim()) return false;
   if (!selectedProfile) return false;
   const creds = selectedProfile.credentials ?? [];
@@ -68,7 +78,7 @@ async function addSecret(): Promise<void> {
       value,
     };
 
-    await window.createSecret(options);
+    await window.createSecret(options, gateway);
     handleNavigation({ page: NavigationPage.SECRET_VAULT });
   } catch (err: unknown) {
     error = err instanceof Error ? err.message : String(err);
@@ -84,11 +94,23 @@ async function addSecret(): Promise<void> {
       <div class="bg-(--pd-content-card-bg) py-6">
         <div class="flex flex-col px-6 max-w-4xl mx-auto space-y-5">
 
-          <SecretTypeSelector
-            onSelect={(profile: OpenshellProfile | undefined): void => {
-              selectedProfile = profile;
-            }}
-          />
+          {#if gateway}
+            {#key gateway}
+              <svelte:boundary>
+                <SecretTypeSelector
+                  {gateway}
+                  onSelect={(profile: OpenshellProfile | undefined): void => {
+                    selectedProfile = profile;
+                  }}
+                />
+                {#snippet pending()}
+                  <p class="text-sm text-(--pd-content-card-text) opacity-70">Loading secret types…</p>
+                {/snippet}
+              </svelte:boundary>
+            {/key}
+          {:else if !$openshellGatewaysReady}
+            <p class="text-sm text-(--pd-content-card-text) opacity-70">Loading secret types…</p>
+          {/if}
 
           <div>
             <h1 class="text-2xl font-bold text-(--pd-modal-text)">{title}</h1>

@@ -22,7 +22,8 @@ import { create } from '@bufbuild/protobuf';
 import type { OpenShellClient } from '@nvidia/openshell-sdk';
 import { ProviderProfileSchema } from '@nvidia/openshell-sdk/raw';
 import type { FileSystemWatcher, InferenceProviderConnection } from '@openkaiden/api';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import type { IpcMainInvokeEvent } from 'electron';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { IPCHandle } from '/@/plugin/api.js';
 import type { ContainerProviderRegistry } from '/@/plugin/container-registry.js';
@@ -338,6 +339,47 @@ describe('openshellAdapter', () => {
 
     expect(result).toEqual([
       { id: 'openai', display_name: 'OpenAI', description: 'OpenAI API provider', credentials: [] },
+    ]);
+  });
+
+  test('listServices reads profiles from the given gateway', async () => {
+    mockRaw.listProviderProfiles.mockResolvedValue({
+      profiles: [{ id: 'github', displayName: 'GitHub', description: 'GitHub API provider', credentials: [] }],
+    });
+
+    const result = await manager.listServices('remote');
+
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
+    expect(result).toEqual([
+      { id: 'github', display_name: 'GitHub', description: 'GitHub API provider', credentials: [] },
+    ]);
+  });
+
+  test('secret-manager:create IPC handler creates the secret on the given gateway', async () => {
+    mockRaw.createProvider.mockResolvedValue({});
+    const handler = vi.mocked(ipcHandle).mock.calls.find(([channel]) => channel === 'secret-manager:create')?.[1];
+    assert(handler);
+
+    const result = await handler({} as IpcMainInvokeEvent, defaultOptions, 'remote');
+
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
+    expect(result).toEqual({ name: 'my-secret' });
+  });
+
+  test('secret-manager:list-services IPC handler reads profiles from the given gateway', async () => {
+    mockRaw.listProviderProfiles.mockResolvedValue({
+      profiles: [{ id: 'github', displayName: 'GitHub', description: 'GitHub API provider', credentials: [] }],
+    });
+    const handler = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(([channel]) => channel === 'secret-manager:list-services')?.[1];
+    assert(handler);
+
+    const result = await handler({} as IpcMainInvokeEvent, 'remote');
+
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
+    expect(result).toEqual([
+      { id: 'github', display_name: 'GitHub', description: 'GitHub API provider', credentials: [] },
     ]);
   });
 
