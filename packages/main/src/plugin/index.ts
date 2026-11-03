@@ -81,6 +81,7 @@ import { OpenshellImageBuilder } from '/@/plugin/openshell-cli/openshell-image-b
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
+import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
 import { RagEnvironmentRegistry } from '/@/plugin/rag-environment-registry.js';
 import { SchedulerRegistry } from '/@/plugin/scheduler/scheduler-registry.js';
@@ -620,6 +621,7 @@ export class PluginSystem {
     container.bind<OpenshellPolicyManager>(OpenshellPolicyManager).toSelf();
     container.bind<OpenshellGatewayManager>(OpenshellGatewayManager).toSelf().inSingletonScope();
     container.bind<OpenshellSdkClientManager>(OpenshellSdkClientManager).toSelf().inSingletonScope();
+    container.bind<OpenshellSdkFileTransfer>(OpenshellSdkFileTransfer).toSelf().inSingletonScope();
     container.bind<OpenshellGateway>(OpenshellGateway).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayStateManager>(OpenshellGatewayStateManager).toSelf().inSingletonScope();
     container.bind<OpenshellImageBuilder>(OpenshellImageBuilder).toSelf().inSingletonScope();

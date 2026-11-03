@@ -31,19 +31,17 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { AgentRegistry } from '/@/plugin/agent-registry.js';
 import * as configWriter from '/@/plugin/agent-workspace/workspace-config-writer.js';
 import type { IPCHandle } from '/@/plugin/api.js';
-import type { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
 import type { Directories } from '/@/plugin/directories.js';
-import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
+import type { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import type { TaskManager } from '/@/plugin/tasks/task-manager.js';
 import type { Task } from '/@/plugin/tasks/tasks.js';
-import type { Exec } from '/@/plugin/util/exec.js';
 import type { AgentWorkspaceCreateOptions } from '/@api/agent-workspace-info.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
@@ -64,7 +62,6 @@ vi.mock(import('node:fs/promises'));
 vi.mock(import('node:os'));
 vi.mock(import('js-yaml'));
 vi.mock(import('yaml'));
-vi.mock(import('/@/plugin/openshell-cli/openshell-cli.js'));
 vi.mock(import('/@/plugin/openshell-cli/openshell-policy-manager.js'));
 
 const TEST_SHELL_COMMAND = ['/test/shell'];
@@ -147,7 +144,9 @@ const apiSender: ApiSenderType = {
   receive: vi.fn(),
 };
 const ipcHandle: IPCHandle = vi.fn();
-const openshellCli = new OpenshellCli({} as Exec, {} as CliToolRegistry);
+const openshellSdkFileTransfer = {
+  uploadToSandbox: vi.fn(),
+} as unknown as OpenshellSdkFileTransfer;
 const sdkSandbox = {
   create: vi.fn(),
   delete: vi.fn(),
@@ -257,7 +256,7 @@ function getCreateLocalGatewayHandler(): (listener: unknown, options: unknown) =
 }
 
 function getSandboxUploads(): Array<{ local: string; remote: string }> {
-  return vi.mocked(openshellCli.uploadToSandbox).mock.calls.map(([, local, remote]) => ({ local, remote }));
+  return vi.mocked(openshellSdkFileTransfer.uploadToSandbox).mock.calls.map(([, local, remote]) => ({ local, remote }));
 }
 
 beforeEach(() => {
@@ -318,8 +317,8 @@ beforeEach(() => {
     configurationRegistry,
     providerRegistry,
     secretManager,
-    openshellCli,
     openshellSdkClientManager,
+    openshellSdkFileTransfer,
     agentRegistry,
     openshellGateway,
     openshellGatewayStateManager,
@@ -490,7 +489,7 @@ describe('create – OpenShell mode', () => {
       vi.mocked(sdkSandbox.waitReady).mock.invocationCallOrder[0]!,
     );
     expect(vi.mocked(sdkSandbox.waitReady).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(openshellCli.uploadToSandbox).mock.invocationCallOrder[0]!,
+      vi.mocked(openshellSdkFileTransfer.uploadToSandbox).mock.invocationCallOrder[0]!,
     );
   });
 
@@ -1183,14 +1182,14 @@ describe('create – OpenShell mode', () => {
     await expect(manager.create(defaultOptions)).rejects.toThrow(message);
 
     expect(sdkSandbox.delete).not.toHaveBeenCalled();
-    expect(openshellCli.uploadToSandbox).not.toHaveBeenCalled();
+    expect(openshellSdkFileTransfer.uploadToSandbox).not.toHaveBeenCalled();
     expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
     expect(apiSender.send).toHaveBeenCalledTimes(2);
     expect(mockTask.status).toBe('failure');
   });
 
   test('rolls back and waits for deletion when an upload fails', async () => {
-    vi.mocked(openshellCli.uploadToSandbox).mockRejectedValue(new Error('upload failed'));
+    vi.mocked(openshellSdkFileTransfer.uploadToSandbox).mockRejectedValue(new Error('upload failed'));
 
     await expect(manager.create(defaultOptions)).rejects.toThrow('upload failed');
 
@@ -1200,7 +1199,7 @@ describe('create – OpenShell mode', () => {
   });
 
   test('reports both setup and rollback errors', async () => {
-    vi.mocked(openshellCli.uploadToSandbox).mockRejectedValue(new Error('upload failed'));
+    vi.mocked(openshellSdkFileTransfer.uploadToSandbox).mockRejectedValue(new Error('upload failed'));
     vi.mocked(sdkSandbox.waitDeleted).mockRejectedValue(new Error('deletion timed out'));
 
     await expect(manager.create(defaultOptions)).rejects.toThrow(
@@ -1228,7 +1227,7 @@ describe('create – OpenShell mode', () => {
       secretName: 'my-sandbox-secret',
       clonedProfile: 'my-sandbox-profile',
     });
-    vi.mocked(openshellCli.uploadToSandbox).mockRejectedValue(new Error('upload failed'));
+    vi.mocked(openshellSdkFileTransfer.uploadToSandbox).mockRejectedValue(new Error('upload failed'));
 
     await expect(manager.create(defaultOptions)).rejects.toThrow('upload failed');
 
@@ -1466,7 +1465,7 @@ describe('create – no-folder workspace', () => {
         labels: expect.objectContaining({ gateway: 'kaiden' }),
       }),
     );
-    expect(openshellCli.uploadToSandbox).not.toHaveBeenCalled();
+    expect(openshellSdkFileTransfer.uploadToSandbox).not.toHaveBeenCalled();
   });
 
   test('does not add WORKSPACE_LABEL when sourcePath is absent', async () => {
