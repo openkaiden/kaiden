@@ -167,6 +167,48 @@ const mockOllamaProvider: ProviderInfo = {
   inferenceProviderConnectionCreation: false,
 } as unknown as ProviderInfo;
 
+const mockOpenAIProvider: ProviderInfo = {
+  id: 'openai',
+  name: 'OpenAI',
+  internalId: 'openai-internal',
+  extensionId: 'openai.extension',
+  status: 'started',
+  containerConnections: [],
+  kubernetesConnections: [],
+  vmConnections: [],
+  inferenceConnections: [
+    {
+      connectionType: 'inference',
+      id: 'conn-3',
+      name: 'Cloud',
+      type: 'cloud',
+      status: 'started',
+      llmMetadata: { name: 'openai' },
+      models: [{ label: 'gpt-5-chat' }, { label: 'gpt-4o' }],
+    },
+  ],
+  ragConnections: [],
+  chunkConnections: [],
+  containerProviderConnectionCreation: false,
+  containerProviderConnectionInitialization: false,
+  kubernetesProviderConnectionCreation: false,
+  kubernetesProviderConnectionInitialization: false,
+  vmProviderConnectionCreation: false,
+  vmProviderConnectionInitialization: false,
+  inferenceProviderConnectionCreation: false,
+  inferenceProviderConnectionInitialization: false,
+  ragProviderConnectionCreation: false,
+  ragProviderConnectionInitialization: false,
+  chunkProviderConnectionCreation: false,
+  chunkProviderConnectionInitialization: false,
+  links: [],
+  detectionChecks: [],
+  warnings: [],
+  images: {},
+  installationSupport: false,
+  cleanupSupport: false,
+};
+
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.resetAllMocks();
@@ -277,6 +319,37 @@ test('search filters model list', async () => {
 
   expect(screen.getByText('claude-sonnet-4')).toBeInTheDocument();
   expect(screen.queryByText('claude-opus-4')).not.toBeInTheDocument();
+});
+
+test('search matches models using individual keywords', async () => {
+  setProviders([mockOpenAIProvider]);
+
+  render(AgentWorkspaceCreateStepAgentModel);
+
+  await fireEvent.click(screen.getByText('OpenCode'));
+
+  const searchInput = screen.getByPlaceholderText('Filter models…');
+  await fireEvent.input(searchInput, { target: { value: 'chat-5' } });
+
+  expect(screen.getByText('gpt-5-chat')).toBeInTheDocument();
+  expect(screen.queryByText('gpt-4o')).not.toBeInTheDocument();
+});
+
+test.each([
+  { keyword: 'openai', field: 'provider name' },
+  { keyword: 'cloud', field: 'connection name' },
+])('search matches a keyword from the $field', async ({ keyword }) => {
+  setProviders([mockOpenAIProvider]);
+
+  render(AgentWorkspaceCreateStepAgentModel);
+
+  await fireEvent.click(screen.getByText('OpenCode'));
+
+  const searchInput = screen.getByPlaceholderText('Filter models…');
+  await fireEvent.input(searchInput, { target: { value: `chat ${keyword}` } });
+
+  expect(screen.getByText('gpt-5-chat')).toBeInTheDocument();
+  expect(screen.queryByText('gpt-4o')).not.toBeInTheDocument();
 });
 
 test('switching agent keeps model if still compatible', async () => {
