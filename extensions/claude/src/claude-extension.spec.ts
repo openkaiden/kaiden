@@ -229,13 +229,10 @@ describe('ClaudeExtension', () => {
       const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
       expect(written.hasCompletedOnboarding).toBe(true);
       expect(written.projects['/sandbox'].hasTrustDialogAccepted).toBe(true);
-      expect(written.customApiKeyResponses).toEqual({
-        approved: ['unused'],
-        rejected: [],
-      });
+      expect(written.customApiKeyResponses).toBeUndefined();
     });
 
-    test('approves unused Claude API key response in .claude.json', async () => {
+    test('preserves existing customApiKeyResponses in .claude.json', async () => {
       await claudeExtension.activate();
       const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
 
@@ -243,7 +240,7 @@ describe('ClaudeExtension', () => {
       const existing = JSON.stringify({
         customApiKeyResponses: {
           approved: ['existing'],
-          rejected: ['unused', 'other'],
+          rejected: ['other'],
         },
       });
       const configFile: AgentConfigurationFile = {
@@ -256,7 +253,7 @@ describe('ClaudeExtension', () => {
 
       const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
       expect(written.customApiKeyResponses).toEqual({
-        approved: ['existing', 'unused'],
+        approved: ['existing'],
         rejected: ['other'],
       });
     });
