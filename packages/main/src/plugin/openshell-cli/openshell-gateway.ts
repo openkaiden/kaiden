@@ -775,7 +775,7 @@ export class OpenshellGateway implements IAsyncDisposable {
     await this.stopAndDrainGateway(name);
   }
 
-  async canStartGateway(gateway: GatewayInfo): Promise<boolean> {
+  async canStartGateway(gateway: Pick<GatewayInfo, 'name' | 'endpoint' | 'is_remote'>): Promise<boolean> {
     if (gateway.is_remote || !this.isLocalEndpoint(gateway.endpoint) || !this.getGatewayBinaryPath()) {
       return false;
     }
@@ -784,6 +784,31 @@ export class OpenshellGateway implements IAsyncDisposable {
       return false;
     }
     return gateway.name === DEFAULT_GATEWAY_NAME || this.isCreatedGateway(gateway.name);
+  }
+
+  async startManagedGateway(name: string): Promise<void> {
+    const { gateway_endpoint: endpoint, is_remote } = await this.gatewayManager.getGateway(name);
+    if (!(await this.canStartGateway({ name, endpoint, is_remote }))) {
+      throw new Error(`Gateway "${name}" cannot be started: it is not a stopped gateway managed by this instance`);
+    }
+    const pid = await this.readAndValidatePid(name);
+    if (pid !== undefined) {
+      throw new Error(`A process recorded for ${name} is still alive (PID ${pid}). Stop it before restarting.`);
+    }
+    // Re-check after the awaits above: a concurrent start may have begun meanwhile, and joining it would
+    // fire onDidGatewayStart twice. Nothing awaits between this check and start() registering the startup.
+    const bookkeeping = this.#gatewayBookkeeping.get(name);
+    if (bookkeeping?.process || bookkeeping?.startups.size) {
+      throw new Error(`Gateway "${name}" is already running or starting`);
+    }
+    if (name === DEFAULT_GATEWAY_NAME) {
+      const port = this.getEndpointPort(endpoint);
+      const bindAddress = new URL(endpoint).hostname;
+      await this.start({ ...(port === undefined ? {} : { port }), ...(bindAddress ? { bindAddress } : {}) });
+    } else {
+      await this.startCreatedGateway(name, endpoint);
+    }
+    this._onDidGatewayStart.fire();
   }
 
   // Cancels any in-flight startup, then waits for both the process exit and the startup to settle.

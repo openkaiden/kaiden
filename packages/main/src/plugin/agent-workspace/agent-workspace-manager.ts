@@ -795,6 +795,33 @@ export class AgentWorkspaceManager implements Disposable {
     }
   }
 
+  async startOpenshellGateway(name: string): Promise<void> {
+    const task = this.taskManager.createTask({ title: `Starting gateway "${name}"` });
+    task.state = 'running';
+    task.status = 'in-progress';
+    let started = false;
+    try {
+      await this.openshellGateway.startManagedGateway(name);
+      started = true;
+      try {
+        await this.openshellGatewayStateManager.refresh();
+      } finally {
+        this.apiSender.send('agent-workspace-update');
+      }
+      task.status = 'success';
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : String(err);
+      task.status = 'failure';
+      task.error = started
+        ? `Gateway "${name}" started, but failed to refresh gateway state: ${detail}`
+        : `Failed to start gateway "${name}": ${detail}`;
+      console.error(task.error);
+      throw new Error(task.error, { cause: err });
+    } finally {
+      task.state = 'completed';
+    }
+  }
+
   async deleteOpenshellSandbox(name: string, gateway: string): Promise<void> {
     const workspaces = await this.listOpenshellSandboxes(gateway);
     const workspace = workspaces.flatMap(entry => entry.sandboxes).find(ws => ws.name === name);
@@ -1180,6 +1207,10 @@ export class AgentWorkspaceManager implements Disposable {
 
     this.ipcHandle('agent-workspace:stopOpenshellGateway', async (_listener, name: string): Promise<void> => {
       return this.stopOpenshellGateway(name);
+    });
+
+    this.ipcHandle('agent-workspace:startOpenshellGateway', async (_listener, name: string): Promise<void> => {
+      return this.startOpenshellGateway(name);
     });
 
     this.ipcHandle(

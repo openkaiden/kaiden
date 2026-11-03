@@ -1321,6 +1321,154 @@ describe('canStartGateway', () => {
   });
 });
 
+describe('startManagedGateway', () => {
+  test('starts a stopped created gateway on its registered endpoint and notifies listeners', async () => {
+    vi.mocked(access).mockResolvedValue(undefined);
+    vi.mocked(gatewayManager.getGateway).mockResolvedValue({
+      name: 'local-dev',
+      gateway_endpoint: 'http://127.0.0.1:17675',
+      is_remote: false,
+      gateway_port: 17675,
+    });
+    const listener = vi.fn();
+    gateway.onDidGatewayStart(listener);
+
+    await gateway.startManagedGateway('local-dev');
+
+    expect(spawn).toHaveBeenCalledExactlyOnceWith(
+      GATEWAY_BINARY,
+      expect.arrayContaining([
+        '--config',
+        join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev', 'gateway.toml'),
+        '--port',
+        '17675',
+      ]),
+      expect.objectContaining({ detached: false }),
+    );
+    expect(gateway.canStopGateway('local-dev')).toBe(true);
+    expect(listener).toHaveBeenCalledOnce();
+  });
+
+  test('restarts kaiden-local on its registered port without re-registering it', async () => {
+    vi.mocked(gatewayManager.getGateway).mockResolvedValue({
+      name: 'kaiden-local',
+      gateway_endpoint: 'http://127.0.0.1:18000',
+      is_remote: false,
+      gateway_port: 18000,
+    });
+    const listener = vi.fn();
+    gateway.onDidGatewayStart(listener);
+
+    await gateway.startManagedGateway('kaiden-local');
+
+    expect(spawn).toHaveBeenCalledExactlyOnceWith(
+      GATEWAY_BINARY,
+      expect.arrayContaining(['--port', '18000']),
+      expect.objectContaining({ detached: false }),
+    );
+    expect(gatewayManager.addGateway).not.toHaveBeenCalled();
+    expect(gateway.isRunning()).toBe(true);
+    expect(listener).toHaveBeenCalledOnce();
+  });
+
+  test('restarts kaiden-local on its registered bind address', async () => {
+    vi.mocked(gatewayManager.getGateway).mockResolvedValue({
+      name: 'kaiden-local',
+      gateway_endpoint: 'http://0.0.0.0:18000',
+      is_remote: false,
+      gateway_port: 18000,
+    });
+
+    await gateway.startManagedGateway('kaiden-local');
+
+    expect(spawn).toHaveBeenCalledExactlyOnceWith(
+      GATEWAY_BINARY,
+      expect.arrayContaining(['--port', '18000', '--bind-address', '0.0.0.0']),
+      expect.objectContaining({ detached: false }),
+    );
+    expect(gatewayManager.removeGateway).not.toHaveBeenCalled();
+    expect(gatewayManager.addGateway).not.toHaveBeenCalled();
+  });
+
+  test('rejects a gateway this instance does not manage', async () => {
+    vi.mocked(gatewayManager.getGateway).mockResolvedValue({
+      name: 'external',
+      gateway_endpoint: 'http://127.0.0.1:17680',
+      is_remote: false,
+      gateway_port: 17680,
+    });
+    const listener = vi.fn();
+    gateway.onDidGatewayStart(listener);
+
+    await expect(gateway.startManagedGateway('external')).rejects.toThrow(
+      'Gateway "external" cannot be started: it is not a stopped gateway managed by this instance',
+    );
+    expect(spawn).not.toHaveBeenCalled();
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  test('rejects a concurrent start so listeners are notified once', async () => {
+    vi.mocked(gatewayManager.getGateway).mockResolvedValue({
+      name: 'kaiden-local',
+      gateway_endpoint: 'http://127.0.0.1:18000',
+      is_remote: false,
+      gateway_port: 18000,
+    });
+    const listener = vi.fn();
+    gateway.onDidGatewayStart(listener);
+
+    const results = await Promise.allSettled([
+      gateway.startManagedGateway('kaiden-local'),
+      gateway.startManagedGateway('kaiden-local'),
+    ]);
+
+    expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(listener).toHaveBeenCalledOnce();
+  });
+
+  test('rejects starting a gateway that is already running', async () => {
+    vi.mocked(gatewayManager.getGateway).mockResolvedValue({
+      name: 'kaiden-local',
+      gateway_endpoint: 'http://127.0.0.1:18000',
+      is_remote: false,
+      gateway_port: 18000,
+    });
+    await gateway.start();
+    const listener = vi.fn();
+    gateway.onDidGatewayStart(listener);
+
+    await expect(gateway.startManagedGateway('kaiden-local')).rejects.toThrow(
+      'Gateway "kaiden-local" cannot be started: it is not a stopped gateway managed by this instance',
+    );
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  test('rejects when the recorded PID is still alive', async () => {
+    // Signal 0 checks this test process without sending it a signal or mocking the global process.
+    vi.mocked(readFile).mockResolvedValue(String(process.pid));
+    vi.mocked(gatewayManager.getGateway).mockResolvedValue({
+      name: 'kaiden-local',
+      gateway_endpoint: 'http://127.0.0.1:29670',
+      is_remote: false,
+      gateway_port: 29670,
+    });
+
+    await expect(gateway.startManagedGateway('kaiden-local')).rejects.toThrow(
+      `A process recorded for kaiden-local is still alive (PID ${process.pid}). Stop it before restarting.`,
+    );
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  test('propagates a missing registration without spawning', async () => {
+    vi.mocked(access).mockResolvedValue(undefined);
+
+    await expect(gateway.startManagedGateway('local-dev')).rejects.toThrow('not found');
+    expect(spawn).not.toHaveBeenCalled();
+  });
+});
+
 describe('isRunning', () => {
   test('returns false when no process is spawned', () => {
     expect(gateway.isRunning()).toBe(false);

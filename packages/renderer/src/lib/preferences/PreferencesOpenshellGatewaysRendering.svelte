@@ -7,7 +7,9 @@ import EngineIcon from '/@/lib/ui/EngineIcon.svelte';
 import { extensionInfos } from '/@/stores/extensions';
 import { type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME } from '/@api/openshell-gateway-info';
 
+import { GatewayStartAction } from './gateway-start-action.svelte';
 import { GatewayStopAction } from './gateway-stop-action.svelte';
+import GatewayStartButton from './GatewayStartButton.svelte';
 import GatewayStopButton from './GatewayStopButton.svelte';
 import PreferencesOpenshellGatewayCreate from './PreferencesOpenshellGatewayCreate.svelte';
 import SettingsPage from './SettingsPage.svelte';
@@ -21,6 +23,7 @@ let activeGateway: GatewayInfo | undefined = $derived($openshellGateways.find(g 
 let otherGateways: GatewayInfo[] = $derived($openshellGateways.filter(g => !g.active));
 let showCreateGateway = $state(false);
 const stopAction = new GatewayStopAction();
+const startAction = new GatewayStartAction();
 
 function openCreateGateway(): void {
   showCreateGateway = true;
@@ -107,6 +110,9 @@ function getDetails(gateway: GatewayInfo): string {
     {#each stopAction.errors as [name, error] (name)}
       <ErrorMessage {error} />
     {/each}
+    {#each startAction.errors as [name, error] (name)}
+      <ErrorMessage {error} />
+    {/each}
     {#if !openshellStarted}
       <EmptyScreen
         icon={EngineIcon}
@@ -146,6 +152,7 @@ function getDetails(gateway: GatewayInfo): string {
             </span>
             <span class="text-sm text-(--pd-content-card-text) opacity-70">{getDetails(activeGateway)}</span>
             <GatewayStopButton gateway={activeGateway} {stopAction} />
+            <GatewayStartButton gateway={activeGateway} {startAction} />
           </div>
         </div>
       </div>
@@ -173,6 +180,7 @@ function getDetails(gateway: GatewayInfo): string {
                 </span>
                 <span class="text-sm text-(--pd-content-card-text) opacity-70">{getDetails(gateway)}</span>
                 <GatewayStopButton {gateway} {stopAction} />
+                <GatewayStartButton {gateway} {startAction} />
               </div>
             </div>
           {/each}
