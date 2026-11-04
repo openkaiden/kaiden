@@ -133,6 +133,7 @@ import type {
   CreateLocalGatewayOptions,
   GatewayInfo,
   GatewaySandboxes,
+  LocalGatewayDriver,
   OpenshellProfile,
 } from '/@api/openshell-gateway-info';
 import type { V1Route } from '/@api/openshift-types';
@@ -403,6 +404,10 @@ export function initExposure(): void {
 
   contextBridge.exposeInMainWorld('startOpenshellGateway', async (name: string): Promise<void> => {
     return ipcInvoke('agent-workspace:startOpenshellGateway', name);
+  });
+
+  contextBridge.exposeInMainWorld('getDefaultLocalGatewayDriver', async (): Promise<LocalGatewayDriver> => {
+    return ipcInvoke('agent-workspace:getDefaultLocalGatewayDriver');
   });
 
   contextBridge.exposeInMainWorld(

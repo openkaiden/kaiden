@@ -51,6 +51,7 @@ beforeEach(() => {
   openshellGateways.set([]);
   vi.mocked(window.isFreePort).mockResolvedValue(true);
   vi.mocked(window.createLocalGateway).mockResolvedValue([]);
+  vi.mocked(window.getDefaultLocalGatewayDriver).mockResolvedValue('vm');
 });
 
 test.each([true, false])('stops a managed gateway (active: %s)', async active => {
@@ -157,7 +158,11 @@ test('shows stop errors and permits retry', async () => {
   expect(window.stopOpenshellGateway).toHaveBeenCalledTimes(2);
 });
 
-test('creates a gateway after confirming the selected port is available', async () => {
+test.each([
+  'vm',
+  'podman',
+] as const)('creates a %s gateway by default after confirming the port is available', async driver => {
+  vi.mocked(window.getDefaultLocalGatewayDriver).mockResolvedValue(driver);
   setOpenshellStarted();
   render(PreferencesOpenshellGatewaysRendering);
   await fireEvent.click(screen.getByRole('button', { name: 'Create local gateway' }));
@@ -171,7 +176,25 @@ test('creates a gateway after confirming the selected port is available', async 
     name: 'local-gateway',
     bindAddress: '127.0.0.1',
     port: 17675,
-    driver: 'podman',
+    driver,
+  });
+});
+
+test('creates a gateway with the driver selected over the platform default', async () => {
+  setOpenshellStarted();
+  render(PreferencesOpenshellGatewaysRendering);
+  await fireEvent.click(screen.getByRole('button', { name: 'Create local gateway' }));
+  await fireEvent.click(await screen.findByRole('button', { name: /VM/ }));
+  await fireEvent.click(screen.getByRole('button', { name: 'Docker' }));
+  const createButton = screen.getByRole('button', { name: 'Create' });
+  await vi.waitFor(() => expect(createButton).toBeEnabled());
+  await fireEvent.click(createButton);
+
+  expect(window.createLocalGateway).toHaveBeenCalledWith({
+    name: 'local-gateway',
+    bindAddress: '127.0.0.1',
+    port: 17675,
+    driver: 'docker',
   });
 });
 
