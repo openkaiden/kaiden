@@ -19,11 +19,17 @@
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
-import { tick } from 'svelte';
+import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { openshellGateways } from '/@/kaiden/stores/openshell-gateways';
-import { openshellSandboxes, selectedGateway } from '/@/kaiden/stores/openshell-sandboxes';
+import {
+  allOpenshellSandboxes,
+  clearSandboxActionError,
+  openshellSandboxes,
+  selectedGateway,
+  setSandboxActionError,
+} from '/@/kaiden/stores/openshell-sandboxes';
 import { notificationQueue } from '/@/stores/notifications';
 import type { NotificationCard } from '/@api/notification';
 import type { GatewayInfo, GatewaySandboxes } from '/@api/openshell-gateway-info';
@@ -140,7 +146,6 @@ test('Expect gateway filter dropdown is not shown when there is only one connect
       gatewayState: { reachable: true, health: 'healthy', compatible: true },
     },
   ]);
-  await tick();
 
   expect(screen.queryByLabelText('Filter by gateway')).not.toBeInTheDocument();
 });
@@ -165,9 +170,8 @@ test('Expect gateway filter dropdown is shown when there are multiple connected 
 
   render(AgentWorkspaceList);
   openshellGateways.set(gateways);
-  await tick();
 
-  const dropdown = screen.getByLabelText('Filter by gateway');
+  const dropdown = await screen.findByLabelText('Filter by gateway');
   expect(dropdown).toBeInTheDocument();
 });
 
@@ -201,15 +205,13 @@ test('Expect selecting a gateway filters the workspace list', async () => {
     },
   ]);
   openshellSandboxes.set(workspaces);
-  await tick();
 
-  expect(screen.getByText('local-workspace')).toBeInTheDocument();
-  expect(screen.getByText('remote-workspace')).toBeInTheDocument();
+  expect(await screen.findByText('local-workspace')).toBeInTheDocument();
+  expect(await screen.findByText('remote-workspace')).toBeInTheDocument();
 
   const dropdownTrigger = within(screen.getByLabelText('Filter by gateway')).getByRole('button');
   await fireEvent.click(dropdownTrigger);
   await fireEvent.click(screen.getByRole('button', { name: 'local' }));
-  await tick();
 
   expect(screen.getByText('local-workspace')).toBeInTheDocument();
   expect(screen.queryByText('remote-workspace')).not.toBeInTheDocument();
@@ -245,18 +247,15 @@ test('Expect "All" option shows all workspaces', async () => {
     },
   ]);
   openshellSandboxes.set(workspaces);
-  await tick();
 
-  const dropdownTrigger = within(screen.getByLabelText('Filter by gateway')).getByRole('button');
+  const dropdownTrigger = within(await screen.findByLabelText('Filter by gateway')).getByRole('button');
   await fireEvent.click(dropdownTrigger);
   await fireEvent.click(screen.getByRole('button', { name: 'local' }));
-  await tick();
 
   expect(screen.queryByText('remote-workspace')).not.toBeInTheDocument();
 
   await fireEvent.click(dropdownTrigger);
   await fireEvent.click(screen.getByRole('button', { name: 'All' }));
-  await tick();
 
   expect(screen.getByText('local-workspace')).toBeInTheDocument();
   expect(screen.getByText('remote-workspace')).toBeInTheDocument();
@@ -275,7 +274,6 @@ test('Expect checkboxes rendered for each workspace', async () => {
 
   openshellSandboxes.set(workspaces);
   render(AgentWorkspaceList);
-  await tick();
 
   const checkboxes = screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' });
   expect(checkboxes).toHaveLength(2);
@@ -296,7 +294,6 @@ test('Expect checkbox disabled for workspace in Deleting phase', async () => {
 
   openshellSandboxes.set(workspaces);
   render(AgentWorkspaceList);
-  await tick();
 
   const checkboxes = screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' });
   expect(checkboxes).toHaveLength(2);
@@ -314,7 +311,6 @@ test('Expect bulk delete button appears after selecting a workspace', async () =
 
   openshellSandboxes.set(workspaces);
   render(AgentWorkspaceList);
-  await tick();
 
   expect(screen.queryByRole('button', { name: /Delete .* selected items/ })).not.toBeInTheDocument();
 
@@ -335,7 +331,6 @@ test('Expect user confirmation for bulk delete when required', async () => {
 
   openshellSandboxes.set(workspaces);
   render(AgentWorkspaceList);
-  await tick();
 
   const checkbox = screen.getByRole('checkbox', { name: 'Toggle openshell-workspaces' });
   await fireEvent.click(checkbox);
@@ -352,4 +347,115 @@ test('Expect user confirmation for bulk delete when required', async () => {
   await fireEvent.click(deleteButton);
   expect(window.showMessageBox).toHaveBeenCalledTimes(2);
   await waitFor(() => expect(window.deleteOpenshellSandbox).toHaveBeenCalledWith('workspace-1', 'local'));
+});
+
+test('Expect bulk delete sets actionError on failed workspaces only', async () => {
+  clearSandboxActionError('ws-1');
+  clearSandboxActionError('ws-2');
+  const workspaces: GatewaySandboxes[] = [
+    {
+      gateway: { canStart: false, canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      sandboxes: [
+        { id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() },
+        { id: 'ws-2', name: 'workspace-2', phase: 'Ready', created_at: Date.now().toString() },
+      ],
+    },
+  ];
+
+  openshellSandboxes.set(workspaces);
+  render(AgentWorkspaceList);
+
+  const checkboxes = screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' });
+  await fireEvent.click(checkboxes[0]);
+  await fireEvent.click(checkboxes[1]);
+
+  vi.mocked(window.getConfigurationValue).mockResolvedValue(false);
+  vi.mocked(window.deleteOpenshellSandbox).mockImplementation(async name => {
+    if (name === 'workspace-2') {
+      throw new Error('network error');
+    }
+  });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Delete 2 selected items' }));
+
+  await waitFor(() =>
+    expect(get(allOpenshellSandboxes).find(s => s.id === 'ws-2')?.actionError).toBe('Error: network error'),
+  );
+  expect(get(allOpenshellSandboxes).find(s => s.id === 'ws-1')?.actionError).toBeUndefined();
+
+  // rows hold several tooltips (other columns), hover them all to reveal the error one
+  const failedRow = screen.getByRole('row', { name: 'workspace-2' });
+  for (const trigger of within(failedRow).getAllByTestId('tooltip-trigger')) {
+    await fireEvent.mouseEnter(trigger);
+  }
+  expect(await within(failedRow).findByText('Error: network error')).toBeInTheDocument();
+
+  const successRow = screen.getByRole('row', { name: 'workspace-1' });
+  for (const trigger of within(successRow).queryAllByTestId('tooltip-trigger')) {
+    await fireEvent.mouseEnter(trigger);
+  }
+  expect(within(successRow).queryByText('Error: network error')).not.toBeInTheDocument();
+});
+
+test('Expect failed workspaces to stay selected after bulk delete', async () => {
+  clearSandboxActionError('ws-1');
+  clearSandboxActionError('ws-2');
+  const workspaces: GatewaySandboxes[] = [
+    {
+      gateway: { canStart: false, canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      sandboxes: [
+        { id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() },
+        { id: 'ws-2', name: 'workspace-2', phase: 'Ready', created_at: Date.now().toString() },
+      ],
+    },
+  ];
+
+  openshellSandboxes.set(workspaces);
+  render(AgentWorkspaceList);
+
+  const checkboxes = screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' });
+  await fireEvent.click(checkboxes[0]);
+  await fireEvent.click(checkboxes[1]);
+
+  vi.mocked(window.getConfigurationValue).mockResolvedValue(false);
+  vi.mocked(window.deleteOpenshellSandbox).mockImplementation(async name => {
+    if (name === 'workspace-2') {
+      throw new Error('network error');
+    }
+  });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Delete 2 selected items' }));
+
+  await waitFor(() =>
+    expect(get(allOpenshellSandboxes).find(s => s.id === 'ws-2')?.actionError).toBe('Error: network error'),
+  );
+  expect(screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' })[1]).toBeChecked();
+  expect(screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' })[0]).not.toBeChecked();
+});
+
+test('Expect selection to be kept when an action error is set on another workspace', async () => {
+  clearSandboxActionError('ws-1');
+  clearSandboxActionError('ws-2');
+  const workspaces: GatewaySandboxes[] = [
+    {
+      gateway: { canStart: false, canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      sandboxes: [
+        { id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() },
+        { id: 'ws-2', name: 'workspace-2', phase: 'Ready', created_at: Date.now().toString() },
+      ],
+    },
+  ];
+
+  openshellSandboxes.set(workspaces);
+  render(AgentWorkspaceList);
+
+  await fireEvent.click(screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' })[0]);
+  expect(screen.getByRole('button', { name: 'Delete 1 selected items' })).toBeInTheDocument();
+
+  setSandboxActionError('ws-2', 'Error: boom');
+
+  await waitFor(() =>
+    expect(screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' })[0]).toBeChecked(),
+  );
+  expect(screen.getByRole('button', { name: 'Delete 1 selected items' })).toBeInTheDocument();
 });

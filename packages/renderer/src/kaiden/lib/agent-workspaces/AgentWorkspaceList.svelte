@@ -11,14 +11,17 @@ import {
   TableDurationColumn,
   TableRow,
 } from '@podman-desktop/ui-svelte';
+import { SvelteMap } from 'svelte/reactivity';
 
 import GatewayFilterDropdown from '/@/kaiden/lib/gateways/GatewayFilterDropdown.svelte';
 import {
   allOpenshellSandboxes,
+  clearSandboxActionError,
   filteredOpenshellSandboxes,
   type SandboxInfoWithGateway,
   searchPattern as sandboxSearchPattern,
   selectedGateway as sandboxSelectedGateway,
+  setSandboxActionError,
 } from '/@/kaiden/stores/openshell-sandboxes';
 import { withBulkConfirmation } from '/@/lib/actions/BulkActions';
 import NotificationsBox from '/@/lib/dashboard/NotificationsBox.svelte';
@@ -64,18 +67,36 @@ async function deleteSelectedSandboxes(): Promise<void> {
   bulkDeleteInProgress = true;
   await Promise.all(
     selectedSandboxes.map(async sandbox => {
+      clearSandboxActionError(sandbox.id);
       try {
         await window.deleteOpenshellSandbox(sandbox.name, sandbox.gatewayName);
-      } catch (error) {
-        console.error(`error while removing workspace ${sandbox.name}`, error);
+        selection.delete(key(sandbox));
+      } catch (error: unknown) {
+        setSandboxActionError(sandbox.id, String(error));
       }
     }),
   );
   bulkDeleteInProgress = false;
 }
 
+// selection is kept by row key so it survives store emissions (backend refresh, action errors)
+// and failed bulk deletions stay selected for a retry
+const selection = new SvelteMap<string, boolean>();
+
 const filteredSandboxes: SandboxSelectable[] = $derived(
-  $filteredOpenshellSandboxes.map(sandbox => ({ ...sandbox, selected: false })),
+  $filteredOpenshellSandboxes.map(sandbox => {
+    const sandboxKey = key(sandbox);
+    return {
+      ...sandbox,
+      // the table toggles selection by assigning this property
+      get selected(): boolean {
+        return selection.get(sandboxKey) ?? false;
+      },
+      set selected(selected: boolean) {
+        selection.set(sandboxKey, selected);
+      },
+    };
+  }),
 );
 
 const sandboxRow = new TableRow<SandboxSelectable>({
@@ -83,7 +104,7 @@ const sandboxRow = new TableRow<SandboxSelectable>({
   disabledText: 'Workspace is being deleted',
 });
 
-function key(sandbox: SandboxSelectable): string {
+function key(sandbox: SandboxInfoWithGateway): string {
   return `${sandbox.gatewayName}:${sandbox.id}`;
 }
 
