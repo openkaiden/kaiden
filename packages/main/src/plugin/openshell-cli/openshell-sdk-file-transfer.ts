@@ -18,16 +18,14 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Stats } from 'node:fs';
-import { createReadStream } from 'node:fs';
-import { lstat, readdir, readFile, readlink } from 'node:fs/promises';
-import { basename, join, posix } from 'node:path';
-import type { Writable } from 'node:stream';
+import { lstat } from 'node:fs/promises';
+import { basename, dirname, join, posix } from 'node:path';
 
 import type { OpenShellClient } from '@nvidia/openshell-sdk';
 import { SdkError } from '@nvidia/openshell-sdk';
 import { inject, injectable } from 'inversify';
-import type { Headers, Pack } from 'tar-stream';
-import { pack } from 'tar-stream';
+import type { Pack, PackOptions } from 'tar-fs';
+import tar from 'tar-fs';
 
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { Exec } from '/@/plugin/util/exec.js';
@@ -48,8 +46,8 @@ interface RemoteResult {
  * Uploads local files to an OpenShell sandbox via tar-over-exec,
  * replacing the CLI `openshell sandbox upload` command.
  *
- * The archive is produced as a stream (with backpressure) and sent as stdin
- * of remote commands through the SDK's `execInteractive` with `tty: false`:
+ * The archive is built by `tar-fs` as a stream (with backpressure) and sent as
+ * stdin of remote commands through the SDK's `execInteractive` with `tty: false`:
  * - archives up to {@link OpenshellSdkFileTransfer.UPLOAD_PART_BYTES} are extracted by a single
  *   `tar xf -` exec;
  * - larger archives are staged as part files in the sandbox, one short exec
@@ -64,7 +62,6 @@ interface RemoteResult {
 export class OpenshellSdkFileTransfer {
   protected static readonly MAX_RETRIES = 3;
   protected static readonly INITIAL_BACKOFF_MS = 500;
-  protected static readonly SMALL_FILE_THRESHOLD = 1024 * 1024;
   protected static readonly STDIN_CHUNK_BYTES = 64 * 1024;
   /**
    * Archive bytes sent per exec. Exec stdin has no flow control: the sandbox
@@ -99,8 +96,7 @@ export class OpenshellSdkFileTransfer {
       archiveName = posix.basename(dest);
     }
 
-    const gitFiles = stat.isDirectory() ? await this.#listGitFiles(localPath) : undefined;
-    const archivePrefix = stat.isDirectory() ? this.#directoryPrefix(localPath) : '';
+    const gitFiles = stat.isDirectory() ? await this.#listUploadableGitFiles(localPath) : undefined;
     if (gitFiles?.length === 0) {
       throw new Error(
         `Git filtering selected no files for "${localPath}": the directory is empty or all its files are ignored`,
@@ -110,35 +106,46 @@ export class OpenshellSdkFileTransfer {
     const client = await this.sdkClientManager.getClient(gatewayName);
     const target: UploadTarget = { client, sandboxName, localPath, dest };
 
-    const archive = pack();
-    const producing = (async (): Promise<void> => {
-      try {
-        await this.#writeArchive(archive, localPath, stat, archiveName, archivePrefix, gitFiles);
-        archive.finalize();
-      } catch (err: unknown) {
-        archive.destroy(err instanceof Error ? err : new Error(String(err)));
-        throw err;
-      }
-    })();
-    const sending = (async (): Promise<void> => {
-      try {
-        await this.#sendArchive(target, archive, extractDir);
-      } catch (err: unknown) {
-        // Stop the producer: nothing will read the rest of the archive.
-        archive.destroy();
-        throw err;
-      }
-    })();
+    const archive = this.#createArchive(localPath, stat, archiveName, gitFiles);
+    try {
+      await this.#sendArchive(target, archive, extractDir);
+    } catch (err: unknown) {
+      // Stop reading local files: nothing will consume the rest of the archive.
+      archive.destroy();
+      throw err;
+    }
+  }
 
-    // A producer failure destroys the archive, which also fails the sender
-    // with the producer's error, so the sender's outcome is reported first.
-    const [sent, produced] = await Promise.allSettled([sending, producing]);
-    if (sent.status === 'rejected') {
-      throw sent.reason;
+  /**
+   * Builds the upload archive with `tar-fs`, mirroring `openshell sandbox upload`:
+   * - a directory is wrapped under its basename (`<dest>/<basename>/...`), except
+   *   for paths without a meaningful basename (such as `/`), which stay flat;
+   * - Git-filtered directories only include the listed files (under the same prefix);
+   * - a single file or symlink is renamed to `archiveName` for scp-style destinations.
+   * Symlinks are preserved (not followed) and sockets, FIFOs and devices are skipped.
+   */
+  #createArchive(
+    localPath: string,
+    stat: Stats,
+    archiveName: string | undefined,
+    gitFiles: string[] | undefined,
+  ): Pack {
+    if (stat.isDirectory()) {
+      const prefix = this.#directoryPrefix(localPath);
+      const options: PackOptions = { strict: false };
+      if (gitFiles) {
+        options.entries = gitFiles.map(file => (prefix ? `${prefix}/${file}` : file));
+      } else if (prefix) {
+        options.entries = [prefix];
+      }
+      return tar.pack(prefix ? dirname(localPath) : localPath, options);
     }
-    if (produced.status === 'rejected') {
-      throw produced.reason;
-    }
+    const name = archiveName ?? basename(localPath);
+    return tar.pack(dirname(localPath), {
+      entries: [basename(localPath)],
+      strict: false,
+      map: header => ({ ...header, name }),
+    });
   }
 
   async #sendArchive(target: UploadTarget, archive: Pack, extractDir: string): Promise<void> {
@@ -319,6 +326,28 @@ export class OpenshellSdkFileTransfer {
     }
   }
 
+  /** Git-listed files that exist on disk; files tracked by Git but deleted from the work tree are skipped. */
+  async #listUploadableGitFiles(dir: string): Promise<string[] | undefined> {
+    const files = await this.#listGitFiles(dir);
+    if (!files) {
+      return undefined;
+    }
+    const existing: string[] = [];
+    for (const file of files) {
+      try {
+        await lstat(join(dir, file));
+        existing.push(file);
+      } catch (err: unknown) {
+        if (err instanceof Error && 'code' in err && err.code === 'ENOENT') {
+          console.warn(`[openshell-file-transfer] skipping "${join(dir, file)}": listed by Git but missing on disk`);
+          continue;
+        }
+        throw err;
+      }
+    }
+    return existing;
+  }
+
   /**
    * Like `cp -r` and the CLI, a directory is extracted as `<dest>/<basename>/...`.
    * Paths without a meaningful basename (such as the filesystem root) have no
@@ -327,149 +356,6 @@ export class OpenshellSdkFileTransfer {
   #directoryPrefix(dirPath: string): string {
     const name = basename(dirPath);
     return name === '.' || name === '..' ? '' : name;
-  }
-
-  async #writeArchive(
-    archive: Pack,
-    localPath: string,
-    stat: Stats,
-    archiveName: string | undefined,
-    archivePrefix: string,
-    gitFiles: string[] | undefined,
-  ): Promise<void> {
-    if (stat.isDirectory()) {
-      if (archivePrefix) {
-        await this.#addEntry(archive, { name: `${archivePrefix}/`, type: 'directory' });
-      }
-      if (gitFiles) {
-        await this.#addFileListToArchive(archive, localPath, gitFiles, archivePrefix);
-      } else {
-        await this.#addDirectoryToArchive(archive, localPath, archivePrefix);
-      }
-    } else if (stat.isSymbolicLink()) {
-      const linkTarget = await readlink(localPath);
-      await this.#addEntry(archive, {
-        name: archiveName ?? basename(localPath),
-        type: 'symlink',
-        linkname: linkTarget,
-      });
-    } else {
-      await this.#addFileToArchive(archive, localPath, archiveName ?? basename(localPath), stat);
-    }
-  }
-
-  async #addFileListToArchive(archive: Pack, root: string, files: string[], prefix: string): Promise<void> {
-    for (const relativePath of files) {
-      const fullPath = join(root, relativePath);
-      const archivePath = prefix ? `${prefix}/${relativePath}` : relativePath;
-      let entryStat: Stats;
-      try {
-        entryStat = await lstat(fullPath);
-      } catch (err: unknown) {
-        if (err instanceof Error && 'code' in err && err.code === 'ENOENT') {
-          // Tracked by Git but deleted from the work tree.
-          console.warn(`[openshell-file-transfer] skipping "${fullPath}": listed by Git but missing on disk`);
-          continue;
-        }
-        throw err;
-      }
-
-      if (entryStat.isSymbolicLink()) {
-        const linkTarget = await readlink(fullPath);
-        await this.#addEntry(archive, { name: archivePath, type: 'symlink', linkname: linkTarget });
-      } else if (entryStat.isDirectory()) {
-        // Git lists a submodule as a single path.
-        await this.#addEntry(archive, { name: `${archivePath}/`, type: 'directory' });
-        await this.#addDirectoryToArchive(archive, fullPath, archivePath);
-      } else if (entryStat.isFile()) {
-        await this.#addFileToArchive(archive, fullPath, archivePath, entryStat);
-      }
-    }
-  }
-
-  async #addDirectoryToArchive(archive: Pack, dirPath: string, prefix: string): Promise<void> {
-    const entries = await readdir(dirPath, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = join(dirPath, entry.name);
-      const archivePath = prefix ? `${prefix}/${entry.name}` : entry.name;
-
-      if (entry.isSymbolicLink()) {
-        const linkTarget = await readlink(fullPath);
-        await this.#addEntry(archive, { name: archivePath, type: 'symlink', linkname: linkTarget });
-      } else if (entry.isDirectory()) {
-        await this.#addEntry(archive, { name: `${archivePath}/`, type: 'directory' });
-        await this.#addDirectoryToArchive(archive, fullPath, archivePath);
-      } else if (entry.isFile()) {
-        const fileStat = await lstat(fullPath);
-        await this.#addFileToArchive(archive, fullPath, archivePath, fileStat);
-      }
-    }
-  }
-
-  async #addFileToArchive(archive: Pack, filePath: string, archivePath: string, stat: Stats): Promise<void> {
-    if (stat.size <= OpenshellSdkFileTransfer.SMALL_FILE_THRESHOLD) {
-      const content = await readFile(filePath);
-      await this.#addEntry(
-        archive,
-        { name: archivePath, size: content.length, mode: stat.mode, mtime: stat.mtime, type: 'file' },
-        content,
-      );
-      return;
-    }
-
-    // Stream large files, honoring the archive's backpressure.
-    let entry: Writable | undefined;
-    const packed = new Promise<void>((resolve, reject) => {
-      entry = archive.entry(
-        { name: archivePath, size: stat.size, mode: stat.mode, mtime: stat.mtime, type: 'file' },
-        err => (err ? reject(err) : resolve()),
-      );
-    });
-    if (!entry) {
-      throw new Error(`failed to create archive entry for "${filePath}"`);
-    }
-    try {
-      for await (const chunk of createReadStream(filePath)) {
-        if (!entry.write(chunk)) {
-          await this.#waitForDrain(entry);
-        }
-      }
-      entry.end();
-    } catch (err: unknown) {
-      entry.destroy(err instanceof Error ? err : new Error(String(err)));
-      await packed.catch((packError: unknown) => {
-        console.debug(`[openshell-file-transfer] archive entry "${archivePath}" aborted:`, packError);
-      });
-      throw err;
-    }
-    await packed;
-  }
-
-  /** Adds an entry and resolves once the archive reader has consumed it. */
-  #addEntry(archive: Pack, header: Headers, content?: Buffer): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      const done = (err?: Error | null): void => (err ? reject(err) : resolve());
-      if (content) {
-        archive.entry(header, content, done);
-      } else {
-        archive.entry(header, done);
-      }
-    });
-  }
-
-  #waitForDrain(entry: Writable): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      const onDrain = (): void => {
-        entry.off('close', onClose);
-        resolve();
-      };
-      const onClose = (): void => {
-        entry.off('drain', onDrain);
-        reject(new Error('archive entry closed before it was fully written'));
-      };
-      entry.once('drain', onDrain);
-      entry.once('close', onClose);
-    });
   }
 
   /**

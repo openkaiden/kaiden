@@ -17,14 +17,13 @@
  ***********************************************************************/
 
 import type { Stats } from 'node:fs';
-import { createReadStream } from 'node:fs';
-import { lstat, readdir, readFile, readlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { lstat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 
 import type { ExecInteractiveSessionControl, ExecStreamEvent, OpenShellClient } from '@nvidia/openshell-sdk';
 import { SdkError } from '@nvidia/openshell-sdk';
-import { extract } from 'tar-stream';
+import type { PackOptions } from 'tar-fs';
+import tar from 'tar-fs';
 import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
@@ -32,8 +31,8 @@ import { Exec } from '/@/plugin/util/exec.js';
 
 import { OpenshellSdkFileTransfer } from './openshell-sdk-file-transfer.js';
 
-vi.mock(import('node:fs'));
 vi.mock(import('node:fs/promises'));
+vi.mock(import('tar-fs'));
 vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-client-manager.js'));
 vi.mock(import('/@/plugin/util/exec.js'));
 
@@ -48,7 +47,7 @@ class TestOpenshellSdkFileTransfer extends OpenshellSdkFileTransfer {
 
 const { maxRetries, partBytes, stdinChunkBytes, stagingRoot, unavailable } = TestOpenshellSdkFileTransfer;
 
-const FILE_CONTENT = Buffer.from('file-content');
+const ARCHIVE = Buffer.from('tar-archive-bytes');
 
 let transfer: OpenshellSdkFileTransfer;
 let sdkClientManager: OpenshellSdkClientManager;
@@ -56,6 +55,7 @@ let exec: Exec;
 let execInteractive: OpenShellClient['sandbox']['execInteractive'];
 let sessions: ExecInteractiveSessionControl[];
 let sessionOptions: (script: string) => SessionOptions;
+let archives: Readable[];
 
 interface SessionOptions {
   exitCode?: number;
@@ -111,43 +111,35 @@ function stdinOf(session: ExecInteractiveSessionControl | undefined): Buffer {
   return Buffer.concat(vi.mocked(session.write).mock.calls.map(([data]) => data));
 }
 
-interface ArchiveEntry {
-  name: string;
-  type: string | null | undefined;
-  linkname: string | null | undefined;
-  content: string;
+/** Makes every `tar.pack` call return a fresh stream of `data`, standing in for the archive tar-fs builds. */
+function mockArchive(data: Buffer): Buffer {
+  vi.mocked(tar.pack).mockImplementation(() => {
+    const archive = Readable.from([data]);
+    archives.push(archive);
+    return archive as never;
+  });
+  return data;
 }
 
-async function readArchive(data: Buffer): Promise<ArchiveEntry[]> {
-  const extractor = extract();
-  const entries: ArchiveEntry[] = [];
-  const reading = (async (): Promise<void> => {
-    for await (const entry of extractor) {
-      const parts: Buffer[] = [];
-      for await (const chunk of entry) {
-        parts.push(chunk);
-      }
-      entries.push({
-        name: entry.header.name,
-        type: entry.header.type,
-        linkname: entry.header.linkname,
-        content: Buffer.concat(parts).toString(),
-      });
-    }
-  })();
-  extractor.end(data);
-  await reading;
-  return entries;
+function packCall(): { cwd: string; options: PackOptions } {
+  const call = vi.mocked(tar.pack).mock.calls[0];
+  assert(call);
+  const [cwd, options] = call;
+  assert(options);
+  return { cwd, options };
 }
 
-function mockFileStat(size = FILE_CONTENT.length): Stats {
+/** The name the archive gets for a local entry called `original`, after the `map` passed to tar-fs. */
+function archivedName(options: PackOptions, original: string): string {
+  assert(options.map);
+  return options.map({ name: original, mode: 0o644, mtime: new Date(0), size: 1, type: 'file', uid: 0, gid: 0 }).name;
+}
+
+function mockFileStat(): Stats {
   return {
     isDirectory: () => false,
     isFile: () => true,
     isSymbolicLink: () => false,
-    size,
-    mode: 0o644,
-    mtime: new Date('2026-01-01'),
   } as unknown as Stats;
 }
 
@@ -167,68 +159,35 @@ function mockSymlinkStat(): Stats {
   } as unknown as Stats;
 }
 
-interface MockDirent {
-  name: string;
-  isFile: () => boolean;
-  isDirectory: () => boolean;
-  isSymbolicLink: () => boolean;
-}
-
-function dirent(name: string, kind: 'file' | 'dir' | 'symlink'): MockDirent {
-  return {
-    name,
-    isFile: (): boolean => kind === 'file',
-    isDirectory: (): boolean => kind === 'dir',
-    isSymbolicLink: (): boolean => kind === 'symlink',
-  };
-}
-
 /** Paths built by the code under test use the platform separator; the mocks key on POSIX-style paths. */
 function asPosix(path: unknown): string {
   return String(path).replaceAll('\\', '/');
 }
 
-function gitError(stderr: string, message = 'Command execution failed with exit code 128'): Error {
-  return Object.assign(new Error(message), { stderr });
-}
-
-function mockProjectTree(): void {
-  vi.mocked(lstat).mockImplementation(async (path: Parameters<typeof lstat>[0]) => {
-    const p = asPosix(path);
-    if (p === '/local/project' || p === '/local/project/sub') {
-      return mockDirStat();
-    }
-    return mockFileStat();
-  });
-  vi.mocked(readdir).mockImplementation(async (path: Parameters<typeof readdir>[0]) => {
-    const p = asPosix(path);
-    if (p === '/local/project') {
-      return [dirent('readme.md', 'file'), dirent('sub', 'dir')] as never;
-    }
-    if (p === '/local/project/sub') {
-      return [dirent('nested.ts', 'file')] as never;
-    }
-    return [] as never;
-  });
-}
-
+/** `root` is a directory; every other path is a regular file. */
 function mockDirectoryRoot(root: string): void {
   vi.mocked(lstat).mockImplementation(async (path: Parameters<typeof lstat>[0]) =>
     asPosix(path) === root ? mockDirStat() : mockFileStat(),
   );
 }
 
-function mockLargeFile(size: number): Buffer {
-  const content = Buffer.alloc(size, 'y');
-  vi.mocked(lstat).mockResolvedValue(mockFileStat(size));
-  vi.mocked(createReadStream).mockReturnValue(Readable.from(content) as never);
-  return content;
+function gitError(stderr: string, message = 'Command execution failed with exit code 128'): Error {
+  return Object.assign(new Error(message), { stderr });
+}
+
+function gitListing(...files: string[]): void {
+  vi.mocked(exec.exec).mockResolvedValue({
+    command: 'git',
+    stdout: files.map(file => `${file}\0`).join(''),
+    stderr: '',
+  });
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
   vi.useRealTimers();
   sessions = [];
+  archives = [];
   sessionOptions = (): SessionOptions => ({});
   execInteractive = vi
     .fn<OpenShellClient['sandbox']['execInteractive']>()
@@ -247,8 +206,7 @@ beforeEach(() => {
   );
 
   vi.mocked(lstat).mockResolvedValue(mockFileStat());
-  vi.mocked(readFile).mockResolvedValue(FILE_CONTENT);
-  vi.mocked(createReadStream).mockReturnValue(Readable.from(FILE_CONTENT) as never);
+  mockArchive(ARCHIVE);
 
   transfer = new OpenshellSdkFileTransfer(sdkClientManager, exec);
 });
@@ -265,12 +223,10 @@ describe('single exec uploads', () => {
     expect(scripts()).toEqual([`mkdir -p -- '/remote' && tar xf - -C '/remote'`]);
   });
 
-  test('streams a valid tar archive with the file content as stdin, then closes stdin', async () => {
+  test('streams the archive as stdin, then closes stdin', async () => {
     await transfer.uploadToSandbox('my-sandbox', '/local/file.txt', '/remote/file.txt');
 
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries).toEqual([{ name: 'file.txt', type: 'file', linkname: null, content: 'file-content' }]);
-
+    expect(stdinOf(sessions[0])).toEqual(ARCHIVE);
     const session = sessions[0];
     assert(session);
     const lastWrite = vi.mocked(session.write).mock.invocationCallOrder.at(-1);
@@ -279,20 +235,32 @@ describe('single exec uploads', () => {
     expect(lastWrite).toBeLessThan(closeInput);
   });
 
-  test('renames archive entry to dest basename for scp-style paths', async () => {
-    await transfer.uploadToSandbox('my-sandbox', '/local/file.txt', '/remote/dir/renamed.txt');
-
-    expect(scripts()).toEqual([`mkdir -p -- '/remote/dir' && tar xf - -C '/remote/dir'`]);
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => entry.name)).toEqual(['renamed.txt']);
-  });
-
-  test('uses dest as extract directory and keeps the local name when dest ends with slash', async () => {
+  test('archives a single file from its parent directory, keeping its name when dest ends with slash', async () => {
     await transfer.uploadToSandbox('my-sandbox', '/local/file.txt', '/remote/dir/');
 
+    const { cwd, options } = packCall();
+    expect(cwd).toBe('/local');
+    expect(options).toEqual({ entries: ['file.txt'], strict: false, map: expect.any(Function) });
+    expect(archivedName(options, 'file.txt')).toBe('file.txt');
     expect(scripts()).toEqual([`mkdir -p -- '/remote/dir/' && tar xf - -C '/remote/dir/'`]);
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => entry.name)).toEqual(['file.txt']);
+  });
+
+  test('renames a single file to the dest basename for scp-style paths', async () => {
+    await transfer.uploadToSandbox('my-sandbox', '/local/file.txt', '/remote/dir/renamed.txt');
+
+    expect(archivedName(packCall().options, 'file.txt')).toBe('renamed.txt');
+    expect(scripts()).toEqual([`mkdir -p -- '/remote/dir' && tar xf - -C '/remote/dir'`]);
+  });
+
+  test('renames a single symlink to the dest basename', async () => {
+    vi.mocked(lstat).mockResolvedValue(mockSymlinkStat());
+
+    await transfer.uploadToSandbox('my-sandbox', '/local/link', '/remote/renamed-link');
+
+    const { cwd, options } = packCall();
+    expect(cwd).toBe('/local');
+    expect(options.entries).toEqual(['link']);
+    expect(archivedName(options, 'link')).toBe('renamed-link');
   });
 
   test('shell-escapes single quotes in destination path', async () => {
@@ -305,16 +273,6 @@ describe('single exec uploads', () => {
     await transfer.uploadToSandbox('my-sandbox', '/local/file.txt', '/remote/file.txt');
 
     expect(exec.exec).not.toHaveBeenCalled();
-  });
-
-  test('preserves a single symlink upload under the dest basename', async () => {
-    vi.mocked(lstat).mockResolvedValue(mockSymlinkStat());
-    vi.mocked(readlink).mockResolvedValue('/target/path');
-
-    await transfer.uploadToSandbox('my-sandbox', '/local/link', '/remote/renamed-link');
-
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries).toEqual([{ name: 'renamed-link', type: 'symlink', linkname: '/target/path', content: '' }]);
   });
 
   test('passes gateway name to getClient', async () => {
@@ -332,7 +290,6 @@ describe('home directory destinations', () => {
     { dest: `~/it's here`, extractDir: `"$HOME"/'it'\\''s here'` },
   ])('expands a leading ~ for directory dest "$dest"', async ({ dest, extractDir }) => {
     vi.mocked(lstat).mockResolvedValue(mockDirStat());
-    vi.mocked(readdir).mockResolvedValue([] as never);
 
     await transfer.uploadToSandbox('my-sandbox', '/local/project', dest);
 
@@ -343,8 +300,7 @@ describe('home directory destinations', () => {
     await transfer.uploadToSandbox('my-sandbox', '/local/gitconfig', '~/.gitconfig');
 
     expect(scripts()).toEqual([`mkdir -p -- "$HOME" && tar xf - -C "$HOME"`]);
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => entry.name)).toEqual(['.gitconfig']);
+    expect(archivedName(packCall().options, 'gitconfig')).toBe('.gitconfig');
   });
 
   test.each([
@@ -354,7 +310,6 @@ describe('home directory destinations', () => {
     '.config/~',
   ])('does not expand a ~ that is not a leading ~ or ~/ in "%s"', async dest => {
     vi.mocked(lstat).mockResolvedValue(mockDirStat());
-    vi.mocked(readdir).mockResolvedValue([] as never);
 
     await transfer.uploadToSandbox('my-sandbox', '/local/project', dest);
 
@@ -362,7 +317,7 @@ describe('home directory destinations', () => {
   });
 
   test('extracts staged uploads into the expanded home directory', async () => {
-    mockLargeFile(1.5 * partBytes);
+    mockArchive(Buffer.alloc(1.5 * partBytes, 'y'));
 
     await transfer.uploadToSandbox('my-sandbox', '/local/huge.bin', '~/data/');
 
@@ -374,8 +329,8 @@ describe('home directory destinations', () => {
 });
 
 describe('directory uploads', () => {
-  test('archives every entry when the directory is outside a git work tree', async () => {
-    mockProjectTree();
+  test('wraps the whole directory under its basename when it is outside a git work tree', async () => {
+    mockDirectoryRoot('/local/project');
 
     await transfer.uploadToSandbox('my-sandbox', '/local/project', '/sandbox/project');
 
@@ -384,50 +339,33 @@ describe('directory uploads', () => {
       ['-C', '/local/project', 'ls-files', '-co', '--exclude-standard', '-z'],
       { env: { LC_ALL: 'C' } },
     );
+    expect(tar.pack).toHaveBeenCalledWith('/local', { entries: ['project'], strict: false });
     expect(scripts()).toEqual([`mkdir -p -- '/sandbox/project' && tar xf - -C '/sandbox/project'`]);
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => [entry.name, entry.type])).toEqual([
-      ['project/', 'directory'],
-      ['project/readme.md', 'file'],
-      ['project/sub/', 'directory'],
-      ['project/sub/nested.ts', 'file'],
-    ]);
   });
 
-  test('archives every entry when git is not installed', async () => {
-    mockProjectTree();
+  test('wraps the whole directory when git is not installed', async () => {
+    mockDirectoryRoot('/local/project');
     vi.mocked(exec.exec).mockRejectedValue(gitError('', 'Failed to execute command: spawn git ENOENT'));
 
     await transfer.uploadToSandbox('my-sandbox', '/local/project', '/sandbox/project');
 
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => entry.name)).toEqual([
-      'project/',
-      'project/readme.md',
-      'project/sub/',
-      'project/sub/nested.ts',
-    ]);
+    expect(tar.pack).toHaveBeenCalledWith('/local', { entries: ['project'], strict: false });
   });
 
-  test('only archives files git reports when the directory is in a git work tree', async () => {
-    mockProjectTree();
-    vi.mocked(exec.exec).mockResolvedValue({ command: 'git', stdout: 'readme.md\0sub/nested.ts\0', stderr: '' });
+  test('only archives the files git reports, under the directory basename', async () => {
+    mockDirectoryRoot('/local/project');
+    gitListing('readme.md', 'sub/nested.ts');
 
     await transfer.uploadToSandbox('my-sandbox', '/local/project', '/sandbox/project');
 
-    expect(readdir).not.toHaveBeenCalled();
-    expect(readFile).toHaveBeenCalledWith(join('/local/project', 'readme.md'));
-    expect(readFile).toHaveBeenCalledWith(join('/local/project', 'sub/nested.ts'));
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => [entry.name, entry.content])).toEqual([
-      ['project/', ''],
-      ['project/readme.md', 'file-content'],
-      ['project/sub/nested.ts', 'file-content'],
-    ]);
+    expect(tar.pack).toHaveBeenCalledWith('/local', {
+      entries: ['project/readme.md', 'project/sub/nested.ts'],
+      strict: false,
+    });
   });
 
   test('skips files git tracks that are missing on disk', async () => {
-    vi.mocked(exec.exec).mockResolvedValue({ command: 'git', stdout: 'gone.txt\0kept.txt\0', stderr: '' });
+    gitListing('gone.txt', 'kept.txt');
     vi.mocked(lstat).mockImplementation(async (path: Parameters<typeof lstat>[0]) => {
       const p = asPosix(path);
       if (p === '/local/project') {
@@ -441,13 +379,43 @@ describe('directory uploads', () => {
 
     await transfer.uploadToSandbox('my-sandbox', '/local/project', '/sandbox/project');
 
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => entry.name)).toEqual(['project/', 'project/kept.txt']);
+    expect(tar.pack).toHaveBeenCalledWith('/local', { entries: ['project/kept.txt'], strict: false });
+  });
+
+  test('fails when a file git lists cannot be inspected', async () => {
+    gitListing('secret.txt');
+    vi.mocked(lstat).mockImplementation(async (path: Parameters<typeof lstat>[0]) => {
+      if (asPosix(path) === '/local/project') {
+        return mockDirStat();
+      }
+      throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+    });
+
+    await expect(transfer.uploadToSandbox('my-sandbox', '/local/project', '/sandbox/project')).rejects.toThrow(
+      'EACCES: permission denied',
+    );
+    expect(execInteractive).not.toHaveBeenCalled();
   });
 
   test('refuses to upload when git filtering selects no files', async () => {
     vi.mocked(lstat).mockResolvedValue(mockDirStat());
-    vi.mocked(exec.exec).mockResolvedValue({ command: 'git', stdout: '', stderr: '' });
+    gitListing();
+
+    await expect(transfer.uploadToSandbox('my-sandbox', '/local/project', '/sandbox/project')).rejects.toThrow(
+      'Git filtering selected no files for "/local/project"',
+    );
+    expect(tar.pack).not.toHaveBeenCalled();
+    expect(execInteractive).not.toHaveBeenCalled();
+  });
+
+  test('refuses to upload when every file git lists is missing on disk', async () => {
+    gitListing('gone.txt');
+    vi.mocked(lstat).mockImplementation(async (path: Parameters<typeof lstat>[0]) => {
+      if (asPosix(path) === '/local/project') {
+        return mockDirStat();
+      }
+      throw Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' });
+    });
 
     await expect(transfer.uploadToSandbox('my-sandbox', '/local/project', '/sandbox/project')).rejects.toThrow(
       'Git filtering selected no files for "/local/project"',
@@ -465,53 +433,44 @@ describe('directory uploads', () => {
     expect(execInteractive).not.toHaveBeenCalled();
   });
 
-  test('preserves symlink entries in directories', async () => {
-    vi.mocked(lstat).mockResolvedValue(mockDirStat());
-    vi.mocked(readdir).mockResolvedValue([dirent('link.txt', 'symlink')] as never);
-    vi.mocked(readlink).mockResolvedValue('../target.txt');
-
-    await transfer.uploadToSandbox('my-sandbox', '/local/project', '/remote/dest');
-
-    expect(readlink).toHaveBeenCalledWith(join('/local/project', 'link.txt'));
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => [entry.name, entry.type, entry.linkname])).toEqual([
-      ['project/', 'directory', null],
-      ['project/link.txt', 'symlink', '../target.txt'],
-    ]);
-  });
-
   test('extracts a directory as <dest>/<basename> whatever the destination', async () => {
     mockDirectoryRoot('/local/skills/my-skill');
-    vi.mocked(readdir).mockResolvedValue([dirent('SKILL.md', 'file')] as never);
 
     await transfer.uploadToSandbox('my-sandbox', '/local/skills/my-skill', '.claude/skills');
 
+    expect(tar.pack).toHaveBeenCalledWith('/local/skills', { entries: ['my-skill'], strict: false });
     expect(scripts()).toEqual([`mkdir -p -- '.claude/skills' && tar xf - -C '.claude/skills'`]);
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => entry.name)).toEqual(['my-skill/', 'my-skill/SKILL.md']);
   });
 
-  test('extracts the contents directly into dest when the directory has no basename', async () => {
+  test('archives the contents directly when the directory has no basename', async () => {
     mockDirectoryRoot('/');
-    vi.mocked(readdir).mockResolvedValue([dirent('readme.md', 'file')] as never);
 
     await transfer.uploadToSandbox('my-sandbox', '/', '/sandbox/project');
 
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => entry.name)).toEqual(['readme.md']);
+    const { cwd, options } = packCall();
+    expect(cwd).toBe('/');
+    expect(options).toEqual({ strict: false });
+    expect(options).not.toHaveProperty('entries');
+  });
+
+  test('does not prefix git files when the directory has no basename', async () => {
+    mockDirectoryRoot('/');
+    gitListing('a.txt');
+
+    await transfer.uploadToSandbox('my-sandbox', '/', '/sandbox/project');
+
+    expect(tar.pack).toHaveBeenCalledWith('/', { entries: ['a.txt'], strict: false });
   });
 });
 
 describe('staged uploads of archives larger than one part', () => {
   test('stages parts of at most 2 MiB, extracts them in order, then removes the staging directory', async () => {
-    const content = mockLargeFile(2.5 * partBytes);
+    const archive = mockArchive(Buffer.alloc(2.5 * partBytes, 'y'));
 
     await transfer.uploadToSandbox('my-sandbox', '/local/huge.bin', '/remote/huge.bin');
 
-    expect(createReadStream).toHaveBeenCalledWith('/local/huge.bin');
     const all = scripts();
     expect(all).toHaveLength(5);
-
     const stagingDir = stagingDirOf(all[0]);
     expect(stagingDir.startsWith(`'${stagingRoot}/kaiden-upload-`)).toBe(true);
     expect(all).toEqual([
@@ -523,16 +482,14 @@ describe('staged uploads of archives larger than one part', () => {
     ]);
 
     const parts = sessions.slice(0, 3).map(session => stdinOf(session));
-    expect(parts.map(part => part.length)).toEqual([partBytes, partBytes, content.length + 1536 - 2 * partBytes]);
+    expect(parts.map(part => part.length)).toEqual([partBytes, partBytes, archive.length - 2 * partBytes]);
+    // Buffer#equals is native; toEqual walks a 5 MiB buffer element by element (seconds).
+    expect(Buffer.concat(parts).equals(archive)).toBe(true);
     expect(stdinOf(sessions[3])).toHaveLength(0);
-    const entries = await readArchive(Buffer.concat(parts));
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.name).toBe('huge.bin');
-    expect(entries[0]?.content).toBe(content.toString());
   });
 
   test('writes stdin in chunks of at most 64 KiB', async () => {
-    mockLargeFile(1.5 * partBytes);
+    mockArchive(Buffer.alloc(1.5 * partBytes, 'y'));
 
     await transfer.uploadToSandbox('my-sandbox', '/local/huge.bin', '/remote/huge.bin');
 
@@ -541,7 +498,7 @@ describe('staged uploads of archives larger than one part', () => {
   });
 
   test('removes the staging directory and reports the failure when a part cannot be staged', async () => {
-    mockLargeFile(2.5 * partBytes);
+    mockArchive(Buffer.alloc(2.5 * partBytes, 'y'));
     sessionOptions = (script): SessionOptions =>
       script.endsWith('part-000001') ? { exitCode: 1, stderr: 'cat: write error: No space left on device' } : {};
 
@@ -555,7 +512,7 @@ describe('staged uploads of archives larger than one part', () => {
   });
 
   test('still reports the upload result when removing the staging directory fails', async () => {
-    mockLargeFile(1.5 * partBytes);
+    mockArchive(Buffer.alloc(1.5 * partBytes, 'y'));
     sessionOptions = (script): SessionOptions => (script.startsWith('rm -rf') ? { exitCode: 1 } : {});
 
     await transfer.uploadToSandbox('my-sandbox', '/local/huge.bin', '/remote/huge.bin');
@@ -608,8 +565,7 @@ describe('errors and retries', () => {
     await upload;
 
     expect(execInteractive).toHaveBeenCalledTimes(2);
-    const entries = await readArchive(stdinOf(sessions[0]));
-    expect(entries.map(entry => entry.name)).toEqual(['file.txt']);
+    expect(stdinOf(sessions[0])).toEqual(ARCHIVE);
   });
 
   test.each([
@@ -638,21 +594,29 @@ describe('errors and retries', () => {
     expect(execInteractive).toHaveBeenCalledTimes(maxRetries);
   });
 
-  test('throws on archive build error without starting a remote command', async () => {
-    vi.mocked(readFile).mockRejectedValueOnce(new Error('ENOENT'));
+  test('throws when the archive cannot be built, without starting a remote command', async () => {
+    vi.mocked(tar.pack).mockImplementation(
+      () =>
+        new Readable({
+          read(): void {
+            this.destroy(new Error('ENOENT: no such file or directory'));
+          },
+        }) as never,
+    );
 
     await expect(transfer.uploadToSandbox('my-sandbox', '/local/missing', '/remote/dest')).rejects.toThrow('ENOENT');
     expect(execInteractive).not.toHaveBeenCalled();
   });
 
-  test('stops producing the archive when a staged upload fails', async () => {
-    mockLargeFile(4.5 * partBytes);
+  test('stops reading local files when a staged upload fails', async () => {
+    mockArchive(Buffer.alloc(4.5 * partBytes, 'y'));
     sessionOptions = (script): SessionOptions => (script.endsWith('part-000000') ? { exitCode: 1 } : {});
 
     await expect(transfer.uploadToSandbox('my-sandbox', '/local/huge.bin', '/remote/huge.bin')).rejects.toThrow(
       'upload staging failed with exit code 1',
     );
-    // Only the failed part and the cleanup ran; the rest of the archive was never sent.
+    // Only the failed part and the cleanup ran, and the archive stream was destroyed.
     expect(scripts()).toHaveLength(2);
+    expect(archives[0]?.destroyed).toBe(true);
   });
 });

@@ -51,9 +51,6 @@ const config = {
         'electron',
         'chokidar',
         'tar-fs',
-        // Bundling resolves the `browser` export condition, which makes tar-stream's
-        // b4a dependency write tar headers with empty numeric fields (invalid archives).
-        'tar-stream',
         'ssh2',
         '@segment/analytics-node',
         'express',
