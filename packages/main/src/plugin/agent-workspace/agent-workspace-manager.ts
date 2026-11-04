@@ -32,12 +32,12 @@ import { updateWorkspaceConfig, writeWorkspaceConfig } from '/@/plugin/agent-wor
 import { WritableConfigurationFile } from '/@/plugin/agent-workspace/writable-configuration-file.js';
 import { IPCHandle, WebContentsType } from '/@/plugin/api.js';
 import { Directories } from '/@/plugin/directories.js';
-import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
+import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
 import { mapSdkSandboxRef } from '/@/plugin/openshell-cli/openshell-sdk-sandbox-mapper.js';
 import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import { ProviderRegistry } from '/@/plugin/provider-registry.js';
@@ -160,10 +160,10 @@ export class AgentWorkspaceManager implements Disposable {
     private readonly providerRegistry: ProviderRegistry,
     @inject(SecretManager)
     private readonly secretManager: SecretManager,
-    @inject(OpenshellCli)
-    private readonly openshellCli: OpenshellCli,
     @inject(OpenshellSdkClientManager)
     private readonly openshellSdkClientManager: OpenshellSdkClientManager,
+    @inject(OpenshellSdkFileTransfer)
+    private readonly openshellSdkFileTransfer: OpenshellSdkFileTransfer,
     @inject(AgentRegistry)
     private readonly agentRegistry: AgentRegistry,
     @inject(OpenshellGateway)
@@ -349,7 +349,7 @@ export class AgentWorkspaceManager implements Disposable {
 
     try {
       for (const upload of uploads) {
-        await this.openshellCli.uploadToSandbox(sandboxName, upload.local, upload.remote, options.gateway);
+        await this.openshellSdkFileTransfer.uploadToSandbox(sandboxName, upload.local, upload.remote, options.gateway);
       }
 
       // cloned profile already contains the endpoint

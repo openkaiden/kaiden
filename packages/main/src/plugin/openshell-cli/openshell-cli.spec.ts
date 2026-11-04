@@ -103,28 +103,3 @@ describe('getVersion', () => {
     await expect(openshellCli.getVersion()).rejects.toThrow('command not found');
   });
 });
-
-describe('uploadToSandbox', () => {
-  test('executes openshell sandbox upload on the given gateway', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.mocked(exec.exec).mockResolvedValue(mockExecResult(''));
-
-    await openshellCli.uploadToSandbox('my-sandbox', '/local/image.png', '/tmp/attachments/', 'my-gateway');
-
-    expect(exec.exec).toHaveBeenCalledWith(
-      OPENSHELL_CLI_PATH,
-      ['sandbox', 'upload', 'my-sandbox', '/local/image.png', '/tmp/attachments/', '-g', 'my-gateway'],
-      undefined,
-    );
-  });
-
-  test('rejects when CLI fails', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    vi.mocked(exec.exec).mockRejectedValue(new Error('sandbox not found: unknown'));
-
-    await expect(openshellCli.uploadToSandbox('unknown', '/local/file', '/tmp', 'my-gateway')).rejects.toThrow(
-      'sandbox not found: unknown',
-    );
-  });
-});

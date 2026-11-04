@@ -29,8 +29,8 @@ import { inject, injectable, preDestroy } from 'inversify';
 
 import { AgentRegistry } from '/@/plugin/agent-registry.js';
 import { Directories } from '/@/plugin/directories.js';
-import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
+import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
 import { mapSdkSandboxRef } from '/@/plugin/openshell-cli/openshell-sdk-sandbox-mapper.js';
 import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import type {
@@ -98,11 +98,11 @@ export class AcpSessionManager {
 
   constructor(
     @inject(ApiSenderType) private readonly apiSender: ApiSenderType,
-    @inject(OpenshellCli) private readonly openshellCli: OpenshellCli,
     @inject(AgentRegistry) private readonly agentRegistry: AgentRegistry,
     @inject(Directories) private readonly directories: Directories,
     @inject(OpenshellSdkClientManager) private readonly sdkClientManager: OpenshellSdkClientManager,
     @inject(IConfigurationRegistry) private readonly configurationRegistry: IConfigurationRegistry,
+    @inject(OpenshellSdkFileTransfer) private readonly sdkFileTransfer: OpenshellSdkFileTransfer,
   ) {}
 
   async init(): Promise<void> {
@@ -987,7 +987,7 @@ export class AcpSessionManager {
     const results: UploadedAttachment[] = [];
     for (const attachment of attachments) {
       const destDir = `${ATTACHMENT_UPLOAD_DIR}/${randomUUID()}/`;
-      await this.openshellCli.uploadToSandbox(sandboxName, attachment.filePath, destDir, gatewayName);
+      await this.sdkFileTransfer.uploadToSandbox(sandboxName, attachment.filePath, destDir, gatewayName);
       const remotePath = `${destDir}${basename(attachment.filePath)}`;
       results.push({ ...attachment, remotePath });
     }

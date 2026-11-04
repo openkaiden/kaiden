@@ -116,42 +116,4 @@ export class OpenshellCli {
       throw new Error(detail);
     }
   }
-
-  // ── sandbox commands ──────────────────────────────────────────────
-
-  async uploadToSandbox(sandboxName: string, localPath: string, dest: string, gatewayName: string): Promise<void> {
-    await this.runCli(['sandbox', 'upload', sandboxName, localPath, dest, '-g', gatewayName]);
-  }
-
-  // ── helpers ───────────────────────────────────────────────────────
-
-  private async runCli(
-    args: string[],
-    options?: { redact?: boolean; env?: { [p: string]: string }; quiet?: boolean },
-  ): Promise<void> {
-    const cliPath = this.getCliPath();
-    const displayArgs = options?.redact ? this.redactSensitiveArgs(args) : args;
-    if (!options?.quiet) {
-      console.log(`Executing: ${cliPath} ${displayArgs.join(' ')}`);
-    }
-    try {
-      await this.exec.exec(cliPath, args, options?.env ? { env: options.env } : undefined);
-    } catch (err: unknown) {
-      const detail = this.extractCliError(err);
-      if (!options?.quiet) {
-        console.error(`openshell failed: ${cliPath} ${displayArgs.join(' ')} — ${detail}`);
-      }
-      throw new Error(detail);
-    }
-  }
-
-  private redactSensitiveArgs(args: string[]): string[] {
-    const sensitiveFlags = new Set(['--credential', '--config', '--env']);
-    return args.map((arg, i) => {
-      if (i > 0 && sensitiveFlags.has(args[i - 1]!)) {
-        return '***';
-      }
-      return arg;
-    });
-  }
 }

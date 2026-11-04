@@ -26,8 +26,8 @@ import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { AgentRegistry } from '/@/plugin/agent-registry.js';
 import type { Directories } from '/@/plugin/directories.js';
-import type { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
+import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
 import type { AcpSessionCreateOptions, AcpSessionInfo } from '/@api/acp-session-info.js';
 import { ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT } from '/@api/acp-settings.js';
 import type { AgentInfo } from '/@api/agent-info.js';
@@ -55,16 +55,14 @@ class TestAcpSessionManager extends AcpSessionManager {
 vi.mock(import('node:fs'));
 vi.mock(import('node:fs/promises'));
 vi.mock(import('@agentclientprotocol/sdk'));
+vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-file-transfer.js'));
 
 const apiSender: ApiSenderType = {
   send: vi.fn(),
   receive: vi.fn(),
 };
 
-const openshellCli: OpenshellCli = {
-  getCliPath: vi.fn().mockReturnValue('/usr/bin/openshell'),
-  uploadToSandbox: vi.fn(),
-} as unknown as OpenshellCli;
+const openshellSdkFileTransfer: OpenshellSdkFileTransfer = Object.create(OpenshellSdkFileTransfer.prototype);
 
 const mockSandboxList = vi.fn();
 const sdkSandbox = {
@@ -140,11 +138,11 @@ describe('AcpSessionManager', () => {
     } as never);
     manager = new TestAcpSessionManager(
       apiSender,
-      openshellCli,
       agentRegistry,
       directories,
       openshellSdkClientManager,
       configurationRegistry,
+      openshellSdkFileTransfer,
     );
   });
 
@@ -261,14 +259,14 @@ describe('AcpSessionManager', () => {
 
   describe('uploadAttachments', () => {
     test('uploads image attachments to sandbox and returns remote path', async () => {
-      vi.mocked(openshellCli.uploadToSandbox).mockResolvedValue();
+      vi.mocked(openshellSdkFileTransfer.uploadToSandbox).mockResolvedValue();
 
       const attachments = [{ filePath: '/local/photo.png', fileName: 'photo.png', mimeType: 'image/png' }];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (manager as any).uploadAttachments('test-sandbox', attachments, 'test-gateway');
 
-      expect(openshellCli.uploadToSandbox).toHaveBeenCalledWith(
+      expect(openshellSdkFileTransfer.uploadToSandbox).toHaveBeenCalledWith(
         'test-sandbox',
         '/local/photo.png',
         expect.stringContaining('/sandbox/.kaiden-attachments/'),
@@ -279,14 +277,14 @@ describe('AcpSessionManager', () => {
     });
 
     test('uploads text attachments to sandbox instead of inlining', async () => {
-      vi.mocked(openshellCli.uploadToSandbox).mockResolvedValue();
+      vi.mocked(openshellSdkFileTransfer.uploadToSandbox).mockResolvedValue();
 
       const attachments = [{ filePath: '/local/notes.txt', fileName: 'notes.txt', mimeType: 'text/plain' }];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (manager as any).uploadAttachments('test-sandbox', attachments, 'test-gateway');
 
-      expect(openshellCli.uploadToSandbox).toHaveBeenCalledWith(
+      expect(openshellSdkFileTransfer.uploadToSandbox).toHaveBeenCalledWith(
         'test-sandbox',
         '/local/notes.txt',
         expect.stringContaining('/sandbox/.kaiden-attachments/'),
@@ -297,14 +295,14 @@ describe('AcpSessionManager', () => {
     });
 
     test('uploads markdown attachments to sandbox instead of inlining', async () => {
-      vi.mocked(openshellCli.uploadToSandbox).mockResolvedValue();
+      vi.mocked(openshellSdkFileTransfer.uploadToSandbox).mockResolvedValue();
 
       const attachments = [{ filePath: '/local/doc.md', fileName: 'doc.md', mimeType: 'text/markdown' }];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (manager as any).uploadAttachments('test-sandbox', attachments, 'test-gateway');
 
-      expect(openshellCli.uploadToSandbox).toHaveBeenCalledWith(
+      expect(openshellSdkFileTransfer.uploadToSandbox).toHaveBeenCalledWith(
         'test-sandbox',
         '/local/doc.md',
         expect.stringContaining('/sandbox/.kaiden-attachments/'),
@@ -315,14 +313,14 @@ describe('AcpSessionManager', () => {
     });
 
     test('uploads PDF attachments to sandbox', async () => {
-      vi.mocked(openshellCli.uploadToSandbox).mockResolvedValue();
+      vi.mocked(openshellSdkFileTransfer.uploadToSandbox).mockResolvedValue();
 
       const attachments = [{ filePath: '/local/doc.pdf', fileName: 'doc.pdf', mimeType: 'application/pdf' }];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (manager as any).uploadAttachments('test-sandbox', attachments, 'test-gateway');
 
-      expect(openshellCli.uploadToSandbox).toHaveBeenCalled();
+      expect(openshellSdkFileTransfer.uploadToSandbox).toHaveBeenCalled();
       expect(result[0].remotePath).toMatch(/\/sandbox\/\.kaiden-attachments\/.*\/doc\.pdf/);
     });
 
@@ -333,14 +331,14 @@ describe('AcpSessionManager', () => {
     });
 
     test('passes gateway name to uploadToSandbox when provided', async () => {
-      vi.mocked(openshellCli.uploadToSandbox).mockResolvedValue();
+      vi.mocked(openshellSdkFileTransfer.uploadToSandbox).mockResolvedValue();
 
       const attachments = [{ filePath: '/local/photo.png', fileName: 'photo.png', mimeType: 'image/png' }];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (manager as any).uploadAttachments('test-sandbox', attachments, 'my-gateway');
 
-      expect(openshellCli.uploadToSandbox).toHaveBeenCalledWith(
+      expect(openshellSdkFileTransfer.uploadToSandbox).toHaveBeenCalledWith(
         'test-sandbox',
         '/local/photo.png',
         expect.stringContaining('/sandbox/.kaiden-attachments/'),
