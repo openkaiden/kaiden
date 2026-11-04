@@ -19,6 +19,7 @@
 import { node } from '../../.electron-vendors.cache.json';
 import { join } from 'path';
 import { builtinModules } from 'module';
+import { defaultServerConditions } from 'vite';
 
 const PACKAGE_ROOT = __dirname;
 /**
@@ -30,6 +31,13 @@ const config = {
   root: PACKAGE_ROOT,
   envDir: process.cwd(),
   resolve: {
+    // Resolve dependencies with Node export conditions instead of the
+    // default browser ones.  build.lib defaults to client conditions
+    // (['module', 'browser', …]) which causes packages with a "browser"
+    // exports entry (e.g. b4a) to bundle their browser build into the
+    // Electron main process.  Using defaultServerConditions switches to
+    // ['module', 'node', …] so the Node/default build is picked instead.
+    conditions: defaultServerConditions,
     alias: {
       '/@/': join(PACKAGE_ROOT, 'src') + '/',
       '/@api/': join(PACKAGE_ROOT, '../api/src') + '/',
