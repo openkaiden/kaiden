@@ -28,6 +28,7 @@ import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxe
 import * as ragStore from '/@/kaiden/stores/rag-environments';
 import * as skillsStore from '/@/kaiden/stores/skills';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
+import { handleNavigation } from '/@/navigation';
 import type { AgentWorkspaceConfiguration } from '/@api/agent-workspace-info';
 import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info';
 import type { RagEnvironment } from '/@api/rag/rag-environment';
@@ -337,8 +338,6 @@ test('Expect all skills shown including disabled ones', async () => {
 });
 
 test('Expect Manage Skills button navigates to skills page', async () => {
-  const { handleNavigation } = await import('/@/navigation');
-
   render(AgentWorkspaceDetailsSettings, { workspaceId: 'ws-1', workspaceSummary, configuration });
 
   await fireEvent.click(screen.getByRole('link', { name: 'Agent Skills' }));

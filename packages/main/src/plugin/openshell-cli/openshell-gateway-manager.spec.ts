@@ -17,6 +17,9 @@
  ***********************************************************************/
 
 import { EventEmitter } from 'node:events';
+import { existsSync } from 'node:fs';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { connect } from 'node:http2';
 import { join } from 'node:path';
 
 import { OpenShellClient } from '@nvidia/openshell-sdk';
@@ -104,8 +107,6 @@ async function mockGrpcResponse(
   grpcBody: Buffer,
   trailers?: Record<string, string>,
 ): Promise<void> {
-  const { connect } = await import('node:http2');
-
   vi.mocked(connect).mockImplementation(() => {
     const session = new EventEmitter() as ReturnType<typeof connect>;
     session.close = vi.fn();
@@ -142,8 +143,6 @@ beforeEach(() => {
 describe('OpenshellGatewayManager', () => {
   describe('listGateways', () => {
     test('lists gateways from user directory', async () => {
-      const { readdir, readFile } = await import('node:fs/promises');
-      const { existsSync } = await import('node:fs');
       vi.mocked(readdir)
         .mockResolvedValueOnce(['my-gw'] as unknown as never[])
         .mockRejectedValueOnce(new Error());
@@ -159,8 +158,6 @@ describe('OpenshellGatewayManager', () => {
     test('lists gateways from both user and system directories', async () => {
       vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', SYSTEM_CONFIG_DIR);
       manager = new OpenshellGatewayManager(gatewayConfig);
-      const { readdir, readFile } = await import('node:fs/promises');
-      const { existsSync } = await import('node:fs');
       vi.mocked(readdir)
         .mockResolvedValueOnce(['user-gw'] as unknown as never[])
         .mockResolvedValueOnce(['system-gw'] as unknown as never[]);
@@ -183,8 +180,6 @@ describe('OpenshellGatewayManager', () => {
     test('user gateways take precedence over system gateways with the same name', async () => {
       vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', SYSTEM_CONFIG_DIR);
       manager = new OpenshellGatewayManager(gatewayConfig);
-      const { readdir, readFile } = await import('node:fs/promises');
-      const { existsSync } = await import('node:fs');
       vi.mocked(readdir)
         .mockResolvedValueOnce(['shared-gw'] as unknown as never[])
         .mockResolvedValueOnce(['shared-gw'] as unknown as never[]);
@@ -201,7 +196,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('returns empty list when no gateways exist', async () => {
-      const { readdir } = await import('node:fs/promises');
       vi.mocked(readdir).mockRejectedValue(new Error('ENOENT'));
 
       const gateways = await manager.listGateways();
@@ -210,8 +204,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('skips entries with invalid names', async () => {
-      const { readdir, readFile } = await import('node:fs/promises');
-      const { existsSync } = await import('node:fs');
       vi.mocked(readdir)
         .mockResolvedValueOnce(['valid-gw', '..', '.hidden'] as unknown as never[])
         .mockRejectedValueOnce(new Error());
@@ -225,8 +217,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('skips entries without a metadata.json file', async () => {
-      const { readdir } = await import('node:fs/promises');
-      const { existsSync } = await import('node:fs');
       vi.mocked(readdir)
         .mockResolvedValueOnce(['no-meta'] as unknown as never[])
         .mockRejectedValueOnce(new Error());
@@ -243,8 +233,6 @@ describe('OpenshellGatewayManager', () => {
       vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', '');
 
       try {
-        const { readdir, readFile } = await import('node:fs/promises');
-        const { existsSync } = await import('node:fs');
         vi.mocked(readdir).mockResolvedValueOnce(['win-gw'] as unknown as never[]);
         vi.mocked(existsSync).mockReturnValue(true);
         vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'win-gw' })));
@@ -263,7 +251,6 @@ describe('OpenshellGatewayManager', () => {
 
   describe('getGateway', () => {
     test('returns metadata from user directory', async () => {
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'my-gw' })));
 
       const result = await manager.getGateway('my-gw');
@@ -275,7 +262,6 @@ describe('OpenshellGatewayManager', () => {
     test('falls back to system directory when not found in user', async () => {
       vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', SYSTEM_CONFIG_DIR);
       manager = new OpenshellGatewayManager(gatewayConfig);
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile)
         .mockRejectedValueOnce(new Error('ENOENT'))
         .mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'system-gw' })));
@@ -287,7 +273,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('throws when gateway is not found anywhere', async () => {
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
 
       await expect(manager.getGateway('missing')).rejects.toThrow(/No metadata found for gateway 'missing'/);
@@ -302,8 +287,6 @@ describe('OpenshellGatewayManager', () => {
 
   describe('addGateway', () => {
     test('creates gateway directory and writes metadata', async () => {
-      const { existsSync } = await import('node:fs');
-      const { mkdir, readFile, writeFile } = await import('node:fs/promises');
       vi.mocked(existsSync).mockReturnValue(false);
 
       const metadata = validMetadata({ name: 'new-gw' });
@@ -319,7 +302,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('throws when a user gateway with the same name already exists', async () => {
-      const { existsSync } = await import('node:fs');
       vi.mocked(existsSync).mockReturnValue(true);
 
       await expect(manager.addGateway('existing', validMetadata({ name: 'existing' }))).rejects.toThrow(
@@ -328,8 +310,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('allows adding a user gateway that shadows a system gateway', async () => {
-      const { existsSync } = await import('node:fs');
-      const { mkdir, readFile, writeFile } = await import('node:fs/promises');
       vi.mocked(existsSync).mockReturnValueOnce(false).mockReturnValueOnce(true);
 
       const metadata = validMetadata({ name: 'system-override' });
@@ -351,8 +331,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('auto-selects the newly added gateway as active', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readFile, writeFile } = await import('node:fs/promises');
       vi.mocked(existsSync).mockReturnValue(false);
 
       const metadata = validMetadata({ name: 'auto-gw' });
@@ -368,8 +346,6 @@ describe('OpenshellGatewayManager', () => {
 
   describe('removeGateway', () => {
     test('removes user gateway metadata file', async () => {
-      const { existsSync } = await import('node:fs');
-      const { rm, readFile } = await import('node:fs/promises');
       vi.mocked(existsSync).mockReturnValueOnce(true);
       vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
 
@@ -379,8 +355,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('clears active gateway when removing the active one', async () => {
-      const { existsSync } = await import('node:fs');
-      const { rm, readFile } = await import('node:fs/promises');
       vi.mocked(existsSync).mockReturnValueOnce(true);
       vi.mocked(readFile).mockResolvedValueOnce('old-gw');
 
@@ -393,14 +367,12 @@ describe('OpenshellGatewayManager', () => {
     test('throws when trying to remove a system gateway', async () => {
       vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', SYSTEM_CONFIG_DIR);
       manager = new OpenshellGatewayManager(gatewayConfig);
-      const { existsSync } = await import('node:fs');
       vi.mocked(existsSync).mockReturnValueOnce(false).mockReturnValueOnce(true);
 
       await expect(manager.removeGateway('system-gw')).rejects.toThrow(/installed by the system/);
     });
 
     test('throws when gateway does not exist', async () => {
-      const { existsSync } = await import('node:fs');
       vi.mocked(existsSync).mockReturnValue(false);
 
       await expect(manager.removeGateway('nonexistent')).rejects.toThrow(/No gateway metadata found/);
@@ -413,7 +385,6 @@ describe('OpenshellGatewayManager', () => {
 
   describe('getActiveGateway', () => {
     test('reads active gateway name from user config', async () => {
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockResolvedValueOnce('my-active\n');
 
       const active = await manager.getActiveGateway();
@@ -425,7 +396,6 @@ describe('OpenshellGatewayManager', () => {
     test('falls back to system active gateway when user has none', async () => {
       vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', SYSTEM_CONFIG_DIR);
       manager = new OpenshellGatewayManager(gatewayConfig);
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockRejectedValueOnce(new Error('ENOENT')).mockResolvedValueOnce('system-active');
 
       const active = await manager.getActiveGateway();
@@ -434,7 +404,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('returns undefined when no active gateway is set', async () => {
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
 
       const active = await manager.getActiveGateway();
@@ -443,7 +412,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('returns undefined when active gateway file contains an invalid name', async () => {
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockResolvedValueOnce('..');
 
       const active = await manager.getActiveGateway();
@@ -454,7 +422,6 @@ describe('OpenshellGatewayManager', () => {
 
   describe('setActiveGateway', () => {
     test('writes the active gateway name to user config', async () => {
-      const { readFile, mkdir, writeFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'target-gw' })));
 
       await manager.setActiveGateway('target-gw');
@@ -464,7 +431,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('throws when the target gateway does not exist', async () => {
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
 
       await expect(manager.setActiveGateway('missing')).rejects.toThrow(/No metadata found for gateway 'missing'/);
@@ -477,7 +443,6 @@ describe('OpenshellGatewayManager', () => {
 
   describe('getGatewayInfo', () => {
     test('makes a gRPC call and returns parsed runtime info', async () => {
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'my-gw' })));
 
       const grpcBody = encodeGatewayInfoResponse({
@@ -499,7 +464,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('decodes degraded status from protobuf enum', async () => {
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'gw' })));
 
       await mockGrpcResponse(200, encodeGatewayInfoResponse({ status: 2 }));
@@ -510,7 +474,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('throws on HTTP error response', async () => {
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'gw' })));
 
       await mockGrpcResponse(401, Buffer.alloc(0));
@@ -519,7 +482,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('throws on non-zero grpc-status trailer', async () => {
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'gw' })));
 
       await mockGrpcResponse(200, Buffer.alloc(0), { 'grpc-status': '13', 'grpc-message': 'internal%20error' });
@@ -528,7 +490,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('handles malformed percent-encoding in grpc-message trailer', async () => {
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'gw' })));
 
       await mockGrpcResponse(200, Buffer.alloc(0), { 'grpc-status': '2', 'grpc-message': 'bad%ZZencoding' });
@@ -537,8 +498,6 @@ describe('OpenshellGatewayManager', () => {
     });
 
     test('rejects when response exceeds maximum size', async () => {
-      const { readFile } = await import('node:fs/promises');
-      const { connect } = await import('node:http2');
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'gw' })));
 
       const destroyedStreams: { req: boolean; session: boolean } = { req: false, session: false };
@@ -581,8 +540,6 @@ describe('OpenshellGatewayManager', () => {
 
   describe('health', () => {
     test('creates an SDK client and returns its health', async () => {
-      const { readdir, readFile } = await import('node:fs/promises');
-      const { existsSync } = await import('node:fs');
       vi.mocked(readdir)
         .mockResolvedValueOnce(['my-gw'] as unknown as never[])
         .mockRejectedValueOnce(new Error());
@@ -607,7 +564,6 @@ describe('OpenshellGatewayManager', () => {
       vi.stubEnv('XDG_CONFIG_HOME', '/custom/config');
       manager = new OpenshellGatewayManager(gatewayConfig);
 
-      const { readdir } = await import('node:fs/promises');
       vi.mocked(readdir).mockRejectedValue(new Error('ENOENT'));
 
       await manager.listGateways();
@@ -622,7 +578,6 @@ describe('OpenshellGatewayManager', () => {
 
       manager = new OpenshellGatewayManager(gatewayConfig);
 
-      const { readdir } = await import('node:fs/promises');
       vi.mocked(readdir).mockRejectedValue(new Error('ENOENT'));
 
       await manager.listGateways();
@@ -639,7 +594,6 @@ describe('OpenshellGatewayManager', () => {
 
         manager = new OpenshellGatewayManager(gatewayConfig);
 
-        const { readdir } = await import('node:fs/promises');
         vi.mocked(readdir).mockRejectedValue(new Error('ENOENT'));
 
         await manager.listGateways();
@@ -653,8 +607,6 @@ describe('OpenshellGatewayManager', () => {
 
       manager = new OpenshellGatewayManager(gatewayConfig);
 
-      const { readdir, readFile } = await import('node:fs/promises');
-      const { existsSync } = await import('node:fs');
       vi.mocked(readdir)
         .mockResolvedValueOnce([] as unknown as never[])
         .mockResolvedValueOnce(['sys-gw'] as unknown as never[]);

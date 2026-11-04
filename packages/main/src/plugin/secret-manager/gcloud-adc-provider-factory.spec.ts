@@ -16,6 +16,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { readFile } from 'node:fs/promises';
+
 import type { OpenShellClient } from '@nvidia/openshell-sdk';
 import { beforeEach, describe, expect, type Mock, test, vi } from 'vitest';
 
@@ -60,7 +62,6 @@ beforeEach(async () => {
   client = { raw: mockRaw } as unknown as OpenShellClient;
   factory = new GcloudAdcProviderFactory();
 
-  const { readFile } = await import('node:fs/promises');
   vi.mocked(readFile).mockResolvedValue(
     JSON.stringify({
       type: 'authorized_user',
@@ -184,7 +185,6 @@ describe('createProvider', () => {
   });
 
   test('reads ADC file from credentials GOOGLE_APPLICATION_CREDENTIALS path', async () => {
-    const { readFile } = await import('node:fs/promises');
     const optionsWithCreds: SecretCreateOptions = {
       name: 'my-gcp',
       type: 'google-vertex-ai',
@@ -212,7 +212,6 @@ describe('supports', () => {
 
 describe('readGcloudAdc', () => {
   test('rejects for service account type', async () => {
-    const { readFile } = await import('node:fs/promises');
     vi.mocked(readFile).mockResolvedValue(
       JSON.stringify({
         type: 'service_account',
@@ -226,14 +225,12 @@ describe('readGcloudAdc', () => {
   });
 
   test('rejects when file cannot be read', async () => {
-    const { readFile } = await import('node:fs/promises');
     vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
 
     await expect(readGcloudAdc()).rejects.toThrow('Could not read gcloud ADC file');
   });
 
   test('rejects when client_id is missing', async () => {
-    const { readFile } = await import('node:fs/promises');
     vi.mocked(readFile).mockResolvedValue(
       JSON.stringify({
         type: 'authorized_user',

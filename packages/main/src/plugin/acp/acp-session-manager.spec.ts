@@ -16,6 +16,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { existsSync } from 'node:fs';
+import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -430,9 +432,6 @@ describe('AcpSessionManager', () => {
 
   describe('init', () => {
     test('skips loading when sessions directory does not exist', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(false);
 
       await manager.init();
@@ -441,9 +440,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('loads sessions from disk and marks non-terminal as completed', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['session-1.json' as never]);
 
@@ -472,9 +468,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('preserves terminal session status on load', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['session-2.json' as never]);
 
@@ -502,9 +495,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('skips non-json files', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['.gitkeep' as never]);
 
@@ -514,9 +504,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('marks unresolved permission requests as resolved and expired on load', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['session-perm.json' as never]);
 
@@ -567,9 +554,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('preserves already-resolved permission requests on load', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['session-resolved.json' as never]);
 
@@ -617,9 +601,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('handles corrupt session files gracefully', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['bad.json' as never]);
       vi.mocked(readFile).mockResolvedValue('not valid json');
@@ -636,9 +617,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('restores session events from disk', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['session-3.json' as never]);
 
@@ -671,9 +649,6 @@ describe('AcpSessionManager', () => {
 
   describe('deleteSession', () => {
     test('removes session file from disk', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile, rm, writeFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['session-del.json' as never]);
       vi.mocked(writeFile).mockResolvedValue();
@@ -705,9 +680,6 @@ describe('AcpSessionManager', () => {
 
   describe('renameSession', () => {
     test('updates the name field and persists to disk', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile, writeFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['session-rename.json' as never]);
       vi.mocked(writeFile).mockResolvedValue();
@@ -742,9 +714,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('persists to disk before broadcasting update event', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile, writeFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['session-order.json' as never]);
 
@@ -780,9 +749,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('restores previous metadata when persistence fails', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile, writeFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['session-fail.json' as never]);
 
@@ -818,9 +784,6 @@ describe('AcpSessionManager', () => {
 
   describe('persistence of resume fields', () => {
     test('restores acpSessionId, agentCommand, and gatewayName from disk', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['session-resume.json' as never]);
 
@@ -851,9 +814,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('restores messageTurn from max turn in persisted events', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['session-turn.json' as never]);
 
@@ -909,9 +869,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('handles missing resume fields in old persisted data', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['old-session.json' as never]);
 
@@ -954,9 +911,6 @@ describe('AcpSessionManager', () => {
     }
 
     test('marks sessions with missing sandboxes', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['s1.json' as never]);
       vi.mocked(readFile).mockResolvedValue(
@@ -989,9 +943,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('preserves sandboxId when sandbox is still ready', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['s1.json' as never]);
       vi.mocked(readFile).mockResolvedValue(
@@ -1022,9 +973,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('clears sandboxId when sandbox exists but is not ready', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['s1.json' as never]);
       vi.mocked(readFile).mockResolvedValue(
@@ -1057,9 +1005,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('validates each session against the sandboxes of its own gateway', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['s1.json' as never, 's2.json' as never]);
       vi.mocked(readFile).mockImplementation(async path =>
@@ -1083,9 +1028,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('marks legacy sessions without gateway as having no sandbox', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['s1.json' as never, 's2.json' as never]);
       vi.mocked(readFile).mockImplementation(async path =>
@@ -1108,9 +1050,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('still validates other gateways when one gateway fails', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['s1.json' as never, 's2.json' as never]);
       vi.mocked(readFile).mockImplementation(async path =>
@@ -1134,9 +1073,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('handles listSandboxes failure gracefully', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['s1.json' as never]);
       vi.mocked(readFile).mockResolvedValue(
@@ -1165,9 +1101,6 @@ describe('AcpSessionManager', () => {
 
   describe('sendFollowUp guard', () => {
     test('throws when sandbox is missing', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['s1.json' as never]);
       vi.mocked(readFile).mockResolvedValue(
@@ -1195,9 +1128,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('throws for a session saved without a gateway', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['s1.json' as never]);
       vi.mocked(readFile).mockResolvedValue(
@@ -1229,9 +1159,6 @@ describe('AcpSessionManager', () => {
 
   describe('setSessionModel', () => {
     test('resets contextUsed and contextSize to undefined after model switch', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile, writeFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(writeFile).mockResolvedValue();
       vi.mocked(readdir).mockResolvedValue(['session-model.json' as never]);
@@ -1290,9 +1217,6 @@ describe('AcpSessionManager', () => {
 
   describe('setSessionConfigOption', () => {
     test('resets contextUsed and contextSize to undefined when config option category is model', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile, writeFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(writeFile).mockResolvedValue();
       vi.mocked(readdir).mockResolvedValue(['session-config.json' as never]);
@@ -1364,9 +1288,6 @@ describe('AcpSessionManager', () => {
     });
 
     test('preserves context data when config option category is not model', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile, writeFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(writeFile).mockResolvedValue();
       vi.mocked(readdir).mockResolvedValue(['session-config-other.json' as never]);
@@ -1430,9 +1351,6 @@ describe('AcpSessionManager', () => {
 
   describe('usage_update notification', () => {
     test('notifies subscribers for cost-free usage_update events', async () => {
-      const { existsSync } = await import('node:fs');
-      const { readdir, readFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(readdir).mockResolvedValue(['session-usage.json' as never]);
 
@@ -1482,9 +1400,6 @@ describe('AcpSessionManager', () => {
     sessionId: string;
     mockExec: MockExecSession;
   }> {
-    const { existsSync } = await import('node:fs');
-    const { writeFile } = await import('node:fs/promises');
-
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(writeFile).mockResolvedValue();
 
@@ -1752,9 +1667,6 @@ describe('AcpSessionManager', () => {
     async function setupSessionWithConnection(opts?: {
       promptResult?: { stopReason: string };
     }): Promise<{ sessionId: string }> {
-      const { existsSync } = await import('node:fs');
-      const { writeFile } = await import('node:fs/promises');
-
       vi.mocked(existsSync).mockReturnValue(true);
       vi.mocked(writeFile).mockResolvedValue();
 

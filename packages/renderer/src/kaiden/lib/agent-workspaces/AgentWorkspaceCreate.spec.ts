@@ -34,6 +34,7 @@ import * as ragStore from '/@/kaiden/stores/rag-environments';
 import * as secretVaultStore from '/@/kaiden/stores/secret-vault';
 import * as skillsStore from '/@/kaiden/stores/skills';
 import * as workspaceProjectsStore from '/@/kaiden/stores/workspace-projects';
+import { handleNavigation } from '/@/navigation';
 import * as providerStore from '/@/stores/providers';
 import type { AgentInfo } from '/@api/agent-info';
 import type { MCPRemoteServerInfo } from '/@api/mcp/mcp-server-info';
@@ -853,8 +854,6 @@ test('Expect stale secret selections cleared and Continue disabled while gateway
 });
 
 test('Expect Open Vault button navigates to secret vault', async () => {
-  const { handleNavigation } = await import('/@/navigation');
-
   render(AgentWorkspaceCreate);
 
   await navigateToToolsSecretsStep();
@@ -996,8 +995,6 @@ test('Expect createAgentWorkspace excludes disabled skill paths', async () => {
 });
 
 test('Expect Manage Skills button navigates to skills page', async () => {
-  const { handleNavigation } = await import('/@/navigation');
-
   render(AgentWorkspaceCreate);
 
   await navigateToToolsSecretsStep();
@@ -1149,8 +1146,6 @@ test('Expect knowledge bases listed with provider display name and source count'
 });
 
 test('Expect Manage Knowledges button navigates to rag environments page', async () => {
-  const { handleNavigation } = await import('/@/navigation');
-
   render(AgentWorkspaceCreate);
 
   await navigateToToolsSecretsStep();
@@ -2028,7 +2023,6 @@ test('Expect error dialog shown when createAgentWorkspace fails from Start Works
 });
 
 test('Expect navigation still called when startAsIs fails', async () => {
-  const { handleNavigation } = await import('/@/navigation');
   vi.mocked(window.createAgentWorkspace).mockRejectedValue(new Error('creation failed'));
   vi.mocked(window.checkAgentWorkspaceConfigExists).mockResolvedValue(true);
 
@@ -2050,7 +2044,6 @@ test('Expect navigation still called when startAsIs fails', async () => {
 });
 
 test('Expect navigation still called when startWorkspace fails', async () => {
-  const { handleNavigation } = await import('/@/navigation');
   vi.mocked(window.createAgentWorkspace).mockRejectedValue(new Error('creation failed'));
   vi.mocked(window.showMessageBox).mockResolvedValue({ response: 0 });
 

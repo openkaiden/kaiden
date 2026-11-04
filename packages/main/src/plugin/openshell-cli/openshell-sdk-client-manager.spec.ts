@@ -33,8 +33,7 @@ const mockConnect = vi.fn();
 beforeEach(async () => {
   vi.resetAllMocks();
 
-  const sdk = await import('@nvidia/openshell-sdk');
-  vi.mocked(sdk.OpenShellClient.connect).mockImplementation(mockConnect);
+  vi.mocked(OpenShellClient.connect).mockImplementation(mockConnect);
   mockConnect.mockResolvedValue({ sandbox: {}, raw: {}, transport: {} });
 });
 

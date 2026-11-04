@@ -26,6 +26,7 @@ import type { CatalogModelInfo } from '/@/kaiden/lib/models/models-utils';
 import * as modelCatalogStore from '/@/kaiden/stores/model-catalog';
 import * as modelsStore from '/@/kaiden/stores/models';
 import { resetRouterDraft } from '/@/kaiden/stores/semantic-router-create-draft.svelte';
+import { handleNavigation } from '/@/navigation';
 
 import SemanticRouterCreate from './SemanticRouterCreate.svelte';
 
@@ -293,7 +294,6 @@ describe('create flow', () => {
     await fireEvent.click(createBtn);
     await vi.advanceTimersToNextTimerAsync();
 
-    const { handleNavigation } = await import('/@/navigation');
     await waitFor(() => {
       expect(handleNavigation).toHaveBeenCalledWith({ page: 'semantic-routers' });
     });
@@ -328,7 +328,6 @@ describe('create flow', () => {
     const cancelBtn = screen.getByRole('button', { name: 'Cancel' });
     await fireEvent.click(cancelBtn);
 
-    const { handleNavigation } = await import('/@/navigation');
     expect(handleNavigation).toHaveBeenCalledWith({ page: 'semantic-routers' });
   });
 });
