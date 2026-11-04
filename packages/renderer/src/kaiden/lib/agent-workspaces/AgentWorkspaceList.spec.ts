@@ -382,6 +382,19 @@ test('Expect bulk delete sets actionError on failed workspaces only', async () =
     expect(get(allOpenshellSandboxes).find(s => s.id === 'ws-2')?.actionError).toBe('Error: network error'),
   );
   expect(get(allOpenshellSandboxes).find(s => s.id === 'ws-1')?.actionError).toBeUndefined();
+
+  // rows hold several tooltips (other columns), hover them all to reveal the error one
+  const failedRow = screen.getByRole('row', { name: 'workspace-2' });
+  for (const trigger of within(failedRow).getAllByTestId('tooltip-trigger')) {
+    await fireEvent.mouseEnter(trigger);
+  }
+  expect(await within(failedRow).findByText('Error: network error')).toBeInTheDocument();
+
+  const successRow = screen.getByRole('row', { name: 'workspace-1' });
+  for (const trigger of within(successRow).queryAllByTestId('tooltip-trigger')) {
+    await fireEvent.mouseEnter(trigger);
+  }
+  expect(within(successRow).queryByText('Error: network error')).not.toBeInTheDocument();
 });
 
 test('Expect failed workspaces to stay selected after bulk delete', async () => {
