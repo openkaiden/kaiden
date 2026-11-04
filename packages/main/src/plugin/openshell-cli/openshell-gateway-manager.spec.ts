@@ -509,22 +509,6 @@ describe('OpenshellGatewayManager', () => {
       expect(result.status).toBe('degraded');
     });
 
-    test('resolves active gateway when no name is provided', async () => {
-      const { readFile } = await import('node:fs/promises');
-      vi.mocked(readFile)
-        .mockResolvedValueOnce('active-gw')
-        .mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'active-gw' })));
-
-      await mockGrpcResponse(200, encodeGatewayInfoResponse({ status: 1 }));
-
-      await manager.getGatewayInfo();
-
-      expect(gatewayConfig.buildConnectOptions).toHaveBeenCalledWith({
-        name: 'active-gw',
-        endpoint: 'http://127.0.0.1:17670',
-      });
-    });
-
     test('throws on HTTP error response', async () => {
       const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'gw' })));
@@ -615,29 +599,6 @@ describe('OpenshellGatewayManager', () => {
         endpoint: 'http://127.0.0.1:17670',
       });
       expect(result).toEqual({ status: 'healthy', version: '1.0.0' });
-    });
-
-    test('resolves gateway when name is undefined', async () => {
-      const { readdir, readFile } = await import('node:fs/promises');
-      const { existsSync } = await import('node:fs');
-      vi.mocked(readdir)
-        .mockResolvedValueOnce(['only-gw'] as unknown as never[])
-        .mockRejectedValueOnce(new Error());
-      vi.mocked(existsSync).mockReturnValue(true);
-      vi.mocked(readFile)
-        .mockRejectedValueOnce(new Error('ENOENT'))
-        .mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'only-gw' })))
-        .mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'only-gw' })));
-      const mockHealth = vi.fn().mockResolvedValue({ status: 'healthy', version: '1.0.0' });
-      const mockConnect = vi.fn().mockResolvedValue({ health: mockHealth });
-      vi.mocked(OpenShellClient.connect).mockImplementation(mockConnect);
-
-      await manager.health();
-
-      expect(gatewayConfig.buildConnectOptions).toHaveBeenCalledWith({
-        name: 'only-gw',
-        endpoint: 'http://127.0.0.1:17670',
-      });
     });
   });
 

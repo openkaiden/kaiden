@@ -175,8 +175,8 @@ export class OpenshellGatewayManager {
   // as a raw gRPC unary request over HTTP/2 with a minimal protobuf
   // decoder for the known response shape.
 
-  async getGatewayInfo(gatewayName?: string): Promise<GatewayRuntimeInfo> {
-    const gateway = await this.#resolveGateway(gatewayName);
+  async getGatewayInfo(gatewayName: string): Promise<GatewayRuntimeInfo> {
+    const gateway = await this.getGateway(gatewayName);
     const connectOpts = await this.gatewayConfig.buildConnectOptions({
       name: gateway.name,
       endpoint: gateway.gateway_endpoint,
@@ -191,8 +191,8 @@ export class OpenshellGatewayManager {
     return GatewayRuntimeInfoSchema.parse(decodeGetGatewayInfoResponse(responseBytes));
   }
 
-  async health(gatewayName?: string): Promise<{ status: string; version: string }> {
-    const gateway = await this.#resolveGateway(gatewayName);
+  async health(gatewayName: string): Promise<{ status: string; version: string }> {
+    const gateway = await this.getGateway(gatewayName);
     const connectOpts = await this.gatewayConfig.buildConnectOptions({
       name: gateway.name,
       endpoint: gateway.gateway_endpoint,
@@ -308,18 +308,6 @@ export class OpenshellGatewayManager {
   async #clearActiveGateway(): Promise<void> {
     const activePath = join(this.#openshellConfigDir(), ACTIVE_GATEWAY_FILENAME);
     await rm(activePath, { force: true });
-  }
-
-  async #resolveGateway(gatewayName?: string): Promise<GatewayMetadata> {
-    if (gatewayName) return this.getGateway(gatewayName);
-
-    const activeName = await this.getActiveGateway();
-    if (activeName) return this.getGateway(activeName);
-
-    const all = await this.listGateways();
-    if (all.length === 1) return all[0]!.metadata;
-    if (all.length === 0) throw new Error('No OpenShell gateways registered');
-    throw new Error('Multiple OpenShell gateways registered but none is active');
   }
 
   #grpcUnaryCall(

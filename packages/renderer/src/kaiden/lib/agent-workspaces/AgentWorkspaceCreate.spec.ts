@@ -1060,12 +1060,14 @@ test('Expect createAgentWorkspace called with secret ids when vault has entries'
     {
       id: 'github-token',
       name: 'GitHub Token',
+      gateway: 'local',
       type: 'github',
       description: 'Personal access token',
     },
     {
       id: 'anthropic-key',
       name: 'Anthropic Key',
+      gateway: 'local',
       type: 'anthropic',
       description: 'API key',
     },

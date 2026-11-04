@@ -801,13 +801,14 @@ export class AcpSessionManager {
     if (!session.agentCommand.length) {
       throw new Error(`Cannot reconnect session "${sessionId}": agent command is unknown`);
     }
+    const gatewayName = this.getSessionGateway(session);
 
     this.closeExecSession(session);
 
     debugPty(`${session.info.sandboxName} reconnecting via execInteractive: ${session.agentCommand.join(' ')}`);
 
     const abortController = new AbortController();
-    const sdkClient = await this.sdkClientManager.getClient(session.gatewayName);
+    const sdkClient = await this.sdkClientManager.getClient(gatewayName);
     const execSession = await sdkClient.sandbox.execInteractive(session.info.sandboxName, session.agentCommand, {
       tty: false,
       cols: PTY_COLS,
@@ -900,6 +901,7 @@ export class AcpSessionManager {
     if (!session) {
       throw new Error(`Session "${sessionId}" not found`);
     }
+    const gatewayName = this.getSessionGateway(session);
     if (!session.info.sandboxId) {
       throw new Error(`Sandbox "${session.info.sandboxName}" no longer exists`);
     }
@@ -927,11 +929,7 @@ export class AcpSessionManager {
 
     let contentBlocks: acp.ContentBlock[];
     try {
-      const uploadedAttachments = await this.uploadAttachments(
-        session.info.sandboxName,
-        attachments,
-        session.gatewayName,
-      );
+      const uploadedAttachments = await this.uploadAttachments(session.info.sandboxName, attachments, gatewayName);
       contentBlocks = this.buildContentBlocks(prompt, uploadedAttachments);
     } catch (err: unknown) {
       console.error(`[ACP ${session.info.sandboxName}] attachment upload failed:`, err);
@@ -981,8 +979,8 @@ export class AcpSessionManager {
 
   private async uploadAttachments(
     sandboxName: string,
-    attachments?: AcpAttachment[],
-    gatewayName?: string,
+    attachments: AcpAttachment[] | undefined,
+    gatewayName: string,
   ): Promise<UploadedAttachment[] | undefined> {
     if (!attachments?.length) return undefined;
 
@@ -1370,6 +1368,12 @@ export class AcpSessionManager {
     const sessionsByGateway = Map.groupBy(this.sessions.values(), session => session.gatewayName);
     await Promise.all(
       Array.from(sessionsByGateway, async ([gatewayName, sessions]) => {
+        if (!gatewayName) {
+          for (const session of sessions) {
+            session.info.sandboxId = undefined;
+          }
+          return;
+        }
         try {
           const sandboxes = await this.#listSandboxes(gatewayName);
           const readySandboxes = new Map(sandboxes.filter(s => s.phase === 'Ready').map(s => [s.name, s.id]));
@@ -1412,7 +1416,17 @@ export class AcpSessionManager {
     }
   }
 
-  async #listSandboxes(gatewayName?: string): Promise<SandboxInfo[]> {
+  /** Sessions saved before the gateway was recorded can't be reconnected. */
+  private getSessionGateway(session: AcpSession): string {
+    if (!session.gatewayName) {
+      throw new Error(
+        `Session "${session.info.id}" has no gateway recorded. Start a new session on sandbox "${session.info.sandboxName}".`,
+      );
+    }
+    return session.gatewayName;
+  }
+
+  async #listSandboxes(gatewayName: string): Promise<SandboxInfo[]> {
     const client = await this.sdkClientManager.getClient(gatewayName);
     const refs = client.sandbox.list({ workspace: OpenshellWorkspaceDefaults.WORKSPACE });
     return (await refs.all()).map(mapSdkSandboxRef);

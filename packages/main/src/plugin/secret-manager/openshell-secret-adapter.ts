@@ -65,7 +65,7 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
     private readonly openshellRegistry: OpenShellRegistry,
   ) {}
 
-  async createSecret(options: SecretCreateOptions, gateway?: string): Promise<SecretName> {
+  async createSecret(options: SecretCreateOptions, gateway: string): Promise<SecretName> {
     if (typeof options.value === 'string') {
       throw new Error('options.value must be a record for Openshell');
     }
@@ -75,7 +75,7 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
     return { name: options.name };
   }
 
-  async listSecrets(gateway?: string): Promise<SecretInfo[]> {
+  async listSecrets(gateway: string): Promise<SecretInfo[]> {
     const client = await this.sdkClientManager.getClient(gateway);
     const response = await client.raw.listProviders({
       workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
@@ -86,7 +86,7 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
     }));
   }
 
-  async removeSecret(name: string, gateway?: string): Promise<SecretName> {
+  async removeSecret(name: string, gateway: string): Promise<SecretName> {
     const client = await this.sdkClientManager.getClient(gateway);
     await client.raw.deleteProvider({
       name,
@@ -95,7 +95,7 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
     return { name };
   }
 
-  async listServices(gateway?: string): Promise<OpenshellProfile[]> {
+  async listServices(gateway: string): Promise<OpenshellProfile[]> {
     const client = await this.sdkClientManager.getClient(gateway);
     const response = await client.raw.listProviderProfiles({
       workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
@@ -114,7 +114,7 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
     }));
   }
 
-  async createProfile(options: CreateProfileOptions, gateway?: string): Promise<void> {
+  async createProfile(options: CreateProfileOptions, gateway: string): Promise<void> {
     const baseProfile = this.openshellRegistry.getProfiles().find(p => p.id === options.from);
     if (!baseProfile) {
       throw new Error(`Provider profile "${options.from}" not found`);
@@ -164,7 +164,7 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
     }
   }
 
-  async deleteProfile(profileId: string, gateway?: string): Promise<void> {
+  async deleteProfile(profileId: string, gateway: string): Promise<void> {
     const client = await this.sdkClientManager.getClient(gateway);
     await client.raw.deleteProviderProfile({
       id: profileId,
@@ -173,7 +173,7 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
     });
   }
 
-  async ensureProfileOnGateway(profile: ProviderProfile, gateway?: string): Promise<void> {
+  async ensureProfileOnGateway(profile: ProviderProfile, gateway: string): Promise<void> {
     const client = await this.sdkClientManager.getClient(gateway);
     const response = await client.raw.listProviderProfiles({
       workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
