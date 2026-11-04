@@ -128,8 +128,8 @@ export class SecretManager {
     await this.openshellAdapter.deleteProfile(profileId, gateway);
   }
 
-  async listServices(): Promise<OpenshellProfile[]> {
-    return this.cli.listServices();
+  async listServices(gateway?: string): Promise<OpenshellProfile[]> {
+    return this.cli.listServices(gateway);
   }
 
   /**
@@ -298,8 +298,8 @@ export class SecretManager {
 
     this.ipcHandle(
       'secret-manager:create',
-      async (_listener: unknown, options: SecretCreateOptions): Promise<SecretName> => {
-        return this.create(options);
+      async (_listener: unknown, options: SecretCreateOptions, gateway?: string): Promise<SecretName> => {
+        return this.create(options, gateway);
       },
     );
 
@@ -314,8 +314,11 @@ export class SecretManager {
       },
     );
 
-    this.ipcHandle('secret-manager:list-services', async (): Promise<OpenshellProfile[]> => {
-      return this.listServices();
-    });
+    this.ipcHandle(
+      'secret-manager:list-services',
+      async (_listener: unknown, gateway?: string): Promise<OpenshellProfile[]> => {
+        return this.listServices(gateway);
+      },
+    );
   }
 }

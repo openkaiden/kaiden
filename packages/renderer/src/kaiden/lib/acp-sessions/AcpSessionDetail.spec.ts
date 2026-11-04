@@ -181,6 +181,28 @@ describe('createSession error display', () => {
   });
 });
 
+describe('createSession gateway', () => {
+  test('creates the session on the gateway of the selected sandbox', async () => {
+    const remoteSandbox: SandboxInfoWithGateway = {
+      id: 'sb-remote',
+      name: 'remote-sandbox',
+      phase: 'Ready',
+      gatewayName: 'remote',
+    };
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([]);
+    vi.mocked(openshellSandboxesStore).allOpenshellSandboxes = writable<SandboxInfoWithGateway[]>([remoteSandbox]);
+    vi.mocked(agentsStore).agentInfos = writable<AgentInfo[]>([ACP_AGENT]);
+
+    render(AcpSessionDetail, { sessionId: 'new', draftSandboxName: 'remote-sandbox' });
+
+    await vi.waitFor(() => {
+      expect(window.createAcpSession).toHaveBeenCalledWith(
+        expect.objectContaining({ sandboxName: 'remote-sandbox', gatewayName: 'remote' }),
+      );
+    });
+  });
+});
+
 describe('scroll lock', () => {
   function getFlowContainer(): HTMLElement {
     return document.querySelector('.overflow-auto')!;

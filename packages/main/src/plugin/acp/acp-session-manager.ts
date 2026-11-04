@@ -202,7 +202,8 @@ export class AcpSessionManager {
   }
 
   async createSession(options: AcpSessionCreateOptions): Promise<AcpSessionInfo> {
-    const sandboxes = await this.#listSandboxes();
+    const { gatewayName } = options;
+    const sandboxes = await this.#listSandboxes(gatewayName);
     const sandbox = sandboxes.find(s => s.name === options.sandboxName);
     if (!sandbox) {
       throw new Error(`Sandbox "${options.sandboxName}" not found`);
@@ -215,7 +216,6 @@ export class AcpSessionManager {
 
     const sessionId = randomUUID();
 
-    const gatewayName = sandbox.labels?.['gateway'];
     debugPty(`${sandbox.name} execInteractive: ${command.join(' ')}`);
 
     const abortController = new AbortController();
@@ -1367,19 +1367,21 @@ export class AcpSessionManager {
 
   private async validateSandboxes(): Promise<void> {
     if (this.sessions.size === 0) return;
-    try {
-      const sandboxes = await this.#listSandboxes();
-      const readySandboxes = new Map(sandboxes.filter(s => s.phase === 'Ready').map(s => [s.name, s.id]));
-      for (const session of this.sessions.values()) {
-        if (readySandboxes.has(session.info.sandboxName)) {
-          session.info.sandboxId = readySandboxes.get(session.info.sandboxName);
-        } else {
-          session.info.sandboxId = undefined;
+    const sessionsByGateway = Map.groupBy(this.sessions.values(), session => session.gatewayName);
+    await Promise.all(
+      Array.from(sessionsByGateway, async ([gatewayName, sessions]) => {
+        try {
+          const sandboxes = await this.#listSandboxes(gatewayName);
+          const readySandboxes = new Map(sandboxes.filter(s => s.phase === 'Ready').map(s => [s.name, s.id]));
+          for (const session of sessions) {
+            session.info.sandboxId = readySandboxes.get(session.info.sandboxName);
+          }
+        } catch (err: unknown) {
+          // Gateway may be unavailable — keep its sessions as they are
+          console.error(`[ACP] Failed to validate sandboxes on gateway "${gatewayName}":`, err);
         }
-      }
-    } catch {
-      // CLI may be unavailable — skip validation
-    }
+      }),
+    );
   }
 
   private async saveToDisk(sessionId: string): Promise<void> {
@@ -1410,8 +1412,8 @@ export class AcpSessionManager {
     }
   }
 
-  async #listSandboxes(): Promise<SandboxInfo[]> {
-    const client = await this.sdkClientManager.getClient();
+  async #listSandboxes(gatewayName?: string): Promise<SandboxInfo[]> {
+    const client = await this.sdkClientManager.getClient(gatewayName);
     const refs = client.sandbox.list({ workspace: OpenshellWorkspaceDefaults.WORKSPACE });
     return (await refs.all()).map(mapSdkSandboxRef);
   }

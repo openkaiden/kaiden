@@ -21,7 +21,8 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import type { OpenshellProfile } from '/@api/openshell-gateway-info';
+import { openshellGateways, openshellGatewaysReady } from '/@/kaiden/stores/openshell-gateways';
+import type { GatewayInfo, OpenshellProfile } from '/@api/openshell-gateway-info';
 
 import SecretVaultCreate from './SecretVaultCreate.svelte';
 
@@ -46,9 +47,22 @@ const MOCK_SERVICES: OpenshellProfile[] = [
   },
 ];
 
+function usableGateway(name: string, active = false): GatewayInfo {
+  return {
+    name,
+    endpoint: `http://${name}:8080`,
+    canStop: false,
+    canStart: false,
+    active,
+    gatewayState: { reachable: true, health: 'healthy', compatible: true },
+  };
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.resetAllMocks();
+  openshellGateways.set([usableGateway('kaiden', true)]);
+  openshellGatewaysReady.set(true);
   vi.mocked(window.createSecret).mockResolvedValue({ name: 'test' });
   vi.mocked(window.listSecretServices).mockResolvedValue(MOCK_SERVICES);
 });
@@ -118,7 +132,7 @@ test('cancel navigates back to secret vault', async () => {
 
   render(SecretVaultCreate);
 
-  const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+  const cancelButton = await screen.findByRole('button', { name: 'Cancel' });
   await fireEvent.click(cancelButton);
 
   expect(handleNavigation).toHaveBeenCalledWith({ page: 'secret-vault' });
@@ -139,16 +153,19 @@ test('submits predefined service type with credential fields as SecretValue', as
 
   await fireEvent.click(screen.getByRole('button', { name: 'Add Secret' }));
 
-  expect(window.createSecret).toHaveBeenCalledWith({
-    name: 'gh-token',
-    type: 'github',
-    value: {
-      credentials: {
-        GH_TOKEN: 'ghp_abc123',
-        GITHUB_TOKEN: 'ghp_abc123',
+  expect(window.createSecret).toHaveBeenCalledWith(
+    {
+      name: 'gh-token',
+      type: 'github',
+      value: {
+        credentials: {
+          GH_TOKEN: 'ghp_abc123',
+          GITHUB_TOKEN: 'ghp_abc123',
+        },
       },
     },
-  });
+    'kaiden',
+  );
 
   expect(handleNavigation).toHaveBeenCalledWith({ page: 'secret-vault' });
 });
@@ -268,13 +285,64 @@ test('uses credential name as fallback key when env_vars is empty', async () => 
 
   await fireEvent.click(screen.getByRole('button', { name: 'Add Secret' }));
 
-  expect(window.createSecret).toHaveBeenCalledWith({
-    name: 'my-custom',
-    type: 'custom-provider',
-    value: {
-      credentials: {
-        secret_key: 'sk-123',
+  expect(window.createSecret).toHaveBeenCalledWith(
+    {
+      name: 'my-custom',
+      type: 'custom-provider',
+      value: {
+        credentials: {
+          secret_key: 'sk-123',
+        },
       },
     },
+    'kaiden',
+  );
+});
+
+test('loads services from the active gateway when several gateways are usable', async () => {
+  openshellGateways.set([usableGateway('remote'), usableGateway('kaiden', true)]);
+
+  render(SecretVaultCreate);
+
+  await screen.findByLabelText('GitHub');
+  expect(window.listSecretServices).toHaveBeenCalledWith('kaiden');
+  expect(window.listSecretServices).not.toHaveBeenCalledWith('remote');
+});
+
+test('reloads services and clears the selected type when the active gateway changes', async () => {
+  openshellGateways.set([usableGateway('kaiden', true), usableGateway('remote')]);
+
+  render(SecretVaultCreate);
+  await fireEvent.click(await screen.findByLabelText('GitHub'));
+  expect(screen.getByLabelText('Token')).toBeInTheDocument();
+
+  openshellGateways.set([usableGateway('kaiden'), usableGateway('remote', true)]);
+
+  await waitFor(() => {
+    expect(window.listSecretServices).toHaveBeenCalledWith('remote');
   });
+  expect(await screen.findByLabelText('GitHub')).toHaveAttribute('aria-pressed', 'false');
+  expect(screen.queryByLabelText('Token')).not.toBeInTheDocument();
+});
+
+test('shows loading until the gateway list is known', async () => {
+  openshellGateways.set([]);
+  openshellGatewaysReady.set(false);
+
+  render(SecretVaultCreate);
+
+  expect(await screen.findByText('Loading secret types…')).toBeInTheDocument();
+  expect(window.listSecretServices).not.toHaveBeenCalled();
+});
+
+test('does not load services when no gateway is usable', async () => {
+  openshellGateways.set([
+    { ...usableGateway('kaiden', true), gatewayState: { reachable: false, health: 'unhealthy', compatible: true } },
+  ]);
+
+  render(SecretVaultCreate);
+
+  expect(await screen.findByRole('button', { name: 'Add Secret' })).toBeDisabled();
+  expect(screen.queryByText('Loading secret types…')).not.toBeInTheDocument();
+  expect(window.listSecretServices).not.toHaveBeenCalled();
 });

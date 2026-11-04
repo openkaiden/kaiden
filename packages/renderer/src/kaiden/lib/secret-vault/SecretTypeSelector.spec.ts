@@ -44,22 +44,15 @@ beforeEach(() => {
   vi.mocked(window.listSecretServices).mockResolvedValue([GITHUB, NO_CREDENTIALS]);
 });
 
-test('shows loading text until the secret types are fetched', async () => {
-  const pending = Promise.withResolvers<OpenshellProfile[]>();
-  vi.mocked(window.listSecretServices).mockReturnValue(pending.promise);
-
-  render(SecretTypeSelector, { onSelect: vi.fn() });
-
-  expect(screen.getByText('Loading secret types…')).toBeInTheDocument();
-
-  pending.resolve([GITHUB]);
+test('loads the secret types of the given gateway', async () => {
+  render(SecretTypeSelector, { gateway: 'remote', onSelect: vi.fn() });
 
   expect(await screen.findByLabelText('GitHub')).toBeInTheDocument();
-  expect(screen.queryByText('Loading secret types…')).not.toBeInTheDocument();
+  expect(window.listSecretServices).toHaveBeenCalledWith('remote');
 });
 
 test('only offers secret types that have credentials', async () => {
-  render(SecretTypeSelector, { onSelect: vi.fn() });
+  render(SecretTypeSelector, { gateway: 'kaiden', onSelect: vi.fn() });
 
   expect(await screen.findByLabelText('GitHub')).toBeInTheDocument();
   expect(screen.queryByLabelText('No Creds')).not.toBeInTheDocument();
@@ -68,7 +61,7 @@ test('only offers secret types that have credentials', async () => {
 test('offers no secret type when fetching them fails', async () => {
   vi.mocked(window.listSecretServices).mockRejectedValue(new Error('CLI not found'));
 
-  render(SecretTypeSelector, { onSelect: vi.fn() });
+  render(SecretTypeSelector, { gateway: 'kaiden', onSelect: vi.fn() });
 
   expect(await screen.findByText('Secret type')).toBeInTheDocument();
   expect(screen.queryByLabelText('GitHub')).not.toBeInTheDocument();
@@ -76,7 +69,7 @@ test('offers no secret type when fetching them fails', async () => {
 
 test('reports the selected secret type profile', async () => {
   const onSelect = vi.fn();
-  render(SecretTypeSelector, { onSelect });
+  render(SecretTypeSelector, { gateway: 'kaiden', onSelect });
 
   await fireEvent.click(await screen.findByLabelText('GitHub'));
 
