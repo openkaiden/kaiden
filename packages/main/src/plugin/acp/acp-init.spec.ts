@@ -18,6 +18,7 @@
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT } from '/@api/acp-settings.js';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
 
 import { AcpInit } from './acp-init.js';
@@ -46,6 +47,24 @@ describe('init', () => {
             default: 20,
             minimum: 1,
             maximum: 100,
+          }),
+        }),
+      }),
+    ]);
+  });
+
+  test('registers acp.promptTimeoutSeconds configuration', () => {
+    acpInit.init();
+
+    expect(configurationRegistry.registerConfigurations).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'preferences.acp',
+        properties: expect.objectContaining({
+          'acp.promptTimeoutSeconds': expect.objectContaining({
+            type: 'number',
+            default: ACP_PROMPT_TIMEOUT_SECONDS_DEFAULT,
+            minimum: 0,
+            maximum: 3600,
           }),
         }),
       }),
