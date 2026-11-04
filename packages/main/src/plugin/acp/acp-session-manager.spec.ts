@@ -1758,6 +1758,7 @@ describe('AcpSessionManager', () => {
 
       const session = await manager.createSession({
         sandboxName: 'test-sandbox',
+        gatewayName: 'test-gateway',
         prompt: 'hello',
         agentId: 'openclaw',
       });
