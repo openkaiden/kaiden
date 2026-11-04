@@ -5,10 +5,9 @@ import { Icon } from '@podman-desktop/ui-svelte/icons';
 
 import { modelSelectionKey } from '/@/kaiden/stores/model-catalog';
 import { handleNavigation } from '/@/navigation';
-import { matchesAllTokens } from '/@/stores/search-util';
 import { NavigationPage } from '/@api/navigation-page';
 
-import type { CatalogModelInfo } from './models-utils';
+import { type CatalogModelInfo, filterModelsBySearch } from './models-utils';
 
 type ModelCategory = 'cloud' | 'corporate' | 'local';
 
@@ -56,7 +55,7 @@ let showDefaultColumn: boolean = $derived(multiSelect && defaultModel !== undefi
 
 let searchTerm = $state('');
 
-let displayedModels: CatalogModelInfo[] = $derived(filterBySearch(models, searchTerm));
+let displayedModels: CatalogModelInfo[] = $derived(filterModelsBySearch(models, searchTerm));
 
 let cloudModels: CatalogModelInfo[] = $derived(displayedModels.filter(m => m.type === 'cloud'));
 let corporateModels: CatalogModelInfo[] = $derived(displayedModels.filter(m => m.type === 'self-hosted'));
@@ -73,10 +72,6 @@ let selectedCount: number = $derived(
 function isSelected(key: string): boolean {
   if (multiSelect) return selectedKeys?.has(key) ?? false;
   return selectedKey === key;
-}
-
-function filterBySearch(allModels: CatalogModelInfo[], term: string): CatalogModelInfo[] {
-  return allModels.filter(m => matchesAllTokens([m.label, m.providerName, m.connectionName].join(' '), term));
 }
 
 function getKey(model: CatalogModelInfo): string {
