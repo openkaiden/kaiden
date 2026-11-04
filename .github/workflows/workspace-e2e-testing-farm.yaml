@@ -16,6 +16,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 name: workspace e2e tests (Testing Farm)
+run-name: >-
+  ${{ inputs.npm_target == 'test:e2e:workspaces:opencode' && 'workspace e2e tests (Testing Farm, opencode agent)'
+    || inputs.npm_target == 'test:e2e:workspaces:goose' && 'workspace e2e tests (Testing Farm, goose agent)'
+    || inputs.npm_target == 'test:e2e:workspaces:filesystem-network' && 'workspace e2e tests (Testing Farm, filesystem/network policies, opencode agent)'
+    || 'workspace e2e tests (Testing Farm)' }}
 
 on:
   schedule:
@@ -26,6 +31,18 @@ on:
         description: 'Branch, tag, or full SHA of openkaiden/kaiden to test; defaults to the dispatch ref'
         required: false
         type: string
+      npm_target:
+        default: 'test:e2e:workspaces'
+        description: 'npm target to run tests (use :opencode, :goose or :filesystem-network for a single smoke test)'
+        type: choice
+        # Specs with scenarios that run here; Claude needs ANTHROPIC_API_KEY
+        # (unavailable) and OpenClaw/Copilot are skipped for 0.4.0.
+        options:
+          - 'test:e2e:workspaces'
+          - 'test:e2e:workspaces:opencode'
+          - 'test:e2e:workspaces:goose'
+          - 'test:e2e:workspaces:filesystem-network'
+        required: false
 
 permissions:
   contents: read
@@ -66,7 +83,8 @@ jobs:
           tmt_path: tests/tmt
           compose: ${{ env.TESTING_FARM_COMPOSE }}
           arch: x86_64
-          variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.sha }}
+          # Scheduled runs have no inputs, so they keep running the full suite.
+          variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.sha }};KAIDEN_NPM_TARGET=${{ inputs.npm_target || 'test:e2e:workspaces' }}
           # Covered providers only; see tests/tmt/scripts/workspace-provider.sh.
           secrets: OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }};GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           # The action polls for ~timeout x 4 minutes (~200m), between the test
