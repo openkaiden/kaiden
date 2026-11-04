@@ -50,7 +50,7 @@ beforeEach(() => {
   clearSandboxActionError(sandbox.id);
   openshellSandboxes.set([
     {
-      gateway: { name: 'remote-gateway', endpoint: 'http://localhost:18080', canStop: false },
+      gateway: { name: 'remote-gateway', endpoint: 'http://localhost:18080', canStart: false, canStop: false },
       sandboxes: [{ id: 'sandbox-1', name: 'shared-name', phase: 'Ready' }],
     },
   ]);

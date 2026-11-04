@@ -354,7 +354,7 @@ test('Expect bulk delete sets actionError on failed workspaces only', async () =
   clearSandboxActionError('ws-2');
   const workspaces: GatewaySandboxes[] = [
     {
-      gateway: { canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      gateway: { canStart: false, canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
       sandboxes: [
         { id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() },
         { id: 'ws-2', name: 'workspace-2', phase: 'Ready', created_at: Date.now().toString() },
@@ -389,7 +389,7 @@ test('Expect failed workspaces to stay selected after bulk delete', async () => 
   clearSandboxActionError('ws-2');
   const workspaces: GatewaySandboxes[] = [
     {
-      gateway: { canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      gateway: { canStart: false, canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
       sandboxes: [
         { id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() },
         { id: 'ws-2', name: 'workspace-2', phase: 'Ready', created_at: Date.now().toString() },
@@ -424,7 +424,7 @@ test('Expect selection to be kept when an action error is set on another workspa
   clearSandboxActionError('ws-2');
   const workspaces: GatewaySandboxes[] = [
     {
-      gateway: { canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      gateway: { canStart: false, canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
       sandboxes: [
         { id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() },
         { id: 'ws-2', name: 'workspace-2', phase: 'Ready', created_at: Date.now().toString() },

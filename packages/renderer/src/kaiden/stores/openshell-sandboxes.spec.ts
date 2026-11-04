@@ -30,7 +30,7 @@ import {
 
 const gatewaySandboxes: GatewaySandboxes[] = [
   {
-    gateway: { name: 'local', endpoint: 'http://localhost:18080', canStop: false },
+    gateway: { name: 'local', endpoint: 'http://localhost:18080', canStart: false, canStop: false },
     sandboxes: [
       { id: 'ws-1', name: 'workspace-1', phase: 'Ready' },
       { id: 'ws-2', name: 'workspace-2', phase: 'Ready' },
