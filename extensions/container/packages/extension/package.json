@@ -2,7 +2,7 @@
   "name": "container",
   "displayName": "Container",
   "description": "Allows to interact with container engines (docker, podman, etc.)",
-  "version": "0.4.0-next",
+  "version": "0.4.0",
   "icon": {
     "light": "icon_light.png",
     "dark": "icon_dark.png"
