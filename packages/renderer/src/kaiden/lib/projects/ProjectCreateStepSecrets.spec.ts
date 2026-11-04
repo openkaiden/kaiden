@@ -23,6 +23,7 @@ import { writable } from 'svelte/store';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import * as secretVaultStore from '/@/kaiden/stores/secret-vault';
+import { handleNavigation } from '/@/navigation';
 import type { SecretVaultInfo } from '/@api/secret-vault/secret-vault-info';
 
 import ProjectCreateStepSecrets from './ProjectCreateStepSecrets.svelte';
@@ -77,7 +78,6 @@ describe('summary card', () => {
 
   test('clicking Create a secret link navigates to secret vault', async () => {
     vi.mocked(secretVaultStore).secretVaultInfos = writable<readonly SecretVaultInfo[]>([]);
-    const { handleNavigation } = await import('/@/navigation');
 
     render(ProjectCreateStepSecrets, {
       selectedSecretIds: [],
@@ -142,8 +142,6 @@ describe('checklist panel', () => {
   });
 
   test('clicking Open Vault navigates to secret vault', async () => {
-    const { handleNavigation } = await import('/@/navigation');
-
     render(ProjectCreateStepSecrets, {
       selectedSecretIds: SAMPLE_SECRETS.map(s => s.id),
     });

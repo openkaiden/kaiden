@@ -17,6 +17,7 @@
  ***********************************************************************/
 
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readFile, readlink, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -411,7 +412,6 @@ describe('darwin', () => {
     const outputDir = join(testDir, 'output');
     await expect(downloadMkfsExt4(VERSION, 'arm64', 'darwin', outputDir)).rejects.toThrow('checksum mismatch');
 
-    const { existsSync } = await import('node:fs');
     expect(existsSync(join(outputDir, 'mkfs.ext4'))).toBe(false);
     expect(existsSync(join(outputDir, '.mkfs-ext4'))).toBe(false);
     expect(existsSync(join(outputDir, '.mkfs-ext4-version'))).toBe(false);

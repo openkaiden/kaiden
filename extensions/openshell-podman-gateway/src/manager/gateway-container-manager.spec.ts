@@ -16,6 +16,9 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { pipeline } from 'node:stream/promises';
+
 import type { CliToolInfo } from '@openkaiden/api';
 import { cli, env, process as processApi } from '@openkaiden/api';
 import type { ContainerExtensionAPI, EndpointConnection } from '@openkaiden/container-extension-api';
@@ -24,6 +27,7 @@ import DockerModem from 'docker-modem';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import Dockerode from 'dockerode';
 import { Container } from 'inversify';
+import { extract } from 'tar';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { SocketHelper } from '/@/helper/socket-helper';
@@ -555,10 +559,6 @@ describe('GatewayContainerManager', () => {
   });
 
   test('should copy certs from container to gateway directory', async () => {
-    const { rm: rmMock, mkdir: mkdirMock } = await import('node:fs/promises');
-    const { pipeline: pipelineMock } = await import('node:stream/promises');
-    const tarMock = await import('tar');
-
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
     setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
@@ -566,16 +566,14 @@ describe('GatewayContainerManager', () => {
 
     await gatewayContainerManager.init();
 
-    expect(rmMock).toHaveBeenCalledWith(expect.stringContaining('gateway'), { recursive: true, force: true });
-    expect(mkdirMock).toHaveBeenCalledWith(expect.stringContaining('gateway'), { recursive: true });
+    expect(rm).toHaveBeenCalledWith(expect.stringContaining('gateway'), { recursive: true, force: true });
+    expect(mkdir).toHaveBeenCalledWith(expect.stringContaining('gateway'), { recursive: true });
     expect(Dockerode.Container.prototype.getArchive).toHaveBeenCalledWith({ path: '/kaiden' });
-    expect(pipelineMock).toHaveBeenCalled();
-    expect(tarMock.extract).toHaveBeenCalledWith(expect.objectContaining({ strip: 1 }));
+    expect(pipeline).toHaveBeenCalled();
+    expect(extract).toHaveBeenCalledWith(expect.objectContaining({ strip: 1 }));
   });
 
   test('should write gateway.toml config file', async () => {
-    const { writeFile: writeFileMock } = await import('node:fs/promises');
-
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
     setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
@@ -583,15 +581,13 @@ describe('GatewayContainerManager', () => {
 
     await gatewayContainerManager.init();
 
-    expect(writeFileMock).toHaveBeenCalledWith(
+    expect(writeFile).toHaveBeenCalledWith(
       expect.stringContaining('gateway.toml'),
       expect.stringContaining('[openshell.gateway.gateway_jwt]'),
     );
   });
 
   test('should generate gateway config with non-expiring JWTs (ttl_secs = 0)', async () => {
-    const { writeFile: writeFileMock } = await import('node:fs/promises');
-
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
     setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
@@ -599,7 +595,7 @@ describe('GatewayContainerManager', () => {
 
     await gatewayContainerManager.init();
 
-    expect(writeFileMock).toHaveBeenCalledWith(
+    expect(writeFile).toHaveBeenCalledWith(
       expect.stringContaining('gateway.toml'),
       expect.stringContaining('ttl_secs = 0'),
     );

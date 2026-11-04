@@ -16,6 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -54,7 +55,6 @@ describe('OpenshellGatewayConfig', () => {
 
     test('loads mTLS certs for https endpoints', async () => {
       vi.stubEnv('XDG_CONFIG_HOME', '/test/config');
-      const { readFile } = await import('node:fs/promises');
       vi.mocked(readFile)
         .mockResolvedValueOnce(Buffer.from('ca-data'))
         .mockResolvedValueOnce(Buffer.from('cert-data'))
@@ -79,7 +79,6 @@ describe('OpenshellGatewayConfig', () => {
 
     test('passes undefined certs when mTLS files are missing', async () => {
       vi.stubEnv('XDG_CONFIG_HOME', '/test/config');
-      const { readFile } = await import('node:fs/promises');
       const enoent = Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' });
       vi.mocked(readFile).mockRejectedValue(enoent);
 
@@ -98,7 +97,6 @@ describe('OpenshellGatewayConfig', () => {
 
     test('propagates non-ENOENT cert read errors', async () => {
       vi.stubEnv('XDG_CONFIG_HOME', '/test/config');
-      const { readFile } = await import('node:fs/promises');
       const permError = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
       vi.mocked(readFile).mockRejectedValue(permError);
 
@@ -109,7 +107,6 @@ describe('OpenshellGatewayConfig', () => {
     });
 
     test('respects XDG_CONFIG_HOME', async () => {
-      const { readFile } = await import('node:fs/promises');
       const enoent = Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' });
       vi.mocked(readFile).mockRejectedValue(enoent);
       vi.stubEnv('XDG_CONFIG_HOME', '/custom/config');

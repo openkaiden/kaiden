@@ -19,6 +19,7 @@
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { MCPPackage } from '/@/plugin/mcp/package/mcp-package.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
@@ -532,7 +533,6 @@ describe('startMCPServer / stopMCPServer', () => {
   test('startMCPServer spawns a registered package server', async () => {
     vi.mocked(mockMcpManager.get).mockReturnValue(registeredServer);
 
-    const { MCPPackage } = await import('/@/plugin/mcp/package/mcp-package.js');
     const mockTransport = {} as Transport;
     vi.mocked(MCPPackage.prototype.spawn).mockResolvedValue(mockTransport);
     vi.mocked(MCPPackage.prototype.buildCommandSpec).mockReturnValue({ command: 'node', args: ['server.js'] });
@@ -580,7 +580,6 @@ describe('startMCPServer / stopMCPServer', () => {
     vi.mocked(mockMcpManager.get).mockReturnValue(registeredServer);
     vi.mocked(mockMcpManager.listMCPRemoteServers).mockResolvedValue([registeredServer]);
 
-    const { MCPPackage } = await import('/@/plugin/mcp/package/mcp-package.js');
     vi.mocked(MCPPackage.prototype.spawn).mockResolvedValue({} as Transport);
     vi.mocked(MCPPackage.prototype.buildCommandSpec).mockReturnValue({ command: 'node', args: ['server.js'] });
 
@@ -620,7 +619,6 @@ describe('startMCPServer / stopMCPServer', () => {
   test('setupMCPServer registers a different package target for the same server id', async () => {
     vi.mocked(mockMcpManager.listMCPRemoteServers).mockResolvedValue([otherRegisteredServer]);
 
-    const { MCPPackage } = await import('/@/plugin/mcp/package/mcp-package.js');
     vi.mocked(MCPPackage.prototype.spawn).mockResolvedValue({} as Transport);
     vi.mocked(MCPPackage.prototype.buildCommandSpec).mockReturnValue({ command: 'node', args: ['server.js'] });
 
@@ -687,7 +685,6 @@ describe('startMCPServer / stopMCPServer', () => {
   test('registerMCPServerOnly registers a different package target for the same server id', async () => {
     vi.mocked(mockMcpManager.listMCPRemoteServers).mockResolvedValue([otherSpawnedServer]);
 
-    const { MCPPackage } = await import('/@/plugin/mcp/package/mcp-package.js');
     vi.mocked(MCPPackage.prototype.buildCommandSpec).mockReturnValue({ command: 'node', args: ['server.js'] });
 
     await registry.registerMCPServerOnly(SERVER_ID, {

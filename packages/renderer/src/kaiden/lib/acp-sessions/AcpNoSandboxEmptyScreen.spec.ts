@@ -21,6 +21,7 @@ import '@testing-library/jest-dom/vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import { handleNavigation } from '/@/navigation';
 import { NavigationPage } from '/@api/navigation-page';
 
 import AcpNoSandboxEmptyScreen from './AcpNoSandboxEmptyScreen.svelte';
@@ -47,8 +48,6 @@ test('renders Create Workspace button', () => {
 });
 
 test('clicking Create Workspace navigates to workspace creation', async () => {
-  const { handleNavigation } = await import('/@/navigation');
-
   render(AcpNoSandboxEmptyScreen);
 
   const button = screen.getByRole('button', { name: 'Create Workspace' });

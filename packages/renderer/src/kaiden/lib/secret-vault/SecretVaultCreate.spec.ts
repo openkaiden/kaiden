@@ -22,6 +22,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { openshellGateways, openshellGatewaysReady } from '/@/kaiden/stores/openshell-gateways';
+import { handleNavigation } from '/@/navigation';
 import type { GatewayInfo, OpenshellProfile } from '/@api/openshell-gateway-info';
 
 import SecretVaultCreate from './SecretVaultCreate.svelte';
@@ -128,8 +129,6 @@ test('Add Secret button is disabled when required fields are empty', async () =>
 });
 
 test('cancel navigates back to secret vault', async () => {
-  const { handleNavigation } = await import('/@/navigation');
-
   render(SecretVaultCreate);
 
   const cancelButton = await screen.findByRole('button', { name: 'Cancel' });
@@ -139,8 +138,6 @@ test('cancel navigates back to secret vault', async () => {
 });
 
 test('submits predefined service type with credential fields as SecretValue', async () => {
-  const { handleNavigation } = await import('/@/navigation');
-
   render(SecretVaultCreate);
 
   await waitFor(() => {

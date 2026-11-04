@@ -19,6 +19,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import type { SecretVaultInfoUI } from '/@/kaiden/lib/secret-vault/SecretVaultInfoUI';
@@ -109,7 +110,6 @@ test('should set actionError via store when removeSecret fails', async () => {
 
   await vi.advanceTimersByTimeAsync(100);
 
-  const { get } = await import('svelte/store');
   const secrets = get(secretVaultInfos);
   const failedSecret = secrets.find(s => s.id === secret.id);
   expect(failedSecret?.actionError).toBe('Error: secret is in use by a sandbox');
