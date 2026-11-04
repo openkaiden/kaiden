@@ -77,79 +77,65 @@ jobs:
             echo "needs_update=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check for existing PR
+      - name: Check that the matching SDK is published
         if: steps.compare.outputs.needs_update == 'true'
-        id: existing_pr
+        id: sdk
         run: |
-          PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --state open --json number --jq '.[0].number // empty')
-          if [ -n "$PR_NUMBER" ]; then
-            echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Found existing PR #$PR_NUMBER"
+          LATEST="${{ steps.latest.outputs.version }}"
+          if npm view "@openkaiden/opnshll-sdk@$LATEST" version | grep -q .; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "No existing PR found"
+            echo "::notice::@openkaiden/opnshll-sdk@$LATEST is not published yet; skipping"
+            echo "published=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Update version in package.json
-        if: steps.compare.outputs.needs_update == 'true'
-        run: |
-          TMPFILE=$(mktemp)
-          jq --arg v "${{ steps.latest.outputs.version }}" '.openshellVersion = $v' extensions/openshell/package.json > "$TMPFILE"
-          mv "$TMPFILE" extensions/openshell/package.json
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: steps.sdk.outputs.published == 'true'
+        name: Install pnpm
+        with:
+          run_install: false
 
-      - name: Update existing PR
-        if: steps.compare.outputs.needs_update == 'true' && steps.existing_pr.outputs.exists == 'true'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.sdk.outputs.published == 'true'
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Bump versions and open or update PR
+        if: steps.sdk.outputs.published == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.KAIDEN_BOT_TOKEN }}
         run: |
           CURRENT="${{ steps.current.outputs.version }}"
           NEW="${{ steps.latest.outputs.version }}"
+          SDK="npm:@openkaiden/opnshll-sdk@$NEW"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git fetch origin "$BRANCH_NAME"
-          git restore extensions/openshell/package.json
-          git checkout "$BRANCH_NAME"
-          git checkout main -- extensions/openshell/package.json
-
-          TMPFILE=$(mktemp)
-          jq --arg v "$NEW" '.openshellVersion = $v' extensions/openshell/package.json > "$TMPFILE"
-          mv "$TMPFILE" extensions/openshell/package.json
-
-          git add extensions/openshell/package.json
-          git commit --amend -m "chore(deps): bump openshell from $CURRENT to $NEW
-
-          Release: https://github.com/NVIDIA/OpenShell/releases/tag/v$NEW"
-          git push --force-with-lease
-
-          gh pr edit "${{ steps.existing_pr.outputs.number }}" \
-            --title "chore(deps): bump openshell from $CURRENT to $NEW" \
-            --body "Bumps OpenShell from \`$CURRENT\` to \`$NEW\`.
-
-          Release: https://github.com/NVIDIA/OpenShell/releases/tag/v$NEW"
-
-      - name: Create new PR
-        if: steps.compare.outputs.needs_update == 'true' && steps.existing_pr.outputs.exists == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.KAIDEN_BOT_TOKEN }}
-        run: |
-          CURRENT="${{ steps.current.outputs.version }}"
-          NEW="${{ steps.latest.outputs.version }}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git checkout -B "$BRANCH_NAME"
-          git add extensions/openshell/package.json
+
+          set_json() {
+            TMPFILE=$(mktemp)
+            jq --arg v "$2" "$3" "$1" > "$TMPFILE"
+            mv "$TMPFILE" "$1"
+          }
+          set_json extensions/openshell/package.json "$NEW" '.openshellVersion = $v'
+          set_json package.json "$SDK" '.dependencies["@nvidia/openshell-sdk"] = $v'
+          set_json packages/extension-api/package.json "$SDK" '.dependencies["@nvidia/openshell-sdk"] = $v'
+          pnpm install --lockfile-only
+
+          git add extensions/openshell/package.json package.json packages/extension-api/package.json pnpm-lock.yaml
           git commit -m "chore(deps): bump openshell from $CURRENT to $NEW
 
           Release: https://github.com/NVIDIA/OpenShell/releases/tag/v$NEW"
           git push --force -u origin "$BRANCH_NAME"
 
-          gh pr create \
-            --title "chore(deps): bump openshell from $CURRENT to $NEW" \
-            --body "Bumps OpenShell from \`$CURRENT\` to \`$NEW\`.
+          TITLE="chore(deps): bump openshell from $CURRENT to $NEW"
+          BODY="Bumps OpenShell and \`@openkaiden/opnshll-sdk\` from \`$CURRENT\` to \`$NEW\`.
 
           Release: https://github.com/NVIDIA/OpenShell/releases/tag/v$NEW"
+          PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr edit "$PR_NUMBER" --title "$TITLE" --body "$BODY"
+          else
+            gh pr create --title "$TITLE" --body "$BODY"
+          fi
