@@ -401,6 +401,10 @@ export function initExposure(): void {
     return ipcInvoke('agent-workspace:stopOpenshellGateway', name);
   });
 
+  contextBridge.exposeInMainWorld('startOpenshellGateway', async (name: string): Promise<void> => {
+    return ipcInvoke('agent-workspace:startOpenshellGateway', name);
+  });
+
   contextBridge.exposeInMainWorld(
     'createLocalGateway',
     async (options: CreateLocalGatewayOptions): Promise<GatewayInfo[]> => {

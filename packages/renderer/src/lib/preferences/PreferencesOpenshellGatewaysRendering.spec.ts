@@ -92,6 +92,57 @@ test('does not offer stopping an unowned or stopped gateway', () => {
   expect(screen.queryByRole('button', { name: /Stop gateway/ })).not.toBeInTheDocument();
 });
 
+test.each([true, false])('starts a stopped managed gateway (active: %s)', async active => {
+  setOpenshellStarted();
+  const gateway: GatewayInfo = {
+    name: 'local-dev',
+    endpoint: 'http://localhost:17675',
+    active,
+    canStop: false,
+    canStart: true,
+  };
+  openshellGateways.set([gateway]);
+  const pending = Promise.withResolvers<void>();
+  vi.mocked(window.startOpenshellGateway).mockReturnValue(pending.promise);
+  render(PreferencesOpenshellGatewaysRendering);
+  expect(screen.queryByRole('button', { name: 'Stop gateway local-dev' })).not.toBeInTheDocument();
+  const button = screen.getByRole('button', { name: 'Start gateway local-dev' });
+  await fireEvent.click(button);
+  expect(button).toHaveClass('disabled');
+  await fireEvent.click(button);
+  expect(window.startOpenshellGateway).toHaveBeenCalledExactlyOnceWith('local-dev');
+  openshellGateways.set([{ ...gateway, canStart: false, canStop: true }]);
+  pending.resolve();
+  await vi.waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Start gateway local-dev' })).not.toBeInTheDocument(),
+  );
+  expect(screen.getByRole('button', { name: 'Stop gateway local-dev' })).toBeInTheDocument();
+});
+
+test('does not offer starting a running or unmanaged gateway', () => {
+  setOpenshellStarted();
+  openshellGateways.set([
+    { name: 'running', endpoint: 'http://localhost:17675', canStop: true, canStart: false },
+    { name: 'remote', endpoint: 'https://example.com', is_remote: true, canStop: false, canStart: false },
+  ]);
+  render(PreferencesOpenshellGatewaysRendering);
+  expect(screen.queryByRole('button', { name: /Start gateway/ })).not.toBeInTheDocument();
+});
+
+test('shows start errors and permits retry', async () => {
+  setOpenshellStarted();
+  openshellGateways.set([{ name: 'local-dev', endpoint: 'http://localhost:17675', canStop: false, canStart: true }]);
+  vi.mocked(window.startOpenshellGateway).mockRejectedValueOnce(new Error('Port 17675 is busy'));
+  render(PreferencesOpenshellGatewaysRendering);
+  const button = screen.getByRole('button', { name: 'Start gateway local-dev' });
+  await fireEvent.click(button);
+  expect(await screen.findByText(/Port 17675 is busy/)).toBeInTheDocument();
+  expect(button).toBeEnabled();
+  vi.mocked(window.startOpenshellGateway).mockResolvedValue(undefined);
+  await fireEvent.click(button);
+  expect(window.startOpenshellGateway).toHaveBeenCalledTimes(2);
+});
+
 test('shows stop errors and permits retry', async () => {
   setOpenshellStarted();
   openshellGateways.set([{ name: 'local-dev', endpoint: 'http://localhost:17675', canStop: true, canStart: false }]);

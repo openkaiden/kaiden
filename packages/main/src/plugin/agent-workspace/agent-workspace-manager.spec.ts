@@ -208,6 +208,7 @@ let gatewayStateUpdateCallback: (() => void) | undefined;
 const openshellGateway = {
   createLocalGateway: vi.fn(),
   stopManagedGateway: vi.fn(),
+  startManagedGateway: vi.fn(),
   supportsMounts: vi.fn(),
   onDidGatewayStart: vi.fn((cb: () => void) => {
     gatewayStartCallback = cb;
@@ -357,6 +358,10 @@ describe('init', () => {
 
   test('registers IPC handler for stopOpenshellGateway', () => {
     expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:stopOpenshellGateway', expect.any(Function));
+  });
+
+  test('registers IPC handler for startOpenshellGateway', () => {
+    expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:startOpenshellGateway', expect.any(Function));
   });
 
   test('refreshes gateway state before returning a newly created gateway', async () => {
@@ -2994,6 +2999,77 @@ describe('stopOpenshellGateway', () => {
     expect(apiSender.send).toHaveBeenCalledExactlyOnceWith('agent-workspace-update');
     expect(mockTask.status).toBe('failure');
     expect(mockTask.error).toBe('Gateway "local-dev" stopped, but failed to refresh gateway state: refresh failed');
+    expect(mockTask.state).toBe('completed');
+  });
+});
+
+describe('startOpenshellGateway', () => {
+  test('refreshes workspace rows only after the gateway state refresh completes', async () => {
+    const refresh = Promise.withResolvers<void>();
+    vi.mocked(openshellGatewayStateManager.refresh).mockReturnValue(refresh.promise);
+    const starting = manager.startOpenshellGateway('local-dev');
+    await vi.waitFor(() => expect(openshellGatewayStateManager.refresh).toHaveBeenCalledOnce());
+    expect(apiSender.send).not.toHaveBeenCalledWith('agent-workspace-update');
+    refresh.resolve();
+    await starting;
+    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+  });
+
+  test('starts a gateway and refreshes its state', async () => {
+    await manager.startOpenshellGateway('local-dev');
+    expect(openshellGateway.startManagedGateway).toHaveBeenCalledWith('local-dev');
+    expect(openshellGatewayStateManager.refresh).toHaveBeenCalledOnce();
+    expect(mockTask.status).toBe('success');
+    expect(mockTask.state).toBe('completed');
+  });
+
+  test.each([new Error('start failed'), 'start failed'])('reports gateway start failures: %s', async cause => {
+    vi.mocked(openshellGateway.startManagedGateway).mockRejectedValue(cause);
+    await expect(manager.startOpenshellGateway('local-dev')).rejects.toMatchObject({
+      message: 'Failed to start gateway "local-dev": start failed',
+      cause,
+    });
+    expect(mockTask.status).toBe('failure');
+    expect(mockTask.error).toBe('Failed to start gateway "local-dev": start failed');
+    expect(mockTask.state).toBe('completed');
+    expect(openshellGatewayStateManager.refresh).not.toHaveBeenCalled();
+    expect(apiSender.send).not.toHaveBeenCalledWith('agent-workspace-update');
+  });
+
+  test('start IPC handler forwards the gateway name', async () => {
+    const handler = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(([channel]) => channel === 'agent-workspace:startOpenshellGateway')?.[1];
+    assert(handler);
+    const event: IpcMainInvokeEvent = {
+      sender: webContents,
+      senderFrame: webContents.mainFrame,
+      processId: 1,
+      frameId: 1,
+      type: 'frame',
+      defaultPrevented: false,
+      preventDefault: vi.fn(),
+    };
+    await handler(event, 'local-dev');
+    expect(openshellGateway.startManagedGateway).toHaveBeenCalledWith('local-dev');
+    expect(mockTask.status).toBe('success');
+    expect(mockTask.state).toBe('completed');
+  });
+
+  test.each([
+    new Error('refresh failed'),
+    'refresh failed',
+  ])('reports refresh failure separately and updates workspace rows after successfully starting a gateway: %s', async cause => {
+    vi.mocked(openshellGatewayStateManager.refresh).mockRejectedValue(cause);
+    await expect(manager.startOpenshellGateway('local-dev')).rejects.toMatchObject({
+      message: 'Gateway "local-dev" started, but failed to refresh gateway state: refresh failed',
+      cause,
+    });
+    expect(openshellGateway.startManagedGateway).toHaveBeenCalledExactlyOnceWith('local-dev');
+    expect(openshellGatewayStateManager.refresh).toHaveBeenCalledOnce();
+    expect(apiSender.send).toHaveBeenCalledExactlyOnceWith('agent-workspace-update');
+    expect(mockTask.status).toBe('failure');
+    expect(mockTask.error).toBe('Gateway "local-dev" started, but failed to refresh gateway state: refresh failed');
     expect(mockTask.state).toBe('completed');
   });
 });
