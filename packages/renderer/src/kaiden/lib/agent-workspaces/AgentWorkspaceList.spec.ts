@@ -28,6 +28,7 @@ import {
   clearSandboxActionError,
   openshellSandboxes,
   selectedGateway,
+  setSandboxActionError,
 } from '/@/kaiden/stores/openshell-sandboxes';
 import { notificationQueue } from '/@/stores/notifications';
 import type { NotificationCard } from '/@api/notification';
@@ -381,4 +382,66 @@ test('Expect bulk delete sets actionError on failed workspaces only', async () =
     expect(get(allOpenshellSandboxes).find(s => s.id === 'ws-2')?.actionError).toBe('Error: network error'),
   );
   expect(get(allOpenshellSandboxes).find(s => s.id === 'ws-1')?.actionError).toBeUndefined();
+});
+
+test('Expect failed workspaces to stay selected after bulk delete', async () => {
+  clearSandboxActionError('ws-1');
+  clearSandboxActionError('ws-2');
+  const workspaces: GatewaySandboxes[] = [
+    {
+      gateway: { canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      sandboxes: [
+        { id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() },
+        { id: 'ws-2', name: 'workspace-2', phase: 'Ready', created_at: Date.now().toString() },
+      ],
+    },
+  ];
+
+  openshellSandboxes.set(workspaces);
+  render(AgentWorkspaceList);
+
+  const checkboxes = screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' });
+  await fireEvent.click(checkboxes[0]);
+  await fireEvent.click(checkboxes[1]);
+
+  vi.mocked(window.getConfigurationValue).mockResolvedValue(false);
+  vi.mocked(window.deleteOpenshellSandbox).mockImplementation(async name => {
+    if (name === 'workspace-2') {
+      throw new Error('network error');
+    }
+  });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Delete 2 selected items' }));
+
+  await waitFor(() =>
+    expect(get(allOpenshellSandboxes).find(s => s.id === 'ws-2')?.actionError).toBe('Error: network error'),
+  );
+  expect(screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' })[1]).toBeChecked();
+});
+
+test('Expect selection to be kept when an action error is set on another workspace', async () => {
+  clearSandboxActionError('ws-1');
+  clearSandboxActionError('ws-2');
+  const workspaces: GatewaySandboxes[] = [
+    {
+      gateway: { canStop: false, name: 'local', endpoint: 'http://localhost:18080' },
+      sandboxes: [
+        { id: 'ws-1', name: 'workspace-1', phase: 'Ready', created_at: Date.now().toString() },
+        { id: 'ws-2', name: 'workspace-2', phase: 'Ready', created_at: Date.now().toString() },
+      ],
+    },
+  ];
+
+  openshellSandboxes.set(workspaces);
+  render(AgentWorkspaceList);
+
+  await fireEvent.click(screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' })[0]);
+  expect(screen.getByRole('button', { name: 'Delete 1 selected items' })).toBeInTheDocument();
+
+  setSandboxActionError('ws-2', 'Error: boom');
+
+  await waitFor(() =>
+    expect(screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' })[0]).toBeChecked(),
+  );
+  expect(screen.getByRole('button', { name: 'Delete 1 selected items' })).toBeInTheDocument();
 });

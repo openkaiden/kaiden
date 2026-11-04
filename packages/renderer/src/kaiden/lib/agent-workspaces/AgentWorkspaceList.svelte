@@ -77,16 +77,23 @@ async function deleteSelectedSandboxes(): Promise<void> {
   bulkDeleteInProgress = false;
 }
 
-const filteredSandboxes: SandboxSelectable[] = $derived(
-  $filteredOpenshellSandboxes.map(sandbox => ({ ...sandbox, selected: false })),
-);
+// keep the current selection when the store emits (backend refresh, action error updates)
+let previousSandboxes: SandboxSelectable[] = [];
+const filteredSandboxes: SandboxSelectable[] = $derived.by(() => {
+  const sandboxes = $filteredOpenshellSandboxes.map(sandbox => ({
+    ...sandbox,
+    selected: previousSandboxes.find(previous => key(previous) === key(sandbox))?.selected ?? false,
+  }));
+  previousSandboxes = sandboxes;
+  return sandboxes;
+});
 
 const sandboxRow = new TableRow<SandboxSelectable>({
   selectable: (sandbox): boolean => sandbox.phase !== 'Deleting',
   disabledText: 'Workspace is being deleted',
 });
 
-function key(sandbox: SandboxSelectable): string {
+function key(sandbox: SandboxInfoWithGateway): string {
   return `${sandbox.gatewayName}:${sandbox.id}`;
 }
 
