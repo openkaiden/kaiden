@@ -146,7 +146,7 @@ jobs:
           git commit -m "chore(deps): bump openshell from $CURRENT to $NEW
 
           Release: https://github.com/NVIDIA/OpenShell/releases/tag/v$NEW"
-          git push --force-with-lease -u origin "$BRANCH_NAME"
+          git push --force -u origin "$BRANCH_NAME"
 
           gh pr create \
             --title "chore(deps): bump openshell from $CURRENT to $NEW" \
