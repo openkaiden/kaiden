@@ -25,9 +25,8 @@ import {
   resourcesWithCreateButton,
 } from '/@/model/core/types';
 import { NavigationBar } from '/@/model/navigation/navigation';
-import { isLocalRuntimeAvailable, resolveAgentModelConnectionFor } from '/@/model/pages/agent-model-setup';
 import { GuidedSetupPage } from '/@/model/pages/guided-setup-page';
-import { describeAgentOnboarding, describeIfAvailable } from '/@/model/pages/guided-setup-workflow';
+import { describeAgentOnboarding } from '/@/model/pages/guided-setup-workflow';
 import {
   completeGuidedSetupWithModel,
   expectDefaultModelInCodingAgents,
@@ -190,142 +189,33 @@ isolatedTest.describe('Settings - onboarding restart', { tag: '@smoke' }, () => 
     });
   });
 
-  describeAgentOnboarding(CODING_AGENT.COPILOT, 'GitHub Copilot', () => {
-    describeIfAvailable(
-      isLocalRuntimeAvailable(),
-      'local model',
-      'OLLAMA_ENABLED or RAMALAMA_ENABLED is required for this test',
-      () => {
-        const session = bindGuidedSetupSession();
+  describeAgentOnboarding(CODING_AGENT.CODEX, 'Codex', () => {
+    const session = bindGuidedSetupSession();
 
-        isolatedTest('[SET-09] persists a newly selected default model (local model)', async () => {
-          const guidedSetup = new GuidedSetupPage(session.page!);
-          const navigationBar = new NavigationBar(session.page!);
+    isolatedTest('[SET-09] persists a newly selected default model', async () => {
+      const guidedSetup = new GuidedSetupPage(session.page!);
+      const navigationBar = new NavigationBar(session.page!);
 
-          const initialOnboardingRestart = await completeGuidedSetupWithModel(
-            guidedSetup,
-            CODING_AGENT.COPILOT,
-            labels => labels.at(-1)!,
-          );
-          await expectDefaultModelInCodingAgents(
-            navigationBar,
-            CODING_AGENT.COPILOT,
-            initialOnboardingRestart.modelLabel,
-          );
+      const initialOnboardingRestart = await completeGuidedSetupWithModel(
+        guidedSetup,
+        CODING_AGENT.CODEX,
+        labels => labels.at(-1)!,
+      );
+      await expectDefaultModelInCodingAgents(navigationBar, CODING_AGENT.CODEX, initialOnboardingRestart.modelLabel);
 
-          await restartOnboarding(navigationBar, guidedSetup);
+      await restartOnboarding(navigationBar, guidedSetup);
 
-          const updatedOnboardingRestart = await completeGuidedSetupWithModel(
-            guidedSetup,
-            CODING_AGENT.COPILOT,
-            labels =>
-              labels.find(label => label !== initialOnboardingRestart.modelLabel) ??
-              initialOnboardingRestart.modelLabel,
-          );
-          await expectDefaultModelInCodingAgents(
-            navigationBar,
-            CODING_AGENT.COPILOT,
-            updatedOnboardingRestart.modelLabel,
-          );
+      const updatedOnboardingRestart = await completeGuidedSetupWithModel(
+        guidedSetup,
+        CODING_AGENT.CODEX,
+        labels =>
+          labels.find(label => label !== initialOnboardingRestart.modelLabel) ?? initialOnboardingRestart.modelLabel,
+      );
+      await expectDefaultModelInCodingAgents(navigationBar, CODING_AGENT.CODEX, updatedOnboardingRestart.modelLabel);
 
-          // Only enough local Ollama/RamaLama models guarantee a different one was available to switch to.
-          if (updatedOnboardingRestart.availableModelCount > 1) {
-            expect(updatedOnboardingRestart.modelLabel).not.toBe(initialOnboardingRestart.modelLabel);
-          }
-        });
-      },
-    );
-
-    describeIfAvailable(
-      !!resolveAgentModelConnectionFor(CODING_AGENT.COPILOT, 'openai'),
-      'API provider (OpenAI)',
-      'OPENAI_API_KEY is required for this test',
-      () => {
-        const session = bindGuidedSetupSession();
-
-        isolatedTest('[SET-10] persists a newly selected default model (OpenAI)', async () => {
-          const guidedSetup = new GuidedSetupPage(session.page!);
-          const navigationBar = new NavigationBar(session.page!);
-
-          const initialOnboardingRestart = await completeGuidedSetupWithModel(
-            guidedSetup,
-            CODING_AGENT.COPILOT,
-            labels => labels.at(-1)!,
-            'openai',
-          );
-          await expectDefaultModelInCodingAgents(
-            navigationBar,
-            CODING_AGENT.COPILOT,
-            initialOnboardingRestart.modelLabel,
-          );
-
-          await restartOnboarding(navigationBar, guidedSetup);
-
-          const updatedOnboardingRestart = await completeGuidedSetupWithModel(
-            guidedSetup,
-            CODING_AGENT.COPILOT,
-            labels =>
-              labels.find(label => label !== initialOnboardingRestart.modelLabel) ??
-              initialOnboardingRestart.modelLabel,
-            'openai',
-          );
-          await expectDefaultModelInCodingAgents(
-            navigationBar,
-            CODING_AGENT.COPILOT,
-            updatedOnboardingRestart.modelLabel,
-          );
-
-          if (updatedOnboardingRestart.availableModelCount > 1) {
-            expect(updatedOnboardingRestart.modelLabel).not.toBe(initialOnboardingRestart.modelLabel);
-          }
-        });
-      },
-    );
-
-    describeIfAvailable(
-      !!resolveAgentModelConnectionFor(CODING_AGENT.COPILOT, 'claude'),
-      'API provider (Claude)',
-      'ANTHROPIC_API_KEY is required for this test',
-      () => {
-        const session = bindGuidedSetupSession();
-
-        isolatedTest('[SET-10] persists a newly selected default model (Claude)', async () => {
-          const guidedSetup = new GuidedSetupPage(session.page!);
-          const navigationBar = new NavigationBar(session.page!);
-
-          const initialOnboardingRestart = await completeGuidedSetupWithModel(
-            guidedSetup,
-            CODING_AGENT.COPILOT,
-            labels => labels.at(-1)!,
-            'claude',
-          );
-          await expectDefaultModelInCodingAgents(
-            navigationBar,
-            CODING_AGENT.COPILOT,
-            initialOnboardingRestart.modelLabel,
-          );
-
-          await restartOnboarding(navigationBar, guidedSetup);
-
-          const updatedOnboardingRestart = await completeGuidedSetupWithModel(
-            guidedSetup,
-            CODING_AGENT.COPILOT,
-            labels =>
-              labels.find(label => label !== initialOnboardingRestart.modelLabel) ??
-              initialOnboardingRestart.modelLabel,
-            'claude',
-          );
-          await expectDefaultModelInCodingAgents(
-            navigationBar,
-            CODING_AGENT.COPILOT,
-            updatedOnboardingRestart.modelLabel,
-          );
-
-          if (updatedOnboardingRestart.availableModelCount > 1) {
-            expect(updatedOnboardingRestart.modelLabel).not.toBe(initialOnboardingRestart.modelLabel);
-          }
-        });
-      },
-    );
+      if (updatedOnboardingRestart.availableModelCount > 1) {
+        expect(updatedOnboardingRestart.modelLabel).not.toBe(initialOnboardingRestart.modelLabel);
+      }
+    });
   });
 });

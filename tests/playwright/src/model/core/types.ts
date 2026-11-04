@@ -248,7 +248,7 @@ export const OPENAI_SMOKE_MODEL = 'gpt-4.1-mini';
 export const ENABLED_CODING_AGENTS = [
   CODING_AGENT.OPENCODE,
   CODING_AGENT.CLAUDE,
-  CODING_AGENT.COPILOT,
+  CODING_AGENT.CODEX,
 ] as const satisfies readonly CodingAgent[];
 
 export const AGENT_MODEL_SETUPS = [

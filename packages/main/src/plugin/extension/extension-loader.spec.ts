@@ -849,6 +849,25 @@ test('Verify extension activate registers extension features and the disposable 
   expect(subscriptions[0]).toBe(disposable);
 });
 
+test('should enable a subset of agents by default', () => {
+  configurationRegistryGetConfigurationMock.mockReturnValue({
+    get: (_key: string, defaultValue: string[]) => defaultValue,
+  });
+
+  const disabled = extensionLoader.getDisabledExtensionIds();
+
+  expect(disabled).toContain('kaiden.copilot');
+  expect(disabled).toContain('kaiden.cursor');
+  expect(disabled).toContain('kaiden.gemini');
+  expect(disabled).toContain('kaiden.goose');
+  expect(disabled).toContain('kaiden.mistral');
+  expect(disabled).toContain('kaiden.openclaw');
+  // Ensure the default-enabled agents are NOT in the disabled list
+  expect(disabled).not.toContain('kaiden.claude');
+  expect(disabled).not.toContain('kaiden.opencode');
+  expect(disabled).not.toContain('kaiden.codex');
+});
+
 test('Verify disable extension updates configuration', async () => {
   const ids = ['extension.foo'];
 
