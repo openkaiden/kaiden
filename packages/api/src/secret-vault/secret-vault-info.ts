@@ -19,7 +19,7 @@
 export interface SecretVaultInfo {
   id: string;
   name: string;
-  gateway?: string;
+  gateway: string;
   type?: string;
   description?: string;
   hosts?: string[];

@@ -54,7 +54,7 @@ interface ResolveProfileOptions {
   profileId: string;
   agentCommand: string;
   secretName: string;
-  gateway?: string;
+  gateway: string;
   endpoint?: string;
 }
 
@@ -91,7 +91,7 @@ export class SecretManager {
     return this.openshellAdapter;
   }
 
-  async create(options: CreateSecretWithParentTypeOptions, gateway?: string): Promise<SecretName> {
+  async create(options: CreateSecretWithParentTypeOptions, gateway: string): Promise<SecretName> {
     const result = await this.cli.createSecret(options, gateway);
     this.apiSender.send('secret-manager-update');
     return result;
@@ -118,17 +118,17 @@ export class SecretManager {
     return results;
   }
 
-  async remove(name: string, gateway?: string): Promise<SecretName> {
+  async remove(name: string, gateway: string): Promise<SecretName> {
     const result = await this.cli.removeSecret(name, gateway);
     this.apiSender.send('secret-manager-update');
     return result;
   }
 
-  async removeProfile(profileId: string, gateway?: string): Promise<void> {
+  async removeProfile(profileId: string, gateway: string): Promise<void> {
     await this.openshellAdapter.deleteProfile(profileId, gateway);
   }
 
-  async listServices(gateway?: string): Promise<OpenshellProfile[]> {
+  async listServices(gateway: string): Promise<OpenshellProfile[]> {
     return this.cli.listServices(gateway);
   }
 
@@ -144,7 +144,7 @@ export class SecretManager {
     sandboxName: string,
     modelId: string,
     agentCommand: string,
-    gateway?: string,
+    gateway: string,
   ): Promise<SandboxSecretResult | undefined> {
     const info = this.providerRegistry.getInferenceConnectionFromModel(modelId);
     if (!info) return undefined;
@@ -157,7 +157,7 @@ export class SecretManager {
     providerId: string,
     connection: InferenceProviderConnection,
     agentCommand: string,
-    gateway?: string,
+    gateway: string,
   ): Promise<SandboxSecretResult | undefined> {
     const provider = this.providerRegistry.getProvider(providerId);
     const { config, connectionProperties } = this.getConnectionProperties(connection, provider);
@@ -298,7 +298,7 @@ export class SecretManager {
 
     this.ipcHandle(
       'secret-manager:create',
-      async (_listener: unknown, options: SecretCreateOptions, gateway?: string): Promise<SecretName> => {
+      async (_listener: unknown, options: SecretCreateOptions, gateway: string): Promise<SecretName> => {
         return this.create(options, gateway);
       },
     );
@@ -309,14 +309,14 @@ export class SecretManager {
 
     this.ipcHandle(
       'secret-manager:remove',
-      async (_listener: unknown, name: string, gateway?: string): Promise<SecretName> => {
+      async (_listener: unknown, name: string, gateway: string): Promise<SecretName> => {
         return this.remove(name, gateway);
       },
     );
 
     this.ipcHandle(
       'secret-manager:list-services',
-      async (_listener: unknown, gateway?: string): Promise<OpenshellProfile[]> => {
+      async (_listener: unknown, gateway: string): Promise<OpenshellProfile[]> => {
         return this.listServices(gateway);
       },
     );

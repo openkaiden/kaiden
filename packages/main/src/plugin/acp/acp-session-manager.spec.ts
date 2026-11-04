@@ -264,13 +264,13 @@ describe('AcpSessionManager', () => {
       const attachments = [{ filePath: '/local/photo.png', fileName: 'photo.png', mimeType: 'image/png' }];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (manager as any).uploadAttachments('test-sandbox', attachments);
+      const result = await (manager as any).uploadAttachments('test-sandbox', attachments, 'test-gateway');
 
       expect(openshellCli.uploadToSandbox).toHaveBeenCalledWith(
         'test-sandbox',
         '/local/photo.png',
         expect.stringContaining('/sandbox/.kaiden-attachments/'),
-        undefined,
+        'test-gateway',
       );
       expect(result).toHaveLength(1);
       expect(result[0].remotePath).toMatch(/\/sandbox\/\.kaiden-attachments\/.*\/photo\.png/);
@@ -282,13 +282,13 @@ describe('AcpSessionManager', () => {
       const attachments = [{ filePath: '/local/notes.txt', fileName: 'notes.txt', mimeType: 'text/plain' }];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (manager as any).uploadAttachments('test-sandbox', attachments);
+      const result = await (manager as any).uploadAttachments('test-sandbox', attachments, 'test-gateway');
 
       expect(openshellCli.uploadToSandbox).toHaveBeenCalledWith(
         'test-sandbox',
         '/local/notes.txt',
         expect.stringContaining('/sandbox/.kaiden-attachments/'),
-        undefined,
+        'test-gateway',
       );
       expect(result).toHaveLength(1);
       expect(result[0].remotePath).toMatch(/\/sandbox\/\.kaiden-attachments\/.*\/notes\.txt/);
@@ -300,13 +300,13 @@ describe('AcpSessionManager', () => {
       const attachments = [{ filePath: '/local/doc.md', fileName: 'doc.md', mimeType: 'text/markdown' }];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (manager as any).uploadAttachments('test-sandbox', attachments);
+      const result = await (manager as any).uploadAttachments('test-sandbox', attachments, 'test-gateway');
 
       expect(openshellCli.uploadToSandbox).toHaveBeenCalledWith(
         'test-sandbox',
         '/local/doc.md',
         expect.stringContaining('/sandbox/.kaiden-attachments/'),
-        undefined,
+        'test-gateway',
       );
       expect(result).toHaveLength(1);
       expect(result[0].remotePath).toMatch(/\/sandbox\/\.kaiden-attachments\/.*\/doc\.md/);
@@ -318,7 +318,7 @@ describe('AcpSessionManager', () => {
       const attachments = [{ filePath: '/local/doc.pdf', fileName: 'doc.pdf', mimeType: 'application/pdf' }];
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (manager as any).uploadAttachments('test-sandbox', attachments);
+      const result = await (manager as any).uploadAttachments('test-sandbox', attachments, 'test-gateway');
 
       expect(openshellCli.uploadToSandbox).toHaveBeenCalled();
       expect(result[0].remotePath).toMatch(/\/sandbox\/\.kaiden-attachments\/.*\/doc\.pdf/);
@@ -326,7 +326,7 @@ describe('AcpSessionManager', () => {
 
     test('returns undefined when no attachments', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (manager as any).uploadAttachments('test-sandbox', undefined);
+      const result = await (manager as any).uploadAttachments('test-sandbox', undefined, 'test-gateway');
       expect(result).toBeUndefined();
     });
 
@@ -971,6 +971,7 @@ describe('AcpSessionManager', () => {
             updatedAt: 2000,
           },
           events: [],
+          gatewayName: 'test-gateway',
         }),
       );
       mockSandboxList.mockReturnValue({
@@ -1005,6 +1006,7 @@ describe('AcpSessionManager', () => {
             updatedAt: 2000,
           },
           events: [],
+          gatewayName: 'test-gateway',
         }),
       );
       mockSandboxList.mockReturnValue({
@@ -1037,6 +1039,7 @@ describe('AcpSessionManager', () => {
             updatedAt: 2000,
           },
           events: [],
+          gatewayName: 'test-gateway',
         }),
       );
       mockSandboxList.mockReturnValue({
@@ -1075,10 +1078,11 @@ describe('AcpSessionManager', () => {
       const sessions = await manager.listSessions();
       expect(sessions.find(s => s.id === 's1')?.sandboxId).toBe('id-a');
       expect(sessions.find(s => s.id === 's2')?.sandboxId).toBe('id-b');
-      expect(openshellSdkClientManager.getClient).not.toHaveBeenCalledWith(undefined);
+      const gateways = vi.mocked(openshellSdkClientManager.getClient).mock.calls.map(([gateway]) => gateway);
+      expect(new Set(gateways)).toEqual(new Set(['gw-a', 'gw-b']));
     });
 
-    test('validates legacy sessions without gateway on the default gateway', async () => {
+    test('marks legacy sessions without gateway as having no sandbox', async () => {
       const { existsSync } = await import('node:fs');
       const { readdir, readFile } = await import('node:fs/promises');
 
@@ -1087,21 +1091,20 @@ describe('AcpSessionManager', () => {
       vi.mocked(readFile).mockImplementation(async path =>
         String(path).endsWith('s1.json') ? sessionFile('s1') : sessionFile('s2', 'gw-a'),
       );
-      vi.mocked(openshellSdkClientManager.getClient).mockImplementation(async gatewayName => {
-        const id = gatewayName === 'gw-a' ? 'id-a' : 'id-default';
+      vi.mocked(openshellSdkClientManager.getClient).mockImplementation(async () => {
         const all = vi
           .fn()
-          .mockResolvedValue([{ id, name: 'my-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' }]);
+          .mockResolvedValue([{ id: 'id-a', name: 'my-sandbox', phase: 'ready', labels: {}, resourceVersion: '1' }]);
         return { sandbox: { list: vi.fn().mockReturnValue({ all }) } } as never;
       });
 
       await manager.init();
 
       const sessions = await manager.listSessions();
-      expect(sessions.find(s => s.id === 's1')?.sandboxId).toBe('id-default');
+      expect(sessions.find(s => s.id === 's1')?.sandboxId).toBeUndefined();
       expect(sessions.find(s => s.id === 's2')?.sandboxId).toBe('id-a');
-      expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith(undefined);
-      expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith('gw-a');
+      // init() and listSessions() each validate once; the legacy session never reaches the SDK
+      expect(vi.mocked(openshellSdkClientManager.getClient).mock.calls).toEqual([['gw-a'], ['gw-a']]);
     });
 
     test('still validates other gateways when one gateway fails', async () => {
@@ -1148,6 +1151,7 @@ describe('AcpSessionManager', () => {
             updatedAt: 2000,
           },
           events: [],
+          gatewayName: 'test-gateway',
         }),
       );
       mockSandboxList.mockRejectedValue(new Error('CLI not found'));
@@ -1178,6 +1182,7 @@ describe('AcpSessionManager', () => {
             updatedAt: 2000,
           },
           events: [],
+          gatewayName: 'test-gateway',
         }),
       );
       mockSandboxList.mockReturnValue({
@@ -1187,6 +1192,38 @@ describe('AcpSessionManager', () => {
       await manager.init();
 
       await expect(manager.sendFollowUp('s1', 'hello')).rejects.toThrow('Sandbox "gone-sandbox" no longer exists');
+    });
+
+    test('throws for a session saved without a gateway', async () => {
+      const { existsSync } = await import('node:fs');
+      const { readdir, readFile } = await import('node:fs/promises');
+
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readdir).mockResolvedValue(['s1.json' as never]);
+      vi.mocked(readFile).mockResolvedValue(
+        JSON.stringify({
+          info: {
+            id: 's1',
+            sandboxName: 'legacy-sandbox',
+            sandboxId: 'sb-id',
+            prompt: 'hello',
+            status: 'completed',
+            createdAt: 1000,
+            updatedAt: 2000,
+          },
+          events: [],
+        }),
+      );
+
+      await manager.init();
+
+      await expect(manager.sendFollowUp('s1', 'hello')).rejects.toThrow(
+        'Session "s1" has no gateway recorded. Start a new session on sandbox "legacy-sandbox".',
+      );
+      expect(openshellSdkClientManager.getClient).not.toHaveBeenCalled();
+      const [session] = await manager.listSessions();
+      assert(session);
+      expect(session.status).toBe('completed');
     });
   });
 

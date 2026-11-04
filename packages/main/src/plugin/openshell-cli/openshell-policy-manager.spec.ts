@@ -81,7 +81,7 @@ test('preserves existing policy and applies structured network and model rules o
 test('waits for the submitted revision to load', async () => {
   getSandboxPolicyStatus.mockResolvedValueOnce({ revision: { status: PolicyStatus.PENDING } });
 
-  await manager.updatePolicy('my-sandbox', policy);
+  await manager.updatePolicy('my-sandbox', policy, 'my-gateway');
 
   expect(getSandboxPolicyStatus).toHaveBeenCalledTimes(2);
 });
@@ -92,13 +92,13 @@ test.each([
 ])('rejects policy revision status $status', async ({ status, loadError, message }) => {
   getSandboxPolicyStatus.mockResolvedValue({ revision: { status, loadError } });
 
-  await expect(manager.updatePolicy('my-sandbox', policy)).rejects.toThrow(message);
+  await expect(manager.updatePolicy('my-sandbox', policy, 'my-gateway')).rejects.toThrow(message);
 });
 
 test('propagates a rejected policy update without polling', async () => {
   setPolicy.mockRejectedValue(new Error('invalid policy'));
 
-  await expect(manager.updatePolicy('my-sandbox', policy)).rejects.toThrow('invalid policy');
+  await expect(manager.updatePolicy('my-sandbox', policy, 'my-gateway')).rejects.toThrow('invalid policy');
 
   expect(getSandboxPolicyStatus).not.toHaveBeenCalled();
 });
@@ -107,7 +107,7 @@ test('times out when the revision remains pending', async () => {
   vi.useFakeTimers();
   try {
     getSandboxPolicyStatus.mockResolvedValue({ revision: { status: PolicyStatus.PENDING } });
-    const update = manager.updatePolicy('my-sandbox', policy);
+    const update = manager.updatePolicy('my-sandbox', policy, 'my-gateway');
     const rejection = expect(update).rejects.toThrow('Timed out waiting for OpenShell policy version 7 to load');
     await vi.advanceTimersByTimeAsync(60_000);
     await rejection;

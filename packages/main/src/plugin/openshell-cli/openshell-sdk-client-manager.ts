@@ -41,8 +41,8 @@ export class OpenshellSdkClientManager {
     private readonly gatewayConfig: OpenshellGatewayConfig,
   ) {}
 
-  async getClient(gatewayName?: string): Promise<OpenShellClient> {
-    const gateway = await this.#resolveGateway(gatewayName);
+  async getClient(gatewayName: string): Promise<OpenShellClient> {
+    const gateway = await this.gatewayManager.getGateway(gatewayName);
 
     const cached = this.#cache.get(gateway.name);
     if (cached?.endpoint === gateway.gateway_endpoint) {
@@ -82,25 +82,5 @@ export class OpenshellSdkClientManager {
       endpoint: gateway.gateway_endpoint,
     });
     return ClientClass.connect(options);
-  }
-
-  async #resolveGateway(gatewayName?: string): Promise<GatewayMetadata> {
-    if (gatewayName) {
-      return this.gatewayManager.getGateway(gatewayName);
-    }
-
-    const activeName = await this.gatewayManager.getActiveGateway();
-    if (activeName) {
-      return this.gatewayManager.getGateway(activeName);
-    }
-
-    const all = await this.gatewayManager.listGateways();
-
-    if (all.length === 1) return all[0]!.metadata;
-
-    if (all.length === 0) {
-      throw new Error('No OpenShell gateways registered');
-    }
-    throw new Error('Multiple OpenShell gateways registered but none is active');
   }
 }

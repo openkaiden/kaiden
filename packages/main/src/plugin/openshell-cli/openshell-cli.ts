@@ -119,32 +119,8 @@ export class OpenshellCli {
 
   // ── sandbox commands ──────────────────────────────────────────────
 
-  async startSandbox(name: string): Promise<void> {
-    await this.runCli(['sandbox', 'start', name]);
-  }
-
-  async stopSandbox(name: string): Promise<void> {
-    await this.runCli(['sandbox', 'stop', name]);
-  }
-
-  async deleteAllSandboxes(gatewayName?: string): Promise<void> {
-    const args = ['sandbox', 'delete', '--all'];
-    if (gatewayName) {
-      args.push('-g', gatewayName);
-    }
-    await this.runCli(args);
-  }
-
-  async connectSandbox(name: string): Promise<void> {
-    await this.runCli(['sandbox', 'connect', name]);
-  }
-
-  async uploadToSandbox(sandboxName: string, localPath: string, dest: string, gatewayName?: string): Promise<void> {
-    const args = ['sandbox', 'upload', sandboxName, localPath, dest];
-    if (gatewayName) {
-      args.push('-g', gatewayName);
-    }
-    await this.runCli(args);
+  async uploadToSandbox(sandboxName: string, localPath: string, dest: string, gatewayName: string): Promise<void> {
+    await this.runCli(['sandbox', 'upload', sandboxName, localPath, dest, '-g', gatewayName]);
   }
 
   // ── helpers ───────────────────────────────────────────────────────

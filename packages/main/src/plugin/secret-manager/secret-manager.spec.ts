@@ -62,7 +62,7 @@ class TestSecretManager extends SecretManager {
     profileId: string;
     agentCommand: string;
     secretName: string;
-    gateway?: string;
+    gateway: string;
     endpoint?: string;
   }): Promise<string | undefined> {
     return super.resolveProfileForAgent(options);
@@ -239,7 +239,7 @@ describe('openshellAdapter', () => {
   test('delegates create to openshellAdapter', async () => {
     mockRaw.createProvider.mockResolvedValue({});
 
-    const result = await manager.create(defaultOptions);
+    const result = await manager.create(defaultOptions, 'kaiden-local');
 
     expect(mockRaw.createProvider).toHaveBeenCalledWith({
       provider: {
@@ -313,7 +313,7 @@ describe('openshellAdapter', () => {
   test('delegates remove to openshellAdapter', async () => {
     mockRaw.deleteProvider.mockResolvedValue({});
 
-    const result = await manager.remove('my-openai');
+    const result = await manager.remove('my-openai', 'kaiden-local');
 
     expect(mockRaw.deleteProvider).toHaveBeenCalledWith({
       name: 'my-openai',
@@ -335,7 +335,7 @@ describe('openshellAdapter', () => {
       profiles: [{ id: 'openai', displayName: 'OpenAI', description: 'OpenAI API provider', credentials: [] }],
     });
 
-    const result = await manager.listServices();
+    const result = await manager.listServices('kaiden-local');
 
     expect(result).toEqual([
       { id: 'openai', display_name: 'OpenAI', description: 'OpenAI API provider', credentials: [] },
@@ -390,7 +390,7 @@ describe('openshellAdapter', () => {
   test('still emits secret-manager-update on create', async () => {
     mockRaw.createProvider.mockResolvedValue({});
 
-    await manager.create(defaultOptions);
+    await manager.create(defaultOptions, 'kaiden-local');
 
     expect(apiSender.send).toHaveBeenCalledWith('secret-manager-update');
   });
@@ -398,7 +398,7 @@ describe('openshellAdapter', () => {
   test('still emits secret-manager-update on remove', async () => {
     mockRaw.deleteProvider.mockResolvedValue({});
 
-    await manager.remove('my-openai');
+    await manager.remove('my-openai', 'kaiden-local');
 
     expect(apiSender.send).toHaveBeenCalledWith('secret-manager-update');
   });
@@ -531,7 +531,7 @@ describe('ensureSecretForSandbox', () => {
     mockRaw.listProviders.mockResolvedValue({ providers: [] });
     vi.mocked(providerRegistry.getInferenceConnectionFromModel).mockReturnValue(undefined);
 
-    const result = await manager.ensureSecretForSandbox('my-sandbox', 'unknown::model::', 'claude');
+    const result = await manager.ensureSecretForSandbox('my-sandbox', 'unknown::model::', 'claude', 'kaiden');
 
     expect(result).toBeUndefined();
   });
@@ -545,6 +545,7 @@ describe('resolveProfileForAgent', () => {
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
     const result = await manager.resolveProfileForAgent({
+      gateway: 'kaiden-local',
       profileId: 'openai',
       agentCommand: 'claude',
       secretName: 'test-sandbox-test-uuid-1234',
@@ -573,6 +574,7 @@ describe('resolveProfileForAgent', () => {
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
     const result = await manager.resolveProfileForAgent({
+      gateway: 'kaiden-local',
       profileId: 'openai',
       agentCommand: 'claude',
       secretName: 'test-sandbox-test-uuid-1234',
@@ -606,6 +608,7 @@ describe('resolveProfileForAgent', () => {
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
     const result = await manager.resolveProfileForAgent({
+      gateway: 'kaiden-local',
       profileId: 'openai',
       agentCommand: '/usr/local/bin/claude',
       secretName: 'test-sandbox-test-uuid-1234',
@@ -641,6 +644,7 @@ describe('resolveProfileForAgent', () => {
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
     const result = await manager.resolveProfileForAgent({
+      gateway: 'kaiden-local',
       profileId: 'openai',
       agentCommand: 'claude',
       secretName: 'test-sandbox-test-uuid-1234',
@@ -677,6 +681,7 @@ describe('resolveProfileForAgent', () => {
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
     const result = await manager.resolveProfileForAgent({
+      gateway: 'kaiden-local',
       profileId: 'openai',
       agentCommand: '/usr/local/bin/claude',
       secretName: 'test-sandbox-test-uuid-1234',
@@ -745,6 +750,7 @@ describe('resolveProfileForAgent', () => {
 
     const endpoint = 'http://localhost:11434/v1';
     const result = await manager.resolveProfileForAgent({
+      gateway: 'kaiden-local',
       profileId: 'openai',
       agentCommand: 'claude',
       secretName: 'my-sandbox-test-uuid-1234',
@@ -770,6 +776,7 @@ describe('resolveProfileForAgent', () => {
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
     const result = await manager.resolveProfileForAgent({
+      gateway: 'kaiden-local',
       profileId: 'openai',
       agentCommand: 'claude',
       secretName: 'test-sandbox-test-uuid-1234',
@@ -792,6 +799,7 @@ describe('resolveProfileForAgent', () => {
 
     const endpoint = 'http://localhost:11434/v1';
     await manager.resolveProfileForAgent({
+      gateway: 'kaiden-local',
       profileId: 'openai',
       agentCommand: 'claude',
       secretName: 'test-sandbox-test-uuid-1234',
@@ -830,6 +838,7 @@ describe('resolveProfileForAgent', () => {
     });
 
     const result = await manager.resolveProfileForAgent({
+      gateway: 'kaiden-local',
       profileId: 'google-vertex-ai',
       agentCommand: 'claude',
       secretName: 'test-sandbox-test-uuid-1234',
@@ -851,6 +860,7 @@ describe('resolveProfileForAgent', () => {
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
     const result = await manager.resolveProfileForAgent({
+      gateway: 'kaiden-local',
       profileId: 'google-vertex-ai',
       agentCommand: 'claude',
       secretName: 'test-sandbox-test-uuid-1234',

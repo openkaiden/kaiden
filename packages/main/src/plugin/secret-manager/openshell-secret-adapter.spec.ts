@@ -101,7 +101,7 @@ describe('createSecret', () => {
       value: { credentials: { GH_TOKEN: 'ghp_abc123' } },
     };
 
-    const result = await adapter.createSecret(options);
+    const result = await adapter.createSecret(options, 'kaiden-local');
 
     expect(defaultFactory.createProvider).toHaveBeenCalledWith(expect.anything(), options);
     expect(result).toEqual({ name: 'my-secret' });
@@ -114,7 +114,7 @@ describe('createSecret', () => {
       value: { credentials: {} },
     };
 
-    const result = await adapter.createSecret(options);
+    const result = await adapter.createSecret(options, 'kaiden-local');
 
     expect(gcloudFactory.createProvider).toHaveBeenCalledWith(expect.anything(), options);
     expect(defaultFactory.createProvider).not.toHaveBeenCalled();
@@ -140,7 +140,9 @@ describe('createSecret', () => {
       value: 'plain-string',
     };
 
-    await expect(adapter.createSecret(options)).rejects.toThrow('options.value must be a record for Openshell');
+    await expect(adapter.createSecret(options, 'kaiden-local')).rejects.toThrow(
+      'options.value must be a record for Openshell',
+    );
   });
 });
 
@@ -153,7 +155,7 @@ describe('listSecrets', () => {
       ],
     });
 
-    const result = await adapter.listSecrets();
+    const result = await adapter.listSecrets('kaiden-local');
 
     expect(mockRaw.listProviders).toHaveBeenCalledWith({
       workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
@@ -167,7 +169,7 @@ describe('listSecrets', () => {
   test('returns empty array when no providers exist', async () => {
     mockRaw.listProviders.mockResolvedValue({ providers: [] });
 
-    const result = await adapter.listSecrets();
+    const result = await adapter.listSecrets('kaiden-local');
 
     expect(result).toEqual([]);
   });
@@ -183,7 +185,7 @@ describe('listSecrets', () => {
   test('rejects when client.raw.listProviders fails', async () => {
     mockRaw.listProviders.mockRejectedValue(new Error('no gateway configured'));
 
-    await expect(adapter.listSecrets()).rejects.toThrow('no gateway configured');
+    await expect(adapter.listSecrets('kaiden-local')).rejects.toThrow('no gateway configured');
   });
 });
 
@@ -191,7 +193,7 @@ describe('removeSecret', () => {
   test('delegates to client.raw.deleteProvider and returns the secret name', async () => {
     mockRaw.deleteProvider.mockResolvedValue({});
 
-    const result = await adapter.removeSecret('my-openai');
+    const result = await adapter.removeSecret('my-openai', 'kaiden-local');
 
     expect(mockRaw.deleteProvider).toHaveBeenCalledWith({
       name: 'my-openai',
@@ -211,7 +213,7 @@ describe('removeSecret', () => {
   test('rejects when client.raw.deleteProvider fails', async () => {
     mockRaw.deleteProvider.mockRejectedValue(new Error('provider not found: unknown'));
 
-    await expect(adapter.removeSecret('unknown')).rejects.toThrow('provider not found: unknown');
+    await expect(adapter.removeSecret('unknown', 'kaiden-local')).rejects.toThrow('provider not found: unknown');
   });
 });
 
@@ -234,7 +236,7 @@ describe('listServices', () => {
       ],
     });
 
-    const result = await adapter.listServices();
+    const result = await adapter.listServices('kaiden-local');
 
     expect(mockRaw.listProviderProfiles).toHaveBeenCalledWith({
       workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
@@ -258,7 +260,7 @@ describe('listServices', () => {
   test('returns empty array when no profiles exist', async () => {
     mockRaw.listProviderProfiles.mockResolvedValue({ profiles: [] });
 
-    const result = await adapter.listServices();
+    const result = await adapter.listServices('kaiden-local');
 
     expect(result).toEqual([]);
   });
@@ -266,7 +268,7 @@ describe('listServices', () => {
   test('rejects when client.raw.listProviderProfiles fails', async () => {
     mockRaw.listProviderProfiles.mockRejectedValue(new Error('no gateway configured'));
 
-    await expect(adapter.listServices()).rejects.toThrow('no gateway configured');
+    await expect(adapter.listServices('kaiden-local')).rejects.toThrow('no gateway configured');
   });
 });
 
@@ -284,7 +286,7 @@ describe('createProfile', () => {
     ]);
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
-    await adapter.createProfile({ name: 'openai-claude', from: 'openai', binaries: ['/**/claude'] });
+    await adapter.createProfile({ name: 'openai-claude', from: 'openai', binaries: ['/**/claude'] }, 'kaiden-local');
 
     expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -312,12 +314,15 @@ describe('createProfile', () => {
     ]);
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
-    await adapter.createProfile({
-      name: 'openai-claude',
-      from: 'openai',
-      binaries: ['/**/claude'],
-      endpoint: 'http://localhost:11434/v1',
-    });
+    await adapter.createProfile(
+      {
+        name: 'openai-claude',
+        from: 'openai',
+        binaries: ['/**/claude'],
+        endpoint: 'http://localhost:11434/v1',
+      },
+      'kaiden-local',
+    );
 
     expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
       create(ImportProviderProfilesRequestSchema, {
@@ -364,12 +369,15 @@ describe('createProfile', () => {
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
     await expect(
-      adapter.createProfile({
-        name: 'openai-claude',
-        from: 'openai',
-        binaries: ['/**/claude'],
-        endpoint: 'not-a-url',
-      }),
+      adapter.createProfile(
+        {
+          name: 'openai-claude',
+          from: 'openai',
+          binaries: ['/**/claude'],
+          endpoint: 'not-a-url',
+        },
+        'kaiden-local',
+      ),
     ).rejects.toThrow(`Can't parse endpoint not-a-url while create profile openai-claude`);
   });
 
@@ -386,12 +394,15 @@ describe('createProfile', () => {
     ]);
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
-    await adapter.createProfile({
-      name: 'openai-clone',
-      from: 'openai',
-      binaries: ['/**/claude'],
-      endpoint: 'https://api.openai.com/v1',
-    });
+    await adapter.createProfile(
+      {
+        name: 'openai-clone',
+        from: 'openai',
+        binaries: ['/**/claude'],
+        endpoint: 'https://api.openai.com/v1',
+      },
+      'kaiden-local',
+    );
 
     expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -419,12 +430,15 @@ describe('createProfile', () => {
     ]);
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
-    await adapter.createProfile({
-      name: 'openai-clone',
-      from: 'openai',
-      binaries: ['/**/claude'],
-      endpoint: 'https://api.openai.com/v1',
-    });
+    await adapter.createProfile(
+      {
+        name: 'openai-clone',
+        from: 'openai',
+        binaries: ['/**/claude'],
+        endpoint: 'https://api.openai.com/v1',
+      },
+      'kaiden-local',
+    );
 
     expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -452,12 +466,15 @@ describe('createProfile', () => {
     ]);
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
-    await adapter.createProfile({
-      name: 'openai-clone',
-      from: 'openai',
-      binaries: ['/**/claude'],
-      endpoint: 'https://api.openai.com/v1',
-    });
+    await adapter.createProfile(
+      {
+        name: 'openai-clone',
+        from: 'openai',
+        binaries: ['/**/claude'],
+        endpoint: 'https://api.openai.com/v1',
+      },
+      'kaiden-local',
+    );
 
     expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
       create(ImportProviderProfilesRequestSchema, {
@@ -502,7 +519,7 @@ describe('createProfile', () => {
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: false, diagnostics: ['conflict'] });
 
     await expect(
-      adapter.createProfile({ name: 'openai-claude', from: 'openai', binaries: ['/**/claude'] }),
+      adapter.createProfile({ name: 'openai-claude', from: 'openai', binaries: ['/**/claude'] }, 'kaiden-local'),
     ).rejects.toThrow(`Provider profile openai-claude can't be imported`);
   });
 
@@ -510,7 +527,7 @@ describe('createProfile', () => {
     vi.mocked(openshellRegistry.getProfiles).mockReturnValue([]);
 
     await expect(
-      adapter.createProfile({ name: 'openai-claude', from: 'openai', binaries: ['/**/claude'] }),
+      adapter.createProfile({ name: 'openai-claude', from: 'openai', binaries: ['/**/claude'] }, 'kaiden-local'),
     ).rejects.toThrow('Provider profile "openai" not found');
   });
 });
@@ -519,7 +536,7 @@ describe('deleteProfile', () => {
   test('delegates to client.raw.deleteProviderProfile with allowMissing', async () => {
     mockRaw.deleteProviderProfile.mockResolvedValue({});
 
-    await adapter.deleteProfile('my-sandbox-uuid');
+    await adapter.deleteProfile('my-sandbox-uuid', 'kaiden-local');
 
     expect(mockRaw.deleteProviderProfile).toHaveBeenCalledWith({
       id: 'my-sandbox-uuid',
@@ -553,7 +570,7 @@ describe('ensureProfileOnGateway', () => {
       profiles: [{ id: 'google-vertex-ai', displayName: 'Google Vertex AI', credentials: [] }],
     });
 
-    await adapter.ensureProfileOnGateway(create(ProviderProfileSchema, { id: 'google-vertex-ai' }));
+    await adapter.ensureProfileOnGateway(create(ProviderProfileSchema, { id: 'google-vertex-ai' }), 'kaiden-local');
 
     expect(mockRaw.importProviderProfiles).not.toHaveBeenCalled();
   });
@@ -568,7 +585,7 @@ describe('ensureProfileOnGateway', () => {
     vi.mocked(openshellRegistry.getProfiles).mockReturnValue([registryProfile]);
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
 
-    await adapter.ensureProfileOnGateway(create(ProviderProfileSchema, { id: 'google-vertex-ai' }));
+    await adapter.ensureProfileOnGateway(create(ProviderProfileSchema, { id: 'google-vertex-ai' }), 'kaiden-local');
 
     expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
       create(ImportProviderProfilesRequestSchema, {
@@ -591,7 +608,7 @@ describe('ensureProfileOnGateway', () => {
     mockRaw.importProviderProfiles.mockResolvedValue({ imported: false, diagnostics: ['conflict'] });
 
     await expect(
-      adapter.ensureProfileOnGateway(create(ProviderProfileSchema, { id: 'google-vertex-ai' })),
+      adapter.ensureProfileOnGateway(create(ProviderProfileSchema, { id: 'google-vertex-ai' }), 'kaiden-local'),
     ).rejects.toThrow(`Provider profile google-vertex-ai can't be imported`);
   });
 

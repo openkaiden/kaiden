@@ -31,8 +31,8 @@ vi.mock(import('/@/navigation'));
 vi.mock(import('/@/kaiden/stores/secret-vault'));
 
 const SAMPLE_SECRETS: SecretVaultInfo[] = [
-  { id: 'github-token', name: 'GitHub Token', type: 'github', description: 'Personal access token' },
-  { id: 'anthropic-key', name: 'Anthropic Key', type: 'anthropic', description: 'API key' },
+  { id: 'github-token', name: 'GitHub Token', gateway: 'local', type: 'github', description: 'Personal access token' },
+  { id: 'anthropic-key', name: 'Anthropic Key', gateway: 'local', type: 'anthropic', description: 'API key' },
 ];
 
 beforeEach(() => {

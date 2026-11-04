@@ -31,7 +31,7 @@ export class OpenshellPolicyManager {
     private readonly sdkClientManager: OpenshellSdkClientManager,
   ) {}
 
-  async updatePolicy(sandboxName: string, policy: OpenshellPolicy, gateway?: string): Promise<void> {
+  async updatePolicy(sandboxName: string, policy: OpenshellPolicy, gateway: string): Promise<void> {
     const client = await this.sdkClientManager.getClient(gateway);
     const config = await client.sandbox.getConfig(sandboxName);
     const currentPolicy = config.policy;

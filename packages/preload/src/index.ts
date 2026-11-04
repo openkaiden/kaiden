@@ -542,7 +542,7 @@ export function initExposure(): void {
 
   contextBridge.exposeInMainWorld(
     'createSecret',
-    async (options: SecretCreateOptions, gateway?: string): Promise<SecretName> => {
+    async (options: SecretCreateOptions, gateway: string): Promise<SecretName> => {
       return ipcInvoke('secret-manager:create', options, gateway);
     },
   );
@@ -551,11 +551,11 @@ export function initExposure(): void {
     return ipcInvoke('secret-manager:list', gateway);
   });
 
-  contextBridge.exposeInMainWorld('removeSecret', async (name: string, gateway?: string): Promise<SecretName> => {
+  contextBridge.exposeInMainWorld('removeSecret', async (name: string, gateway: string): Promise<SecretName> => {
     return ipcInvoke('secret-manager:remove', name, gateway);
   });
 
-  contextBridge.exposeInMainWorld('listSecretServices', async (gateway?: string): Promise<OpenshellProfile[]> => {
+  contextBridge.exposeInMainWorld('listSecretServices', async (gateway: string): Promise<OpenshellProfile[]> => {
     return ipcInvoke('secret-manager:list-services', gateway);
   });
 

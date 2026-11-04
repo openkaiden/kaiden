@@ -19,7 +19,7 @@
 import { OpenShellClient } from '@nvidia/openshell-sdk';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type { GatewayMetadata, ListedGateway } from '/@api/openshell-gateway-info.js';
+import type { GatewayMetadata } from '/@api/openshell-gateway-info.js';
 
 import type { OpenshellGatewayConfig } from './openshell-gateway-config.js';
 import { OpenshellSdkClientManager } from './openshell-sdk-client-manager.js';
@@ -48,22 +48,14 @@ function metadata(overrides: Partial<GatewayMetadata> = {}): GatewayMetadata {
   };
 }
 
-function listed(meta: GatewayMetadata, source: 'user' | 'system' = 'user'): ListedGateway {
-  return { metadata: meta, source };
-}
-
 function createSdkClient(
   opts: {
-    listGateways?: () => Promise<ListedGateway[]>;
     getGateway?: (name: string) => Promise<GatewayMetadata>;
-    getActiveGateway?: () => Promise<string | undefined>;
   } = {},
   buildConnectOptions?: OpenshellGatewayConfig['buildConnectOptions'],
 ): OpenshellSdkClientManager {
   const gatewayManager = {
-    listGateways: opts.listGateways ?? vi.fn().mockResolvedValue([listed(metadata())]),
     getGateway: opts.getGateway ?? vi.fn().mockImplementation(async (name: string) => metadata({ name })),
-    getActiveGateway: opts.getActiveGateway ?? vi.fn().mockResolvedValue(undefined),
   } as never;
   const gatewayConfig = {
     buildConnectOptions:
@@ -215,52 +207,12 @@ describe('OpenshellSdkClientManager', () => {
       expect(mockConnect).toHaveBeenCalledTimes(2);
     });
 
-    test('selects active gateway when no name is provided', async () => {
-      const sdkClient = createSdkClient({
-        getActiveGateway: vi.fn().mockResolvedValue('active-gw'),
-        getGateway: vi.fn().mockResolvedValue(metadata({ name: 'active-gw' })),
-      });
-
-      await sdkClient.getClient();
-
-      expect(mockConnect).toHaveBeenCalledWith({ gateway: 'http://127.0.0.1:17670' });
-    });
-
-    test('selects sole gateway when none is active', async () => {
-      const sdkClient = createSdkClient({
-        getActiveGateway: vi.fn().mockResolvedValue(undefined),
-        listGateways: vi.fn().mockResolvedValue([listed(metadata())]),
-      });
-
-      await sdkClient.getClient();
-
-      expect(mockConnect).toHaveBeenCalledWith({ gateway: 'http://127.0.0.1:17670' });
-    });
-
     test('throws when named gateway is not found', async () => {
       const sdkClient = createSdkClient({
         getGateway: vi.fn().mockRejectedValue(new Error(`No metadata found for gateway 'missing'`)),
       });
 
       await expect(sdkClient.getClient('missing')).rejects.toThrow(/gateway 'missing'/i);
-    });
-
-    test('throws when no gateways are registered', async () => {
-      const sdkClient = createSdkClient({
-        getActiveGateway: vi.fn().mockResolvedValue(undefined),
-        listGateways: vi.fn().mockResolvedValue([]),
-      });
-
-      await expect(sdkClient.getClient()).rejects.toThrow(/no openshell gateways registered/i);
-    });
-
-    test('throws when multiple gateways exist but none is active', async () => {
-      const sdkClient = createSdkClient({
-        getActiveGateway: vi.fn().mockResolvedValue(undefined),
-        listGateways: vi.fn().mockResolvedValue([listed(metadata({ name: 'gw1' })), listed(metadata({ name: 'gw2' }))]),
-      });
-
-      await expect(sdkClient.getClient()).rejects.toThrow(/multiple.*none is active/i);
     });
   });
 
