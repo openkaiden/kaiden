@@ -18,6 +18,7 @@
 
 import { randomInt } from 'node:crypto';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
@@ -31,14 +32,20 @@ import * as tar from 'tar';
 import { SocketHelper } from '/@/helper/socket-helper';
 import { ContainerExtensionAPISymbol, ExtensionContextSymbol } from '/@/inject/symbol';
 
-export const GATEWAY_IMAGE = 'ghcr.io/nvidia/openshell/gateway:0.0.71';
+export const GATEWAY_IMAGE = 'quay.io/jeffmaury/openshell-gateway-podman:0.1.5';
 const GATEWAY_LABEL = 'ai.openkaiden.openshell-podman-gateway';
 const GATEWAY_PORT_LABEL = 'ai.openkaiden.openshell-podman-gateway.port';
-const GATEWAY_NAME = 'kaiden';
+const GATEWAY_NAME = 'kaiden-podman';
 const LOG_PREFIX = '[openshell-podman-gateway]';
 
 const GATEWAY_CONFIG = `[openshell]
-version = 1
+version = 2
+
+[openshell.gateway]
+compute_driver = "podman"
+
+[openshell.drivers.podman]
+enable_bind_mounts = true
 
 [openshell.gateway.auth]
 allow_unauthenticated_users = true
@@ -47,7 +54,6 @@ allow_unauthenticated_users = true
 signing_key_path = "/kaiden/jwt/signing.pem"
 public_key_path = "/kaiden/jwt/public.pem"
 kid_path = "/kaiden/jwt/kid"
-ttl_secs = 0
 `;
 
 const WINDOWS_PATH_REGEXP = /^([A-Za-z]):[/\\](.*)$/;
@@ -79,12 +85,6 @@ export class GatewayContainerManager implements Disposable {
         console.error(`${LOG_PREFIX} failed to setup gateway on endpoint change:`, err);
       });
     });
-
-    extensionApi.cli.onDidChange(() => {
-      this.trySetupGateway().catch((err: unknown) => {
-        console.error(`${LOG_PREFIX} failed to setup gateway on CLI change:`, err);
-      });
-    });
   }
 
   async trySetupGateway(): Promise<void> {
@@ -95,12 +95,6 @@ export class GatewayContainerManager implements Disposable {
     const endpoints = this.containerExtensionAPI.getEndpoints();
     if (endpoints.length === 0) {
       console.log(`${LOG_PREFIX} no container endpoints available yet`);
-      return;
-    }
-
-    const cliPath = this.findOpenshellCliPath();
-    if (!cliPath) {
-      console.log(`${LOG_PREFIX} openshell CLI not available yet`);
       return;
     }
 
@@ -117,14 +111,14 @@ export class GatewayContainerManager implements Disposable {
           );
         }
         this.#port = existing.port;
-        await this.doRegisterGateway(cliPath, existing.port);
+        await this.doRegisterGateway(existing.port);
         return;
       }
 
       console.log(`${LOG_PREFIX} no existing gateway container found, creating one`);
       const port = await this.createGatewayContainer(endpoints[0]!.dockerode);
       this.#port = port;
-      await this.doRegisterGateway(cliPath, port);
+      await this.doRegisterGateway(port);
     } catch (err: unknown) {
       console.error(`${LOG_PREFIX} failed to ensure gateway container:`, err);
     }
@@ -168,8 +162,6 @@ export class GatewayContainerManager implements Disposable {
         '--port',
         String(port),
         '--disable-tls',
-        '--drivers',
-        'podman',
         '--bind-address',
         '0.0.0.0',
         '--log-level',
@@ -181,6 +173,7 @@ export class GatewayContainerManager implements Disposable {
         [GATEWAY_LABEL]: 'true',
         [GATEWAY_PORT_LABEL]: String(port),
       },
+      ExposedPorts: { [`${port}`]: {} },
       HostConfig: {
         SecurityOpt: ['label=disable'],
         PortBindings: {
@@ -273,38 +266,36 @@ export class GatewayContainerManager implements Disposable {
     return promise;
   }
 
-  private async doRegisterGateway(cliPath: string, port: number): Promise<void> {
-    try {
-      await extensionApi.process.exec(cliPath, ['gateway', 'remove', GATEWAY_NAME]);
-    } catch {
-      // gateway may not exist yet
-    }
+  private async doRegisterGateway(port: number): Promise<void> {
+    const gatewayDir = join(getOpenshellGatewaysDir(), GATEWAY_NAME);
+    const metadata = {
+      name: GATEWAY_NAME,
+      gateway_endpoint: `http://localhost:${port}`,
+      is_remote: false,
+      gateway_port: 0,
+      auth_mode: 'plaintext',
+    };
 
     try {
-      await extensionApi.process.exec(cliPath, [
-        'gateway',
-        'add',
-        `http://localhost:${port}`,
-        '--name',
-        GATEWAY_NAME,
-        '--local',
-      ]);
+      await mkdir(gatewayDir, { recursive: true });
+      await writeFile(join(gatewayDir, 'metadata.json'), JSON.stringify(metadata, undefined, 2), 'utf-8');
       console.log(`${LOG_PREFIX} registered gateway '${GATEWAY_NAME}' at http://localhost:${port}`);
     } catch (err: unknown) {
       console.error(`${LOG_PREFIX} failed to register gateway:`, err);
     }
   }
 
-  private findOpenshellCliPath(): string | undefined {
-    console.log(extensionApi.cli.all);
-    const tool = extensionApi.cli.all.find(t => t.name === 'openshell');
-    console.log('tool', tool);
-    return tool?.path;
-  }
-
   dispose(): void {
     this.#disposed = true;
   }
+}
+
+/**
+ * Mirrors the openshell CLI user config location: $XDG_CONFIG_HOME, then %APPDATA% (Roaming) on Windows.
+ */
+export function getOpenshellGatewaysDir(): string {
+  const configRoot = process.env['XDG_CONFIG_HOME'] ?? process.env['APPDATA'] ?? join(homedir(), 'AppData', 'Roaming');
+  return join(configRoot, 'openshell', 'gateways');
 }
 
 export function convertToWslPath(windowsPath: string): string {
