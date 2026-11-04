@@ -60,12 +60,20 @@ const STOP_TIMEOUT_MS = 5000;
 const SUPERVISOR_IMAGE_BASE = 'ghcr.io/nvidia/openshell/supervisor';
 const GATEWAY_LOG_FILENAME = 'gateway.log';
 const GATEWAY_PID_FILENAME = 'gateway.pid';
+const GATEWAY_CONFIG_FILENAME = 'gateway.toml';
 const VM_DRIVER_STATE_FOLDER = 'state';
 const DEFAULT_GATEWAY_NAME = KAIDEN_LOCAL_GATEWAY_NAME;
 
 const GatewayConfigSchema = z.object({
   openshell: z.object({
-    drivers: z.record(z.string(), z.object({ enable_bind_mounts: z.boolean().optional() })),
+    drivers: z.record(
+      z.string(),
+      z.object({
+        enable_bind_mounts: z.boolean().optional(),
+        allow_driver_config: z.boolean().optional(),
+        resource_admission: z.object({ enabled: z.boolean().optional() }).optional(),
+      }),
+    ),
   }),
 });
 
@@ -439,7 +447,7 @@ export class OpenshellGateway implements IAsyncDisposable {
       return false;
     }
     try {
-      await access(join(this.getGatewayStorageDirectory(name), 'gateway.toml'));
+      await access(join(this.getGatewayStorageDirectory(name), GATEWAY_CONFIG_FILENAME));
       return true;
     } catch (err: unknown) {
       if (!this.isFileNotFoundError(err)) {
@@ -458,22 +466,49 @@ export class OpenshellGateway implements IAsyncDisposable {
       return false;
     }
 
-    if (this.#gatewayBookkeeping.get(gateway.name)?.process) {
-      return this.#supportsMountsFromConfig(gateway);
+    // A gateway Kaiden started can outlive the session that started it (crash, force quit) and be
+    // reused by the next one, so its saved config is checked even when this session has no process.
+    const fromConfig = await this.#supportsMountsFromConfig(gateway);
+    if (fromConfig !== undefined) {
+      return fromConfig;
     }
-
+    if (this.#gatewayBookkeeping.get(gateway.name)?.process) {
+      return false;
+    }
     return this.#supportsMountsFromRuntime(gateway);
   }
 
-  async #supportsMountsFromConfig(gateway: GatewayInfo): Promise<boolean> {
-    if (gateway.driver !== 'podman' && gateway.driver !== 'docker') {
+  /** Returns undefined when Kaiden has no saved config for the gateway. */
+  async #supportsMountsFromConfig(gateway: GatewayInfo): Promise<boolean | undefined> {
+    // Registered names come from OpenShell's registry, so only names Kaiden could have created
+    // are resolved to a storage path.
+    if (!GATEWAY_NAME_PATTERN.test(gateway.name)) {
+      return undefined;
+    }
+    // Only Podman and Docker support bind mounts, so other known drivers skip the file read.
+    if (gateway.driver !== undefined && gateway.driver !== 'podman' && gateway.driver !== 'docker') {
       return false;
     }
-    const configPath = join(this.getGatewayStorageDirectory(gateway.name), 'gateway.toml');
+    const configPath = join(this.getGatewayStorageDirectory(gateway.name), GATEWAY_CONFIG_FILENAME);
     try {
       const config = GatewayConfigSchema.parse(parseToml(await readFile(configPath, 'utf-8')));
-      return config.openshell.drivers[gateway.driver]?.enable_bind_mounts === true;
-    } catch {
+      // A saved config with an unknown driver can't be matched to a driver table.
+      if (gateway.driver === undefined) {
+        return false;
+      }
+      const driverConfig = config.openshell.drivers[gateway.driver];
+      // Since OpenShell 0.1.0, drivers reject host bind mounts unless caller driver config is
+      // allowed and resource admission is disabled. Configs written before that fall back to uploads.
+      return (
+        driverConfig?.enable_bind_mounts === true &&
+        driverConfig.allow_driver_config === true &&
+        driverConfig.resource_admission?.enabled === false
+      );
+    } catch (err: unknown) {
+      if (this.isFileNotFoundError(err)) {
+        return undefined;
+      }
+      console.warn(`[openshell-gateway] cannot read bind mount settings of "${gateway.name}" from ${configPath}:`, err);
       return false;
     }
   }
@@ -509,7 +544,7 @@ export class OpenshellGateway implements IAsyncDisposable {
     gatewayBookkeeping.port = port;
     gatewayBookkeeping.bindAddress = url.hostname;
     const storageDirectory = this.getGatewayStorageDirectory(name);
-    const configPath = join(storageDirectory, 'gateway.toml');
+    const configPath = join(storageDirectory, GATEWAY_CONFIG_FILENAME);
     const { gatewayProcess, processState } = await this.spawnCreatedGateway(
       name,
       binaryPath,
@@ -1087,7 +1122,7 @@ export class OpenshellGateway implements IAsyncDisposable {
 
       signal.throwIfAborted();
       const storageDirectory = this.getGatewayStorageDirectory(DEFAULT_GATEWAY_NAME);
-      const configPath = join(storageDirectory, 'gateway.toml');
+      const configPath = join(storageDirectory, GATEWAY_CONFIG_FILENAME);
       await mkdir(storageDirectory, { recursive: true });
       await this.generateCerts(binaryPath, storageDirectory, signal);
       const config = Mustache.render(gatewayConfigTemplate, {
@@ -1239,7 +1274,7 @@ export class OpenshellGateway implements IAsyncDisposable {
     driver: LocalGatewayDriver,
     signal: AbortSignal,
   ): Promise<string> {
-    const configPath = join(storageDirectory, 'gateway.toml');
+    const configPath = join(storageDirectory, GATEWAY_CONFIG_FILENAME);
     await mkdir(storageDirectory, { recursive: true });
     signal.throwIfAborted();
     await this.generateCerts(binaryPath, storageDirectory, signal, true);

@@ -20,16 +20,16 @@ import { inc } from 'semver';
 import { afterEach, assert, beforeEach, expect, test, vi } from 'vitest';
 
 import type { IConfigurationRegistry } from '/@api/configuration/models.js';
-import type { ListedGateway } from '/@api/openshell-gateway-info.js';
+import type { GatewayMetadata, ListedGateway } from '/@api/openshell-gateway-info.js';
 import { MIN_GATEWAY_VERSION } from '/@api/openshell-gateway-info.js';
 
 import { OpenshellGateway } from './openshell-gateway.js';
 import type { OpenshellGatewayManager } from './openshell-gateway-manager.js';
 import { OpenshellGatewayStateManager } from './openshell-gateway-state-manager.js';
 
-function listed(name: string, endpoint: string): ListedGateway {
+function listed(name: string, endpoint: string, overrides: Partial<GatewayMetadata> = {}): ListedGateway {
   return {
-    metadata: { name, gateway_endpoint: endpoint, is_remote: false, gateway_port: 0 },
+    metadata: { name, gateway_endpoint: endpoint, is_remote: false, gateway_port: 0, ...overrides },
     source: 'user',
   };
 }
@@ -170,6 +170,7 @@ test('builds a cached snapshot from registrations and runtime information', asyn
       canStart: false,
       endpoint: 'http://127.0.0.1:17670',
       active: true,
+      type: 'local',
       source: 'user',
       is_remote: false,
       remote_host: undefined,
@@ -182,6 +183,7 @@ test('builds a cached snapshot from registrations and runtime information', asyn
       canStart: false,
       endpoint: 'https://gateway.example.com',
       active: false,
+      type: 'local',
       source: 'user',
       is_remote: false,
       remote_host: undefined,
@@ -292,6 +294,7 @@ test('marks a gateway unreachable when runtime information cannot be retrieved',
       canStart: false,
       endpoint: 'http://127.0.0.1:17671',
       active: false,
+      type: 'local',
       source: 'user',
       is_remote: false,
       remote_host: undefined,
@@ -299,6 +302,19 @@ test('marks a gateway unreachable when runtime information cannot be retrieved',
       gatewayState: { reachable: false, health: 'unknown', compatible: true, process: { status: 'not-running' } },
     },
   ]);
+});
+
+test.each([
+  { expected: 'local', metadata: {} },
+  { expected: 'remote', metadata: { is_remote: true } },
+  { expected: 'cloud', metadata: { is_remote: true, auth_mode: 'cloudflare_jwt' } },
+])('reports the $expected gateway type from the registration metadata', async ({ expected, metadata }) => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('gw', 'https://127.0.0.1:17670', metadata)]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+
+  await manager.refresh();
+
+  expect(manager.listGateways()).toEqual([expect.objectContaining({ name: 'gw', type: expected })]);
 });
 
 test('fires an update when a registration is removed', async () => {
@@ -481,6 +497,7 @@ test('includes process state with running pid when gateway is reachable', async 
       canStart: false,
       endpoint: 'http://127.0.0.1:17670',
       active: true,
+      type: 'local',
       source: 'user',
       is_remote: false,
       remote_host: undefined,
@@ -511,6 +528,7 @@ test('includes process state with running pid when gateway is unreachable', asyn
       canStart: false,
       endpoint: 'http://127.0.0.1:17670',
       active: true,
+      type: 'local',
       source: 'user',
       is_remote: false,
       remote_host: undefined,
@@ -541,6 +559,7 @@ test('includes not-running process state when gateway is unreachable and no pid'
       canStart: false,
       endpoint: 'http://127.0.0.1:17670',
       active: true,
+      type: 'local',
       source: 'user',
       is_remote: false,
       remote_host: undefined,
@@ -570,6 +589,7 @@ test('omits process state when gateway is reachable and no pid', async () => {
       canStart: false,
       endpoint: 'https://gateway.example.com',
       active: true,
+      type: 'local',
       source: 'user',
       is_remote: false,
       remote_host: undefined,

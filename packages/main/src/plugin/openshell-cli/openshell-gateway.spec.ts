@@ -55,6 +55,8 @@ const GATEWAY_STORAGE_DIRECTORY = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateway
 const GATEWAY_CONFIG_PATH = join(GATEWAY_STORAGE_DIRECTORY, 'gateway.toml');
 const GATEWAY_DB_URL = `sqlite:${join(GATEWAY_STORAGE_DIRECTORY, 'gateway.db')}?mode=rwc`;
 const GATEWAY_LOG_PATH = join(GATEWAY_STORAGE_DIRECTORY, 'gateway.log');
+const BIND_MOUNT_DRIVER_SETTINGS =
+  'enable_bind_mounts = true\nallow_driver_config = true\nresource_admission = { enabled = false }\n';
 
 type MockWriteStream = WriteStream & {
   write: ReturnType<typeof vi.fn>;
@@ -1683,8 +1685,8 @@ describe('supportsMounts', () => {
     await gateway.start();
   });
 
-  test('queries runtime info for a discovered gateway instead of reading local config', async () => {
-    vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true');
+  test('queries runtime info for a discovered gateway without a saved Kaiden config', async () => {
+    vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' }));
     vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
       status: 'healthy',
       compute_drivers: [{ name: 'podman', capabilities: { driver_name: 'podman' } }],
@@ -1699,12 +1701,18 @@ describe('supportsMounts', () => {
         driver: 'podman',
       }),
     ).resolves.toBe(true);
-    expect(readFile).not.toHaveBeenCalled();
+    expect(readFile).toHaveBeenCalledWith(
+      join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'discovered', 'gateway.toml'),
+      'utf-8',
+    );
     expect(gatewayManager.getGatewayInfo).toHaveBeenCalledWith('discovered');
   });
 
-  test('returns true when the managed gateway config enables bind mounts', async () => {
-    vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true\n');
+  test.each([
+    'podman',
+    'docker',
+  ] as const)('returns true when the managed %s gateway config enables bind mounts', async driver => {
+    vi.mocked(readFile).mockResolvedValue(`[openshell.drivers.${driver}]\n${BIND_MOUNT_DRIVER_SETTINGS}`);
 
     await expect(
       gateway.supportsMounts({
@@ -1713,14 +1721,44 @@ describe('supportsMounts', () => {
         name: 'kaiden-local',
         endpoint: 'http://127.0.0.1:17670',
         type: 'local',
-        driver: 'podman',
+        driver,
       }),
     ).resolves.toBe(true);
     expect(readFile).toHaveBeenCalledWith(GATEWAY_CONFIG_PATH, 'utf-8');
   });
 
-  test('returns false for gateways without a managed bind-mount config', async () => {
-    vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
+  test.each([
+    { name: 'predates OpenShell 0.1.0', settings: 'enable_bind_mounts = true\n', driver: 'podman' },
+    {
+      name: 'keeps resource admission enabled',
+      settings: 'enable_bind_mounts = true\nallow_driver_config = true\nresource_admission = { enabled = true }\n',
+      driver: 'podman',
+    },
+    {
+      name: 'does not allow driver config',
+      settings: 'enable_bind_mounts = true\nresource_admission = { enabled = false }\n',
+      driver: 'podman',
+    },
+    { name: 'exists but the driver is not known yet', settings: BIND_MOUNT_DRIVER_SETTINGS, driver: undefined },
+  ] as const)('returns false when the managed gateway config $name', async ({ settings, driver }) => {
+    vi.mocked(readFile).mockResolvedValue(`[openshell.drivers.podman]\n${settings}`);
+
+    await expect(
+      gateway.supportsMounts({
+        canStop: false,
+        canStart: false,
+        name: 'kaiden-local',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver,
+      }),
+    ).resolves.toBe(false);
+    expect(readFile).toHaveBeenCalledWith(GATEWAY_CONFIG_PATH, 'utf-8');
+  });
+
+  test('logs and returns false when the managed gateway config cannot be parsed', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman\n');
 
     await expect(
       gateway.supportsMounts({
@@ -1732,10 +1770,28 @@ describe('supportsMounts', () => {
         driver: 'podman',
       }),
     ).resolves.toBe(false);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(GATEWAY_CONFIG_PATH), expect.any(Error));
   });
 
-  test('falls back to runtime check when the managed gateway exits', async () => {
-    vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true\n');
+  test('returns false for gateways without a managed bind-mount config', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+    await expect(
+      gateway.supportsMounts({
+        canStop: false,
+        canStart: false,
+        name: 'kaiden-local',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver: 'podman',
+      }),
+    ).resolves.toBe(false);
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining(GATEWAY_CONFIG_PATH), expect.anything());
+  });
+
+  test('keeps checking the saved config after the managed gateway exits', async () => {
+    vi.mocked(readFile).mockResolvedValue(`[openshell.drivers.podman]\n${BIND_MOUNT_DRIVER_SETTINGS}`);
     const info = {
       canStop: false,
       canStart: false,
@@ -1747,9 +1803,30 @@ describe('supportsMounts', () => {
     await expect(gateway.supportsMounts(info)).resolves.toBe(true);
 
     vi.mocked(spawn).mock.results[0]?.value.emit('exit', 0);
-    vi.mocked(gatewayManager.getGatewayInfo).mockRejectedValue(new Error('gateway unreachable'));
+    vi.mocked(readFile).mockResolvedValue('[openshell.drivers.podman]\nenable_bind_mounts = true\n');
 
     await expect(gateway.supportsMounts(info)).resolves.toBe(false);
+    expect(gatewayManager.getGatewayInfo).not.toHaveBeenCalled();
+  });
+
+  test('returns false without a runtime guess when the started gateway has no saved config', async () => {
+    vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' }));
+    vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
+      status: 'healthy',
+      compute_drivers: [{ name: 'podman', capabilities: { driver_name: 'podman' } }],
+    });
+
+    await expect(
+      gateway.supportsMounts({
+        canStop: false,
+        canStart: false,
+        name: 'kaiden-local',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver: 'podman',
+      }),
+    ).resolves.toBe(false);
+    expect(gatewayManager.getGatewayInfo).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -1772,6 +1849,57 @@ describe('supportsMounts', () => {
 });
 
 describe('supportsMounts (non-managed gateways)', () => {
+  beforeEach(() => {
+    vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' }));
+  });
+
+  test.each([
+    { name: 'predates OpenShell 0.1.0', settings: 'enable_bind_mounts = true\n', expected: false },
+    { name: 'enables bind mounts', settings: BIND_MOUNT_DRIVER_SETTINGS, expected: true },
+  ])('checks the saved config of a Kaiden gateway reused from an earlier session that $name', async ({
+    settings,
+    expected,
+  }) => {
+    vi.mocked(readFile).mockResolvedValue(`[openshell.drivers.podman]\n${settings}`);
+    vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
+      status: 'healthy',
+      compute_drivers: [{ name: 'podman', capabilities: { driver_name: 'podman' } }],
+    });
+
+    await expect(
+      gateway.supportsMounts({
+        canStop: false,
+        canStart: false,
+        name: 'kaiden-local',
+        endpoint: 'http://127.0.0.1:17670',
+        type: 'local',
+        driver: 'podman',
+      }),
+    ).resolves.toBe(expected);
+    expect(readFile).toHaveBeenCalledWith(GATEWAY_CONFIG_PATH, 'utf-8');
+    expect(gatewayManager.getGatewayInfo).not.toHaveBeenCalled();
+  });
+
+  test('does not read a saved config for an invalid registered gateway name', async () => {
+    vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
+      status: 'healthy',
+      compute_drivers: [{ name: 'podman', capabilities: { driver_name: 'podman' } }],
+    });
+
+    await expect(
+      gateway.supportsMounts({
+        canStop: false,
+        canStart: false,
+        name: '../outside',
+        endpoint: 'http://127.0.0.1:17675',
+        type: 'local',
+        driver: 'podman',
+      }),
+    ).resolves.toBe(true);
+    expect(readFile).not.toHaveBeenCalled();
+    expect(gatewayManager.getGatewayInfo).toHaveBeenCalledWith('../outside');
+  });
+
   test.each([
     'podman',
     'docker',
@@ -1794,12 +1922,26 @@ describe('supportsMounts (non-managed gateways)', () => {
     expect(gatewayManager.getGatewayInfo).toHaveBeenCalledWith('external-gw');
   });
 
-  test('returns false for a non-managed local gateway with vm driver', async () => {
+  test('queries runtime info for a non-managed local gateway whose driver is not known yet', async () => {
     vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
       status: 'healthy',
-      compute_drivers: [{ name: 'vm', capabilities: { driver_name: 'vm' } }],
+      compute_drivers: [{ name: 'podman', capabilities: { driver_name: 'podman' } }],
     });
 
+    await expect(
+      gateway.supportsMounts({
+        canStop: false,
+        canStart: false,
+        name: 'external-gw',
+        endpoint: 'http://127.0.0.1:17671',
+        type: 'local',
+        driver: undefined,
+      }),
+    ).resolves.toBe(true);
+    expect(gatewayManager.getGatewayInfo).toHaveBeenCalledWith('external-gw');
+  });
+
+  test('returns false for a non-managed local gateway with vm driver', async () => {
     await expect(
       gateway.supportsMounts({
         canStop: false,
@@ -1810,6 +1952,8 @@ describe('supportsMounts (non-managed gateways)', () => {
         driver: 'vm',
       }),
     ).resolves.toBe(false);
+    expect(readFile).not.toHaveBeenCalled();
+    expect(gatewayManager.getGatewayInfo).not.toHaveBeenCalled();
   });
 
   test('returns false when getGatewayInfo fails for a non-managed gateway', async () => {
@@ -2524,6 +2668,8 @@ describe('gateway config generation', () => {
 
     const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1] as string;
     expect(writtenContent).toContain('enable_bind_mounts = true');
+    expect(writtenContent).toContain('allow_driver_config = true');
+    expect(writtenContent).toContain('resource_admission = { enabled = false }');
     expect(writtenContent).toContain(`compute_driver = "${driver}"`);
   });
 
