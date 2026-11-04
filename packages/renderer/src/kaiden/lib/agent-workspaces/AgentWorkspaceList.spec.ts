@@ -430,6 +430,7 @@ test('Expect failed workspaces to stay selected after bulk delete', async () => 
     expect(get(allOpenshellSandboxes).find(s => s.id === 'ws-2')?.actionError).toBe('Error: network error'),
   );
   expect(screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' })[1]).toBeChecked();
+  expect(screen.getAllByRole('checkbox', { name: 'Toggle openshell-workspaces' })[0]).not.toBeChecked();
 });
 
 test('Expect selection to be kept when an action error is set on another workspace', async () => {

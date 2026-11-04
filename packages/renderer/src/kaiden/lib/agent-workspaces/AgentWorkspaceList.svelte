@@ -11,6 +11,7 @@ import {
   TableDurationColumn,
   TableRow,
 } from '@podman-desktop/ui-svelte';
+import { SvelteMap } from 'svelte/reactivity';
 
 import GatewayFilterDropdown from '/@/kaiden/lib/gateways/GatewayFilterDropdown.svelte';
 import {
@@ -69,6 +70,7 @@ async function deleteSelectedSandboxes(): Promise<void> {
       clearSandboxActionError(sandbox.id);
       try {
         await window.deleteOpenshellSandbox(sandbox.name, sandbox.gatewayName);
+        selection.delete(key(sandbox));
       } catch (error: unknown) {
         setSandboxActionError(sandbox.id, String(error));
       }
@@ -77,16 +79,25 @@ async function deleteSelectedSandboxes(): Promise<void> {
   bulkDeleteInProgress = false;
 }
 
-// keep the current selection when the store emits (backend refresh, action error updates)
-let previousSandboxes: SandboxSelectable[] = [];
-const filteredSandboxes: SandboxSelectable[] = $derived.by(() => {
-  const sandboxes = $filteredOpenshellSandboxes.map(sandbox => ({
-    ...sandbox,
-    selected: previousSandboxes.find(previous => key(previous) === key(sandbox))?.selected ?? false,
-  }));
-  previousSandboxes = sandboxes;
-  return sandboxes;
-});
+// selection is kept by row key so it survives store emissions (backend refresh, action errors)
+// and failed bulk deletions stay selected for a retry
+const selection = new SvelteMap<string, boolean>();
+
+const filteredSandboxes: SandboxSelectable[] = $derived(
+  $filteredOpenshellSandboxes.map(sandbox => {
+    const sandboxKey = key(sandbox);
+    return {
+      ...sandbox,
+      // the table toggles selection by assigning this property
+      get selected(): boolean {
+        return selection.get(sandboxKey) ?? false;
+      },
+      set selected(selected: boolean) {
+        selection.set(sandboxKey, selected);
+      },
+    };
+  }),
+);
 
 const sandboxRow = new TableRow<SandboxSelectable>({
   selectable: (sandbox): boolean => sandbox.phase !== 'Deleting',
