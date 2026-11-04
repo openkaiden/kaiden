@@ -60,6 +60,7 @@ import type {
   CreateLocalGatewayOptions,
   GatewayInfo,
   GatewaySandboxes,
+  LocalGatewayDriver,
   OpenshellBindMount,
   OpenshellUpload,
   SandboxInfo,
@@ -746,6 +747,10 @@ export class AgentWorkspaceManager implements Disposable {
     return [...this.openshellGatewayStateManager.listGateways()];
   }
 
+  async getDefaultLocalGatewayDriver(): Promise<LocalGatewayDriver> {
+    return this.openshellGateway.getDefaultLocalGatewayDriver();
+  }
+
   async createLocalGateway(options: CreateLocalGatewayOptions): Promise<GatewayInfo[]> {
     const task = this.taskManager.createTask({ title: `Creating local gateway "${options.name.trim()}"` });
     task.state = 'running';
@@ -1208,6 +1213,10 @@ export class AgentWorkspaceManager implements Disposable {
 
     this.ipcHandle('agent-workspace:startOpenshellGateway', async (_listener, name: string): Promise<void> => {
       return this.startOpenshellGateway(name);
+    });
+
+    this.ipcHandle('agent-workspace:getDefaultLocalGatewayDriver', async (): Promise<LocalGatewayDriver> => {
+      return this.getDefaultLocalGatewayDriver();
     });
 
     this.ipcHandle(

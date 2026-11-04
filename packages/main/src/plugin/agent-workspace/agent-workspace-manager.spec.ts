@@ -205,6 +205,7 @@ let gatewayStateUpdateCallback: (() => void) | undefined;
 
 const openshellGateway = {
   createLocalGateway: vi.fn(),
+  getDefaultLocalGatewayDriver: vi.fn(),
   stopManagedGateway: vi.fn(),
   startManagedGateway: vi.fn(),
   supportsMounts: vi.fn(),
@@ -360,6 +361,25 @@ describe('init', () => {
 
   test('registers IPC handler for startOpenshellGateway', () => {
     expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:startOpenshellGateway', expect.any(Function));
+  });
+
+  test('returns the default local gateway driver from the gateway service', async () => {
+    vi.mocked(openshellGateway.getDefaultLocalGatewayDriver).mockReturnValue('vm');
+    const handler = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(([channel]) => channel === 'agent-workspace:getDefaultLocalGatewayDriver')?.[1];
+    assert(handler);
+    const event: IpcMainInvokeEvent = {
+      sender: webContents,
+      senderFrame: webContents.mainFrame,
+      processId: 1,
+      frameId: 1,
+      type: 'frame',
+      defaultPrevented: false,
+      preventDefault: vi.fn(),
+    };
+
+    await expect(handler(event)).resolves.toBe('vm');
   });
 
   test('refreshes gateway state before returning a newly created gateway', async () => {

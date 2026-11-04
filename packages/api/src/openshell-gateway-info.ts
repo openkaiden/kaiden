@@ -168,7 +168,7 @@ export interface GatewayAddOptions {
 }
 
 export interface OpenshellGatewayStartOptions {
-  /** Defaults to the Podman driver. */
+  /** Defaults to the VM driver on macOS and Linux, and to the Podman driver on other platforms. */
   driver?: LocalGatewayDriver;
   port?: number;
   bindAddress?: string;
@@ -183,7 +183,7 @@ export interface CreateLocalGatewayOptions {
   name: string;
   bindAddress: string;
   port: number;
-  /** Defaults to the Podman driver. */
+  /** Defaults to the VM driver on macOS and Linux, and to the Podman driver on other platforms. */
   driver?: LocalGatewayDriver;
 }
 

@@ -362,7 +362,7 @@ export class OpenshellGateway implements IAsyncDisposable {
   async createLocalGateway(options: CreateLocalGatewayOptions): Promise<void> {
     const name = options.name.trim();
     this.validateGatewayName(name, false);
-    const driver = options.driver ?? 'podman';
+    const driver = options.driver ?? this.getDefaultLocalGatewayDriver();
     const gateway = this.getOrCreateGatewayBookkeeping(name);
     await this.runGatewayStartup(gateway, signal => this.createContainerGateway(name, options, driver, signal));
   }
@@ -623,6 +623,11 @@ export class OpenshellGateway implements IAsyncDisposable {
     return { gatewayProcess, processState };
   }
 
+  /** The VM driver is the default only where it is validated (macOS and Linux); other platforms keep Podman. */
+  getDefaultLocalGatewayDriver(): LocalGatewayDriver {
+    return isMac() || isLinux() ? 'vm' : 'podman';
+  }
+
   private getGatewayEnvironment(binaryPath: string, storageDirectory: string): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1' };
     env['XDG_STATE_HOME'] = join(storageDirectory, 'state');
@@ -705,7 +710,7 @@ export class OpenshellGateway implements IAsyncDisposable {
 
     const configPath = await this.createGatewayConfig(
       binaryPath,
-      options?.driver ?? 'podman',
+      options?.driver ?? this.getDefaultLocalGatewayDriver(),
       signal,
       options?.supervisorImage,
     );

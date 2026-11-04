@@ -884,6 +884,24 @@ describe('createLocalGateway', () => {
     });
   });
 
+  test.each([
+    { platformKind: 'darwin', driver: 'vm' },
+    { platformKind: 'linux', driver: 'vm' },
+    { platformKind: 'win32', driver: 'podman' },
+  ])('defaults a named gateway to the $driver driver on $platformKind', async ({ platformKind, driver }) => {
+    vi.mocked(isMac).mockReturnValue(platformKind === 'darwin');
+    vi.mocked(isLinux).mockReturnValue(platformKind === 'linux');
+    vi.mocked(spawn).mockReturnValue(createMockChildProcess());
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.1.5'));
+
+    await gateway.createLocalGateway({ name: 'local-dev', bindAddress: '127.0.0.1', port: 17675 });
+
+    const configPath = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev', 'gateway.toml');
+    const writtenContent = vi.mocked(writeFile).mock.calls.find(([path]) => path === configPath)?.[1];
+    assert(typeof writtenContent === 'string');
+    expect(parseToml(writtenContent)).toMatchObject({ openshell: { gateway: { compute_driver: driver } } });
+  });
+
   test('sets a short VM driver state_dir for a named VM gateway', async () => {
     vi.mocked(spawn).mockReturnValue(createMockChildProcess());
     vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.116'));
@@ -2592,6 +2610,25 @@ describe('gateway config generation', () => {
     expect(writtenContent).not.toContain('[openshell.drivers.docker]');
   });
 
+  test.each([
+    { platformKind: 'darwin', driver: 'vm', otherDriver: 'podman' },
+    { platformKind: 'linux', driver: 'vm', otherDriver: 'podman' },
+    { platformKind: 'win32', driver: 'podman', otherDriver: 'vm' },
+  ])('config defaults to the $driver driver on $platformKind', async ({ platformKind, driver, otherDriver }) => {
+    vi.mocked(isMac).mockReturnValue(platformKind === 'darwin');
+    vi.mocked(isLinux).mockReturnValue(platformKind === 'linux');
+    vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.1.5'));
+
+    await gateway.start();
+
+    const writtenContent = vi.mocked(writeFile).mock.calls[0]?.[1];
+    assert(typeof writtenContent === 'string');
+    const config = parseToml(writtenContent);
+    expect(config).toMatchObject({ openshell: { gateway: { compute_driver: driver } } });
+    expect(writtenContent).toContain(`[openshell.drivers.${driver}]`);
+    expect(writtenContent).not.toContain(`[openshell.drivers.${otherDriver}]`);
+  });
+
   test('writes gateway.toml config with JWT paths', async () => {
     vi.mocked(exec.exec).mockResolvedValue(mockExecResult('openshell-gateway 0.0.69'));
 
@@ -2806,6 +2843,19 @@ describe('gateway config generation', () => {
     expect(writtenContent).toContain('enable_bind_mounts = true');
     expect(writtenContent).toContain('compute_driver = "podman"');
     expect(gatewayManager.getGatewayInfo).not.toHaveBeenCalled();
+  });
+});
+
+describe('getDefaultLocalGatewayDriver', () => {
+  test.each([
+    { platformKind: 'darwin', driver: 'vm' },
+    { platformKind: 'linux', driver: 'vm' },
+    { platformKind: 'win32', driver: 'podman' },
+  ])('returns the $driver driver on $platformKind', ({ platformKind, driver }) => {
+    vi.mocked(isMac).mockReturnValue(platformKind === 'darwin');
+    vi.mocked(isLinux).mockReturnValue(platformKind === 'linux');
+
+    expect(gateway.getDefaultLocalGatewayDriver()).toBe(driver);
   });
 });
 
