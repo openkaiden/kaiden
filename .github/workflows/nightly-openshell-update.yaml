@@ -80,9 +80,12 @@ jobs:
       - name: Check that the matching SDK is published
         if: steps.compare.outputs.needs_update == 'true'
         id: sdk
+        env:
+          LATEST: ${{ steps.latest.outputs.version }}
         run: |
-          LATEST="${{ steps.latest.outputs.version }}"
-          if npm view "@openkaiden/opnshll-sdk@$LATEST" version | grep -q .; then
+          # registry/auth errors fail the step; an empty result means not published yet
+          PUBLISHED=$(npm view "@openkaiden/opnshll-sdk@$LATEST" version)
+          if [ -n "$PUBLISHED" ]; then
             echo "published=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::@openkaiden/opnshll-sdk@$LATEST is not published yet; skipping"
@@ -104,24 +107,14 @@ jobs:
         if: steps.sdk.outputs.published == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.KAIDEN_BOT_TOKEN }}
+          CURRENT: ${{ steps.current.outputs.version }}
+          NEW: ${{ steps.latest.outputs.version }}
         run: |
-          CURRENT="${{ steps.current.outputs.version }}"
-          NEW="${{ steps.latest.outputs.version }}"
-          SDK="npm:@openkaiden/opnshll-sdk@$NEW"
-
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH_NAME"
 
-          set_json() {
-            TMPFILE=$(mktemp)
-            jq --arg v "$2" "$3" "$1" > "$TMPFILE"
-            mv "$TMPFILE" "$1"
-          }
-          set_json extensions/openshell/package.json "$NEW" '.openshellVersion = $v'
-          set_json package.json "$SDK" '.dependencies["@nvidia/openshell-sdk"] = $v'
-          set_json packages/extension-api/package.json "$SDK" '.dependencies["@nvidia/openshell-sdk"] = $v'
-          pnpm install --lockfile-only
+          bash .github/scripts/openshell/bump-openshell.sh "$NEW"
 
           git add extensions/openshell/package.json package.json packages/extension-api/package.json pnpm-lock.yaml
           git commit -m "chore(deps): bump openshell from $CURRENT to $NEW
