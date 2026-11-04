@@ -22,6 +22,21 @@ set -euo pipefail
 : "${KAIDEN_REF:?Testing Farm did not provide KAIDEN_REF}"
 : "${KAIDEN_TEST_USER:?the tmt plan did not provide KAIDEN_TEST_USER}"
 
+# Mirrors the Windows workflow's npm_target input, limited to specs
+# with scenarios that run here; unset (scheduled runs, local tmt) means the full
+# suite. Fail fast on anything else.
+KAIDEN_NPM_TARGET="${KAIDEN_NPM_TARGET:-test:e2e:workspaces}"
+case "$KAIDEN_NPM_TARGET" in
+  test:e2e:workspaces) run_target="test:e2e:workspaces:run" ;;
+  test:e2e:workspaces:opencode | test:e2e:workspaces:goose | test:e2e:workspaces:filesystem-network)
+    run_target="$KAIDEN_NPM_TARGET"
+    ;;
+  *)
+    echo "Unsupported KAIDEN_NPM_TARGET '${KAIDEN_NPM_TARGET}'" >&2
+    exit 1
+    ;;
+esac
+
 # Testing Farm runs tests as root. Do the system-level setup (Node) here, then
 # re-run as the unprivileged user the plan's prepare step created so Podman is
 # rootless (OpenShell requires it) and that user needs no sudo. runuser keeps
@@ -139,10 +154,10 @@ export KAIDEN_E2E_VERBOSE_LOGS=true
 
 pnpm install --frozen-lockfile
 pnpm exec playwright install chromium
-# Same steps as `pnpm run test:e2e:workspaces` (the suite the Windows workflow
-# runs), split only so the run output can go to a *.log that cleanup redacts and
-# publishes; tmt publishes stdout (output.txt) unredacted.
+# Same steps as the selected npm target (as the Windows workflow runs it), split
+# only so the run output can go to a *.log that cleanup redacts and publishes;
+# tmt publishes stdout (output.txt) unredacted.
 pnpm run test:e2e:build
 mkdir -p tests/playwright/output
-echo "Workspace-Provider run output: playwright-output/workspace-provider-run.log"
-pnpm run test:e2e:workspaces:run > tests/playwright/output/workspace-provider-run.log 2>&1
+echo "Workspace-Provider run output (${KAIDEN_NPM_TARGET}): playwright-output/workspace-provider-run.log"
+pnpm run "$run_target" > tests/playwright/output/workspace-provider-run.log 2>&1
