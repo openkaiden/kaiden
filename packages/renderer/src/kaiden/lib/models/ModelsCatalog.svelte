@@ -18,7 +18,13 @@ import ModelRuntimeColumn from '/@/kaiden/lib/models/columns/ModelRuntimeColumn.
 import ModelSizeColumn from '/@/kaiden/lib/models/columns/ModelSizeColumn.svelte';
 import ModelStatusColumn from '/@/kaiden/lib/models/columns/ModelStatusColumn.svelte';
 import LocalRuntimeTiles from '/@/kaiden/lib/models/LocalRuntimeTiles.svelte';
-import type { CatalogModelInfo, InferenceConnectionSummary } from '/@/kaiden/lib/models/models-utils';
+import {
+  type CatalogModelInfo,
+  filterModelsBySearch,
+  type InferenceConnectionSummary,
+  searchableConnectionText,
+  searchableRouterText,
+} from '/@/kaiden/lib/models/models-utils';
 import ModelsCatalogEmptyScreen from '/@/kaiden/lib/models/ModelsCatalogEmptyScreen.svelte';
 import ProviderConnectionTiles from '/@/kaiden/lib/models/ProviderConnectionTiles.svelte';
 import SemanticRouterCards from '/@/kaiden/lib/models/SemanticRouterCards.svelte';
@@ -30,6 +36,7 @@ import {
 import { cloudCatalogModels, inHouseCatalogModels, localCatalogModels } from '/@/kaiden/stores/models';
 import { semanticRouterInfos } from '/@/kaiden/stores/semantic-routers';
 import NoLogIcon from '/@/lib/ui/NoLogIcon.svelte';
+import { matchesAllTokens } from '/@/stores/search-util';
 import type { SemanticRouterInfo } from '/@api/semantic-router-info';
 
 type ModelSelectable = CatalogModelInfo & { selected: boolean };
@@ -71,19 +78,19 @@ let localModels: CatalogModelInfo[] = $derived($localCatalogModels);
 let localConnections: InferenceConnectionSummary[] = $derived($localConnectionSummariesStore);
 
 let filteredCloudModels: ModelSelectable[] = $derived(
-  filterBySearch(cloudModels, searchTerm).map(m => ({ ...m, selected: false })),
+  filterModelsBySearch(cloudModels, searchTerm).map(m => ({ ...m, selected: false })),
 );
 let filteredCloudConnections: InferenceConnectionSummary[] = $derived(
   filterConnectionsBySearch(cloudConnections, searchTerm),
 );
 let filteredInHouseModels: ModelSelectable[] = $derived(
-  filterBySearch(inHouseModels, searchTerm).map(m => ({ ...m, selected: false })),
+  filterModelsBySearch(inHouseModels, searchTerm).map(m => ({ ...m, selected: false })),
 );
 let filteredInHouseConnections: InferenceConnectionSummary[] = $derived(
   filterConnectionsBySearch(inHouseConnections, searchTerm),
 );
 let filteredLocalModels: ModelSelectable[] = $derived(
-  filterBySearch(localModels, searchTerm).map(m => ({ ...m, selected: false })),
+  filterModelsBySearch(localModels, searchTerm).map(m => ({ ...m, selected: false })),
 );
 let filteredLocalConnections: InferenceConnectionSummary[] = $derived(
   filterConnectionsBySearch(localConnections, searchTerm),
@@ -128,44 +135,12 @@ const actionsColumn = new TableColumn<ModelSelectable>('Actions', {
 const columns = [statusColumn, nameColumn, sizeColumn, runtimeColumn];
 const columnsWithActions = [statusColumn, nameColumn, sizeColumn, runtimeColumn, actionsColumn];
 
-function filterBySearch(models: CatalogModelInfo[], term: string): CatalogModelInfo[] {
-  if (!term.trim()) return models;
-  const q = term.trim().toLowerCase();
-  return models.filter(
-    m =>
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional: || needed for boolean short-circuit
-      m.label.toLowerCase().includes(q) ||
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-      m.providerId.toLowerCase().includes(q) ||
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-      m.providerName.toLowerCase().includes(q) ||
-      (m.connectionName?.toLowerCase().includes(q) ?? false),
-  );
-}
-
 function filterConnectionsBySearch(conns: InferenceConnectionSummary[], term: string): InferenceConnectionSummary[] {
-  if (!term.trim()) return conns;
-  const q = term.trim().toLowerCase();
-  return conns.filter(
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional: || needed for boolean short-circuit
-    c => c.providerName.toLowerCase().includes(q) || (c.connectionType?.toLowerCase().includes(q) ?? false),
-  );
+  return conns.filter(c => matchesAllTokens(searchableConnectionText(c), term));
 }
 
 function filterRoutersBySearch(routers: SemanticRouterInfo[], term: string): SemanticRouterInfo[] {
-  if (!term.trim()) return routers;
-  const q = term.trim().toLowerCase();
-  return routers.filter(
-    r =>
-      r.name.toLowerCase().includes(q) ||
-      (r.description?.toLowerCase().includes(q) ?? false) ||
-      r.routing.keywords.some(k => k.name.toLowerCase().includes(q)) ||
-      r.routing.decisions.some(
-        d =>
-          d.name.toLowerCase().includes(q) ||
-          d.rules.some(rule => rule.modelRefs.some(m => m.label.toLowerCase().includes(q))),
-      ),
-  );
+  return routers.filter(r => matchesAllTokens(searchableRouterText(r), term));
 }
 
 function addSemanticRouter(): void {
