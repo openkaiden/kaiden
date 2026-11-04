@@ -83,6 +83,8 @@ export const SandboxInfoSchema = z.object({
     'Stopping',
     'Stopped',
     'Completed',
+    'Suspending',
+    'Suspended',
   ]),
   created_at: z
     .string()

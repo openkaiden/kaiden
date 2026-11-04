@@ -31,6 +31,8 @@ const SDK_PHASE_MAP: Record<SandboxPhaseName, SandboxInfo['phase']> = {
   stopping: 'Stopping',
   stopped: 'Stopped',
   completed: 'Completed',
+  suspending: 'Suspending',
+  suspended: 'Suspended',
 };
 
 /**

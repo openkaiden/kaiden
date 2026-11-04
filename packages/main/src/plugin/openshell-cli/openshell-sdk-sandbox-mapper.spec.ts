@@ -62,6 +62,15 @@ describe('mapSdkSandboxRef', () => {
     expect(result.created_at).toBeUndefined();
   });
 
+  test.each([
+    ['suspending', 'Suspending'],
+    ['suspended', 'Suspended'],
+  ] as const)('maps %s phase to %s', (phase, expected) => {
+    const result = mapSdkSandboxRef(sandboxRef({ phase }));
+
+    expect(result.phase).toBe(expected);
+  });
+
   test('maps unknown phase to Unknown', () => {
     const result = mapSdkSandboxRef(sandboxRef({ phase: 'something-new' as never }));
 
