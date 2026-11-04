@@ -1,5 +1,5 @@
 <script lang="ts">
-import { Button, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
+import { Button, Dropdown, ErrorMessage, Input } from '@podman-desktop/ui-svelte';
 
 import { openshellGateways, openshellGatewaysReady } from '/@/kaiden/stores/openshell-gateways';
 import FormPage from '/@/lib/ui/FormPage.svelte';
@@ -13,7 +13,13 @@ import type { SecretCreateOptions } from '/@api/secret-info';
 import SecretTypeSelector from './SecretTypeSelector.svelte';
 
 let gateways = $derived($openshellGateways.filter(isUsableGateway));
-let gateway = $derived(selectGateway(gateways));
+let pickedGateway = $state<string>();
+let gateway = $derived(selectGateway(gateways, pickedGateway));
+// Placeholder first while nothing is selected, so the dropdown does not display a gateway that is not used.
+let gatewayOptions = $derived([
+  ...(gateway ? [] : [{ value: '', label: 'Select a gateway' }]),
+  ...gateways.map(g => ({ value: g.name, label: `${g.name} — ${g.endpoint}` })),
+]);
 
 // Reading `gateway` is intentional: the selected secret type is reset when the gateway changes.
 let selectedProfile = $derived.by((): OpenshellProfile | undefined => {
@@ -93,6 +99,21 @@ async function addSecret(): Promise<void> {
     <div class="px-5 pb-5 min-w-full">
       <div class="bg-(--pd-content-card-bg) py-6">
         <div class="flex flex-col px-6 max-w-4xl mx-auto space-y-5">
+
+          {#if gateways.length > 1}
+            <div>
+              <label for="secret-gateway" class="block text-sm font-semibold text-(--pd-modal-text) mb-2">Gateway</label>
+              <Dropdown
+                id="secret-gateway"
+                name="secret-gateway"
+                class="w-full"
+                value={gateway}
+                options={gatewayOptions}
+                onChange={(value: string): void => {
+                  pickedGateway = value;
+                }} />
+            </div>
+          {/if}
 
           {#if gateway}
             {#key gateway}

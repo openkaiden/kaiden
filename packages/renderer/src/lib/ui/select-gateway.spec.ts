@@ -27,14 +27,22 @@ function gateway(name: string, active = false): GatewayInfo {
 }
 
 test.each([
-  { case: 'uses the active gateway', gateways: [gateway('a'), gateway('b', true)], expected: 'b' },
-  { case: 'uses the only gateway when none is active', gateways: [gateway('a')], expected: 'a' },
+  { case: 'keeps the picked gateway', gateways: [gateway('a', true), gateway('b')], picked: 'b', expected: 'b' },
+  {
+    case: 'falls back to the active gateway',
+    gateways: [gateway('a'), gateway('b', true)],
+    picked: undefined,
+    expected: 'b',
+  },
+  { case: 'drops a picked gateway no longer listed', gateways: [gateway('a', true)], picked: 'gone', expected: 'a' },
+  { case: 'uses the only gateway when none is active', gateways: [gateway('a')], picked: undefined, expected: 'a' },
   {
     case: 'returns empty with several inactive gateways',
     gateways: [gateway('a'), gateway('b')],
+    picked: undefined,
     expected: '',
   },
-  { case: 'returns empty without gateways', gateways: [], expected: '' },
-])('$case', ({ gateways, expected }) => {
-  expect(selectGateway(gateways)).toBe(expected);
+  { case: 'returns empty without gateways', gateways: [], picked: 'a', expected: '' },
+])('$case', ({ gateways, picked, expected }) => {
+  expect(selectGateway(gateways, picked)).toBe(expected);
 });

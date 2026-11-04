@@ -19,8 +19,13 @@
 import type { GatewayInfo } from '/@api/openshell-gateway-info';
 
 /**
- * Gateway to use: the active gateway, otherwise the only one. Empty when none applies.
+ * Gateway to use: the one picked by the user while it is still listed,
+ * otherwise the active gateway, otherwise the only one. Empty when none applies.
  */
-export function selectGateway(gateways: GatewayInfo[]): string {
-  return gateways.find(gateway => gateway.active)?.name ?? (gateways.length === 1 ? (gateways[0]?.name ?? '') : '');
+export function selectGateway(gateways: GatewayInfo[], picked?: string): string {
+  return (
+    gateways.find(gateway => gateway.name === picked)?.name ??
+    gateways.find(gateway => gateway.active)?.name ??
+    (gateways.length === 1 ? (gateways[0]?.name ?? '') : '')
+  );
 }
