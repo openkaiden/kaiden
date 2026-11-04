@@ -229,36 +229,7 @@ describe('ClaudeExtension', () => {
       const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
       expect(written.hasCompletedOnboarding).toBe(true);
       expect(written.projects['/sandbox'].hasTrustDialogAccepted).toBe(true);
-      expect(written.customApiKeyResponses).toEqual({
-        approved: ['unused'],
-        rejected: [],
-      });
-    });
-
-    test('approves unused Claude API key response in .claude.json', async () => {
-      await claudeExtension.activate();
-      const agent = vi.mocked(agents.registerAgent).mock.calls[0]![0];
-
-      const updateMock = vi.fn();
-      const existing = JSON.stringify({
-        customApiKeyResponses: {
-          approved: ['existing'],
-          rejected: ['unused', 'other'],
-        },
-      });
-      const configFile: AgentConfigurationFile = {
-        path: CLAUDE_JSON_PATH,
-        read: vi.fn().mockResolvedValue(existing),
-        update: updateMock,
-      };
-
-      await agent.preWorkspaceStart(createContext([configFile]));
-
-      const written = JSON.parse(updateMock.mock.calls[0]![0] as string);
-      expect(written.customApiKeyResponses).toEqual({
-        approved: ['existing', 'unused'],
-        rejected: ['other'],
-      });
+      expect(written).not.toHaveProperty('customApiKeyResponses');
     });
 
     test('writes command MCP servers as stdio in .claude.json', async () => {
