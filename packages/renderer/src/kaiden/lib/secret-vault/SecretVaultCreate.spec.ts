@@ -322,6 +322,115 @@ test('reloads services and clears the selected type when the active gateway chan
   expect(screen.queryByLabelText('Token')).not.toBeInTheDocument();
 });
 
+test('reloads services and creates the secret on the gateway picked in the dropdown', async () => {
+  openshellGateways.set([usableGateway('kaiden', true), usableGateway('remote')]);
+
+  render(SecretVaultCreate);
+  await screen.findByLabelText('GitHub');
+
+  await fireEvent.click(screen.getByLabelText('Gateway'));
+  await fireEvent.click(screen.getByRole('button', { name: /remote — / }));
+
+  await waitFor(() => {
+    expect(window.listSecretServices).toHaveBeenCalledWith('remote');
+  });
+  await fireEvent.click(await screen.findByLabelText('GitHub'));
+  await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'gh-token' } });
+  await fireEvent.input(screen.getByLabelText('Token'), { target: { value: 'ghp_abc123' } });
+  await fireEvent.click(screen.getByRole('button', { name: 'Add Secret' }));
+
+  expect(window.createSecret).toHaveBeenCalledWith(expect.objectContaining({ name: 'gh-token' }), 'remote');
+});
+
+test('clears the selected secret type when switching gateway', async () => {
+  openshellGateways.set([usableGateway('kaiden', true), usableGateway('remote')]);
+
+  render(SecretVaultCreate);
+  await fireEvent.click(await screen.findByLabelText('GitHub'));
+  expect(screen.getByLabelText('Token')).toBeInTheDocument();
+
+  await fireEvent.click(screen.getByLabelText('Gateway'));
+  await fireEvent.click(screen.getByRole('button', { name: /remote — / }));
+
+  expect(await screen.findByLabelText('GitHub')).toHaveAttribute('aria-pressed', 'false');
+  expect(screen.queryByLabelText('Token')).not.toBeInTheDocument();
+});
+
+test('shows loading while the secret types of the picked gateway are fetched', async () => {
+  openshellGateways.set([usableGateway('kaiden', true), usableGateway('remote')]);
+  const remoteServices = Promise.withResolvers<OpenshellProfile[]>();
+  vi.mocked(window.listSecretServices).mockResolvedValueOnce(MOCK_SERVICES).mockReturnValueOnce(remoteServices.promise);
+
+  render(SecretVaultCreate);
+  await screen.findByLabelText('GitHub');
+
+  await fireEvent.click(screen.getByLabelText('Gateway'));
+  await fireEvent.click(screen.getByRole('button', { name: /remote — / }));
+
+  expect(await screen.findByText('Loading secret types…')).toBeInTheDocument();
+
+  remoteServices.resolve(MOCK_SERVICES.filter(s => s.id === 'gemini'));
+
+  expect(await screen.findByLabelText('Gemini')).toBeInTheDocument();
+  expect(screen.queryByText('Loading secret types…')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('GitHub')).not.toBeInTheDocument();
+});
+
+test('asks to select a gateway when several are usable and none is active', async () => {
+  openshellGateways.set([usableGateway('kaiden'), usableGateway('remote')]);
+
+  render(SecretVaultCreate);
+
+  expect(await screen.findByText('Select a gateway')).toBeInTheDocument();
+  expect(window.listSecretServices).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Add Secret' })).toBeDisabled();
+
+  await fireEvent.click(screen.getByLabelText('Gateway'));
+  await fireEvent.click(screen.getByRole('button', { name: /remote — / }));
+
+  expect(await screen.findByLabelText('GitHub')).toBeInTheDocument();
+  expect(window.listSecretServices).toHaveBeenCalledWith('remote');
+  expect(screen.queryByText('Select a gateway')).not.toBeInTheDocument();
+});
+
+test('lists a gateway that becomes usable while the form is open', async () => {
+  openshellGateways.set([usableGateway('kaiden', true), usableGateway('remote')]);
+
+  render(SecretVaultCreate);
+  await screen.findByLabelText('GitHub');
+
+  openshellGateways.set([usableGateway('kaiden', true), usableGateway('remote'), usableGateway('other')]);
+
+  await fireEvent.click(screen.getByLabelText('Gateway'));
+  expect(await screen.findByRole('button', { name: /other — / })).toBeInTheDocument();
+});
+
+test('falls back to the active gateway when the picked gateway disappears', async () => {
+  openshellGateways.set([usableGateway('kaiden', true), usableGateway('remote'), usableGateway('other')]);
+
+  render(SecretVaultCreate);
+  await screen.findByLabelText('GitHub');
+
+  await fireEvent.click(screen.getByLabelText('Gateway'));
+  await fireEvent.click(screen.getByRole('button', { name: /remote — / }));
+  await waitFor(() => {
+    expect(window.listSecretServices).toHaveBeenCalledWith('remote');
+  });
+
+  openshellGateways.set([usableGateway('kaiden', true), usableGateway('other')]);
+
+  await waitFor(() => {
+    expect(window.listSecretServices).toHaveBeenLastCalledWith('kaiden');
+  });
+  expect(screen.getByLabelText('Gateway')).toHaveTextContent('kaiden — ');
+  await fireEvent.click(await screen.findByLabelText('GitHub'));
+  await fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'gh-token' } });
+  await fireEvent.input(screen.getByLabelText('Token'), { target: { value: 'ghp_abc123' } });
+  await fireEvent.click(screen.getByRole('button', { name: 'Add Secret' }));
+
+  expect(window.createSecret).toHaveBeenCalledWith(expect.objectContaining({ name: 'gh-token' }), 'kaiden');
+});
+
 test('shows loading until the gateway list is known', async () => {
   openshellGateways.set([]);
   openshellGatewaysReady.set(false);
