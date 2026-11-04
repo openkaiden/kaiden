@@ -81,7 +81,7 @@ export class OpenshellSdkFileTransfer {
     private readonly exec: Exec,
   ) {}
 
-  async uploadToSandbox(sandboxName: string, localPath: string, dest: string, gatewayName?: string): Promise<void> {
+  async uploadToSandbox(sandboxName: string, localPath: string, dest: string, gatewayName: string): Promise<void> {
     const stat = await lstat(localPath);
     let extractDir: string;
     let archiveName: string | undefined;
