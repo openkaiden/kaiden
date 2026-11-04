@@ -32,6 +32,7 @@ import { updateWorkspaceConfig, writeWorkspaceConfig } from '/@/plugin/agent-wor
 import { WritableConfigurationFile } from '/@/plugin/agent-workspace/writable-configuration-file.js';
 import { IPCHandle, WebContentsType } from '/@/plugin/api.js';
 import { Directories } from '/@/plugin/directories.js';
+import { DraftPolicyWatcher } from '/@/plugin/draft-policy/draft-policy-watcher.js';
 import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
@@ -99,10 +100,19 @@ export interface AgentTerminalHandle {
 
 // an agent session being started; cancelled when its workspace is deleted or the manager is disposed meanwhile
 interface PendingAgentStart {
+  sandboxId: string;
   sandboxName: string;
   gateway: string;
   cancelled: boolean;
   promise: Promise<WorkspaceTerminalSession>;
+}
+
+// identifies the agent session to start; workspaceId differs from sandboxId for the plain shell started alongside the agent
+interface AgentSessionRequest {
+  workspaceId: string;
+  sandboxId: string;
+  sandboxName: string;
+  gateway: string;
 }
 
 interface WorkspaceTerminalSession {
@@ -143,6 +153,9 @@ export class AgentWorkspaceManager implements Disposable {
   private readonly rendererTerminals = new Map<number, AgentTerminalHandle>();
   // bumped on every renderer reload so that a terminal request from the previous renderer is dropped
   private rendererGeneration = 0;
+  private readonly draftPolicyDisposables = new Map<string, Disposable>();
+  private readonly startingDraftPolicyWatches = new Set<string>();
+  private readonly cancelledDraftPolicyWatches = new Set<string>();
   private readonly disposables: Disposable[] = [];
 
   constructor(
@@ -178,6 +191,8 @@ export class AgentWorkspaceManager implements Disposable {
     private readonly openshellNetworkPolicy: OpenshellNetworkPolicy,
     @inject(InteractiveShellCommand)
     private readonly interactiveShellCommand: readonly string[],
+    @inject(DraftPolicyWatcher)
+    private readonly draftPolicyWatcher: DraftPolicyWatcher,
   ) {}
 
   private getGlobalConfigDir(gateway: string, sandboxName: string): string {
@@ -369,7 +384,10 @@ export class AgentWorkspaceManager implements Disposable {
 
       // the agent lifecycle belongs to the workspace: start it now so the terminal only has to attach
       try {
-        await this.ensureAgentSession(sandboxRef.id, sandboxName, options.gateway, async () => agent.command);
+        await this.ensureAgentSession(
+          { workspaceId: sandboxRef.id, sandboxId: sandboxRef.id, sandboxName, gateway: options.gateway },
+          async () => agent.command,
+        );
       } catch (err: unknown) {
         console.warn(`[AgentWorkspace] unable to start agent in workspace "${sandboxName}":`, err);
       }
@@ -584,11 +602,16 @@ export class AgentWorkspaceManager implements Disposable {
     const workspaces = await this.listOpenshellSandboxes(gateway);
     const workspace = workspaces.flatMap(entry => entry.sandboxes).find(ws => ws.id === id);
     const workspaceName = workspace?.name ?? id;
-    await this.deleteWorkspace(workspaceName, gateway, workspace?.labels);
+    await this.deleteWorkspace(id, workspaceName, gateway, workspace?.labels);
     return { id };
   }
 
-  private async deleteWorkspace(name: string, gateway: string, labels?: Record<string, string>): Promise<void> {
+  private async deleteWorkspace(
+    sandboxId: string,
+    name: string,
+    gateway: string,
+    labels?: Record<string, string>,
+  ): Promise<void> {
     const task = this.taskManager.createTask({ title: `Deleting workspace "${name}"` });
     task.state = 'running';
     task.status = 'in-progress';
@@ -608,6 +631,7 @@ export class AgentWorkspaceManager implements Disposable {
       }
       this.apiSender.send('agent-workspace-update');
       this.closeWorkspaceTerminals(name, gateway);
+      this.stopDraftPolicyWatch(sandboxId);
       await rm(this.getGlobalConfigDir(gateway, name), { recursive: true, force: true });
       await this.deleteAssociatedSecretAndProfile(labels?.[SECRET_LABEL], labels?.[PROFILE_LABEL], gateway);
       task.status = 'success';
@@ -798,7 +822,10 @@ export class AgentWorkspaceManager implements Disposable {
   async deleteOpenshellSandbox(name: string, gateway: string): Promise<void> {
     const workspaces = await this.listOpenshellSandboxes(gateway);
     const workspace = workspaces.flatMap(entry => entry.sandboxes).find(ws => ws.name === name);
-    await this.deleteWorkspace(name, gateway, workspace?.labels);
+    if (!workspace) {
+      console.warn(`[Workspace] deleteOpenshellSandbox: sandbox "${name}" not found on gateway "${gateway}"`);
+    }
+    await this.deleteWorkspace(workspace?.id ?? name, name, gateway, workspace?.labels);
   }
 
   async shellInAgentWorkspace(
@@ -852,18 +879,17 @@ export class AgentWorkspaceManager implements Disposable {
 
   // one agent session per workspace: concurrent callers (creation, gateway start, terminal) share the same start
   private async ensureAgentSession(
-    workspaceId: string,
-    sandboxName: string,
-    gateway: string,
+    request: AgentSessionRequest,
     resolveAgentCommand: () => Promise<string | undefined>,
   ): Promise<WorkspaceTerminalSession> {
+    const { workspaceId, sandboxId, sandboxName, gateway } = request;
     const existing = this.workspaceTerminals.get(workspaceId);
     if (existing) {
       return existing;
     }
     let starting = this.startingAgentSessions.get(workspaceId);
     if (!starting) {
-      const start = { sandboxName, gateway, cancelled: false } as PendingAgentStart;
+      const start = { sandboxId, sandboxName, gateway, cancelled: false } as PendingAgentStart;
       start.promise = resolveAgentCommand()
         .then(agentCommand => this.startAgentSession(workspaceId, start, agentCommand))
         .finally(() => this.startingAgentSessions.delete(workspaceId));
@@ -965,6 +991,9 @@ export class AgentWorkspaceManager implements Disposable {
     }
     this.workspaceTerminals.set(workspaceId, started);
     sendAgentCommand();
+    this.startDraftPolicyWatch(start.sandboxId, sandboxName, gateway).catch((err: unknown) => {
+      console.error(`[Workspace] Failed to start draft policy watch for "${sandboxName}":`, err);
+    });
     return started;
   }
 
@@ -1019,8 +1048,9 @@ export class AgentWorkspaceManager implements Disposable {
       throw new Error(`workspace "${sandboxName}" not found. Use "workspace list" to see available workspaces.`);
     }
     const { sandbox, gatewayName } = match;
-    const session = await this.ensureAgentSession(sandbox.id, sandbox.name, gatewayName, () =>
-      this.resolveAgentCommand(sandbox),
+    const session = await this.ensureAgentSession(
+      { workspaceId: sandbox.id, sandboxId: sandbox.id, sandboxName: sandbox.name, gateway: gatewayName },
+      () => this.resolveAgentCommand(sandbox),
     );
     return this.attachClient(session, client);
   }
@@ -1073,11 +1103,12 @@ export class AgentWorkspaceManager implements Disposable {
     );
     await Promise.all(
       targets.map(({ gateway, sandbox }) =>
-        this.ensureAgentSession(sandbox.id, sandbox.name, gateway.name, () => this.resolveAgentCommand(sandbox)).catch(
-          (err: unknown) => {
-            console.warn(`[AgentWorkspace] unable to start agent in workspace "${sandbox.name}":`, err);
-          },
-        ),
+        this.ensureAgentSession(
+          { workspaceId: sandbox.id, sandboxId: sandbox.id, sandboxName: sandbox.name, gateway: gateway.name },
+          () => this.resolveAgentCommand(sandbox),
+        ).catch((err: unknown) => {
+          console.warn(`[AgentWorkspace] unable to start agent in workspace "${sandbox.name}":`, err);
+        }),
       ),
     );
   }
@@ -1218,9 +1249,7 @@ export class AgentWorkspaceManager implements Disposable {
         if (kind === 'shell') {
           // a plain shell kept alongside the agent session (no agent command): it survives the terminal closing
           const shell = await this.ensureAgentSession(
-            `${id}:shell`,
-            workspace.name,
-            gatewayName,
+            { workspaceId: `${id}:shell`, sandboxId: id, sandboxName: workspace.name, gateway: gatewayName },
             async () => undefined,
           );
           this.attachRendererTerminal(shell, onDataId, generation);
@@ -1228,8 +1257,9 @@ export class AgentWorkspaceManager implements Disposable {
         }
 
         // no running session (app restarted before the gateway was up or the shell exited): start the agent again
-        const session = await this.ensureAgentSession(id, workspace.name, gatewayName, () =>
-          this.resolveAgentCommand(workspace),
+        const session = await this.ensureAgentSession(
+          { workspaceId: id, sandboxId: id, sandboxName: workspace.name, gateway: gatewayName },
+          () => this.resolveAgentCommand(workspace),
         );
         this.attachRendererTerminal(session, onDataId, generation);
         return onDataId;
@@ -1311,6 +1341,38 @@ export class AgentWorkspaceManager implements Disposable {
     );
   }
 
+  private async startDraftPolicyWatch(sandboxId: string, sandboxName: string, gatewayName?: string): Promise<void> {
+    if (this.draftPolicyDisposables.has(sandboxId) || this.startingDraftPolicyWatches.has(sandboxId)) return;
+    this.startingDraftPolicyWatches.add(sandboxId);
+    try {
+      const watchDisposable = await this.draftPolicyWatcher.watchSandbox(sandboxId, sandboxName, gatewayName);
+      if (this.cancelledDraftPolicyWatches.has(sandboxId)) {
+        // the sandbox was deleted while the watch was starting: release our lease, but keep the
+        // subscription of the other consumers (e.g. an ACP session) untouched
+        watchDisposable.dispose();
+        return;
+      }
+      this.draftPolicyDisposables.set(sandboxId, watchDisposable);
+    } finally {
+      this.startingDraftPolicyWatches.delete(sandboxId);
+      this.cancelledDraftPolicyWatches.delete(sandboxId);
+    }
+  }
+
+  private stopDraftPolicyWatch(sandboxId: string): void {
+    const disposable = this.draftPolicyDisposables.get(sandboxId);
+    if (disposable) {
+      disposable.dispose();
+      this.draftPolicyDisposables.delete(sandboxId);
+      return;
+    }
+    if (this.startingDraftPolicyWatches.has(sandboxId)) {
+      // the watch is still starting: cancel it instead of unwatching by id, which would also drop
+      // the leases held by other consumers of the same sandbox
+      this.cancelledDraftPolicyWatches.add(sandboxId);
+    }
+  }
+
   @preDestroy()
   dispose(): void {
     for (const start of this.startingAgentSessions.values()) {
@@ -1321,6 +1383,13 @@ export class AgentWorkspaceManager implements Disposable {
       this.closeSession(session);
     }
     this.workspaceTerminals.clear();
+    for (const sandboxId of [...this.draftPolicyDisposables.keys()]) {
+      this.stopDraftPolicyWatch(sandboxId);
+    }
+    for (const sandboxId of this.startingDraftPolicyWatches) {
+      this.cancelledDraftPolicyWatches.add(sandboxId);
+    }
+    this.startingDraftPolicyWatches.clear();
     for (const disposable of this.disposables) disposable.dispose();
   }
 }

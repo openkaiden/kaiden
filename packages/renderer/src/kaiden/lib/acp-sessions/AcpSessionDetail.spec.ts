@@ -27,8 +27,9 @@ import * as acpSessionsStore from '/@/kaiden/stores/acp-sessions.svelte';
 import * as agentsStore from '/@/kaiden/stores/agents';
 import type { SandboxInfoWithGateway } from '/@/kaiden/stores/openshell-sandboxes';
 import * as openshellSandboxesStore from '/@/kaiden/stores/openshell-sandboxes';
-import type { AcpFlowToolCallEvent, AcpSessionInfo } from '/@api/acp-session-info';
+import type { AcpFlowEvent, AcpFlowToolCallEvent, AcpSessionInfo } from '/@api/acp-session-info';
 import type { AgentInfo } from '/@api/agent-info';
+import type { DraftPolicyChunk } from '/@api/draft-policy-info';
 import { AGENT_LABEL } from '/@api/openshell-gateway-info';
 
 import AcpSessionDetail from './AcpSessionDetail.svelte';
@@ -830,5 +831,131 @@ describe('workspace unavailable indicators', () => {
 
     expect(screen.getByText(`(${COMPLETED_SESSION.sandboxName})`)).toBeInTheDocument();
     expect(screen.queryByText(/unavailable/)).not.toBeInTheDocument();
+  });
+});
+
+describe('draft policy integration', () => {
+  function makePolicyChunk(overrides?: Partial<DraftPolicyChunk>): DraftPolicyChunk {
+    return {
+      chunkId: 'chunk-1',
+      ruleName: 'allow_example_443',
+      status: 'pending',
+      host: 'example.com',
+      port: 443,
+      binaries: ['/**'],
+      rationale: 'Host not in allow list',
+      hasSecurityNotes: false,
+      isL7: false,
+      ...overrides,
+    };
+  }
+
+  function makeDraftPolicyEvent(chunks: DraftPolicyChunk[]): AcpFlowEvent {
+    return {
+      kind: 'draft_policy_update',
+      chunks,
+      timestamp: Date.now(),
+    };
+  }
+
+  test('draft policy events do not render rationale in transcript', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([
+      { kind: 'prompt', text: 'hello', timestamp: 1 },
+      makeDraftPolicyEvent([makePolicyChunk()]),
+    ]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    await vi.waitFor(() => expect(screen.getByText('hello')).toBeInTheDocument());
+    expect(screen.queryByText('Host not in allow list')).not.toBeInTheDocument();
+  });
+
+  test('badge renders the pending count when draft policy events have pending chunks', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([makeDraftPolicyEvent([makePolicyChunk()])]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    const badge = await screen.findByTitle('Review blocked network requests');
+    expect(badge.textContent).toContain('1');
+  });
+
+  test('panel auto-opens when pending chunks arrive', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.approveDraftPolicyChunk).mockResolvedValue(undefined);
+    vi.mocked(window.rejectDraftPolicyChunk).mockResolvedValue(undefined);
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([makeDraftPolicyEvent([makePolicyChunk()])]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    await vi.waitFor(() => expect(screen.getByText('Network Rules')).toBeInTheDocument());
+    expect(screen.getByText('example.com:443')).toBeInTheDocument();
+  });
+
+  test('approves a draft chunk using the session sandbox id', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([makeDraftPolicyEvent([makePolicyChunk()])]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+    await vi.waitFor(() => expect(screen.getByText('Network Rules')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Allow' }));
+
+    expect(window.approveDraftPolicyChunk).toHaveBeenCalledWith('sb-1', 'chunk-1');
+  });
+
+  test('reopens the panel when a new pending chunk replaces a resolved one', async () => {
+    const sessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(acpSessionsStore).acpSessions = sessions;
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([
+      makeDraftPolicyEvent([makePolicyChunk({ chunkId: 'chunk-1' })]),
+    ]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+    await vi.waitFor(() => expect(screen.getByText('Network Rules')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByTitle('Close panel'));
+    expect(screen.queryByText('Network Rules')).not.toBeInTheDocument();
+
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([
+      makeDraftPolicyEvent([
+        makePolicyChunk({ chunkId: 'chunk-1', status: 'approved' }),
+        makePolicyChunk({ chunkId: 'chunk-2', host: 'other.example.com' }),
+      ]),
+    ]);
+    sessions.set([{ ...COMPLETED_SESSION, updatedAt: 3000 }]);
+
+    await vi.waitFor(() => expect(screen.getByText('other.example.com:443')).toBeInTheDocument());
+  });
+
+  test('resets policy panel dismissal when the session changes', async () => {
+    const sessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION, { ...COMPLETED_SESSION, id: 'session-2' }]);
+    vi.mocked(acpSessionsStore).acpSessions = sessions;
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([
+      makeDraftPolicyEvent([makePolicyChunk({ chunkId: 'chunk-1' })]),
+    ]);
+
+    const { rerender } = render(AcpSessionDetail, { sessionId: 'session-1' });
+    await vi.waitFor(() => expect(screen.getByText('Network Rules')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByTitle('Close panel'));
+    expect(screen.queryByText('Network Rules')).not.toBeInTheDocument();
+
+    await rerender({ sessionId: 'session-2' });
+
+    await vi.waitFor(() => expect(screen.getByText('Network Rules')).toBeInTheDocument());
+  });
+
+  test('panel does not auto-open when all chunks are resolved', async () => {
+    vi.mocked(acpSessionsStore).acpSessions = writable<AcpSessionInfo[]>([COMPLETED_SESSION]);
+    vi.mocked(window.getAcpSessionEvents).mockResolvedValue([
+      makeDraftPolicyEvent([makePolicyChunk({ status: 'approved' })]),
+    ]);
+
+    render(AcpSessionDetail, { sessionId: 'session-1' });
+
+    await vi.waitFor(() => expect(screen.getByText(`(${COMPLETED_SESSION.sandboxName})`)).toBeInTheDocument());
+    expect(screen.queryByText('Network Rules')).not.toBeInTheDocument();
   });
 });

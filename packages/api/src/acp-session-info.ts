@@ -16,6 +16,8 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import type { DraftPolicyFlowEvent } from './draft-policy-info.js';
+
 export type AcpSessionStatus = 'idle' | 'running' | 'waiting_input' | 'completed' | 'error' | 'cancelled';
 
 export interface AcpModeInfo {
@@ -109,7 +111,8 @@ export type AcpFlowEvent =
   | AcpFlowPermissionRequestEvent
   | AcpFlowElicitationEvent
   | AcpFlowStatusChangeEvent
-  | AcpFlowCostUpdateEvent;
+  | AcpFlowCostUpdateEvent
+  | DraftPolicyFlowEvent;
 
 export interface AcpAttachment {
   filePath: string;
