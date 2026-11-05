@@ -17,9 +17,12 @@
  **********************************************************************/
 
 import { execFile } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { platform } from 'node:os';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
+
+const ENTITLEMENTS_PLIST = resolve(__dirname, '..', 'resources', 'entitlements.openshell-driver-vm.plist');
 
 export async function ensureHypervisorEntitlement(binaryPath: string): Promise<void> {
   if (platform() !== 'darwin') {
@@ -33,7 +36,11 @@ export async function ensureHypervisorEntitlement(binaryPath: string): Promise<v
     '--xml',
     binaryPath,
   ]);
-  if (/<key>com\.apple\.security\.hypervisor<\/key>\s*<true\s*\/>/.test(stdout)) {
+  const required = [...(await readFile(ENTITLEMENTS_PLIST, 'utf-8')).matchAll(/<key>([^<]+)<\/key>/g)].map(
+    ([, key]) => key,
+  );
+  const actual = stdout.replace(/\s+/g, '');
+  if (required.every(key => actual.includes(`<key>${key}</key><true/>`))) {
     return;
   }
 
@@ -51,7 +58,7 @@ export async function addHypervisorEntitlement(binaryPath: string): Promise<void
     '--sign',
     '-',
     '--entitlements',
-    resolve(__dirname, '..', 'resources', 'entitlements.openshell-driver-vm.plist'),
+    ENTITLEMENTS_PLIST,
     binaryPath,
   ]);
 }
