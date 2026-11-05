@@ -142,7 +142,7 @@ cleanup() {
       rm -rf "$dest"
     fi
   fi
-  rm -rf "$repo_dir"
+  rm -rf "$repo_dir" "${build_dir:-}"
   rm -f "$secrets_file" "${KAIDEN_SCRIPT_COPY:-}"
 }
 trap cleanup EXIT
@@ -152,12 +152,42 @@ export VITE_CI=true
 # Forward Electron main stderr (incl. the OpenShell gateway) and renderer console.
 export KAIDEN_E2E_VERBOSE_LOGS=true
 
-pnpm install --frozen-lockfile
-pnpm exec playwright install chromium
 # Same steps as the selected npm target (as the Windows workflow runs it), split
 # only so the run output can go to a *.log that cleanup redacts and publishes;
 # tmt publishes stdout (output.txt) unredacted.
-pnpm run test:e2e:build
+if [[ -n "${KAIDEN_BUILD_URL:-}" ]]; then
+  # Test a packaged testing build (the workflow's testing_build input) instead
+  # of a source build: the Playwright fixture launches KAIDEN_BINARY.
+  : "${KAIDEN_BUILD_SHA256:?Testing Farm did not provide KAIDEN_BUILD_SHA256}"
+  build_dir="$(mktemp -d /tmp/kaiden-build.XXXXXX)"
+  curl --fail --silent --show-error --location -o "$build_dir/kaiden.tar.gz" "$KAIDEN_BUILD_URL"
+  echo "${KAIDEN_BUILD_SHA256}  $build_dir/kaiden.tar.gz" | sha256sum -c -
+  # electron-builder's tarball holds a single kaiden-<version>-x64/ directory.
+  tar -xz --strip-components=1 -C "$build_dir" -f "$build_dir/kaiden.tar.gz"
+  rm -f "$build_dir/kaiden.tar.gz"
+  KAIDEN_BINARY="$build_dir/kaiden"
+  if [[ ! -x "$KAIDEN_BINARY" ]]; then
+    echo "No kaiden executable found in ${KAIDEN_BUILD_URL}" >&2
+    exit 1
+  fi
+  export KAIDEN_BINARY
+  echo "Testing packaged build: ${KAIDEN_BINARY}"
+  # Release builds lack the VITE_CI plaintext safeStorage fallback, so give
+  # Electron a Secret Service to store provider keys in: an unlocked login
+  # keyring on the user's D-Bus session (an empty password would prompt), picked
+  # over basic_text via the GNOME desktop hint. The daemon is left running: the
+  # Testing Farm guest is discarded after the run.
+  printf 'kaiden-ci' | gnome-keyring-daemon --unlock --components=secrets > /dev/null
+  export XDG_CURRENT_DESKTOP=GNOME
+  # The binary bundles the app, so install only the Playwright workspace and
+  # skip postinstall scripts (e.g. OpenShell binary downloads), like the
+  # Windows workflow's test:e2e:pde2e:install.
+  pnpm install --frozen-lockfile --filter @openkaiden/tests-playwright... --ignore-scripts
+else
+  pnpm install --frozen-lockfile
+  pnpm run test:e2e:build
+fi
+pnpm exec playwright install chromium
 mkdir -p tests/playwright/output
 echo "Workspace-Provider run output (${KAIDEN_NPM_TARGET}): playwright-output/workspace-provider-run.log"
 pnpm run "$run_target" > tests/playwright/output/workspace-provider-run.log 2>&1

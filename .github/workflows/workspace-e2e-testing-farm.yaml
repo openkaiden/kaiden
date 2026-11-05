@@ -28,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Branch, tag, or full SHA of openkaiden/kaiden to test; defaults to the dispatch ref'
+        description: 'Branch, tag, or full SHA of openkaiden/kaiden to test; defaults to the dispatch ref (leave empty with testing_build)'
         required: false
         type: string
       npm_target:
@@ -43,6 +43,10 @@ on:
           - 'test:e2e:workspaces:goose'
           - 'test:e2e:workspaces:filesystem-network'
         required: false
+      testing_build:
+        description: 'openkaiden/testing-prereleases tag (e.g. v0.4.0-202611050813-f5fd986e6) to test its Linux x64 binary, with the specs from the commit it was built from'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -64,10 +68,19 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Resolve testing build
+        id: build
+        if: ${{ inputs.testing_build != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TESTING_BUILD: ${{ inputs.testing_build }}
+          INPUT_REF: ${{ inputs.ref }}
+        run: .github/scripts/testing-farm/resolve-testing-build.sh
+
       - name: Resolve source repository and ref
         id: source
         env:
-          INPUT_REF: ${{ inputs.ref }}
+          INPUT_REF: ${{ inputs.ref || steps.build.outputs.sha }}
           CURRENT_REPOSITORY: ${{ github.repository }}
           CURRENT_REF: ${{ github.ref_name }}
         run: .github/scripts/testing-farm/resolve-source.sh
@@ -78,13 +91,16 @@ jobs:
         with:
           api_key: ${{ secrets.TEST_FARM_TOKEN }}
           git_url: https://github.com/${{ steps.source.outputs.repository }}.git
-          git_ref: ${{ steps.source.outputs.sha }}
+          # testing_build runs take the tmt plan and script from the workflow's
+          # commit so older build commits can use them; other runs keep the
+          # tested ref's own plan.
+          git_ref: ${{ inputs.testing_build != '' && github.sha || steps.source.outputs.sha }}
           tmt_plan_regex: workspace-provider
           tmt_path: tests/tmt
           compose: ${{ env.TESTING_FARM_COMPOSE }}
           arch: x86_64
           # Scheduled runs have no inputs, so they keep running the full suite.
-          variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.sha }};KAIDEN_NPM_TARGET=${{ inputs.npm_target || 'test:e2e:workspaces' }}
+          variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.sha }};KAIDEN_NPM_TARGET=${{ inputs.npm_target || 'test:e2e:workspaces' }}${{ steps.build.outputs.url && format(';KAIDEN_BUILD_URL={0};KAIDEN_BUILD_SHA256={1}', steps.build.outputs.url, steps.build.outputs.sha256) }}
           # Covered providers only; see tests/tmt/scripts/workspace-provider.sh.
           secrets: OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }};GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           # The action polls for ~timeout x 4 minutes (~200m), between the test
