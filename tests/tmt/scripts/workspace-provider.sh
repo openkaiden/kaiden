@@ -151,6 +151,10 @@ export PODMAN_ENABLED=true
 export VITE_CI=true
 # Forward Electron main stderr (incl. the OpenShell gateway) and renderer console.
 export KAIDEN_E2E_VERBOSE_LOGS=true
+# The Testing Farm guests (fedora-aws-x86_64) have no /dev/kvm, so the VM
+# driver cannot start.  Force the gateway to use the Podman driver instead of
+# the platform default (VM on Linux since PR #3147).
+export KAIDEN_DEFAULT_GATEWAY_DRIVER=podman
 
 pnpm install --frozen-lockfile
 pnpm exec playwright install chromium

@@ -623,8 +623,17 @@ export class OpenshellGateway implements IAsyncDisposable {
     return { gatewayProcess, processState };
   }
 
-  /** The VM driver is the default only where it is validated (macOS and Linux); other platforms keep Podman. */
+  /**
+   * The VM driver is the default only where it is validated (macOS and Linux); other platforms keep Podman.
+   *
+   * Set `KAIDEN_DEFAULT_GATEWAY_DRIVER` to `vm`, `podman`, or `docker` to override
+   * the platform default — useful for CI guests that lack `/dev/kvm`.
+   */
   getDefaultLocalGatewayDriver(): LocalGatewayDriver {
+    const envDriver = process.env['KAIDEN_DEFAULT_GATEWAY_DRIVER'];
+    if (envDriver === 'vm' || envDriver === 'podman' || envDriver === 'docker') {
+      return envDriver;
+    }
     return isMac() || isLinux() ? 'vm' : 'podman';
   }
 

@@ -2857,6 +2857,28 @@ describe('getDefaultLocalGatewayDriver', () => {
 
     expect(gateway.getDefaultLocalGatewayDriver()).toBe(driver);
   });
+
+  test.each([
+    'vm',
+    'podman',
+    'docker',
+  ] as const)('KAIDEN_DEFAULT_GATEWAY_DRIVER=%s overrides the platform default', driver => {
+    process.env['KAIDEN_DEFAULT_GATEWAY_DRIVER'] = driver;
+    vi.mocked(isMac).mockReturnValue(true);
+
+    expect(gateway.getDefaultLocalGatewayDriver()).toBe(driver);
+
+    delete process.env['KAIDEN_DEFAULT_GATEWAY_DRIVER'];
+  });
+
+  test('ignores an invalid KAIDEN_DEFAULT_GATEWAY_DRIVER value', () => {
+    process.env['KAIDEN_DEFAULT_GATEWAY_DRIVER'] = 'invalid';
+    vi.mocked(isMac).mockReturnValue(true);
+
+    expect(gateway.getDefaultLocalGatewayDriver()).toBe('vm');
+
+    delete process.env['KAIDEN_DEFAULT_GATEWAY_DRIVER'];
+  });
 });
 
 describe('gateway.pid persistence', () => {
