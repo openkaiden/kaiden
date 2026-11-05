@@ -21,7 +21,6 @@ import { inject, injectable } from 'inversify';
 
 import { AcpSessionManager } from '/@/plugin/acp/acp-session-manager.js';
 import { IPCHandle } from '/@/plugin/api.js';
-import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type {
   AcpAttachment,
   AcpFlowEvent,
@@ -37,8 +36,6 @@ export class AcpIPCHandler {
     private readonly ipcHandle: IPCHandle,
     @inject(AcpSessionManager)
     private readonly sessionManager: AcpSessionManager,
-    @inject(OpenshellCli)
-    private readonly openshellCli: OpenshellCli,
   ) {}
 
   init(): void {
@@ -51,7 +48,6 @@ export class AcpIPCHandler {
     this.ipcHandle('acp:deleteSession', this.deleteSession.bind(this));
     this.ipcHandle('acp:renameSession', this.renameSession.bind(this));
     this.ipcHandle('acp:cancelSession', this.cancelSession.bind(this));
-    this.ipcHandle('acp:isOpenshellAvailable', this.isOpenshellAvailable.bind(this));
     this.ipcHandle('acp:setSessionModel', this.setSessionModel.bind(this));
     this.ipcHandle('acp:setSessionMode', this.setSessionMode.bind(this));
     this.ipcHandle('acp:setSessionConfigOption', this.setSessionConfigOption.bind(this));
@@ -96,15 +92,6 @@ export class AcpIPCHandler {
 
   protected cancelSession(_: IpcMainInvokeEvent, sessionId: string): void {
     this.sessionManager.cancelSession(sessionId);
-  }
-
-  protected async isOpenshellAvailable(_: IpcMainInvokeEvent): Promise<boolean> {
-    try {
-      this.openshellCli.getCliPath();
-      return true;
-    } catch {
-      return false;
-    }
   }
 
   protected async setSessionModel(_: IpcMainInvokeEvent, sessionId: string, modelId: string): Promise<void> {
