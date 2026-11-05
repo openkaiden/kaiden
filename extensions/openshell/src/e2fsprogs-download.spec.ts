@@ -16,27 +16,44 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readFile, readlink, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 
 import * as tar from 'tar';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { downloadMkfsExt4 } from './e2fsprogs-download';
 
+vi.mock(import('node:child_process'));
+
 const VERSION = '1.47.4';
 const GETTEXT_VERSION = '1.0';
 const LINUX_LIBRARIES = ['libcom_err.so.2', 'libe2p.so.2', 'libext2fs.so.2', 'libss.so.2'];
 const DARWIN_DYLIB_STEMS = ['libblkid', 'libcom_err', 'libe2p', 'libext2fs', 'libss', 'libuuid'];
 
+const execFileAsync = vi.mocked(promisify(execFile));
+
 let testDir: string;
+
+function otoolOutput(): string {
+  return [
+    'binary:',
+    `\t@@HOMEBREW_CELLAR@@/e2fsprogs/${VERSION}/lib/libext2fs.2.dylib (compatibility version 1.0.0, current version ${VERSION})`,
+    `\t@@HOMEBREW_PREFIX@@/opt/gettext/lib/libintl.8.dylib (compatibility version 9.0.0, current version 9.8.0)`,
+    '\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1319.100.3)',
+    '',
+  ].join('\n');
+}
 
 beforeEach(async () => {
   vi.resetAllMocks();
   testDir = await mkdtemp(join(tmpdir(), 'e2fsprogs-download-test-'));
+  execFileAsync.mockResolvedValue({ stdout: '', stderr: '' });
 });
 
 afterEach(async () => {
@@ -323,12 +340,12 @@ describe('darwin', () => {
     }
 
     const mkfsWrapper = await readFile(join(outputDir, 'mkfs.ext4'), 'utf-8');
-    expect(mkfsWrapper).toContain('DYLD_LIBRARY_PATH');
+    expect(mkfsWrapper).not.toContain('DYLD_LIBRARY_PATH');
     expect(mkfsWrapper).toContain('MKE2FS_CONFIG');
     expect(mkfsWrapper).toContain('$runtime_dir/mkfs.ext4');
 
     const debugfsWrapper = await readFile(join(outputDir, 'debugfs'), 'utf-8');
-    expect(debugfsWrapper).toContain('DYLD_LIBRARY_PATH');
+    expect(debugfsWrapper).not.toContain('DYLD_LIBRARY_PATH');
     expect(debugfsWrapper).toContain('$runtime_dir/debugfs');
 
     expect(await readFile(join(outputDir, '.mkfs-ext4', 'NOTICE'), 'utf-8')).toBe('license notice');
@@ -501,6 +518,45 @@ describe('darwin', () => {
       expect.stringContaining('/manifests/sha256:amd64-platform'),
       expect.anything(),
     );
+  });
+
+  test('rewrites Homebrew library paths with install_name_tool', async () => {
+    const fixtures = await createDarwinFixtures();
+    stubDarwinRegistry(fixtures);
+    const outputDir = join(testDir, 'output');
+    await mkdir(outputDir);
+
+    execFileAsync.mockResolvedValue({ stdout: otoolOutput(), stderr: '' });
+
+    await downloadMkfsExt4(VERSION, 'arm64', 'darwin', outputDir);
+
+    const otoolCalls = execFileAsync.mock.calls.filter(call => call[0] === '/usr/bin/otool');
+    const installNameCalls = execFileAsync.mock.calls.filter(call => call[0] === '/usr/bin/install_name_tool');
+
+    expect(otoolCalls.length).toBeGreaterThan(0);
+    expect(installNameCalls.length).toBeGreaterThan(0);
+
+    const dylibIdCalls = installNameCalls.filter(call => Array.isArray(call[1]) && call[1].includes('-id'));
+    expect(dylibIdCalls.length).toBeGreaterThan(0);
+    for (const call of dylibIdCalls) {
+      const args = call[1] as string[];
+      const idIndex = args.indexOf('-id');
+      expect(args[idIndex + 1]).toMatch(/^@loader_path\/.+\.dylib$/);
+    }
+
+    const changeCalls = installNameCalls.filter(call => Array.isArray(call[1]) && call[1].includes('-change'));
+    expect(changeCalls.length).toBeGreaterThan(0);
+    for (const call of changeCalls) {
+      const args = call[1] as string[];
+      const changeIndex = args.indexOf('-change');
+      expect(args[changeIndex + 1]).toMatch(/@@HOMEBREW/);
+      expect(args[changeIndex + 2]).toMatch(/^@loader_path\//);
+    }
+
+    const systemPathChanges = installNameCalls.filter(
+      call => Array.isArray(call[1]) && (call[1] as string[]).some(arg => arg.includes('/usr/lib/')),
+    );
+    expect(systemPathChanges).toHaveLength(0);
   });
 });
 

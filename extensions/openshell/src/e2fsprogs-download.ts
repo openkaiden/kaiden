@@ -16,11 +16,13 @@
  * SPDX-License-Identifier: Apache-2.0
  **********************************************************************/
 
+import { execFile } from 'node:child_process';
 import { createWriteStream, existsSync, readdirSync } from 'node:fs';
 import { chmod, copyFile, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
+import { promisify } from 'node:util';
 
 import * as tar from 'tar';
 
@@ -77,6 +79,21 @@ function architectureForOci(arch: string): string {
   if (arch === 'x64') return 'amd64';
   if (arch === 'arm64') return 'arm64';
   throw new Error(`unsupported e2fsprogs architecture: ${arch}`);
+}
+
+function parseOtoolDeps(output: string): string[] {
+  const deps: string[] = [];
+  for (const line of output.split('\n')) {
+    const match = /^\t(\S+)\s+\(compatibility/.exec(line);
+    if (match) {
+      deps.push(match[1]);
+    }
+  }
+  return deps;
+}
+
+function isRelocatablePath(depPath: string): boolean {
+  return !depPath.startsWith('/usr/lib/') && !depPath.startsWith('/System/');
 }
 
 function isDarwinLibrary(path: string, bottleRoot: string): boolean {
@@ -231,14 +248,9 @@ case "$0" in
 esac
 bin_dir=$(CDPATH= cd -- "\${script_path%/*}" && pwd)
 runtime_dir="$bin_dir/.mkfs-ext4"
-library_path="$runtime_dir/lib"
-if [ -n "\${DYLD_LIBRARY_PATH:-}" ]; then
-  library_path="$library_path:$DYLD_LIBRARY_PATH"
-fi
 if [ -z "\${MKE2FS_CONFIG:-}" ]; then
   export MKE2FS_CONFIG="$runtime_dir/mke2fs.conf"
 fi
-export DYLD_LIBRARY_PATH="$library_path"
 exec "$runtime_dir/${execTarget}" "$@"
 `;
 }
@@ -254,6 +266,39 @@ async function stageDarwinLibraries(bottleRoot: string, libDir: string): Promise
     }
     for (const file of matchingFiles) {
       await copyFile(join(bottleRoot, 'lib', file), join(libDir, file));
+    }
+  }
+}
+
+async function rewriteDarwinLibraryPaths(runtimeDir: string): Promise<void> {
+  const execFileAsync = promisify(execFile);
+  const libDir = join(runtimeDir, 'lib');
+  const libFiles = await readdir(libDir);
+  const dylibs = libFiles.filter(f => f.endsWith('.dylib'));
+
+  for (const dylib of dylibs) {
+    const dylibPath = join(libDir, dylib);
+    const { stdout } = await execFileAsync('/usr/bin/otool', ['-L', dylibPath]);
+    const args: string[] = ['-id', `@loader_path/${dylib}`];
+    for (const dep of parseOtoolDeps(stdout)) {
+      if (isRelocatablePath(dep)) {
+        args.push('-change', dep, `@loader_path/${basename(dep)}`);
+      }
+    }
+    await execFileAsync('/usr/bin/install_name_tool', [...args, dylibPath]);
+  }
+
+  for (const binary of BINARIES) {
+    const binaryPath = join(runtimeDir, binary.payload);
+    const { stdout } = await execFileAsync('/usr/bin/otool', ['-L', binaryPath]);
+    const args: string[] = [];
+    for (const dep of parseOtoolDeps(stdout)) {
+      if (isRelocatablePath(dep)) {
+        args.push('-change', dep, `@loader_path/lib/${basename(dep)}`);
+      }
+    }
+    if (args.length > 0) {
+      await execFileAsync('/usr/bin/install_name_tool', [...args, binaryPath]);
     }
   }
 }
@@ -409,8 +454,9 @@ export async function downloadMkfsExt4(
       await rm(archive, { force: true });
     }
     if (platform === 'darwin') {
-      const libDir = join(outputDir, runtimeDirectoryName('darwin'), 'lib');
-      await stageGettextLibrary(arch, libDir);
+      const runtimeDir = join(outputDir, runtimeDirectoryName('darwin'));
+      await stageGettextLibrary(arch, join(runtimeDir, 'lib'));
+      await rewriteDarwinLibraryPaths(runtimeDir);
     }
     await writeFile(versionFile, versionMarker, { encoding: 'utf-8' });
   } catch (error) {
