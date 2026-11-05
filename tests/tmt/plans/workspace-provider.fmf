@@ -26,6 +26,10 @@ environment:
 provision:
   hardware:
     memory: '>= 16 GiB'
+    # The default OpenShell VM driver needs KVM, which virtualized AWS guests
+    # lack; bare metal provides /dev/kvm.
+    virtualization:
+      is-virtualized: false
 prepare:
   - name: Install system dependencies
     how: shell

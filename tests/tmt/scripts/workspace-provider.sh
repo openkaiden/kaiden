@@ -79,6 +79,10 @@ if [ "$(id -u)" -eq 0 ]; then
   export XDG_RUNTIME_DIR="/run/user/$uid"
   export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
   cd /tmp
+  # runuser keeps root's PATH; the OpenShell VM driver fails on its /root/*
+  # entries, which the test user cannot read, instead of skipping them.
+  PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '^/root' | paste -sd: -)"
+  export PATH
   exec runuser -u "$KAIDEN_TEST_USER" -- bash "$KAIDEN_SCRIPT_COPY"
 fi
 
