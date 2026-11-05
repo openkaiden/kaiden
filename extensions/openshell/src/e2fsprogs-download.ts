@@ -24,6 +24,7 @@ import { pipeline } from 'node:stream/promises';
 
 import * as tar from 'tar';
 
+import { HomebrewRelocator } from './darwin-relocate';
 import { sha256 } from './sha256';
 
 const REGISTRY = 'https://ghcr.io';
@@ -389,7 +390,9 @@ export async function downloadMkfsExt4(
   architectureForOci(arch);
 
   const versionFile = join(outputDir, '.mkfs-ext4-version');
-  const versionMarker = `${version}-${platform}-${arch}`;
+  // macOS binaries are relocated to @loader_path: the suffix invalidates caches staged without relocation
+  const versionPrefix = `${version}-${platform}-${arch}`;
+  const versionMarker = `${versionPrefix}${platform === 'darwin' ? '-relocated' : ''}`;
   if (existsSync(versionFile) && hasCompleteInstallation(outputDir, platform)) {
     const existing = await readFile(versionFile, 'utf-8');
     if (existing.trim() === versionMarker) {
@@ -408,11 +411,13 @@ export async function downloadMkfsExt4(
     } finally {
       await rm(archive, { force: true });
     }
+    let relocated = false;
     if (platform === 'darwin') {
       const libDir = join(outputDir, runtimeDirectoryName('darwin'), 'lib');
       await stageGettextLibrary(arch, libDir);
+      relocated = await new HomebrewRelocator().relocate(join(outputDir, runtimeDirectoryName('darwin')));
     }
-    await writeFile(versionFile, versionMarker, { encoding: 'utf-8' });
+    await writeFile(versionFile, `${versionPrefix}${relocated ? '-relocated' : ''}`, { encoding: 'utf-8' });
   } catch (error) {
     const rtDir = runtimeDirectoryName(platform);
     await Promise.all([

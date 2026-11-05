@@ -25,7 +25,10 @@ import { join } from 'node:path';
 import * as tar from 'tar';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { HomebrewRelocator } from './darwin-relocate';
 import { downloadMkfsExt4 } from './e2fsprogs-download';
+
+vi.mock(import('./darwin-relocate'));
 
 const VERSION = '1.47.4';
 const GETTEXT_VERSION = '1.0';
@@ -36,6 +39,7 @@ let testDir: string;
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  vi.mocked(HomebrewRelocator.prototype.relocate).mockResolvedValue(true);
   testDir = await mkdtemp(join(tmpdir(), 'e2fsprogs-download-test-'));
 });
 
@@ -286,6 +290,11 @@ describe('linux', () => {
 describe('darwin', () => {
   test('downloads and stages e2fsprogs tools and gettext for macOS beside the VM driver', async () => {
     const fixtures = await createDarwinFixtures();
+    let libintlStagedBeforeRelocation = false;
+    vi.mocked(HomebrewRelocator.prototype.relocate).mockImplementation(async runtimeDir => {
+      libintlStagedBeforeRelocation = existsSync(join(runtimeDir, 'lib', 'libintl.8.dylib'));
+      return true;
+    });
     stubDarwinRegistry(fixtures);
     const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
     const outputDir = join(testDir, 'output');
@@ -298,7 +307,7 @@ describe('darwin', () => {
     expect(await readFile(join(outputDir, '.mkfs-ext4', 'mke2fs'), 'utf-8')).toBe('mke2fs-binary');
     expect(await readFile(join(outputDir, '.mkfs-ext4', 'debugfs'), 'utf-8')).toBe('debugfs-binary');
     expect(await readFile(join(outputDir, '.mkfs-ext4', 'mke2fs.conf'), 'utf-8')).toBe('[defaults]\n');
-    expect(await readFile(join(outputDir, '.mkfs-ext4-version'), 'utf-8')).toBe(`${VERSION}-darwin-arm64`);
+    expect(await readFile(join(outputDir, '.mkfs-ext4-version'), 'utf-8')).toBe(`${VERSION}-darwin-arm64-relocated`);
 
     for (const stem of DARWIN_DYLIB_STEMS) {
       expect(await readFile(join(outputDir, '.mkfs-ext4', 'lib', `${stem}.1.1.dylib`), 'utf-8')).toBe(
@@ -338,6 +347,55 @@ describe('darwin', () => {
     const timeoutValues = timeoutSpy.mock.calls.map(call => call[0]);
     expect(timeoutValues.filter(v => v === 30_000).length).toBeGreaterThanOrEqual(6);
     expect(timeoutValues.filter(v => v === 5 * 60_000).length).toBe(2);
+    expect(HomebrewRelocator.prototype.relocate).toHaveBeenCalledExactlyOnceWith(join(outputDir, '.mkfs-ext4'));
+    expect(libintlStagedBeforeRelocation).toBe(true);
+  });
+
+  test('re-downloads a cached installation staged before relocation', async () => {
+    const fixtures = await createDarwinFixtures();
+    const fetchMock = stubDarwinRegistry(fixtures);
+    const outputDir = join(testDir, 'output');
+    await mkdir(outputDir);
+
+    await downloadMkfsExt4(VERSION, 'arm64', 'darwin', outputDir);
+    const callsAfterDownload = fetchMock.mock.calls.length;
+    await writeFile(join(outputDir, '.mkfs-ext4-version'), `${VERSION}-darwin-arm64`);
+
+    await downloadMkfsExt4(VERSION, 'arm64', 'darwin', outputDir);
+
+    expect(fetchMock).toHaveBeenCalledTimes(callsAfterDownload * 2);
+    expect(HomebrewRelocator.prototype.relocate).toHaveBeenCalledTimes(2);
+    expect(await readFile(join(outputDir, '.mkfs-ext4-version'), 'utf-8')).toBe(`${VERSION}-darwin-arm64-relocated`);
+  });
+
+  test('does not mark the installation relocated when relocation is skipped', async () => {
+    const fixtures = await createDarwinFixtures();
+    const fetchMock = stubDarwinRegistry(fixtures);
+    vi.mocked(HomebrewRelocator.prototype.relocate).mockResolvedValue(false);
+    const outputDir = join(testDir, 'output');
+    await mkdir(outputDir);
+
+    await downloadMkfsExt4(VERSION, 'arm64', 'darwin', outputDir);
+    const callsAfterDownload = fetchMock.mock.calls.length;
+    expect(await readFile(join(outputDir, '.mkfs-ext4-version'), 'utf-8')).toBe(`${VERSION}-darwin-arm64`);
+
+    await downloadMkfsExt4(VERSION, 'arm64', 'darwin', outputDir);
+    expect(fetchMock).toHaveBeenCalledTimes(callsAfterDownload * 2);
+  });
+
+  test('cleans up the installation when relocation fails', async () => {
+    const fixtures = await createDarwinFixtures();
+    stubDarwinRegistry(fixtures);
+    vi.mocked(HomebrewRelocator.prototype.relocate).mockRejectedValue(new Error('relocation failed'));
+    const outputDir = join(testDir, 'output');
+    await mkdir(outputDir);
+
+    await expect(downloadMkfsExt4(VERSION, 'arm64', 'darwin', outputDir)).rejects.toThrow('relocation failed');
+
+    expect(existsSync(join(outputDir, 'mkfs.ext4'))).toBe(false);
+    expect(existsSync(join(outputDir, 'debugfs'))).toBe(false);
+    expect(existsSync(join(outputDir, '.mkfs-ext4'))).toBe(false);
+    expect(existsSync(join(outputDir, '.mkfs-ext4-version'))).toBe(false);
   });
 
   test('reuses a complete cached installation', async () => {
@@ -495,7 +553,7 @@ describe('darwin', () => {
 
     await downloadMkfsExt4(VERSION, 'x64', 'darwin', outputDir);
 
-    expect(await readFile(join(outputDir, '.mkfs-ext4-version'), 'utf-8')).toBe(`${VERSION}-darwin-x64`);
+    expect(await readFile(join(outputDir, '.mkfs-ext4-version'), 'utf-8')).toBe(`${VERSION}-darwin-x64-relocated`);
     expect(await readFile(join(outputDir, '.mkfs-ext4', 'lib', 'libintl.8.dylib'), 'utf-8')).toBe('libintl-binary');
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/manifests/sha256:amd64-platform'),
