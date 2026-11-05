@@ -29,20 +29,10 @@ export function createNavigationAcpSessionsEntry(): NavigationRegistryEntry {
     link: '/acp-sessions',
     tooltip: 'Agent Sessions',
     type: 'entry',
-    hidden: true,
     get counter() {
       return get(acpSessions).filter(s => s.status === 'waiting_input').length;
     },
   };
-
-  window
-    .isOpenshellAvailable()
-    ?.then(available => {
-      registry.hidden = !available;
-    })
-    ?.catch(() => {
-      registry.hidden = true;
-    });
 
   return registry;
 }

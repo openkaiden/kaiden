@@ -526,10 +526,6 @@ export function initExposure(): void {
     return ipcInvoke('acp:cancelSession', sessionId);
   });
 
-  contextBridge.exposeInMainWorld('isOpenshellAvailable', async (): Promise<boolean> => {
-    return ipcInvoke('acp:isOpenshellAvailable');
-  });
-
   contextBridge.exposeInMainWorld('setAcpSessionModel', async (sessionId: string, modelId: string): Promise<void> => {
     return ipcInvoke('acp:setSessionModel', sessionId, modelId);
   });

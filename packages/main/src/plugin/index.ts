@@ -72,7 +72,6 @@ import { MCPIPCHandler } from '/@/plugin/mcp/mcp-ipc-handler.js';
 import { MCPManager } from '/@/plugin/mcp/mcp-manager.js';
 import { MenuRegistry } from '/@/plugin/menu-registry.js';
 import { NavigationManager } from '/@/plugin/navigation/navigation-manager.js';
-import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { OpenshellGatewayConfig } from '/@/plugin/openshell-cli/openshell-gateway-config.js';
 import { OpenshellGatewayManager } from '/@/plugin/openshell-cli/openshell-gateway-manager.js';
@@ -615,7 +614,6 @@ export class PluginSystem {
     container.bind<AgentRegistry>(AgentRegistry).toSelf().inSingletonScope();
     container.bind<Properties>(Properties).toSelf().inSingletonScope();
     container.bind<OpenShellRegistry>(OpenShellRegistry).toSelf().inSingletonScope();
-    container.bind<OpenshellCli>(OpenshellCli).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayConfig>(OpenshellGatewayConfig).toSelf();
     container.bind<OpenshellNetworkPolicy>(OpenshellNetworkPolicy).toSelf().inSingletonScope();
     container.bind<OpenshellPolicyManager>(OpenshellPolicyManager).toSelf();
