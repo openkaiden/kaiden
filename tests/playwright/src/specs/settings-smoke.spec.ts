@@ -128,6 +128,54 @@ test.describe('Settings page navigation', { tag: '@smoke' }, () => {
       await preferencesPage.clearSearch();
     }
   });
+
+  test('[SET-10] Models tab categories and token-based search', async ({ settingsPage }) => {
+    const modelsPage = await settingsPage.openModels();
+
+    await test.step('category sidebar is visible with all categories', async () => {
+      await expect(modelsPage.categoryNav).toBeVisible();
+      for (const label of ['LLM Providers', 'In-house', 'Local', 'Semantic Routers']) {
+        await expect(modelsPage.getCategoryButton(label)).toBeVisible();
+      }
+    });
+
+    await test.step('search input is visible and accepts input', async () => {
+      await expect(modelsPage.searchInput).toBeVisible();
+    });
+
+    await test.step('token-based search filters model rows', async () => {
+      // Ensure we are on the default cloud category
+      await modelsPage.selectCategory('LLM Providers');
+
+      const labels = await modelsPage.getModelLabels();
+
+      if (labels.length === 0) {
+        test.skip(true, 'No cloud models available — token-based search cannot be verified');
+        return;
+      }
+
+      const totalCount = labels.length;
+
+      // Pick the first model label and split it into two non-adjacent tokens
+      // separated by a space to exercise the multi-token search.
+      const label = labels[0]!;
+      const tokens = label.split(/[-_]/);
+      const query = tokens.length >= 2 ? `${tokens[0]} ${tokens[tokens.length - 1]}` : label;
+
+      await modelsPage.searchModels(query);
+
+      // The search should keep at least the model whose label produced the
+      // query and may hide others, so the count must be > 0 and <= total.
+      const filteredCount = await modelsPage.getModelRowCount();
+      expect(filteredCount).toBeGreaterThan(0);
+      expect(filteredCount).toBeLessThanOrEqual(totalCount);
+
+      // Clear the search and verify the full list is restored.
+      await modelsPage.clearSearch();
+      const restoredCount = await modelsPage.getModelRowCount();
+      expect(restoredCount).toBe(totalCount);
+    });
+  });
 });
 
 isolatedTest.describe('Settings - onboarding restart', { tag: '@smoke' }, () => {
