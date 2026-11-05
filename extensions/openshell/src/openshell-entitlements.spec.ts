@@ -50,7 +50,10 @@ test('adds the hypervisor entitlement with an ad hoc signature on macOS', async 
     entitlements,
     '/binary path/openshell-driver-vm',
   ]);
-  expect(await readFile(entitlements, 'utf-8')).toMatch(/<key>com\.apple\.security\.hypervisor<\/key>\s*<true\/>/);
+  const content = await readFile(entitlements, 'utf-8');
+  expect(content).toMatch(/<key>com\.apple\.security\.hypervisor<\/key>\s*<true\/>/);
+  expect(content).toMatch(/<key>com\.apple\.security\.cs\.disable-library-validation<\/key>\s*<true\/>/);
+  expect(content).toMatch(/<key>com\.apple\.security\.cs\.allow-dyld-environment-variables<\/key>\s*<true\/>/);
 });
 
 test.each(['linux', 'win32'] as const)('skips codesign when downloading macOS binaries on %s', async host => {
@@ -67,8 +70,9 @@ test('propagates codesign failures', async () => {
   await expect(addHypervisorEntitlement('/binary/openshell-driver-vm')).rejects.toThrow('codesign failed');
 });
 
-test('keeps an existing hypervisor entitlement without re-signing', async () => {
-  execFileAsync.mockResolvedValue({ stdout: '<key>com.apple.security.hypervisor</key><true/>', stderr: '' });
+test('keeps a driver that already has every entitlement without re-signing', async () => {
+  const entitlements = resolve(__dirname, '..', 'resources', 'entitlements.openshell-driver-vm.plist');
+  execFileAsync.mockResolvedValue({ stdout: await readFile(entitlements, 'utf-8'), stderr: '' });
 
   await ensureHypervisorEntitlement('/binary/openshell-driver-vm');
 
@@ -84,7 +88,8 @@ test('keeps an existing hypervisor entitlement without re-signing', async () => 
 test.each([
   '',
   '<key>com.apple.security.hypervisor</key><false/>',
-])('repairs a missing or disabled hypervisor entitlement: %s', async stdout => {
+  '<key>com.apple.security.hypervisor</key><true/>',
+])('repairs missing or disabled entitlements: %s', async stdout => {
   execFileAsync.mockResolvedValueOnce({ stdout, stderr: '' });
 
   await ensureHypervisorEntitlement('/binary/openshell-driver-vm');
