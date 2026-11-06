@@ -117,7 +117,7 @@ jobs:
 
       - name: Publish test report
         if: ${{ !cancelled() && hashFiles('junit-playwright-results.xml') != '' }}
-        uses: mikepenz/action-junit-report@8a133bfa3ecb0ea9024c1e2ae788b4c25f6cdb9d # v6
+        uses: mikepenz/action-junit-report@4a26df3e2ae132254ba12a53f65a388d0961e786 # v6
         with:
           include_passed: true
           detailed_summary: true
