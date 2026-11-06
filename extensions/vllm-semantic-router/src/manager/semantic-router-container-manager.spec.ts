@@ -31,6 +31,7 @@ import { EnvoyConfigSchema } from '/@/api/envoy-config-schema';
 import { LABEL_ID, LABEL_NAME, LABEL_ROLE } from '/@/api/semantic-router-container-info';
 import { SRConfigSchema } from '/@/api/sr-config-schema';
 import { ContainerFinder } from '/@/helper/container-finder';
+import { NetworkHelper } from '/@/helper/network-helper';
 import { ContainerExtensionAPISymbol, ExtensionContextSymbol, VllmSemanticRouterProvider } from '/@/inject/symbol';
 
 import { SemanticRouterContainerManager } from './semantic-router-container-manager';
@@ -38,6 +39,7 @@ import { SemanticRouterContainerManager } from './semantic-router-container-mana
 vi.mock(import('@ai-sdk/openai-compatible'));
 vi.mock(import('node:fs'));
 vi.mock(import('node:fs/promises'));
+vi.mock(import('/@/helper/network-helper'));
 
 const connectionDisposable = { dispose: vi.fn() };
 const factoryDisposable = { dispose: vi.fn() };
@@ -138,10 +140,12 @@ describe('SemanticRouterContainerManager', () => {
     envoyStartMock.mockResolvedValue(undefined);
     envoyStopMock.mockResolvedValue(undefined);
     envoyRemoveMock.mockResolvedValue(undefined);
+    vi.mocked(NetworkHelper.prototype.getFreeRandomPort).mockResolvedValueOnce(50001).mockResolvedValueOnce(50002);
 
     const container = new Container();
     container.bind(SemanticRouterContainerManager).toSelf();
     container.bind(ContainerFinder).toSelf();
+    container.bind(NetworkHelper).toSelf();
     container.bind(VllmSemanticRouterProvider).toConstantValue(providerMock);
     container.bind(ContainerExtensionAPISymbol).toConstantValue(containerExtensionAPIMock);
     container.bind(ExtensionContextSymbol).toConstantValue(extensionContextMock);
@@ -197,6 +201,38 @@ describe('SemanticRouterContainerManager', () => {
     expect(registeredConnection.type).toBe('local');
     expect(registeredConnection.status()).toBe('stopped');
     expect(registeredConnection.endpoint).toMatch(/^http:\/\/localhost:\d+\/v1$/);
+  });
+
+  test('create binds free host ports from NetworkHelper, excluding the router port for envoy', async () => {
+    vi.mocked(createOpenAICompatible).mockReturnValueOnce({} as unknown as OpenAICompatibleProvider);
+
+    await manager.create({ name: 'my-router', config: stringify(defaultConfig) });
+
+    expect(NetworkHelper.prototype.getFreeRandomPort).toHaveBeenNthCalledWith(1);
+    expect(NetworkHelper.prototype.getFreeRandomPort).toHaveBeenNthCalledWith(2, { exclude: [50001] });
+
+    const routerCall = dockerodeMock.createContainer.mock.calls[0];
+    assert(routerCall);
+    expect(routerCall[0].HostConfig.PortBindings['50051/tcp']).toEqual([{ HostPort: '50001' }]);
+
+    const envoyCall = dockerodeMock.createContainer.mock.calls[1];
+    assert(envoyCall);
+    expect(envoyCall[0].HostConfig.PortBindings['8801/tcp']).toEqual([{ HostPort: '50002' }]);
+
+    const registeredConnection = vi.mocked(providerMock.registerInferenceProviderConnection).mock.calls[0]?.[0];
+    assert(registeredConnection);
+    expect(registeredConnection.endpoint).toBe('http://localhost:50002/v1');
+  });
+
+  test('create fails without creating containers when no free port is available', async () => {
+    vi.mocked(NetworkHelper.prototype.getFreeRandomPort)
+      .mockReset()
+      .mockRejectedValue(new Error('Unable to find a free port'));
+
+    await expect(manager.create({ name: 'my-router', config: stringify(defaultConfig) })).rejects.toThrow(
+      'Unable to find a free port',
+    );
+    expect(dockerodeMock.createContainer).not.toHaveBeenCalled();
   });
 
   test('create generates envoy config with ExtProc and backend clusters from SR config', async () => {

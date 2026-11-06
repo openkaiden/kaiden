@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { randomInt, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -38,6 +38,7 @@ import { EnvoyCluster, type EnvoyConfig, EnvoyRoute } from '/@/api/envoy-config-
 import { LABEL_ID, LABEL_NAME, LABEL_ROLE } from '/@/api/semantic-router-container-info';
 import { SRBackendRef, type SRConfig, SRConfigSchema, SRModel } from '/@/api/sr-config-schema';
 import { ContainerFinder } from '/@/helper/container-finder';
+import { NetworkHelper } from '/@/helper/network-helper';
 import { ContainerExtensionAPISymbol, ExtensionContextSymbol, VllmSemanticRouterProvider } from '/@/inject/symbol';
 
 const VLLM_SR_IMAGE = 'ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0';
@@ -74,6 +75,9 @@ export class SemanticRouterContainerManager {
 
   @inject(ContainerFinder)
   private containerFinder: ContainerFinder;
+
+  @inject(NetworkHelper)
+  private networkHelper: NetworkHelper;
 
   #connections: Map<string, ManagedConnection> = new Map();
   #factoryDisposable: Disposable | undefined;
@@ -121,7 +125,7 @@ export class SemanticRouterContainerManager {
 
     await this.pullImage(dockerode, VLLM_SR_IMAGE);
 
-    const routerGrpcHostPort = randomInt(1024, 65536);
+    const routerGrpcHostPort = await this.networkHelper.getFreeRandomPort();
 
     const routerContainer = await dockerode.createContainer({
       Image: VLLM_SR_IMAGE,
@@ -160,7 +164,7 @@ export class SemanticRouterContainerManager {
 
     await this.pullImage(dockerode, ENVOY_IMAGE);
 
-    const envoyHostPort = randomInt(1024, 65536);
+    const envoyHostPort = await this.networkHelper.getFreeRandomPort({ exclude: [routerGrpcHostPort] });
 
     const envoyContainer = await dockerode.createContainer({
       Image: ENVOY_IMAGE,

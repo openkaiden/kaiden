@@ -19,9 +19,11 @@
 import { ContainerModule } from 'inversify';
 
 import { ContainerFinder } from './container-finder';
+import { NetworkHelper } from './network-helper';
 
 const helpersModule = new ContainerModule(options => {
   options.bind<ContainerFinder>(ContainerFinder).toSelf().inSingletonScope();
+  options.bind<NetworkHelper>(NetworkHelper).toSelf().inSingletonScope();
 });
 
 export { helpersModule };
