@@ -2,6 +2,7 @@
   "_comment": "This file is used to define product specific properties. Do not import it directly in renderer package. Only main package should import it.",
   "name": "Kaiden",
   "appId": "ai.openkaiden.Kaiden",
+  "domain": "ai.openkaiden.kaiden",
   "artifactName": "kaiden",
   "urlProtocol": "kaiden",
   "paths": {
