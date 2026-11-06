@@ -57,11 +57,6 @@ interface ManagedConnection {
 
 type ModelInfo = { cluster: EnvoyCluster; route: EnvoyRoute };
 
-function convertHost(host: string): string {
-  host = host.split('/')[0];
-  return host === 'localhost' ? 'host.docker.internal' : host;
-}
-
 @injectable()
 export class SemanticRouterContainerManager {
   @inject(VllmSemanticRouterProvider)
@@ -492,7 +487,7 @@ export class SemanticRouterContainerManager {
     seen.add(model.name);
 
     const colonIndex = ref.endpoint.lastIndexOf(':');
-    const host = colonIndex === -1 ? ref.endpoint : ref.endpoint.slice(0, colonIndex);
+    const host = this.networkHelper.convertHost(colonIndex === -1 ? ref.endpoint : ref.endpoint.slice(0, colonIndex));
     const port = colonIndex === -1 ? (ref.protocol === 'http' ? 80 : 443) : Number(ref.endpoint.slice(colonIndex + 1));
     if (isNaN(port)) {
       return;
@@ -514,9 +509,9 @@ export class SemanticRouterContainerManager {
                 {
                   endpoint: {
                     address: {
-                      socket_address: { address: convertHost(host), port_value: port },
+                      socket_address: { address: host, port_value: port },
                     },
-                    hostname: convertHost(host),
+                    hostname: host,
                   },
                 },
               ],
@@ -538,7 +533,7 @@ export class SemanticRouterContainerManager {
         },
         route: {
           cluster: clusterName,
-          host_rewrite_literal: convertHost(host),
+          host_rewrite_literal: host,
         },
       },
     };
@@ -547,7 +542,7 @@ export class SemanticRouterContainerManager {
         name: 'envoy.transport_sockets.tls',
         typed_config: {
           '@type': 'type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext',
-          sni: convertHost(host),
+          sni: host,
           common_tls_context: {
             tls_params: {
               tls_minimum_protocol_version: 'TLSv1_2',

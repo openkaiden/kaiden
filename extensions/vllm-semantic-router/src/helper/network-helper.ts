@@ -72,6 +72,15 @@ export class NetworkHelper {
     throw new Error(`Unable to find a free port in [${min}, ${max}) after ${maxAttempts} attempts`);
   }
 
+  /**
+   * Converts a host as seen from the user's machine into a host reachable from inside a container:
+   * strips any path suffix and maps `localhost` to `host.docker.internal`.
+   */
+  convertHost(host: string): string {
+    const hostname = host.split('/')[0];
+    return hostname === 'localhost' ? 'host.docker.internal' : hostname;
+  }
+
   private isAddressPortFree(address: string, port: number): Promise<boolean> {
     const server = createServer();
     return new Promise((resolve, reject) => {

@@ -141,6 +141,7 @@ describe('SemanticRouterContainerManager', () => {
     envoyStopMock.mockResolvedValue(undefined);
     envoyRemoveMock.mockResolvedValue(undefined);
     vi.mocked(NetworkHelper.prototype.getFreeRandomPort).mockResolvedValueOnce(50001).mockResolvedValueOnce(50002);
+    vi.mocked(NetworkHelper.prototype.convertHost).mockReturnValue('converted-host');
 
     const container = new Container();
     container.bind(SemanticRouterContainerManager).toSelf();
@@ -275,7 +276,8 @@ describe('SemanticRouterContainerManager', () => {
     const backendLbEndpoints = backendEndpoints[0].lb_endpoints as Array<Record<string, unknown>>;
     const backendAddr = ((backendLbEndpoints[0].endpoint as Record<string, unknown>).address as Record<string, unknown>)
       .socket_address as Record<string, unknown>;
-    expect(backendAddr.address).toBe('host.docker.internal');
+    expect(backendAddr.address).toBe('converted-host');
+    expect(NetworkHelper.prototype.convertHost).toHaveBeenCalledWith('localhost');
     expect(backendAddr.port_value).toBe(8000);
   });
 
@@ -359,7 +361,8 @@ describe('SemanticRouterContainerManager', () => {
       )[0].endpoint as Record<string, unknown>
     ).address as Record<string, unknown>;
     const socketAddress = addr.socket_address as Record<string, unknown>;
-    expect(socketAddress.address).toBe('my-backend');
+    expect(socketAddress.address).toBe('converted-host');
+    expect(NetworkHelper.prototype.convertHost).toHaveBeenCalledWith('my-backend');
     expect(socketAddress.port_value).toBe(80);
   });
 

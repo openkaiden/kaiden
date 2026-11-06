@@ -134,3 +134,15 @@ describe('getFreeRandomPort', () => {
     );
   });
 });
+
+describe('convertHost', () => {
+  test.each([
+    ['localhost', 'host.docker.internal'],
+    ['localhost/v1', 'host.docker.internal'],
+    ['api.example.com', 'api.example.com'],
+    ['api.example.com/path', 'api.example.com'],
+    ['127.0.0.1', '127.0.0.1'],
+  ])('converts %s to %s', (host, expected) => {
+    expect(helper.convertHost(host)).toBe(expected);
+  });
+});
