@@ -2893,6 +2893,175 @@ describe('agent session lifecycle', () => {
 
     for (const resolve of pendingExecs) resolve(createMockExecSession().session);
   });
+
+  test('polls transitional sandboxes until they settle before starting agents', async () => {
+    vi.useFakeTimers();
+    try {
+      let callCount = 0;
+      vi.mocked(openshellSdkClientManager.getClient).mockImplementation(async () => {
+        callCount++;
+        // First call (from pollUntilWorkspacesSettle): sandbox is Starting
+        // Second call (after timer advances): sandbox is Ready
+        const phase = callCount <= 1 ? 'starting' : 'ready';
+        return {
+          sandbox: {
+            ...sdkSandbox,
+            list: vi.fn().mockReturnValue({
+              all: vi.fn().mockResolvedValue([
+                {
+                  id: 'ws-agent',
+                  name: 'agent-workspace',
+                  phase,
+                  labels: { [AGENT_LABEL]: 'test-agent' },
+                  resourceVersion: String(callCount),
+                },
+              ]),
+            }),
+          },
+        } as unknown as OpenShellClient;
+      });
+      vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([TEST_GATEWAY]);
+      vi.mocked(agentRegistry.getAgent).mockResolvedValue(testAgent);
+      const mock = createMockExecSession();
+      sdkSandbox.execInteractive.mockResolvedValue(mock.session);
+
+      gatewayStartCallback!();
+      // Let the first poll tick through (sandbox is Starting)
+      await vi.advanceTimersByTimeAsync(0);
+      expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+      expect(sdkSandbox.execInteractive).not.toHaveBeenCalled();
+
+      // Advance past the poll interval so the second poll sees Ready
+      await vi.advanceTimersByTimeAsync(2000);
+      await vi.waitFor(() => expect(sdkSandbox.execInteractive).toHaveBeenCalled());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('emits workspace-update on each poll tick while sandboxes are transitional', async () => {
+    vi.useFakeTimers();
+    try {
+      let callCount = 0;
+      vi.mocked(openshellSdkClientManager.getClient).mockImplementation(async () => {
+        callCount++;
+        const phase = callCount <= 2 ? 'provisioning' : 'ready';
+        return {
+          sandbox: {
+            ...sdkSandbox,
+            list: vi.fn().mockReturnValue({
+              all: vi.fn().mockResolvedValue([
+                {
+                  id: 'ws-1',
+                  name: 'sandbox-1',
+                  phase,
+                  labels: {},
+                  resourceVersion: String(callCount),
+                },
+              ]),
+            }),
+          },
+        } as unknown as OpenShellClient;
+      });
+      vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([TEST_GATEWAY]);
+
+      gatewayStartCallback!();
+
+      // Let the first poll tick + initial send
+      await vi.advanceTimersByTimeAsync(0);
+      // One from the handler immediately, one from the poll
+      const initialCalls = vi.mocked(apiSender.send).mock.calls.filter(c => c[0] === 'agent-workspace-update').length;
+      expect(initialCalls).toBeGreaterThanOrEqual(2);
+
+      // Advance two more poll intervals
+      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      const totalCalls = vi.mocked(apiSender.send).mock.calls.filter(c => c[0] === 'agent-workspace-update').length;
+      // Should have emitted more workspace updates for each poll tick
+      expect(totalCalls).toBeGreaterThan(initialCalls);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('does not start agents for sandboxes that settle into Error phase', async () => {
+    vi.useFakeTimers();
+    try {
+      let callCount = 0;
+      vi.mocked(openshellSdkClientManager.getClient).mockImplementation(async () => {
+        callCount++;
+        const phase = callCount <= 1 ? 'starting' : 'error';
+        return {
+          sandbox: {
+            ...sdkSandbox,
+            list: vi.fn().mockReturnValue({
+              all: vi.fn().mockResolvedValue([
+                {
+                  id: 'ws-err',
+                  name: 'error-workspace',
+                  phase,
+                  labels: { [AGENT_LABEL]: 'test-agent' },
+                  resourceVersion: String(callCount),
+                },
+              ]),
+            }),
+          },
+        } as unknown as OpenShellClient;
+      });
+      vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([TEST_GATEWAY]);
+      vi.mocked(agentRegistry.getAgent).mockResolvedValue(testAgent);
+
+      gatewayStartCallback!();
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(2000);
+      // Let any remaining microtasks flush
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Error phase is not transitional, so polling stops
+      // But Error phase is not Ready, so no agent is started
+      expect(sdkSandbox.execInteractive).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('dispose aborts the settle-polling loop', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(openshellSdkClientManager.getClient).mockImplementation(async () => {
+        return {
+          sandbox: {
+            ...sdkSandbox,
+            list: vi.fn().mockReturnValue({
+              all: vi.fn().mockResolvedValue([
+                {
+                  id: 'ws-1',
+                  name: 'sandbox-1',
+                  phase: 'starting',
+                  labels: { [AGENT_LABEL]: 'test-agent' },
+                  resourceVersion: '1',
+                },
+              ]),
+            }),
+          },
+        } as unknown as OpenShellClient;
+      });
+      vi.mocked(openshellGatewayStateManager.listGateways).mockReturnValue([TEST_GATEWAY]);
+
+      gatewayStartCallback!();
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Dispose should abort the polling loop without errors
+      manager.dispose();
+      await vi.advanceTimersByTimeAsync(2000);
+
+      // The agent should never have been started
+      expect(sdkSandbox.execInteractive).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('encodeWorkspaceLabels', () => {
