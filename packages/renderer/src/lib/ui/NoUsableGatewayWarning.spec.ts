@@ -163,3 +163,102 @@ test('hides the warning when a compatible gateway exists', () => {
 
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
+
+test('reports a PID conflict without offering to start until the previous process stops', () => {
+  openshellGateways.set([
+    {
+      name: 'kaiden-local',
+      endpoint: 'http://127.0.0.1:29670',
+      canStop: false,
+      canStart: false,
+      gatewayState: {
+        reachable: false,
+        health: 'unknown',
+        compatible: true,
+        process: { pid: 4242, status: 'running' },
+      },
+    },
+  ]);
+  openshellGatewaysReady.set(true);
+  render(NoUsableGatewayWarning);
+
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'A conflicting process (PID 4242) is blocking the default kaiden-local gateway. Please wait for it to exit before restarting, clear it, or create a new gateway.',
+  );
+  expect(screen.queryByRole('button', { name: /^Start/ })).not.toBeInTheDocument();
+});
+
+test('shows a start error, and the conflict instead once the gateway enters a PID conflict', async () => {
+  vi.mocked(window.startOpenshellGateway).mockRejectedValue(new Error('Port 29670 is busy'));
+  const stoppedDefault = {
+    name: 'kaiden-local',
+    endpoint: 'http://127.0.0.1:29670',
+    canStop: false,
+    canStart: true,
+    gatewayState: { reachable: false, health: 'unknown', compatible: true, process: { status: 'not-running' } },
+  } as const;
+  openshellGateways.set([{ ...stoppedDefault }]);
+  openshellGatewaysReady.set(true);
+  render(NoUsableGatewayWarning);
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Start default gateway' }));
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Port 29670 is busy'));
+
+  openshellGateways.set([
+    {
+      ...stoppedDefault,
+      canStart: false,
+      gatewayState: { ...stoppedDefault.gatewayState, process: { pid: 4242, status: 'running' } },
+    },
+  ]);
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('A conflicting process (PID 4242)'));
+  expect(screen.queryByRole('button', { name: /^Start/ })).not.toBeInTheDocument();
+});
+
+test('starts a stopped gateway from the warning and shows the start in progress', async () => {
+  vi.mocked(window.startOpenshellGateway).mockReturnValue(Promise.withResolvers<void>().promise);
+  openshellGateways.set([
+    {
+      name: 'kaiden-local',
+      endpoint: 'http://127.0.0.1:29670',
+      canStop: false,
+      canStart: true,
+      gatewayState: { reachable: false, health: 'unknown', compatible: true, process: { status: 'not-running' } },
+    },
+  ]);
+  openshellGatewaysReady.set(true);
+  render(NoUsableGatewayWarning);
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Start default gateway' }));
+
+  expect(window.startOpenshellGateway).toHaveBeenCalledExactlyOnceWith('kaiden-local');
+  expect(screen.getByRole('button', { name: 'Start default gateway' })).toBeDisabled();
+  expect(screen.getByRole('alert')).toHaveTextContent('No usable OpenShell gateways available.');
+});
+
+test('does not offer to start when no gateway can be started', () => {
+  openshellGatewaysReady.set(true);
+
+  render(NoUsableGatewayWarning);
+
+  expect(screen.queryByRole('button', { name: /^Start/ })).not.toBeInTheDocument();
+});
+
+test('names a non-default gateway on the start button', async () => {
+  vi.mocked(window.startOpenshellGateway).mockResolvedValue(undefined);
+  openshellGateways.set([
+    {
+      name: 'local-dev',
+      endpoint: 'http://127.0.0.1:17675',
+      canStop: false,
+      canStart: true,
+      gatewayState: { reachable: false, health: 'unknown', compatible: true, process: { status: 'not-running' } },
+    },
+  ]);
+  openshellGatewaysReady.set(true);
+  render(NoUsableGatewayWarning);
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Start gateway local-dev' }));
+
+  expect(window.startOpenshellGateway).toHaveBeenCalledExactlyOnceWith('local-dev');
+});
