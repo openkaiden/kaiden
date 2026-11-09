@@ -668,19 +668,50 @@ describe('init port allocation', () => {
     );
   });
 
-  test('blocks auto-start when the recorded PID is still alive', async () => {
-    // Signal 0 checks this test process without sending it a signal or mocking the global process.
-    vi.mocked(readFile).mockResolvedValue(String(process.pid));
+  test('waits for a previous process to exit before auto-starting', async () => {
+    vi.useFakeTimers();
+    const killSpy = vi
+      .spyOn(process, 'kill')
+      .mockReturnValueOnce(true) // readAndValidatePid: alive
+      .mockReturnValueOnce(true) // waitForStalePidExit poll 1: alive
+      .mockImplementation(() => {
+        // waitForStalePidExit poll 2: ESRCH (process exited)
+        const err = new Error('ESRCH') as NodeJS.ErrnoException;
+        err.code = 'ESRCH';
+        throw err;
+      });
+    vi.mocked(readFile).mockResolvedValue('12345');
+    vi.mocked(gatewayManager.health)
+      .mockRejectedValueOnce(new Error('default port is not a healthy gateway'))
+      .mockResolvedValue({ status: 'healthy', version: '1.0.0' });
+
+    const initPromise = gateway.init();
+    await vi.runAllTimersAsync();
+    await initPromise;
+
+    expect(spawn).toHaveBeenCalled();
+    expect(notificationRegistry.addNotification).not.toHaveBeenCalled();
+    expect(gateway.isRunning()).toBe(true);
+    killSpy.mockRestore();
+  });
+
+  test('reports an error when the recorded PID does not exit within the timeout', async () => {
+    vi.useFakeTimers();
+    const killSpy = vi.spyOn(process, 'kill').mockReturnValue(true);
+    vi.mocked(readFile).mockResolvedValue('12345');
     vi.mocked(gatewayManager.health).mockRejectedValueOnce(new Error('default port is not a healthy gateway'));
 
-    await gateway.init();
+    const initPromise = gateway.init();
+    await vi.runAllTimersAsync();
+    await initPromise;
 
-    const message = `A process recorded for kaiden-local is still alive (PID ${process.pid}). Stop it before restarting.`;
+    const message = 'A process recorded for kaiden-local is still alive (PID 12345). Stop it before restarting.';
     expect(getFreePort).not.toHaveBeenCalled();
     expect(spawn).not.toHaveBeenCalled();
     expect(notificationRegistry.addNotification).toHaveBeenCalledWith(
       expect.objectContaining({ body: message, type: 'error' }),
     );
+    killSpy.mockRestore();
   });
 
   test('blocks auto-start when the recorded PID cannot be read', async () => {
@@ -1490,9 +1521,19 @@ describe('startManagedGateway', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
-  test('rejects when the recorded PID is still alive', async () => {
-    // Signal 0 checks this test process without sending it a signal or mocking the global process.
-    vi.mocked(readFile).mockResolvedValue(String(process.pid));
+  test('waits for a previous process to exit before starting', async () => {
+    vi.useFakeTimers();
+    const killSpy = vi
+      .spyOn(process, 'kill')
+      .mockReturnValueOnce(true) // readAndValidatePid: alive
+      .mockReturnValueOnce(true) // waitForStalePidExit poll 1: alive
+      .mockImplementation(() => {
+        // waitForStalePidExit poll 2: ESRCH (process exited)
+        const err = new Error('ESRCH') as NodeJS.ErrnoException;
+        err.code = 'ESRCH';
+        throw err;
+      });
+    vi.mocked(readFile).mockResolvedValue('12345');
     vi.mocked(gatewayManager.getGateway).mockResolvedValue({
       name: 'kaiden-local',
       gateway_endpoint: 'http://127.0.0.1:29670',
@@ -1500,10 +1541,34 @@ describe('startManagedGateway', () => {
       gateway_port: 29670,
     });
 
-    await expect(gateway.startManagedGateway('kaiden-local')).rejects.toThrow(
-      `A process recorded for kaiden-local is still alive (PID ${process.pid}). Stop it before restarting.`,
+    const startPromise = gateway.startManagedGateway('kaiden-local');
+    await vi.runAllTimersAsync();
+    await startPromise;
+
+    expect(spawn).toHaveBeenCalled();
+    expect(gateway.isRunning()).toBe(true);
+    killSpy.mockRestore();
+  });
+
+  test('rejects when the recorded PID does not exit within the timeout', async () => {
+    vi.useFakeTimers();
+    const killSpy = vi.spyOn(process, 'kill').mockReturnValue(true);
+    vi.mocked(readFile).mockResolvedValue('12345');
+    vi.mocked(gatewayManager.getGateway).mockResolvedValue({
+      name: 'kaiden-local',
+      gateway_endpoint: 'http://127.0.0.1:29670',
+      is_remote: false,
+      gateway_port: 29670,
+    });
+
+    const rejected = expect(gateway.startManagedGateway('kaiden-local')).rejects.toThrow(
+      'A process recorded for kaiden-local is still alive (PID 12345). Stop it before restarting.',
     );
+    await vi.runAllTimersAsync();
+    await rejected;
+
     expect(spawn).not.toHaveBeenCalled();
+    killSpy.mockRestore();
   });
 
   test('propagates a missing registration without spawning', async () => {

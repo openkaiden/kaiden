@@ -256,9 +256,7 @@ export class OpenshellGateway implements IAsyncDisposable {
     try {
       const pid = await this.readAndValidatePid(DEFAULT_GATEWAY_NAME);
       if (pid !== undefined) {
-        throw new Error(
-          `A process recorded for ${DEFAULT_GATEWAY_NAME} is still alive (PID ${pid}). Stop it before restarting.`,
-        );
+        await this.waitForStalePidExit(DEFAULT_GATEWAY_NAME, pid);
       }
       const port = await this.allocateDefaultGatewayPort(reservedPorts);
       await this.start({ port });
@@ -829,7 +827,7 @@ export class OpenshellGateway implements IAsyncDisposable {
     }
     const pid = await this.readAndValidatePid(name);
     if (pid !== undefined) {
-      throw new Error(`A process recorded for ${name} is still alive (PID ${pid}). Stop it before restarting.`);
+      await this.waitForStalePidExit(name, pid);
     }
     // Re-check after the awaits above: a concurrent start may have begun meanwhile, and joining it would
     // fire onDidGatewayStart twice. Nothing awaits between this check and start() registering the startup.
@@ -947,6 +945,25 @@ export class OpenshellGateway implements IAsyncDisposable {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to read the PID file of gateway "${name}": ${message}`, { cause: err });
     }
+  }
+
+  private async waitForStalePidExit(name: string, pid: number): Promise<void> {
+    const maxAttempts = Math.ceil((STOP_TIMEOUT_MS * 2) / HEALTH_CHECK_INTERVAL_MS);
+    console.log(`[openshell-gateway] waiting for previous process (PID ${pid}) of "${name}" to exit`);
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await delay(HEALTH_CHECK_INTERVAL_MS);
+      try {
+        process.kill(pid, 0);
+      } catch (err: unknown) {
+        if ((err as NodeJS.ErrnoException).code === 'ESRCH') {
+          const pidPath = join(this.getGatewayStorageDirectory(name), GATEWAY_PID_FILENAME);
+          await unlink(pidPath).catch(() => {});
+          console.log(`[openshell-gateway] previous process (PID ${pid}) of "${name}" has exited`);
+          return;
+        }
+      }
+    }
+    throw new Error(`A process recorded for ${name} is still alive (PID ${pid}). Stop it before restarting.`);
   }
 
   private async stopGatewayAfterStartupError(name: string): Promise<void> {
