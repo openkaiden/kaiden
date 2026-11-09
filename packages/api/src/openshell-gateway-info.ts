@@ -109,6 +109,19 @@ export type SandboxInfo = z.output<typeof SandboxInfoSchema> & {
   sourcePath?: string;
 };
 
+/**
+ * Sandbox phases that indicate the sandbox is still transitioning and has not
+ * yet reached a terminal state. Callers should poll until every sandbox leaves
+ * this set before acting on the result (e.g. starting agent sessions).
+ */
+export const TRANSITIONAL_PHASES: ReadonlySet<SandboxInfo['phase']> = new Set([
+  'Starting',
+  'Provisioning',
+  'Stopping',
+  'Deleting',
+  'Suspending',
+]);
+
 export const WORKSPACE_LABEL = 'ai.openkaiden.kaiden.workspace';
 export const AGENT_LABEL = 'ai.openkaiden.kaiden.agent';
 export const SECRET_LABEL = 'ai.openkaiden.kaiden.secret';

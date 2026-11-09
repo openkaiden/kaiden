@@ -71,6 +71,7 @@ import {
   MIN_GATEWAY_VERSION,
   PROFILE_LABEL,
   SECRET_LABEL,
+  TRANSITIONAL_PHASES,
   WORKSPACE_LABEL,
 } from '/@api/openshell-gateway-info.js';
 import { TerminalSettings } from '/@api/terminal/terminal-settings.js';
@@ -85,6 +86,9 @@ const MOUNT_HOME_PREFIX = '$HOME';
 const SANDBOX_READY_TIMEOUT_SECONDS = 300;
 const SANDBOX_DELETE_TIMEOUT_SECONDS = 120;
 const DEFAULT_TERMINAL_SCROLLBACK = 1000;
+// Polling parameters for waiting on transitional sandboxes after gateway startup.
+const SETTLE_POLL_INTERVAL_MS = 2_000;
+const SETTLE_MAX_POLLS = 30;
 
 export interface AgentTerminalClient {
   onData: (content: string) => void;
@@ -144,6 +148,8 @@ export class AgentWorkspaceManager implements Disposable {
   private readonly rendererTerminals = new Map<number, AgentTerminalHandle>();
   // bumped on every renderer reload so that a terminal request from the previous renderer is dropped
   private rendererGeneration = 0;
+  // cancels the settle-polling loop started by onDidGatewayStart
+  private settleAbort: AbortController | undefined;
   private readonly disposables: Disposable[] = [];
 
   constructor(
@@ -1093,6 +1099,41 @@ export class AgentWorkspaceManager implements Disposable {
     this.rendererTerminals.clear();
   }
 
+  /**
+   * Polls sandbox state until every workspace has left a transitional phase
+   * (Starting, Provisioning, …), emitting a workspace-update on each tick so
+   * the UI stays current. Resolves once all sandboxes have settled or the
+   * poll limit is reached.
+   */
+  private async pollUntilWorkspacesSettle(signal: AbortSignal): Promise<void> {
+    for (let poll = 0; poll < SETTLE_MAX_POLLS; poll++) {
+      const workspaces = await this.listOpenshellSandboxes();
+      const hasTransitional = workspaces
+        .flatMap(gw => gw.sandboxes)
+        .some(sandbox => TRANSITIONAL_PHASES.has(sandbox.phase));
+      this.apiSender.send('agent-workspace-update');
+
+      if (!hasTransitional) {
+        return;
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const abortError = (): Error =>
+          signal.reason instanceof Error ? signal.reason : new Error('workspace settle polling aborted');
+        if (signal.aborted) {
+          reject(abortError());
+          return;
+        }
+        const timer = setTimeout(resolve, SETTLE_POLL_INTERVAL_MS);
+        const onAbort = (): void => {
+          clearTimeout(timer);
+          reject(abortError());
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+      });
+    }
+  }
+
   // start agents of existing workspaces (e.g. after an application restart) without waiting for a terminal
   private async startAgentSessions(): Promise<void> {
     const targets = (await this.listOpenshellSandboxes()).flatMap(({ gateway, sandboxes }) =>
@@ -1312,6 +1353,12 @@ export class AgentWorkspaceManager implements Disposable {
 
     this.disposables.push(
       this.openshellGateway.onDidGatewayStart(() => {
+        // Cancel a previous settle loop that may still be running (e.g. a gateway
+        // that restarted before all its sandboxes finished transitioning).
+        this.settleAbort?.abort();
+        const abort = new AbortController();
+        this.settleAbort = abort;
+
         this.openshellGatewayStateManager
           .refresh()
           .catch((err: unknown) => {
@@ -1321,9 +1368,12 @@ export class AgentWorkspaceManager implements Disposable {
               }`,
             );
           })
+          .then(() => this.pollUntilWorkspacesSettle(abort.signal))
           .then(() => this.startAgentSessions())
           .catch((err: unknown) => {
-            console.warn('[AgentWorkspaceManager] unable to start agents after gateway startup:', err);
+            if (!abort.signal.aborted) {
+              console.warn('[AgentWorkspaceManager] unable to start agents after gateway startup:', err);
+            }
           });
         this.apiSender.send('agent-workspace-update');
       }),
@@ -1350,6 +1400,8 @@ export class AgentWorkspaceManager implements Disposable {
 
   @preDestroy()
   dispose(): void {
+    this.settleAbort?.abort();
+    this.settleAbort = undefined;
     for (const start of this.startingAgentSessions.values()) {
       start.cancelled = true;
     }
