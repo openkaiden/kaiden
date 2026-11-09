@@ -443,6 +443,56 @@ describe('init', () => {
     expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
   });
 
+  test.each([
+    'provisioning',
+    'starting',
+  ])('refreshes workspaces still %s after a gateway start once they settle', async phase => {
+    mockSdkListSandboxes([
+      { id: 'ws-starting', name: 'starting-workspace', phase, labels: {}, resourceVersion: '1' },
+      { id: 'ws-ready', name: 'ready-workspace', phase: 'ready', labels: {}, resourceVersion: '2' },
+    ]);
+    let markReady: () => void = () => {};
+    sdkSandbox.waitReady.mockReturnValue(
+      new Promise(resolve => {
+        markReady = (): void => resolve({ id: 'ws-starting', name: 'starting-workspace' });
+      }),
+    );
+
+    assert(gatewayStartCallback);
+    gatewayStartCallback();
+    await vi.waitFor(() => expect(sdkSandbox.waitReady).toHaveBeenCalled());
+    expect(sdkSandbox.waitReady).toHaveBeenCalledTimes(1);
+    expect(sdkSandbox.waitReady).toHaveBeenCalledWith('starting-workspace', 300);
+    const updatesBeforeReady = vi
+      .mocked(apiSender.send)
+      .mock.calls.filter(([channel]) => channel === 'agent-workspace-update').length;
+
+    markReady();
+
+    await vi.waitFor(() =>
+      expect(
+        vi.mocked(apiSender.send).mock.calls.filter(([channel]) => channel === 'agent-workspace-update'),
+      ).toHaveLength(updatesBeforeReady + 1),
+    );
+  });
+
+  test('refreshes a workspace that does not become ready after a gateway start', async () => {
+    mockSdkListSandboxes([
+      { id: 'ws-starting', name: 'starting-workspace', phase: 'provisioning', labels: {}, resourceVersion: '1' },
+    ]);
+    sdkSandbox.waitReady.mockRejectedValue(new Error('sandbox entered error phase'));
+
+    assert(gatewayStartCallback);
+    gatewayStartCallback();
+
+    await vi.waitFor(() =>
+      expect(
+        vi.mocked(apiSender.send).mock.calls.filter(([channel]) => channel === 'agent-workspace-update'),
+      ).toHaveLength(2),
+    );
+    expect(sdkSandbox.waitReady).toHaveBeenCalledWith('starting-workspace', 300);
+  });
+
   test('subscribes to gateway init failed event', () => {
     expect(openshellGateway.onDidGatewayInitFailed).toHaveBeenCalled();
   });

@@ -138,6 +138,10 @@ export function encodeWorkspaceLabels(sourcePath: string): Record<string, string
  */
 @injectable()
 export class AgentWorkspaceManager implements Disposable {
+  private static readonly STARTING_SANDBOX_PHASES: ReadonlySet<SandboxInfo['phase']> = new Set([
+    'Provisioning',
+    'Starting',
+  ]);
   private readonly workspaceTerminals = new Map<string, WorkspaceTerminalSession>();
   private readonly startingAgentSessions = new Map<string, PendingAgentStart>();
   // renderer terminals by callback id; ids restart from zero on a renderer reload, so a stale entry is replaced on attach
@@ -1111,6 +1115,31 @@ export class AgentWorkspaceManager implements Disposable {
     );
   }
 
+  // the gateway reports healthy before the sandboxes it restarts are Ready: wait for them like create() does,
+  // then refresh the workspace list so it shows the settled phase
+  private async refreshStartingWorkspaces(): Promise<void> {
+    const starting = (await this.listOpenshellSandboxes()).flatMap(({ gateway, sandboxes }) =>
+      sandboxes
+        .filter(sandbox => AgentWorkspaceManager.STARTING_SANDBOX_PHASES.has(sandbox.phase))
+        .map(sandbox => ({ gateway, sandbox })),
+    );
+    await Promise.all(
+      starting.map(async ({ gateway, sandbox }) => {
+        try {
+          const sdkClient = await this.openshellSdkClientManager.getClient(gateway.name);
+          await sdkClient.sandbox.waitReady(sandbox.name, SANDBOX_READY_TIMEOUT_SECONDS);
+        } catch (err: unknown) {
+          console.warn(
+            `[AgentWorkspace] workspace "${sandbox.name}" on gateway "${gateway.name}" did not become ready:`,
+            err,
+          );
+        } finally {
+          this.apiSender.send('agent-workspace-update');
+        }
+      }),
+    );
+  }
+
   private closeWorkspaceTerminals(sandboxName: string, gateway: string): void {
     for (const start of this.startingAgentSessions.values()) {
       if (start.sandboxName === sandboxName && start.gateway === gateway) {
@@ -1321,9 +1350,12 @@ export class AgentWorkspaceManager implements Disposable {
               }`,
             );
           })
-          .then(() => this.startAgentSessions())
+          .then(() => Promise.all([this.startAgentSessions(), this.refreshStartingWorkspaces()]))
           .catch((err: unknown) => {
-            console.warn('[AgentWorkspaceManager] unable to start agents after gateway startup:', err);
+            console.warn(
+              '[AgentWorkspaceManager] unable to start agents or refresh starting workspaces after gateway startup:',
+              err,
+            );
           });
         this.apiSender.send('agent-workspace-update');
       }),
