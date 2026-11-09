@@ -22,7 +22,6 @@ import {
   NetworkAccessPreset,
   NetworkBinarySchema,
   NetworkEndpointSchema,
-  type ProviderProfile,
   ProviderProfileSchema,
 } from '@nvidia/openshell-sdk/raw';
 import { inject, injectable, multiInject } from 'inversify';
@@ -171,32 +170,6 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
       allowMissing: true,
       workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
     });
-  }
-
-  async ensureProfileOnGateway(profile: ProviderProfile, gateway: string): Promise<void> {
-    const client = await this.sdkClientManager.getClient(gateway);
-    const response = await client.raw.listProviderProfiles({
-      workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
-    });
-    if (response.profiles.some(p => p.id === profile.id)) {
-      return;
-    }
-    const result = await client.raw.importProviderProfiles(
-      create(ImportProviderProfilesRequestSchema, {
-        profiles: [
-          {
-            profile,
-            source: 'imported from registry',
-          },
-        ],
-        workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
-      }),
-    );
-    if (!result.imported) {
-      throw new Error(
-        `Provider profile ${profile.id} can't be imported, diagnostics: ${JSON.stringify(result.diagnostics)}`,
-      );
-    }
   }
 
   shouldCloneProfile(profileId: string): boolean {

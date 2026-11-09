@@ -847,35 +847,4 @@ describe('resolveProfileForAgent', () => {
     expect(result).toBeUndefined();
     expect(mockRaw.importProviderProfiles).not.toHaveBeenCalled();
   });
-
-  test('imports google-vertex-ai profile to gateway when not present', async () => {
-    const registryProfile = create(ProviderProfileSchema, {
-      id: 'google-vertex-ai',
-      displayName: 'Google Vertex AI',
-      credentials: [],
-      binaries: [{ path: '/**' }],
-    });
-    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([registryProfile]);
-    mockRaw.listProviderProfiles.mockResolvedValue({ profiles: [] });
-    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
-
-    const result = await manager.resolveProfileForAgent({
-      gateway: 'kaiden-local',
-      profileId: 'google-vertex-ai',
-      agentCommand: 'claude',
-      secretName: 'test-sandbox-test-uuid-1234',
-    });
-
-    expect(result).toBeUndefined();
-    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
-      expect.objectContaining({
-        profiles: [
-          expect.objectContaining({
-            profile: registryProfile,
-            source: 'imported from registry',
-          }),
-        ],
-      }),
-    );
-  });
 });
