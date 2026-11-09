@@ -668,19 +668,52 @@ describe('init port allocation', () => {
     );
   });
 
-  test('blocks auto-start when the recorded PID is still alive', async () => {
+  test('blocks auto-start when the recorded PID is still alive after waiting for it to exit', async () => {
+    vi.useFakeTimers();
     // Signal 0 checks this test process without sending it a signal or mocking the global process.
     vi.mocked(readFile).mockResolvedValue(String(process.pid));
     vi.mocked(gatewayManager.health).mockRejectedValueOnce(new Error('default port is not a healthy gateway'));
 
-    await gateway.init();
+    const initializing = gateway.init();
+    await vi.runAllTimersAsync();
+    await initializing;
 
     const message = `A process recorded for kaiden-local is still alive (PID ${process.pid}). Stop it before restarting.`;
+    expect(delay).toHaveBeenCalled();
     expect(getFreePort).not.toHaveBeenCalled();
     expect(spawn).not.toHaveBeenCalled();
     expect(notificationRegistry.addNotification).toHaveBeenCalledWith(
       expect.objectContaining({ body: message, type: 'error' }),
     );
+  });
+
+  test('auto-starts once the previous gateway process recorded in the PID file has exited', async () => {
+    vi.mocked(readFile).mockResolvedValueOnce(String(process.pid)).mockResolvedValueOnce(String(process.pid));
+    vi.mocked(delay).mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined);
+    vi.mocked(gatewayManager.health).mockRejectedValueOnce(new Error('default port is not a healthy gateway'));
+
+    await gateway.init();
+
+    expect(delay).toHaveBeenCalledTimes(2);
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(gateway.isRunning()).toBe(true);
+    expect(notificationRegistry.addNotification).not.toHaveBeenCalled();
+  });
+
+  test('cancels auto-start when disposed while waiting for the previous gateway process to exit', async () => {
+    vi.mocked(readFile).mockResolvedValue(String(process.pid));
+    vi.mocked(delay).mockImplementationOnce(async () => {
+      await gateway.asyncDispose();
+    });
+    vi.mocked(gatewayManager.health).mockRejectedValueOnce(new Error('default port is not a healthy gateway'));
+
+    await gateway.init();
+
+    expect(delay).toHaveBeenCalledOnce();
+    // the PID is not checked again once disposed
+    expect(readFile).toHaveBeenCalledExactlyOnceWith(join(GATEWAY_STORAGE_DIRECTORY, 'gateway.pid'), 'utf-8');
+    expect(spawn).not.toHaveBeenCalled();
+    expect(notificationRegistry.addNotification).not.toHaveBeenCalled();
   });
 
   test('blocks auto-start when the recorded PID cannot be read', async () => {

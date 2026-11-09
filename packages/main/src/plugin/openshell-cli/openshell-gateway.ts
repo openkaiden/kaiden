@@ -57,6 +57,8 @@ const DEFAULT_BIND_ADDRESS = '127.0.0.1';
 const HEALTH_CHECK_INTERVAL_MS = 1000;
 const MAX_HEALTH_CHECK_ATTEMPTS = 30;
 const STOP_TIMEOUT_MS = 5000;
+// A gateway left behind by the previous session may still be finishing its graceful shutdown.
+const PREVIOUS_PROCESS_EXIT_CHECK_ATTEMPTS = 60;
 const SUPERVISOR_IMAGE_BASE = 'ghcr.io/nvidia/openshell/supervisor';
 const GATEWAY_LOG_FILENAME = 'gateway.log';
 const GATEWAY_PID_FILENAME = 'gateway.pid';
@@ -254,7 +256,7 @@ export class OpenshellGateway implements IAsyncDisposable {
 
     console.log('[openshell-gateway] no existing gateways found, auto-starting local gateway');
     try {
-      const pid = await this.readAndValidatePid(DEFAULT_GATEWAY_NAME);
+      const pid = await this.waitForRecordedProcessExit(DEFAULT_GATEWAY_NAME);
       if (pid !== undefined) {
         throw new Error(
           `A process recorded for ${DEFAULT_GATEWAY_NAME} is still alive (PID ${pid}). Stop it before restarting.`,
@@ -947,6 +949,28 @@ export class OpenshellGateway implements IAsyncDisposable {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to read the PID file of gateway "${name}": ${message}`, { cause: err });
     }
+  }
+
+  // Kaiden does not wait for the gateway to stop when it quits, so the previous session's gateway may
+  // still be shutting down. Returns the PID when it is still alive after waiting.
+  private async waitForRecordedProcessExit(name: string): Promise<number | undefined> {
+    let pid = await this.readAndValidatePid(name);
+    if (pid === undefined) {
+      return undefined;
+    }
+    const waitStartedAt = Date.now();
+    console.log(`[openshell-gateway] waiting for the previous process of ${name} (PID ${pid}) to exit`);
+    for (let attempt = 0; pid !== undefined && attempt < PREVIOUS_PROCESS_EXIT_CHECK_ATTEMPTS; attempt++) {
+      await delay(HEALTH_CHECK_INTERVAL_MS);
+      if (this.#disposed) {
+        throw new DOMException('Gateway lifecycle has been disposed', 'AbortError');
+      }
+      pid = await this.readAndValidatePid(name);
+    }
+    if (pid === undefined) {
+      console.log(`[openshell-gateway] previous process of ${name} exited after ${Date.now() - waitStartedAt}ms`);
+    }
+    return pid;
   }
 
   private async stopGatewayAfterStartupError(name: string): Promise<void> {
