@@ -27,7 +27,6 @@ import {
 import { beforeEach, describe, expect, type Mock, test, vi } from 'vitest';
 
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
-import { OpenshellProfileOwnership } from '/@/plugin/openshell-cli/openshell-profile-ownership.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
@@ -63,7 +62,6 @@ let defaultFactory: DefaultProviderFactory;
 let gcloudFactory: GcloudAdcProviderFactory;
 const openshellNetworkPolicy = new OpenshellNetworkPolicy();
 let openshellRegistry: OpenShellRegistry;
-let profileOwnership: OpenshellProfileOwnership;
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -85,7 +83,6 @@ beforeEach(() => {
   vi.spyOn(gcloudFactory, 'createProvider').mockResolvedValue(undefined);
 
   openshellRegistry = new OpenShellRegistry(apiSender, properties);
-  profileOwnership = new OpenshellProfileOwnership();
 
   adapter = new OpenshellSecretAdapter(
     sdkClientManager,
@@ -93,7 +90,6 @@ beforeEach(() => {
     defaultFactory,
     openshellNetworkPolicy,
     openshellRegistry,
-    profileOwnership,
   );
 });
 
@@ -565,59 +561,5 @@ describe('shouldCloneProfile', () => {
 
   test('returns true for profiles without a selectable factory', () => {
     expect(adapter.shouldCloneProfile('openai')).toBe(true);
-  });
-});
-
-describe('ensureProfileOnGateway', () => {
-  test('does nothing when profile already exists on gateway', async () => {
-    mockRaw.listProviderProfiles.mockResolvedValue({
-      profiles: [{ id: 'google-vertex-ai', displayName: 'Google Vertex AI', credentials: [] }],
-    });
-
-    await adapter.ensureProfileOnGateway(create(ProviderProfileSchema, { id: 'google-vertex-ai' }), 'kaiden-local');
-
-    expect(mockRaw.importProviderProfiles).not.toHaveBeenCalled();
-  });
-
-  test('imports profile from registry when not on gateway', async () => {
-    mockRaw.listProviderProfiles.mockResolvedValue({ profiles: [] });
-    const registryProfile = create(ProviderProfileSchema, {
-      id: 'google-vertex-ai',
-      displayName: 'Google Vertex AI',
-      credentials: [],
-    });
-    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([registryProfile]);
-    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
-
-    await adapter.ensureProfileOnGateway(create(ProviderProfileSchema, { id: 'google-vertex-ai' }), 'kaiden-local');
-
-    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
-      create(ImportProviderProfilesRequestSchema, {
-        profiles: [profileOwnership.toImportItem(create(ProviderProfileSchema, { id: 'google-vertex-ai' }))],
-        workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
-      }),
-    );
-  });
-
-  test('throws when import fails', async () => {
-    mockRaw.listProviderProfiles.mockResolvedValue({ profiles: [] });
-    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([
-      create(ProviderProfileSchema, { id: 'google-vertex-ai', displayName: 'Google Vertex AI', credentials: [] }),
-    ]);
-    mockRaw.importProviderProfiles.mockResolvedValue({ imported: false, diagnostics: ['conflict'] });
-
-    await expect(
-      adapter.ensureProfileOnGateway(create(ProviderProfileSchema, { id: 'google-vertex-ai' }), 'kaiden-local'),
-    ).rejects.toThrow(`Provider profile google-vertex-ai can't be imported`);
-  });
-
-  test('uses specified gateway', async () => {
-    mockRaw.listProviderProfiles.mockResolvedValue({
-      profiles: [{ id: 'google-vertex-ai', displayName: 'Google Vertex AI', credentials: [] }],
-    });
-
-    await adapter.ensureProfileOnGateway(create(ProviderProfileSchema, { id: 'google-vertex-ai' }), 'remote');
-
-    expect(sdkClientManager.getClient).toHaveBeenCalledWith('remote');
   });
 });

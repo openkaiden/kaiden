@@ -31,7 +31,6 @@ import type { FilesystemMonitoring } from '/@/plugin/filesystem-monitoring.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
-import { OpenshellProfileOwnership } from '/@/plugin/openshell-cli/openshell-profile-ownership.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
@@ -88,14 +87,12 @@ const mockClient = { raw: mockRaw } as unknown as OpenShellClient;
 const sdkClientManager = new OpenshellSdkClientManager(undefined!, undefined!);
 const openshellNetworkPolicy = new OpenshellNetworkPolicy();
 const openshellRegistry = new OpenShellRegistry(apiSender, new Properties());
-const profileOwnership = new OpenshellProfileOwnership();
 const openshellAdapter = new OpenshellSecretAdapter(
   sdkClientManager,
   [new GcloudAdcProviderFactory()],
   new DefaultProviderFactory(),
   openshellNetworkPolicy,
   openshellRegistry,
-  profileOwnership,
 );
 
 const mockProvider = new ProviderImpl(
@@ -849,31 +846,5 @@ describe('resolveProfileForAgent', () => {
 
     expect(result).toBeUndefined();
     expect(mockRaw.importProviderProfiles).not.toHaveBeenCalled();
-  });
-
-  test('imports google-vertex-ai profile to gateway when not present', async () => {
-    const registryProfile = create(ProviderProfileSchema, {
-      id: 'google-vertex-ai',
-      displayName: 'Google Vertex AI',
-      credentials: [],
-      binaries: [{ path: '/**' }],
-    });
-    vi.mocked(openshellRegistry.getProfiles).mockReturnValue([registryProfile]);
-    mockRaw.listProviderProfiles.mockResolvedValue({ profiles: [] });
-    mockRaw.importProviderProfiles.mockResolvedValue({ imported: true, diagnostics: [] });
-
-    const result = await manager.resolveProfileForAgent({
-      gateway: 'kaiden-local',
-      profileId: 'google-vertex-ai',
-      agentCommand: 'claude',
-      secretName: 'test-sandbox-test-uuid-1234',
-    });
-
-    expect(result).toBeUndefined();
-    expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
-      expect.objectContaining({
-        profiles: [profileOwnership.toImportItem(registryProfile)],
-      }),
-    );
   });
 });

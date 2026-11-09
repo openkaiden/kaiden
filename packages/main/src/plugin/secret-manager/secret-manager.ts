@@ -226,7 +226,6 @@ export class SecretManager {
     }
 
     if (!this.openshellAdapter.shouldCloneProfile(profileId)) {
-      await this.openshellAdapter.ensureProfileOnGateway(profile, gateway);
       return undefined;
     }
 
