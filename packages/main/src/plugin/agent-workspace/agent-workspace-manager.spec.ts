@@ -32,6 +32,7 @@ import type { AgentRegistry } from '/@/plugin/agent-registry.js';
 import * as configWriter from '/@/plugin/agent-workspace/workspace-config-writer.js';
 import type { IPCHandle } from '/@/plugin/api.js';
 import type { Directories } from '/@/plugin/directories.js';
+import type { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { type GatewayPollOptions, OpenshellGatewayPoller } from '/@/plugin/openshell-cli/openshell-gateway-poller.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
@@ -221,6 +222,10 @@ const openshellGateway = {
   }),
 } as unknown as OpenshellGateway;
 
+const openshellCli = {
+  installSandboxSshConfig: vi.fn(),
+} as unknown as OpenshellCli;
+
 const openshellGatewayStateManager = {
   listGateways: vi.fn(),
   refresh: vi.fn(),
@@ -328,6 +333,7 @@ beforeEach(() => {
     directories,
     openshellPolicyManager,
     openshellNetworkPolicy,
+    openshellCli,
     TEST_SHELL_COMMAND,
     new OpenshellGatewayPoller(openshellGatewayStateManager),
   );
@@ -365,6 +371,10 @@ describe('init', () => {
 
   test('registers IPC handler for startOpenshellGateway', () => {
     expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:startOpenshellGateway', expect.any(Function));
+  });
+
+  test('registers IPC handler for installSandboxSshConfig', () => {
+    expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:installSandboxSshConfig', expect.any(Function));
   });
 
   test('returns the default local gateway driver from the gateway service', async () => {
@@ -2004,6 +2014,27 @@ describe('deleteOpenshellSandbox', () => {
     await manager.deleteOpenshellSandbox('my-workspace', 'kaiden');
 
     expect(secretManager.remove).toHaveBeenCalledWith('my-workspace-secret', 'kaiden');
+  });
+});
+
+describe('installSandboxSshConfig', () => {
+  test('installs the SSH config of the sandbox on the requested gateway', async () => {
+    await manager.installSandboxSshConfig('my-workspace', 'remote-gateway');
+
+    expect(openshellCli.installSandboxSshConfig).toHaveBeenCalledWith('remote-gateway', 'my-workspace');
+    expect(mockTask.status).toBe('success');
+    expect(mockTask.state).toBe('completed');
+  });
+
+  test('reports the failure and rethrows when the CLI fails', async () => {
+    vi.mocked(openshellCli.installSandboxSshConfig).mockRejectedValue(new Error('ssh config failed'));
+
+    await expect(manager.installSandboxSshConfig('my-workspace', 'remote-gateway')).rejects.toThrow(
+      'Failed to install SSH host for workspace "my-workspace": ssh config failed',
+    );
+
+    expect(mockTask.status).toBe('failure');
+    expect(mockTask.state).toBe('completed');
   });
 });
 

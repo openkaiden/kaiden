@@ -140,7 +140,7 @@ const sandboxTimeColumn = new TableColumn<SandboxSelectable, Date | undefined>('
 
 const sandboxActionsColumn = new TableColumn<SandboxSelectable>('', {
   align: 'right',
-  width: '90px',
+  width: '120px',
   renderer: SandboxActions,
   overflow: true,
 });

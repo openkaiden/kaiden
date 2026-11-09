@@ -32,6 +32,7 @@ import { updateWorkspaceConfig, writeWorkspaceConfig } from '/@/plugin/agent-wor
 import { WritableConfigurationFile } from '/@/plugin/agent-workspace/writable-configuration-file.js';
 import { IPCHandle, WebContentsType } from '/@/plugin/api.js';
 import { Directories } from '/@/plugin/directories.js';
+import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { OpenshellGatewayPoller } from '/@/plugin/openshell-cli/openshell-gateway-poller.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
@@ -190,6 +191,8 @@ export class AgentWorkspaceManager implements Disposable {
     private readonly openshellPolicyManager: OpenshellPolicyManager,
     @inject(OpenshellNetworkPolicy)
     private readonly openshellNetworkPolicy: OpenshellNetworkPolicy,
+    @inject(OpenshellCli)
+    private readonly openshellCli: OpenshellCli,
     @inject(InteractiveShellCommand)
     private readonly interactiveShellCommand: readonly string[],
     @inject(OpenshellGatewayPoller)
@@ -850,6 +853,24 @@ export class AgentWorkspaceManager implements Disposable {
     await this.deleteWorkspace(name, gateway, workspace?.labels);
   }
 
+  async installSandboxSshConfig(name: string, gateway: string): Promise<void> {
+    const task = this.taskManager.createTask({ title: `Installing SSH host for workspace "${name}"` });
+    task.state = 'running';
+    task.status = 'in-progress';
+    try {
+      await this.openshellCli.installSandboxSshConfig(gateway, name);
+      task.status = 'success';
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : String(err);
+      task.status = 'failure';
+      task.error = `Failed to install SSH host for workspace "${name}": ${detail}`;
+      console.error(task.error);
+      throw new Error(task.error, { cause: err });
+    } finally {
+      task.state = 'completed';
+    }
+  }
+
   async shellInAgentWorkspace(
     name: string,
     gateway: string,
@@ -1250,6 +1271,13 @@ export class AgentWorkspaceManager implements Disposable {
       'agent-workspace:deleteOpenshellSandbox',
       async (_listener: unknown, name: string, gateway: string): Promise<void> => {
         return this.deleteOpenshellSandbox(name, gateway);
+      },
+    );
+
+    this.ipcHandle(
+      'agent-workspace:installSandboxSshConfig',
+      async (_listener: unknown, name: string, gateway: string): Promise<void> => {
+        return this.installSandboxSshConfig(name, gateway);
       },
     );
 

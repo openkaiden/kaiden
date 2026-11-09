@@ -421,6 +421,10 @@ export function initExposure(): void {
     return ipcInvoke('agent-workspace:deleteOpenshellSandbox', name, gateway);
   });
 
+  contextBridge.exposeInMainWorld('installSandboxSshConfig', async (name: string, gateway: string): Promise<void> => {
+    return ipcInvoke('agent-workspace:installSandboxSshConfig', name, gateway);
+  });
+
   // Agent Workspace Terminal
   let onDataCallbacksShellInAgentWorkspaceId = 0;
   const onDataCallbacksShellInAgentWorkspace = new Map<

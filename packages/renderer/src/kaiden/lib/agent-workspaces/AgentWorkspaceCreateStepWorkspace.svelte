@@ -1,6 +1,6 @@
 <script lang="ts">
 import { faChevronDown, faFolder, faFolderOpen, faInfoCircle, faRocket } from '@fortawesome/free-solid-svg-icons';
-import { Button, Dropdown, Input } from '@podman-desktop/ui-svelte';
+import { Button, Checkbox, Dropdown, Input } from '@podman-desktop/ui-svelte';
 import { Icon } from '@podman-desktop/ui-svelte/icons';
 
 import WorkspaceDescriptionField from '/@/kaiden/lib/agent-workspaces/WorkspaceDescriptionField.svelte';
@@ -17,6 +17,7 @@ interface Props {
   nameManuallyEdited: boolean;
   descriptionOpen: boolean;
   projectOpen: boolean;
+  registerSshHost?: boolean;
   onBrowseSource: () => Promise<void>;
   configExists?: boolean;
   configAction?: 'merge' | 'replace';
@@ -37,6 +38,7 @@ let {
   nameManuallyEdited = $bindable(),
   descriptionOpen = $bindable(),
   projectOpen = $bindable(),
+  registerSshHost = $bindable(false),
   onBrowseSource,
   configExists = false,
   configAction = $bindable('merge'),
@@ -174,6 +176,15 @@ let nameInputError = $derived(sessionNameError ?? errors?.name ?? '');
       error={nameInputError}
       aria-invalid={nameInputError !== ''}
     />
+  </div>
+
+  <div>
+    <Checkbox bind:checked={registerSshHost} title="Register as SSH Host">
+      <span class="text-sm font-semibold text-[var(--pd-modal-text)]">Register as SSH Host</span>
+    </Checkbox>
+    <p class="text-xs text-[var(--pd-content-card-text)] opacity-50 mt-1.5 pl-8">
+      Adds this workspace to your local SSH config when it is created, so you can connect to it with SSH.
+    </p>
   </div>
 
   <div class="rounded-xl border border-[var(--pd-content-card-border)]/85 bg-[var(--pd-content-card-bg)]/35 overflow-hidden">

@@ -2028,6 +2028,86 @@ test('Expect error dialog shown when createAgentWorkspace fails from Start Works
   });
 });
 
+test('Expect register as SSH host checkbox unchecked by default', () => {
+  render(AgentWorkspaceCreate);
+
+  expect(screen.getByRole('checkbox', { name: 'Register as SSH Host' })).not.toBeChecked();
+});
+
+test('Expect installSandboxSshConfig called when register as SSH host is checked', async () => {
+  vi.mocked(window.installSandboxSshConfig).mockResolvedValue(undefined);
+
+  render(AgentWorkspaceCreate);
+
+  await fireEvent.input(screen.getByPlaceholderText('/path/to/project'), {
+    target: { value: '/home/user/my-repo' },
+  });
+  await fireEvent.click(screen.getByRole('checkbox', { name: 'Register as SSH Host' }));
+  await fireEvent.click(screen.getByRole('button', { name: 'Use all defaults and create workspace' }));
+
+  await waitFor(() => {
+    expect(window.installSandboxSshConfig).toHaveBeenCalledWith('my-repo', 'kaiden');
+  });
+});
+
+test('Expect installSandboxSshConfig not called when register as SSH host is unchecked', async () => {
+  render(AgentWorkspaceCreate);
+
+  await fireEvent.input(screen.getByPlaceholderText('/path/to/project'), {
+    target: { value: '/home/user/my-repo' },
+  });
+  await fireEvent.click(screen.getByRole('button', { name: 'Use all defaults and create workspace' }));
+
+  await waitFor(() => {
+    expect(window.createAgentWorkspace).toHaveBeenCalled();
+  });
+  expect(window.installSandboxSshConfig).not.toHaveBeenCalled();
+});
+
+test('Expect installSandboxSshConfig called from start-as-is when register as SSH host is checked', async () => {
+  vi.mocked(window.checkAgentWorkspaceConfigExists).mockResolvedValue(true);
+  vi.mocked(window.installSandboxSshConfig).mockResolvedValue(undefined);
+
+  render(AgentWorkspaceCreate);
+
+  await fireEvent.input(screen.getByPlaceholderText('/path/to/project'), {
+    target: { value: '/home/user/existing-project' },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: 'Start workspace as-is' })).toBeInTheDocument();
+  });
+
+  await fireEvent.click(screen.getByRole('checkbox', { name: 'Register as SSH Host' }));
+  await fireEvent.click(screen.getByRole('button', { name: 'Start workspace as-is' }));
+
+  await waitFor(() => {
+    expect(window.installSandboxSshConfig).toHaveBeenCalledWith('existing-project', 'kaiden');
+  });
+});
+
+test('Expect warning dialog shown when SSH host registration fails after creation', async () => {
+  vi.mocked(window.installSandboxSshConfig).mockRejectedValue(new Error('ssh config failed'));
+
+  render(AgentWorkspaceCreate);
+
+  await fireEvent.input(screen.getByPlaceholderText('/path/to/project'), {
+    target: { value: '/home/user/my-repo' },
+  });
+  await fireEvent.click(screen.getByRole('checkbox', { name: 'Register as SSH Host' }));
+  await fireEvent.click(screen.getByRole('button', { name: 'Use all defaults and create workspace' }));
+
+  await waitFor(() => {
+    expect(window.showMessageBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Agent Workspace',
+        type: 'warning',
+        message: expect.stringContaining('ssh config failed'),
+      }),
+    );
+  });
+});
+
 test('Expect navigation still called when startAsIs fails', async () => {
   vi.mocked(window.createAgentWorkspace).mockRejectedValue(new Error('creation failed'));
   vi.mocked(window.checkAgentWorkspaceConfigExists).mockResolvedValue(true);

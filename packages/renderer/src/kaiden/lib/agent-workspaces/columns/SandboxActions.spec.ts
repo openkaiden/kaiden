@@ -47,6 +47,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.mocked(withConfirmation).mockImplementation(action => action());
   vi.mocked(window.deleteOpenshellSandbox).mockResolvedValue(undefined);
+  vi.mocked(window.installSandboxSshConfig).mockResolvedValue(undefined);
   clearSandboxActionError(sandbox.id);
   openshellSandboxes.set([
     {
@@ -91,4 +92,23 @@ test('clears previous actionError before deleting again', async () => {
 
   await waitFor(() => expect(window.deleteOpenshellSandbox).toHaveBeenCalledWith('shared-name', 'remote-gateway'));
   expect(get(allOpenshellSandboxes).find(s => s.id === sandbox.id)?.actionError).toBeUndefined();
+});
+
+test('installs the sandbox SSH config on its gateway', async () => {
+  render(SandboxActions, { object: sandbox });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Install as SSH Host' }));
+
+  expect(window.installSandboxSshConfig).toHaveBeenCalledWith('shared-name', 'remote-gateway');
+});
+
+test('sets actionError via store when installing the SSH config fails', async () => {
+  vi.mocked(window.installSandboxSshConfig).mockRejectedValue(new Error('ssh config failed'));
+  render(SandboxActions, { object: sandbox });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Install as SSH Host' }));
+
+  await waitFor(() =>
+    expect(get(allOpenshellSandboxes).find(s => s.id === sandbox.id)?.actionError).toBe('Error: ssh config failed'),
+  );
 });
