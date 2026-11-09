@@ -68,6 +68,24 @@ if [ "$(id -u)" -eq 0 ]; then
   corepack enable
   node --version
 
+  # The workflow's ollama leg sets KAIDEN_OLLAMA_MODEL; the server runs as the
+  # test user below. Fedora's ollama package hard-depends on ~5 GiB of ROCm
+  # libraries (minutes to install), so install the pinned upstream release,
+  # verified against its checksum, without its GPU backends: this guest is
+  # CPU only.
+  if [[ -n "${KAIDEN_OLLAMA_MODEL:-}" ]]; then
+    ollama_version=0.40.11
+    ollama_dir="$(mktemp -d)"
+    ollama_base="https://github.com/ollama/ollama/releases/download/v${ollama_version}"
+    curl --fail --silent --show-error --location -o "$ollama_dir/ollama-linux-amd64.tar.zst" \
+      "${ollama_base}/ollama-linux-amd64.tar.zst"
+    curl --fail --silent --show-error --location -o "$ollama_dir/sha256sum.txt" "${ollama_base}/sha256sum.txt"
+    (cd "$ollama_dir" && grep ' \./ollama-linux-amd64\.tar\.zst$' sha256sum.txt | sha256sum -c -)
+    tar --zstd -x -C /usr/local --exclude='lib/ollama/cuda_*' --exclude='lib/ollama/vulkan' \
+      -f "$ollama_dir/ollama-linux-amd64.tar.zst"
+    rm -rf "$ollama_dir"
+  fi
+
   uid="$(id -u "$KAIDEN_TEST_USER")"
   mkdir -p "$TMT_TEST_DATA"
   chown -R "$KAIDEN_TEST_USER" "$TMT_TEST_DATA"
@@ -90,6 +108,10 @@ fi
 # MISTRAL_API_KEY are not available to this repo (the workflow receives them
 # empty), so Claude and Mistral scenarios skip by design (requiredResource).
 # Fail fast if a covered key is missing so its scenarios can't skip silently.
+# The ollama leg (KAIDEN_OLLAMA_MODEL) runs only the Ollama scenarios, kept out
+# of the cloud-provider run because a running local runtime changes which models
+# the wizard offers. It still gets and checks these keys: the redaction list
+# below is built from them.
 for key in OPENAI_API_KEY GEMINI_API_KEY; do
   if [ -z "${!key:-}" ]; then
     echo "Missing required provider secret ${key}; scenarios would silently skip" >&2
@@ -148,6 +170,9 @@ cleanup() {
   fi
   rm -rf "$repo_dir" "${build_dir:-}"
   rm -f "$secrets_file" "${KAIDEN_SCRIPT_COPY:-}"
+  if [[ -n "${ollama_pid:-}" ]]; then
+    kill "$ollama_pid"
+  fi
 }
 trap cleanup EXIT
 
@@ -155,6 +180,31 @@ export PODMAN_ENABLED=true
 export VITE_CI=true
 # Forward Electron main stderr (incl. the OpenShell gateway) and renderer console.
 export KAIDEN_E2E_VERBOSE_LOGS=true
+
+playwright_args=()
+if [[ -n "${KAIDEN_OLLAMA_MODEL:-}" ]]; then
+  # Serve on 127.0.0.1:11434, where the ollama extension auto-detects it, like
+  # the GHA setup-ollama action. Fail closed: a missing model would make the
+  # Ollama scenarios skip silently.
+  ollama serve > "$test_data_dir/ollama-serve.log" 2>&1 &
+  ollama_pid=$!
+  for _ in $(seq 30); do ollama list > /dev/null 2>&1 && break; sleep 2; done
+  if ! ollama list > /dev/null 2>&1; then
+    echo "Ollama server failed to start; see ollama-serve.log" >&2
+    exit 1
+  fi
+  for attempt in 1 2 3; do
+    ollama pull "$KAIDEN_OLLAMA_MODEL" && break
+    if [[ "$attempt" -eq 3 ]]; then
+      echo "Failed to pull Ollama model ${KAIDEN_OLLAMA_MODEL}" >&2
+      exit 1
+    fi
+    sleep $((attempt * 10))
+  done
+  ollama list
+  export OLLAMA_ENABLED=true
+  playwright_args=(--grep 'with Ollama model')
+fi
 
 # Same steps as the selected npm target (as the Windows workflow runs it), split
 # only so the run output can go to a *.log that cleanup redacts and publishes;
@@ -194,4 +244,4 @@ fi
 pnpm exec playwright install chromium
 mkdir -p tests/playwright/output
 echo "Workspace-Provider run output (${KAIDEN_NPM_TARGET}): playwright-output/workspace-provider-run.log"
-pnpm run "$run_target" > tests/playwright/output/workspace-provider-run.log 2>&1
+pnpm run "$run_target" "${playwright_args[@]}" > tests/playwright/output/workspace-provider-run.log 2>&1

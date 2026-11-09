@@ -53,8 +53,16 @@ permissions:
 
 jobs:
   workspace-e2e:
-    name: Fedora 44 workspace provider E2E
+    name: workspace provider e2e tests (Fedora 44, ${{ matrix.inference }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # 'cloud-providers' runs the cloud-provider scenarios; 'ollama' runs only
+        # the Ollama scenarios against a local Ollama server, kept apart because a
+        # running local runtime changes the models the wizard offers.
+        # filesystem-network has no Ollama scenario.
+        inference: ${{ fromJSON(inputs.npm_target == 'test:e2e:workspaces:filesystem-network' && '["cloud-providers"]' || '["cloud-providers","ollama"]') }}
     # Run only on the upstream repo: forks lack TEST_FARM_TOKEN and the
     # openkaiden/* allow-list means a fork dispatch could only test upstream
     # code anyway, so it could only fail.
@@ -100,7 +108,7 @@ jobs:
           compose: ${{ env.TESTING_FARM_COMPOSE }}
           arch: x86_64
           # Scheduled runs have no inputs, so they keep running the full suite.
-          variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.sha }};KAIDEN_NPM_TARGET=${{ inputs.npm_target || 'test:e2e:workspaces' }}${{ steps.build.outputs.url && format(';KAIDEN_BUILD_URL={0};KAIDEN_BUILD_SHA256={1}', steps.build.outputs.url, steps.build.outputs.sha256) }}
+          variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.sha }};KAIDEN_NPM_TARGET=${{ inputs.npm_target || 'test:e2e:workspaces' }}${{ steps.build.outputs.url && format(';KAIDEN_BUILD_URL={0};KAIDEN_BUILD_SHA256={1}', steps.build.outputs.url, steps.build.outputs.sha256) }}${{ matrix.inference == 'ollama' && ';KAIDEN_OLLAMA_MODEL=granite3.2:2b' || '' }}
           # Covered providers only; see tests/tmt/scripts/workspace-provider.sh.
           secrets: OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }};GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           # The action polls for ~timeout x 4 minutes (~200m), between the test
