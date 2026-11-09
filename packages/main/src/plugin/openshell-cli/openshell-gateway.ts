@@ -57,6 +57,9 @@ const DEFAULT_BIND_ADDRESS = '127.0.0.1';
 const HEALTH_CHECK_INTERVAL_MS = 1000;
 const MAX_HEALTH_CHECK_ATTEMPTS = 30;
 const STOP_TIMEOUT_MS = 5000;
+// A gateway killed before its graceful shutdown completes keeps its supervisor session ownership,
+// so the next gateway rejects the sandbox supervisors until that ownership expires.
+const GRACEFUL_STOP_TIMEOUT_MS = 60_000;
 const SUPERVISOR_IMAGE_BASE = 'ghcr.io/nvidia/openshell/supervisor';
 const GATEWAY_LOG_FILENAME = 'gateway.log';
 const GATEWAY_PID_FILENAME = 'gateway.pid';
@@ -981,6 +984,7 @@ export class OpenshellGateway implements IAsyncDisposable {
   }
 
   private async stopGatewayProcess(name: string, proc: ChildProcess): Promise<void> {
+    const stopStartedAt = Date.now();
     await new Promise<void>((resolve, reject) => {
       let timeout: ReturnType<typeof setTimeout> | undefined;
       const cleanup = (): void => {
@@ -990,6 +994,7 @@ export class OpenshellGateway implements IAsyncDisposable {
       };
       const onExit = (): void => {
         cleanup();
+        console.log(`[openshell-gateway] ${name} exited ${Date.now() - stopStartedAt}ms after SIGTERM`);
         resolve();
       };
       const onError = (err: unknown): void => {
@@ -1010,7 +1015,7 @@ export class OpenshellGateway implements IAsyncDisposable {
         } catch (err: unknown) {
           onError(err);
         }
-      }, STOP_TIMEOUT_MS);
+      }, GRACEFUL_STOP_TIMEOUT_MS);
       try {
         proc.kill('SIGTERM');
         if (typeof proc.exitCode === 'number' || proc.signalCode) onExit();
