@@ -16,19 +16,16 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { create } from '@bufbuild/protobuf';
-import { ProviderProfileImportItemSchema } from '@nvidia/openshell-sdk/raw';
-import type { Disposable, ProviderProfile } from '@openkaiden/api';
+import type { Disposable } from '@openkaiden/api';
 import { inject, injectable, preDestroy } from 'inversify';
 
-import { OpenshellConstants } from '/@/plugin/openshell-cli/openshell-constants.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
+import { OpenshellProfileOwnership } from '/@/plugin/openshell-cli/openshell-profile-ownership.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
 import type { IDisposable } from '/@api/disposable.js';
 import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
-import product from '/@product.json' with { type: 'json' };
 
 /**
  * Pushes Kaiden provider profiles to a gateway the first time it is seen reachable and whenever it
@@ -49,6 +46,8 @@ export class OpenshellProfileSynchronizer implements Disposable {
     private readonly registry: OpenShellRegistry,
     @inject(OpenshellSdkClientManager)
     private readonly sdkClientManager: OpenshellSdkClientManager,
+    @inject(OpenshellProfileOwnership)
+    private readonly profileOwnership: OpenshellProfileOwnership,
   ) {}
 
   init(): void {
@@ -119,10 +118,7 @@ export class OpenshellProfileSynchronizer implements Disposable {
       workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
     });
     const internalProfiles = this.registry.getProfiles();
-    const ownedProfiles = gatewayProfiles.filter(
-      profile =>
-        profile.annotations[OpenshellConstants.OWNER_ANNOTATION_KEY] === OpenshellConstants.OWNER_ANNOTATION_VALUE,
-    );
+    const ownedProfiles = gatewayProfiles.filter(profile => this.profileOwnership.isOwned(profile));
     const internalIds = new Set(internalProfiles.map(profile => profile.id));
     // Importing an id that already exists on the gateway fails, whether or not Kaiden owns it.
     const gatewayIds = new Set(gatewayProfiles.map(profile => profile.id));
@@ -132,16 +128,7 @@ export class OpenshellProfileSynchronizer implements Disposable {
     if (profilesToImport.length > 0) {
       const response = await client.raw.importProviderProfiles({
         workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
-        profiles: profilesToImport.map(profile => {
-          const importedProfile: ProviderProfile = {
-            ...profile,
-            annotations: {
-              ...profile.annotations,
-              [OpenshellConstants.OWNER_ANNOTATION_KEY]: OpenshellConstants.OWNER_ANNOTATION_VALUE,
-            },
-          };
-          return create(ProviderProfileImportItemSchema, { profile: importedProfile, source: product.name });
-        }),
+        profiles: profilesToImport.map(profile => this.profileOwnership.toImportItem(profile)),
       });
       if (!response.imported) {
         throw new Error(
@@ -150,25 +137,23 @@ export class OpenshellProfileSynchronizer implements Disposable {
       }
     }
 
-    const results = await Promise.allSettled(
-      profilesToDelete.map(profile =>
-        client.raw.deleteProviderProfile({
-          id: profile.id,
-          // A profile removed concurrently by the user is not a failure.
-          allowMissing: true,
-          workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
-        }),
-      ),
+    await Promise.all(
+      profilesToDelete.map(async profile => {
+        try {
+          await client.raw.deleteProviderProfile({
+            id: profile.id,
+            // A profile removed concurrently by the user is not a failure.
+            allowMissing: true,
+            workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+          });
+        } catch (err: unknown) {
+          console.error(
+            `[openshell-profile-synchronizer] failed to delete provider profile ${profile.id} on gateway ${gatewayName}`,
+            err,
+          );
+        }
+      }),
     );
-    profilesToDelete.forEach((profile, index) => {
-      const result = results[index];
-      if (result?.status === 'rejected') {
-        console.error(
-          `[openshell-profile-synchronizer] failed to delete provider profile ${profile.id} on gateway ${gatewayName}`,
-          result.reason,
-        );
-      }
-    });
   }
 
   @preDestroy()

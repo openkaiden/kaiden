@@ -24,56 +24,22 @@ import {
   type ListProviderProfilesResponse,
   ListProviderProfilesResponseSchema,
   type ProviderProfile,
-  ProviderProfileImportItemSchema,
+  type ProviderProfileImportItem,
   ProviderProfileSchema,
 } from '@nvidia/openshell-sdk/raw';
 import { beforeEach, expect, test, vi } from 'vitest';
 
-import { Certificates } from '/@/plugin/certificates.js';
-import { CliToolRegistry } from '/@/plugin/cli-tool-registry.js';
-import { CommandRegistry } from '/@/plugin/command-registry.js';
-import { ConfigurationRegistry } from '/@/plugin/configuration-registry.js';
-import { DefaultConfiguration } from '/@/plugin/default-configuration.js';
-import type { Directories } from '/@/plugin/directories.js';
 import { Emitter } from '/@/plugin/events/emitter.js';
-import { LockedConfiguration } from '/@/plugin/locked-configuration.js';
-import { OpenshellConstants } from '/@/plugin/openshell-cli/openshell-constants.js';
-import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
-import { OpenshellGatewayConfig } from '/@/plugin/openshell-cli/openshell-gateway-config.js';
-import { OpenshellGatewayManager } from '/@/plugin/openshell-cli/openshell-gateway-manager.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
+import { OpenshellProfileOwnership } from '/@/plugin/openshell-cli/openshell-profile-ownership.js';
 import { OpenshellProfileSynchronizer } from '/@/plugin/openshell-cli/openshell-profile-synchronizer.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
-import { Proxy } from '/@/plugin/proxy.js';
-import { StatusBarRegistry } from '/@/plugin/statusbar/statusbar-registry.js';
-import { NotificationRegistry } from '/@/plugin/tasks/notification-registry.js';
-import { TaskManager } from '/@/plugin/tasks/task-manager.js';
-import { Telemetry } from '/@/plugin/telemetry/telemetry.js';
-import { Exec } from '/@/plugin/util/exec.js';
-import { Properties } from '/@/plugin/util/properties.js';
-import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
 
 vi.mock(import('@nvidia/openshell-sdk'));
-vi.mock(import('/@/plugin/certificates.js'));
-vi.mock(import('/@/plugin/cli-tool-registry.js'));
-vi.mock(import('/@/plugin/command-registry.js'));
-vi.mock(import('/@/plugin/configuration-registry.js'));
-vi.mock(import('/@/plugin/default-configuration.js'));
-vi.mock(import('/@/plugin/locked-configuration.js'));
 vi.mock(import('/@/plugin/openshell-registry.js'));
-vi.mock(import('/@/plugin/proxy.js'));
-vi.mock(import('/@/plugin/statusbar/statusbar-registry.js'));
-vi.mock(import('/@/plugin/tasks/notification-registry.js'));
-vi.mock(import('/@/plugin/tasks/task-manager.js'));
-vi.mock(import('/@/plugin/telemetry/telemetry.js'));
-vi.mock(import('/@/plugin/util/exec.js'));
-vi.mock(import('/@/plugin/util/properties.js'));
-vi.mock(import('/@/plugin/openshell-cli/openshell-gateway.js'));
-vi.mock(import('/@/plugin/openshell-cli/openshell-gateway-config.js'));
-vi.mock(import('/@/plugin/openshell-cli/openshell-gateway-manager.js'));
 vi.mock(import('/@/plugin/openshell-cli/openshell-gateway-state-manager.js'));
 vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-client-manager.js'));
 
@@ -87,49 +53,20 @@ function gateway(name: string, reachable: boolean): GatewayInfo {
   };
 }
 
-const apiSender: ApiSenderType = {
-  send: vi.fn(),
-  receive: vi.fn(),
-};
-const directories = {} as Directories;
-const gatewayConfig = new OpenshellGatewayConfig();
-const gatewayManager = new OpenshellGatewayManager(gatewayConfig);
-const defaultConfiguration = new DefaultConfiguration(directories);
-const lockedConfiguration = new LockedConfiguration(directories);
-const configurationRegistry = new ConfigurationRegistry(
-  apiSender,
-  directories,
-  defaultConfiguration,
-  lockedConfiguration,
-);
-const gatewayStateManager = new OpenshellGatewayStateManager(
-  gatewayManager,
-  configurationRegistry,
-  new OpenshellGateway(
-    new CliToolRegistry(apiSender),
-    gatewayManager,
-    directories,
-    new Exec(new Proxy(configurationRegistry, new Certificates())),
-    new NotificationRegistry(
-      apiSender,
-      new TaskManager(
-        apiSender,
-        new StatusBarRegistry(apiSender),
-        new CommandRegistry(apiSender, new Telemetry(configurationRegistry, defaultConfiguration, lockedConfiguration)),
-        configurationRegistry,
-      ),
-    ),
-  ),
-);
-const registry = new OpenShellRegistry(apiSender, new Properties());
-const sdkClientManager = new OpenshellSdkClientManager(gatewayManager, gatewayConfig);
-// OpenShellClient has a private constructor and is only obtainable through the automocked connect().
-const sdkClient = OpenShellClient.prototype;
+// Automocked classes do not get instance fields, so expose the members the synchronizer uses.
+function defineField(target: object, name: string, value: unknown): void {
+  Object.defineProperty(target, name, { value, configurable: true });
+}
 
+let gatewayStateManager: OpenshellGatewayStateManager;
+let registry: OpenShellRegistry;
+let sdkClientManager: OpenshellSdkClientManager;
+let sdkClient: OpenShellClient;
 let onDidUpdateGateways: Emitter<readonly GatewayInfo[]>;
 let onDidRegisterProfile: Emitter<ProviderProfile>;
 let onDidUnregisterProfile: Emitter<ProviderProfile>;
 let synchronizer: OpenshellProfileSynchronizer;
+let profileOwnership: OpenshellProfileOwnership;
 
 // Mirrors the gateway state manager, whose snapshot is up to date when it notifies listeners.
 function updateGateways(gateways: readonly GatewayInfo[]): void {
@@ -137,26 +74,36 @@ function updateGateways(gateways: readonly GatewayInfo[]): void {
   onDidUpdateGateways.fire(gateways);
 }
 
+function ownedProfile(id: string): ProviderProfile {
+  return profileOwnership.annotate(create(ProviderProfileSchema, { id }));
+}
+
+function importItem(id: string): ProviderProfileImportItem {
+  return profileOwnership.toImportItem(create(ProviderProfileSchema, { id }));
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   console.error = vi.fn();
+  profileOwnership = new OpenshellProfileOwnership();
+  gatewayStateManager = OpenshellGatewayStateManager.prototype;
+  registry = OpenShellRegistry.prototype;
+  sdkClientManager = OpenshellSdkClientManager.prototype;
+  // OpenShellClient has a private constructor and is only obtainable through the automocked connect().
+  sdkClient = OpenShellClient.prototype;
+
   onDidUpdateGateways = new Emitter<readonly GatewayInfo[]>();
-  // Automocked classes do not get instance fields, so expose the members the synchronizer uses.
-  Object.defineProperty(gatewayStateManager, 'onDidUpdateGateways', {
-    value: onDidUpdateGateways.event,
-    configurable: true,
-  });
   onDidRegisterProfile = new Emitter<ProviderProfile>();
-  Object.defineProperty(registry, 'onDidRegisterProfile', { value: onDidRegisterProfile.event, configurable: true });
   onDidUnregisterProfile = new Emitter<ProviderProfile>();
-  Object.defineProperty(registry, 'onDidUnregisterProfile', {
-    value: onDidUnregisterProfile.event,
-    configurable: true,
+  defineField(gatewayStateManager, 'onDidUpdateGateways', onDidUpdateGateways.event);
+  defineField(registry, 'onDidRegisterProfile', onDidRegisterProfile.event);
+  defineField(registry, 'onDidUnregisterProfile', onDidUnregisterProfile.event);
+  defineField(sdkClient, 'raw', {
+    listProviderProfiles: vi.fn(),
+    importProviderProfiles: vi.fn(),
+    deleteProviderProfile: vi.fn(),
   });
-  Object.defineProperty(sdkClient, 'raw', {
-    value: { listProviderProfiles: vi.fn(), importProviderProfiles: vi.fn(), deleteProviderProfile: vi.fn() },
-    configurable: true,
-  });
+
   vi.mocked(gatewayStateManager.listGateways).mockReturnValue([]);
   vi.mocked(registry.getProfiles).mockReturnValue([]);
   vi.mocked(sdkClientManager.getClient).mockResolvedValue(sdkClient);
@@ -167,7 +114,7 @@ beforeEach(() => {
     create(ImportProviderProfilesResponseSchema, { imported: true, diagnostics: [] }),
   );
   vi.mocked(sdkClient.raw.deleteProviderProfile).mockResolvedValue(create(DeleteProviderProfileResponseSchema, {}));
-  synchronizer = new OpenshellProfileSynchronizer(gatewayStateManager, registry, sdkClientManager);
+  synchronizer = new OpenshellProfileSynchronizer(gatewayStateManager, registry, sdkClientManager, profileOwnership);
   synchronizer.init();
 });
 
@@ -179,17 +126,7 @@ test('imports missing profiles with the ownership annotation when a gateway beco
 
   await vi.waitFor(() =>
     expect(sdkClient.raw.importProviderProfiles).toHaveBeenCalledWith({
-      profiles: [
-        create(ProviderProfileImportItemSchema, {
-          profile: create(ProviderProfileSchema, {
-            id: 'internal',
-            annotations: {
-              [OpenshellConstants.OWNER_ANNOTATION_KEY]: OpenshellConstants.OWNER_ANNOTATION_VALUE,
-            },
-          }),
-          source: OpenshellConstants.OWNER_ANNOTATION_VALUE,
-        }),
-      ],
+      profiles: [importItem('internal')],
       workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
     }),
   );
@@ -202,15 +139,7 @@ test('imports missing profiles with the ownership annotation when a gateway beco
 test('deletes stale owned profiles and preserves unowned gateway profiles', async () => {
   vi.mocked(sdkClient.raw.listProviderProfiles).mockResolvedValue(
     create(ListProviderProfilesResponseSchema, {
-      profiles: [
-        {
-          id: 'stale',
-          annotations: {
-            [OpenshellConstants.OWNER_ANNOTATION_KEY]: OpenshellConstants.OWNER_ANNOTATION_VALUE,
-          },
-        },
-        { id: 'user-profile', annotations: {} },
-      ],
+      profiles: [ownedProfile('stale'), { id: 'user-profile', annotations: {} }],
     }),
   );
 
@@ -238,19 +167,23 @@ test.each([
     syncs: 1,
   },
 ])('synchronizes profiles $syncs time(s) when $name', async ({ events, syncs }) => {
-  for (const gateways of events) {
+  for (const [index, gateways] of events.entries()) {
+    updateGateways(gateways);
+    // A new probe gateway synced right after reaches getClient after any sync this event scheduled,
+    // so the next event is not coalesced into a sync that has not started yet.
+    const probe = `probe-${index}`;
+    updateGateways([...gateways, gateway(probe, true)]);
+    await vi.waitFor(() => expect(sdkClientManager.getClient).toHaveBeenCalledWith(probe));
     updateGateways(gateways);
   }
-  // Give any (unexpected) scheduled sync a chance to run.
-  await new Promise(resolve => setImmediate(resolve));
 
-  expect(sdkClientManager.getClient).toHaveBeenCalledTimes(syncs);
+  expect(vi.mocked(sdkClientManager.getClient).mock.calls.filter(([name]) => name === 'local')).toHaveLength(syncs);
 });
 
 test('synchronizes gateways already reachable at init', async () => {
   synchronizer.dispose();
   vi.mocked(gatewayStateManager.listGateways).mockReturnValue([gateway('local', true)]);
-  synchronizer = new OpenshellProfileSynchronizer(gatewayStateManager, registry, sdkClientManager);
+  synchronizer = new OpenshellProfileSynchronizer(gatewayStateManager, registry, sdkClientManager, profileOwnership);
   synchronizer.init();
 
   await vi.waitFor(() => expect(sdkClientManager.getClient).toHaveBeenCalledExactlyOnceWith('local'));
@@ -266,17 +199,7 @@ test('imports profiles registered before the first gateway snapshot', async () =
 
   await vi.waitFor(() =>
     expect(sdkClient.raw.importProviderProfiles).toHaveBeenCalledWith({
-      profiles: [
-        create(ProviderProfileImportItemSchema, {
-          profile: create(ProviderProfileSchema, {
-            id: 'early',
-            annotations: {
-              [OpenshellConstants.OWNER_ANNOTATION_KEY]: OpenshellConstants.OWNER_ANNOTATION_VALUE,
-            },
-          }),
-          source: OpenshellConstants.OWNER_ANNOTATION_VALUE,
-        }),
-      ],
+      profiles: [importItem('early')],
       workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
     }),
   );
@@ -285,14 +208,7 @@ test('imports profiles registered before the first gateway snapshot', async () =
 test('deletes stale owned profiles left from a previous session on the first gateway snapshot', async () => {
   vi.mocked(sdkClient.raw.listProviderProfiles).mockResolvedValue(
     create(ListProviderProfilesResponseSchema, {
-      profiles: [
-        {
-          id: 'previous-session',
-          annotations: {
-            [OpenshellConstants.OWNER_ANNOTATION_KEY]: OpenshellConstants.OWNER_ANNOTATION_VALUE,
-          },
-        },
-      ],
+      profiles: [ownedProfile('previous-session')],
     }),
   );
 
@@ -310,7 +226,7 @@ test('deletes stale owned profiles left from a previous session on the first gat
 test('uses the gateways known at init as the reachability baseline', async () => {
   synchronizer.dispose();
   vi.mocked(gatewayStateManager.listGateways).mockReturnValue([gateway('local', false)]);
-  synchronizer = new OpenshellProfileSynchronizer(gatewayStateManager, registry, sdkClientManager);
+  synchronizer = new OpenshellProfileSynchronizer(gatewayStateManager, registry, sdkClientManager, profileOwnership);
   synchronizer.init();
 
   updateGateways([gateway('local', true)]);
@@ -398,17 +314,7 @@ test('imports a profile on reachable gateways when it is registered', async () =
 
   await vi.waitFor(() =>
     expect(sdkClient.raw.importProviderProfiles).toHaveBeenCalledWith({
-      profiles: [
-        create(ProviderProfileImportItemSchema, {
-          profile: create(ProviderProfileSchema, {
-            id: 'internal',
-            annotations: {
-              [OpenshellConstants.OWNER_ANNOTATION_KEY]: OpenshellConstants.OWNER_ANNOTATION_VALUE,
-            },
-          }),
-          source: OpenshellConstants.OWNER_ANNOTATION_VALUE,
-        }),
-      ],
+      profiles: [importItem('internal')],
       workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
     }),
   );
@@ -420,14 +326,7 @@ test('deletes the owned profile from reachable gateways when it is unregistered'
   await vi.waitFor(() => expect(sdkClient.raw.listProviderProfiles).toHaveBeenCalledOnce());
   vi.mocked(sdkClient.raw.listProviderProfiles).mockResolvedValue(
     create(ListProviderProfilesResponseSchema, {
-      profiles: [
-        {
-          id: 'removed',
-          annotations: {
-            [OpenshellConstants.OWNER_ANNOTATION_KEY]: OpenshellConstants.OWNER_ANNOTATION_VALUE,
-          },
-        },
-      ],
+      profiles: [ownedProfile('removed')],
     }),
   );
 
@@ -482,7 +381,6 @@ test('coalesces profile registrations into at most one queued synchronization pe
   resolveFirstList(create(ListProviderProfilesResponseSchema, { profiles: [] }));
 
   await vi.waitFor(() => expect(sdkClient.raw.listProviderProfiles).toHaveBeenCalledTimes(2));
-  expect(sdkClient.raw.listProviderProfiles).toHaveBeenCalledTimes(2);
 });
 
 test('stops reacting to profile registrations once disposed', async () => {
@@ -500,15 +398,7 @@ test('does not import a profile whose id already exists unowned on the gateway',
   vi.mocked(registry.getProfiles).mockReturnValue([create(ProviderProfileSchema, { id: 'existing' })]);
   vi.mocked(sdkClient.raw.listProviderProfiles).mockResolvedValue(
     create(ListProviderProfilesResponseSchema, {
-      profiles: [
-        { id: 'existing', annotations: {} },
-        {
-          id: 'stale',
-          annotations: {
-            [OpenshellConstants.OWNER_ANNOTATION_KEY]: OpenshellConstants.OWNER_ANNOTATION_VALUE,
-          },
-        },
-      ],
+      profiles: [{ id: 'existing', annotations: {} }, ownedProfile('stale')],
     }),
   );
 
@@ -529,12 +419,7 @@ test('deletes every stale owned profile and logs each failure with its profile i
   const failure = new Error('permission denied');
   vi.mocked(sdkClient.raw.listProviderProfiles).mockResolvedValue(
     create(ListProviderProfilesResponseSchema, {
-      profiles: ['failing', 'deleted'].map(id => ({
-        id,
-        annotations: {
-          [OpenshellConstants.OWNER_ANNOTATION_KEY]: OpenshellConstants.OWNER_ANNOTATION_VALUE,
-        },
-      })),
+      profiles: ['failing', 'deleted'].map(ownedProfile),
     }),
   );
   vi.mocked(sdkClient.raw.deleteProviderProfile)

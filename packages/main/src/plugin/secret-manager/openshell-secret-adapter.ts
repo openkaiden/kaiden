@@ -28,6 +28,7 @@ import {
 import { inject, injectable, multiInject } from 'inversify';
 
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
+import { OpenshellProfileOwnership } from '/@/plugin/openshell-cli/openshell-profile-ownership.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
@@ -63,6 +64,8 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
     private readonly openshellNetworkPolicy: OpenshellNetworkPolicy,
     @inject(OpenShellRegistry)
     private readonly openshellRegistry: OpenShellRegistry,
+    @inject(OpenshellProfileOwnership)
+    private readonly profileOwnership: OpenshellProfileOwnership,
   ) {}
 
   async createSecret(options: SecretCreateOptions, gateway: string): Promise<SecretName> {
@@ -183,12 +186,7 @@ export class OpenshellSecretAdapter implements SecretCliBackend {
     }
     const result = await client.raw.importProviderProfiles(
       create(ImportProviderProfilesRequestSchema, {
-        profiles: [
-          {
-            profile,
-            source: 'imported from registry',
-          },
-        ],
+        profiles: [this.profileOwnership.toImportItem(profile)],
         workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
       }),
     );

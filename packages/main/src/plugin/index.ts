@@ -79,6 +79,7 @@ import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-
 import { OpenshellImageBuilder } from '/@/plugin/openshell-cli/openshell-image-builder.js';
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
+import { OpenshellProfileOwnership } from '/@/plugin/openshell-cli/openshell-profile-ownership.js';
 import { OpenshellProfileSynchronizer } from '/@/plugin/openshell-cli/openshell-profile-synchronizer.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
@@ -623,6 +624,7 @@ export class PluginSystem {
     container.bind<OpenshellSdkFileTransfer>(OpenshellSdkFileTransfer).toSelf().inSingletonScope();
     container.bind<OpenshellGateway>(OpenshellGateway).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayStateManager>(OpenshellGatewayStateManager).toSelf().inSingletonScope();
+    container.bind<OpenshellProfileOwnership>(OpenshellProfileOwnership).toSelf().inSingletonScope();
     container.bind<OpenshellProfileSynchronizer>(OpenshellProfileSynchronizer).toSelf().inSingletonScope();
     container.bind<OpenshellImageBuilder>(OpenshellImageBuilder).toSelf().inSingletonScope();
     container.bind<AgentWorkspaceManager>(AgentWorkspaceManager).toSelf().inSingletonScope();

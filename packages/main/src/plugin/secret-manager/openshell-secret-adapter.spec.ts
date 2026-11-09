@@ -27,6 +27,7 @@ import {
 import { beforeEach, describe, expect, type Mock, test, vi } from 'vitest';
 
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
+import { OpenshellProfileOwnership } from '/@/plugin/openshell-cli/openshell-profile-ownership.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
@@ -62,6 +63,7 @@ let defaultFactory: DefaultProviderFactory;
 let gcloudFactory: GcloudAdcProviderFactory;
 const openshellNetworkPolicy = new OpenshellNetworkPolicy();
 let openshellRegistry: OpenShellRegistry;
+let profileOwnership: OpenshellProfileOwnership;
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -83,6 +85,7 @@ beforeEach(() => {
   vi.spyOn(gcloudFactory, 'createProvider').mockResolvedValue(undefined);
 
   openshellRegistry = new OpenShellRegistry(apiSender, properties);
+  profileOwnership = new OpenshellProfileOwnership();
 
   adapter = new OpenshellSecretAdapter(
     sdkClientManager,
@@ -90,6 +93,7 @@ beforeEach(() => {
     defaultFactory,
     openshellNetworkPolicy,
     openshellRegistry,
+    profileOwnership,
   );
 });
 
@@ -589,12 +593,7 @@ describe('ensureProfileOnGateway', () => {
 
     expect(mockRaw.importProviderProfiles).toHaveBeenCalledWith(
       create(ImportProviderProfilesRequestSchema, {
-        profiles: [
-          {
-            profile: create(ProviderProfileSchema, { id: 'google-vertex-ai' }),
-            source: 'imported from registry',
-          },
-        ],
+        profiles: [profileOwnership.toImportItem(create(ProviderProfileSchema, { id: 'google-vertex-ai' }))],
         workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
       }),
     );
