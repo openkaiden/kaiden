@@ -33,6 +33,7 @@ import * as configWriter from '/@/plugin/agent-workspace/workspace-config-writer
 import type { IPCHandle } from '/@/plugin/api.js';
 import type { Directories } from '/@/plugin/directories.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
+import { type GatewayPollOptions, OpenshellGatewayPoller } from '/@/plugin/openshell-cli/openshell-gateway-poller.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
@@ -62,6 +63,7 @@ vi.mock(import('node:fs/promises'));
 vi.mock(import('node:os'));
 vi.mock(import('js-yaml'));
 vi.mock(import('yaml'));
+vi.mock(import('/@/plugin/openshell-cli/openshell-gateway-poller.js'));
 vi.mock(import('/@/plugin/openshell-cli/openshell-policy-manager.js'));
 vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-file-transfer.js'));
 
@@ -202,7 +204,6 @@ const providerRegistry = {
 let gatewayStartCallback: (() => void) | undefined;
 let gatewayInitFailedCallback: ((message: string) => void) | undefined;
 let gatewayStateUpdateCallback: (() => void) | undefined;
-let gatewayPollCallback: ((gateways: readonly GatewayInfo[]) => void) | undefined;
 
 const openshellGateway = {
   createLocalGateway: vi.fn(),
@@ -226,10 +227,6 @@ const openshellGatewayStateManager = {
   whenReady: vi.fn(),
   onDidUpdateGateways: vi.fn((cb: () => void) => {
     gatewayStateUpdateCallback = cb;
-    return { dispose: vi.fn() };
-  }),
-  onDidPoll: vi.fn((cb: (gateways: readonly GatewayInfo[]) => void) => {
-    gatewayPollCallback = cb;
     return { dispose: vi.fn() };
   }),
 } as unknown as OpenshellGatewayStateManager;
@@ -314,7 +311,7 @@ beforeEach(() => {
   gatewayStartCallback = undefined;
   gatewayInitFailedCallback = undefined;
   gatewayStateUpdateCallback = undefined;
-  gatewayPollCallback = undefined;
+  vi.mocked(OpenshellGatewayPoller.prototype.watch).mockReturnValue({ dispose: vi.fn() });
   manager = new AgentWorkspaceManager(
     apiSender,
     ipcHandle,
@@ -332,6 +329,7 @@ beforeEach(() => {
     openshellPolicyManager,
     openshellNetworkPolicy,
     TEST_SHELL_COMMAND,
+    new OpenshellGatewayPoller(openshellGatewayStateManager),
   );
   manager.init();
 });
@@ -465,164 +463,52 @@ describe('init', () => {
 });
 
 describe('sandbox polling', () => {
-  const reachableGateway: GatewayInfo = {
-    ...TEST_GATEWAY,
-    gatewayState: { reachable: true, health: 'healthy', compatible: true },
-  };
-  const unreachableGateway: GatewayInfo = {
-    ...ADDITIONAL_GATEWAY,
-    gatewayState: { reachable: false, health: 'unknown', compatible: false },
-  };
-  const never = (): Promise<never> => new Promise<never>(() => {});
-
-  beforeEach(() => {
-    console.warn = vi.fn();
-  });
-
-  // Triggers a poll tick and lets it settle (the SDK mocks resolve as microtasks), so ticks never overlap.
-  async function poll(gateways: readonly GatewayInfo[]): Promise<void> {
-    assert(gatewayPollCallback);
-    gatewayPollCallback(gateways);
-    await new Promise(resolve => setImmediate(resolve));
+  function watchedSandboxes(): GatewayPollOptions<unknown> {
+    const [options] = vi.mocked(OpenshellGatewayPoller.prototype.watch).mock.calls[0] ?? [];
+    assert(options);
+    return options;
   }
 
-  function workspaceUpdateCount(): number {
-    return vi.mocked(apiSender.send).mock.calls.filter(([channel]) => channel === 'agent-workspace-update').length;
-  }
-
-  test('sends a workspace update when the sandbox list changes', async () => {
-    mockSdkListSandboxes([]);
-    await poll([reachableGateway]);
-    await vi.waitFor(() => expect(workspaceUpdateCount()).toBe(1));
-
-    mockSdkListSandboxes();
-    await poll([reachableGateway]);
-
-    await vi.waitFor(() => expect(workspaceUpdateCount()).toBe(2));
+  test('watches sandboxes on the gateway poll', () => {
+    expect(OpenshellGatewayPoller.prototype.watch).toHaveBeenCalledWith(
+      expect.objectContaining({ label: 'sandboxes' }),
+    );
   });
 
-  test('does not send a workspace update when the sandbox list is unchanged', async () => {
+  test('lists the sandboxes of the polled gateway', async () => {
     mockSdkListSandboxes();
-    await poll([reachableGateway]);
-    await poll([reachableGateway]);
 
-    expect(workspaceUpdateCount()).toBe(1);
+    const sandboxes = await watchedSandboxes().list(TEST_GATEWAY);
+
+    expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith(TEST_GATEWAY.name);
+    expect(sandboxes).toEqual(TEST_SDK_REFS.map(ref => expect.objectContaining({ name: ref.name })));
   });
 
-  test('does not send a workspace update when only the resource version changed', async () => {
+  test('serializes only what the list displays', async () => {
+    const { list, serialize } = watchedSandboxes();
     mockSdkListSandboxes();
-    await poll([reachableGateway]);
+    const initial = serialize(await list(TEST_GATEWAY));
 
     mockSdkListSandboxes(TEST_SDK_REFS.map(ref => ({ ...ref, resourceVersion: `${ref.resourceVersion}0` })));
-    await poll([reachableGateway]);
+    expect(serialize(await list(TEST_GATEWAY))).toBe(initial);
 
-    expect(workspaceUpdateCount()).toBe(1);
+    mockSdkListSandboxes([]);
+    expect(serialize(await list(TEST_GATEWAY))).not.toBe(initial);
   });
 
-  test('keeps the last sandbox list when listing fails on a reachable gateway', async () => {
-    mockSdkListSandboxes();
-    await poll([reachableGateway]);
-    await vi.waitFor(() => expect(workspaceUpdateCount()).toBe(1));
+  test('sends a workspace update when the sandboxes changed', () => {
+    watchedSandboxes().onChange();
 
-    vi.mocked(openshellSdkClientManager.getClient).mockRejectedValue(new Error('connection refused'));
-    await poll([reachableGateway]);
-    expect(workspaceUpdateCount()).toBe(1);
-
-    mockSdkListSandboxes();
-    await poll([reachableGateway]);
-
-    expect(workspaceUpdateCount()).toBe(1);
+    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
   });
 
-  test('logs a failing gateway once until it recovers', async () => {
-    vi.mocked(openshellSdkClientManager.getClient).mockRejectedValue(new Error('connection refused'));
-    await poll([reachableGateway]);
-    await poll([reachableGateway]);
-    expect(console.warn).toHaveBeenCalledOnce();
+  test('stops watching sandboxes when disposed', () => {
+    const [subscription] = vi.mocked(OpenshellGatewayPoller.prototype.watch).mock.results;
+    assert(subscription?.type === 'return');
 
-    mockSdkListSandboxes();
-    await poll([reachableGateway]);
-    vi.mocked(openshellSdkClientManager.getClient).mockRejectedValue(new Error('connection refused'));
-    await poll([reachableGateway]);
+    manager.dispose();
 
-    expect(console.warn).toHaveBeenCalledTimes(2);
-  });
-
-  test('does not list sandboxes on unreachable gateways', async () => {
-    mockSdkListSandboxes();
-
-    await poll([reachableGateway, unreachableGateway]);
-
-    expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith(reachableGateway.name);
-    expect(openshellSdkClientManager.getClient).not.toHaveBeenCalledWith(unreachableGateway.name);
-  });
-
-  test('sends one update when a gateway becomes unreachable, then stops listing it', async () => {
-    mockSdkListSandboxes();
-    await poll([reachableGateway]);
-    const listCalls = vi.mocked(openshellSdkClientManager.getClient).mock.calls.length;
-
-    const unreachable: GatewayInfo = {
-      ...reachableGateway,
-      gatewayState: { reachable: false, health: 'unknown', compatible: false },
-    };
-    await poll([unreachable]);
-    await poll([unreachable]);
-
-    expect(workspaceUpdateCount()).toBe(2);
-    expect(openshellSdkClientManager.getClient).toHaveBeenCalledTimes(listCalls);
-  });
-
-  test('skips a tick while the previous poll is still running', async () => {
-    mockSdkListSandboxes();
-    vi.mocked(openshellSdkClientManager.getClient).mockReturnValue(never());
-
-    await poll([reachableGateway]);
-    await poll([reachableGateway]);
-
-    expect(openshellSdkClientManager.getClient).toHaveBeenCalledOnce();
-  });
-
-  test('releases the poll after a hung gateway times out', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
-      vi.mocked(openshellSdkClientManager.getClient).mockReturnValue(never());
-      await poll([reachableGateway]);
-
-      await vi.advanceTimersByTimeAsync(10_000);
-      await poll([reachableGateway]);
-
-      expect(openshellSdkClientManager.getClient).toHaveBeenCalledTimes(2);
-      expect(console.warn).toHaveBeenCalledExactlyOnceWith(
-        `[AgentWorkspaceManager] unable to poll sandboxes of gateway ${reachableGateway.name}:`,
-        new Error(`listing sandboxes of gateway ${reachableGateway.name} timed out after 10000ms`),
-      );
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  test('lists other gateways while one is hung', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
-      mockSdkListSandboxes();
-      const listing = vi.mocked(openshellSdkClientManager.getClient).getMockImplementation();
-      assert(listing);
-      vi.mocked(openshellSdkClientManager.getClient).mockImplementation(name =>
-        name === reachableGateway.name ? never() : listing(name),
-      );
-      const otherGateway: GatewayInfo = { ...unreachableGateway, gatewayState: reachableGateway.gatewayState };
-
-      await poll([reachableGateway, otherGateway]);
-      expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith(otherGateway.name);
-      expect(workspaceUpdateCount()).toBe(0);
-
-      await vi.advanceTimersByTimeAsync(10_000);
-
-      expect(workspaceUpdateCount()).toBe(1);
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(subscription.value.dispose).toHaveBeenCalledOnce();
   });
 });
 
