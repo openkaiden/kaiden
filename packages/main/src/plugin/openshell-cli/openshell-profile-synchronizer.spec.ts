@@ -63,6 +63,7 @@ let registry: OpenShellRegistry;
 let sdkClientManager: OpenshellSdkClientManager;
 let sdkClient: OpenShellClient;
 let onDidUpdateGateways: Emitter<readonly GatewayInfo[]>;
+let onDidPoll: Emitter<readonly GatewayInfo[]>;
 let onDidRegisterProfile: Emitter<ProviderProfile>;
 let onDidUnregisterProfile: Emitter<ProviderProfile>;
 let synchronizer: OpenshellProfileSynchronizer;
@@ -93,9 +94,11 @@ beforeEach(() => {
   sdkClient = OpenShellClient.prototype;
 
   onDidUpdateGateways = new Emitter<readonly GatewayInfo[]>();
+  onDidPoll = new Emitter<readonly GatewayInfo[]>();
   onDidRegisterProfile = new Emitter<ProviderProfile>();
   onDidUnregisterProfile = new Emitter<ProviderProfile>();
   defineField(gatewayStateManager, 'onDidUpdateGateways', onDidUpdateGateways.event);
+  defineField(gatewayStateManager, 'onDidPoll', onDidPoll.event);
   defineField(registry, 'onDidRegisterProfile', onDidRegisterProfile.event);
   defineField(registry, 'onDidUnregisterProfile', onDidUnregisterProfile.event);
   defineField(sdkClient, 'raw', {
@@ -460,4 +463,37 @@ test('synchronizes every currently reachable gateway when a profile is registere
   onDidRegisterProfile.fire(create(ProviderProfileSchema, { id: 'internal' }));
 
   await vi.waitFor(() => expect(sdkClientManager.getClient).toHaveBeenCalledExactlyOnceWith('local'));
+});
+
+test('re-imports a profile removed from a reachable gateway on the next poll', async () => {
+  vi.mocked(registry.getProfiles).mockReturnValue([create(ProviderProfileSchema, { id: 'internal' })]);
+  vi.mocked(sdkClient.raw.listProviderProfiles).mockResolvedValue(
+    create(ListProviderProfilesResponseSchema, { profiles: [ownedProfile('internal')] }),
+  );
+  updateGateways([gateway('local', true)]);
+  await vi.waitFor(() => expect(sdkClient.raw.listProviderProfiles).toHaveBeenCalledOnce());
+  expect(sdkClient.raw.importProviderProfiles).not.toHaveBeenCalled();
+
+  // the profile was deleted on the gateway outside Kaiden
+  vi.mocked(sdkClient.raw.listProviderProfiles).mockResolvedValue(
+    create(ListProviderProfilesResponseSchema, { profiles: [] }),
+  );
+  onDidPoll.fire([gateway('local', true)]);
+
+  await vi.waitFor(() =>
+    expect(sdkClient.raw.importProviderProfiles).toHaveBeenCalledWith({
+      profiles: [importItem('internal')],
+      workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+    }),
+  );
+});
+
+test('does not synchronize unreachable gateways on poll', async () => {
+  updateGateways([gateway('local', false)]);
+
+  onDidPoll.fire([gateway('local', false)]);
+  // a scheduled sync would request its client after a microtask
+  await new Promise(resolve => setImmediate(resolve));
+
+  expect(sdkClientManager.getClient).not.toHaveBeenCalled();
 });

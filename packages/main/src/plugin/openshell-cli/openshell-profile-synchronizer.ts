@@ -29,8 +29,9 @@ import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
 
 /**
  * Pushes Kaiden provider profiles to a gateway the first time it is seen reachable and whenever it
- * transitions from unreachable to reachable, and to every reachable gateway when a profile is
- * registered or unregistered, outside of the gateway state polling path.
+ * transitions from unreachable to reachable, to every reachable gateway when a profile is registered
+ * or unregistered, and to every reachable gateway on each gateway poll tick, so profiles removed
+ * outside Kaiden (e.g. with the openshell CLI) are restored.
  */
 @injectable()
 export class OpenshellProfileSynchronizer implements Disposable {
@@ -55,6 +56,8 @@ export class OpenshellProfileSynchronizer implements Disposable {
       this.gatewayStateManager.onDidUpdateGateways(gateways => this.handleUpdate(gateways)),
       this.registry.onDidRegisterProfile(() => this.syncReachableGateways()),
       this.registry.onDidUnregisterProfile(() => this.syncReachableGateways()),
+      // Restores Kaiden profiles removed from a gateway outside Kaiden (e.g. with the openshell CLI).
+      this.gatewayStateManager.onDidPoll(() => this.syncReachableGateways()),
     );
     // The first gateway snapshot is usually not available yet; when it arrives, its reachable gateways are synced.
     this.handleUpdate(this.gatewayStateManager.listGateways());
