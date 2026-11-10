@@ -66,7 +66,10 @@ export class SettingsModelsPage extends BasePage {
     // inside the table body. The header row also has role="row", so we count
     // all rows and subtract 1 for the header.
     const table = this.page.getByRole('table');
-    const isTableVisible = await table.first().isVisible().catch(() => false);
+    const isTableVisible = await table
+      .first()
+      .isVisible()
+      .catch(() => false);
     if (!isTableVisible) {
       return 0;
     }
@@ -82,7 +85,10 @@ export class SettingsModelsPage extends BasePage {
    */
   async getModelLabels(): Promise<string[]> {
     const table = this.page.getByRole('table');
-    const isTableVisible = await table.first().isVisible().catch(() => false);
+    const isTableVisible = await table
+      .first()
+      .isVisible()
+      .catch(() => false);
     if (!isTableVisible) {
       return [];
     }
