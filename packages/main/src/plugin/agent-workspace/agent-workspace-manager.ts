@@ -84,6 +84,8 @@ const MOUNT_HOME_PREFIX = '$HOME';
 // Timeouts for sandbox startup and deletion cleanup for sdk.
 const SANDBOX_READY_TIMEOUT_SECONDS = 300;
 const SANDBOX_DELETE_TIMEOUT_SECONDS = 120;
+// The SDK list call takes no timeout, so a hung gateway would otherwise block every later poll.
+const SANDBOX_POLL_TIMEOUT_MS = 10_000;
 const DEFAULT_TERMINAL_SCROLLBACK = 1000;
 
 export interface AgentTerminalClient {
@@ -752,6 +754,23 @@ export class AgentWorkspaceManager implements Disposable {
     return sandboxes;
   }
 
+  // Listing is read-only, so a late response after the timeout is simply dropped.
+  private async listGatewaySandboxesWithTimeout(gateway: GatewayInfo): Promise<SandboxInfo[]> {
+    const timedOut = Promise.withResolvers<never>();
+    const timer = setTimeout(
+      () =>
+        timedOut.reject(
+          new Error(`listing sandboxes of gateway ${gateway.name} timed out after ${SANDBOX_POLL_TIMEOUT_MS}ms`),
+        ),
+      SANDBOX_POLL_TIMEOUT_MS,
+    );
+    try {
+      return await Promise.race([this.listGatewaySandboxes(gateway), timedOut.promise]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   // Lists sandboxes of reachable gateways only, so polling stops while a gateway is unhealthy.
   // A failed listing keeps the previous snapshot of that gateway instead of reporting it empty.
   private async pollSandboxes(gateways: readonly GatewayInfo[]): Promise<void> {
@@ -762,23 +781,25 @@ export class AgentWorkspaceManager implements Disposable {
     try {
       const snapshots = new Map<string, string>();
       const reachable = gateways.filter(gw => gw.gatewayState?.reachable);
-      for (const gateway of reachable) {
-        try {
-          const sandboxes = await this.listGatewaySandboxes(gateway);
-          // only the fields the list displays: resource_version may change without a visible difference
-          snapshots.set(gateway.name, JSON.stringify(sandboxes.map(s => [s.id, s.name, s.phase, s.labels])));
-          this.sandboxPollFailures.delete(gateway.name);
-        } catch (err: unknown) {
-          if (!this.sandboxPollFailures.has(gateway.name)) {
-            this.sandboxPollFailures.add(gateway.name);
-            console.warn(`[AgentWorkspaceManager] unable to poll sandboxes of gateway ${gateway.name}:`, err);
+      await Promise.all(
+        reachable.map(async gateway => {
+          try {
+            const sandboxes = await this.listGatewaySandboxesWithTimeout(gateway);
+            // only the fields the list displays: resource_version may change without a visible difference
+            snapshots.set(gateway.name, JSON.stringify(sandboxes.map(s => [s.id, s.name, s.phase, s.labels])));
+            this.sandboxPollFailures.delete(gateway.name);
+          } catch (err: unknown) {
+            if (!this.sandboxPollFailures.has(gateway.name)) {
+              this.sandboxPollFailures.add(gateway.name);
+              console.warn(`[AgentWorkspaceManager] unable to poll sandboxes of gateway ${gateway.name}:`, err);
+            }
+            const previous = this.sandboxSnapshots.get(gateway.name);
+            if (previous !== undefined) {
+              snapshots.set(gateway.name, previous);
+            }
           }
-          const previous = this.sandboxSnapshots.get(gateway.name);
-          if (previous !== undefined) {
-            snapshots.set(gateway.name, previous);
-          }
-        }
-      }
+        }),
+      );
       for (const name of this.sandboxPollFailures) {
         if (!reachable.some(gw => gw.name === name)) {
           this.sandboxPollFailures.delete(name);

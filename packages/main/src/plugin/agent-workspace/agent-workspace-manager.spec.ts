@@ -582,6 +582,48 @@ describe('sandbox polling', () => {
 
     expect(openshellSdkClientManager.getClient).toHaveBeenCalledOnce();
   });
+
+  test('releases the poll after a hung gateway times out', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      vi.mocked(openshellSdkClientManager.getClient).mockReturnValue(never());
+      await poll([reachableGateway]);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      await poll([reachableGateway]);
+
+      expect(openshellSdkClientManager.getClient).toHaveBeenCalledTimes(2);
+      expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+        `[AgentWorkspaceManager] unable to poll sandboxes of gateway ${reachableGateway.name}:`,
+        new Error(`listing sandboxes of gateway ${reachableGateway.name} timed out after 10000ms`),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('lists other gateways while one is hung', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      mockSdkListSandboxes();
+      const listing = vi.mocked(openshellSdkClientManager.getClient).getMockImplementation();
+      assert(listing);
+      vi.mocked(openshellSdkClientManager.getClient).mockImplementation(name =>
+        name === reachableGateway.name ? never() : listing(name),
+      );
+      const otherGateway: GatewayInfo = { ...unreachableGateway, gatewayState: reachableGateway.gatewayState };
+
+      await poll([reachableGateway, otherGateway]);
+      expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith(otherGateway.name);
+      expect(workspaceUpdateCount()).toBe(0);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(workspaceUpdateCount()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 test('rejects with a descriptive error when model is missing at runtime', async () => {
