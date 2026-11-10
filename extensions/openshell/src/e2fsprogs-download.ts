@@ -45,6 +45,7 @@ const DARWIN_LIBRARY_STEMS = ['libblkid', 'libcom_err', 'libe2p', 'libext2fs', '
 const BINARIES = [
   { name: 'mkfs.ext4', payload: 'mke2fs' },
   { name: 'debugfs', payload: 'debugfs' },
+  { name: 'e2fsck', payload: 'e2fsck' },
 ];
 
 interface OciDescriptor {
@@ -415,7 +416,10 @@ export async function downloadMkfsExt4(
     if (platform === 'darwin') {
       const libDir = join(outputDir, runtimeDirectoryName('darwin'), 'lib');
       await stageGettextLibrary(arch, libDir);
-      relocated = await new HomebrewRelocator().relocate(join(outputDir, runtimeDirectoryName('darwin')));
+      relocated = await new HomebrewRelocator().relocate(
+        join(outputDir, runtimeDirectoryName('darwin')),
+        BINARIES.map(binary => binary.payload),
+      );
     }
     await writeFile(versionFile, `${versionPrefix}${relocated ? '-relocated' : ''}`, { encoding: 'utf-8' });
   } catch (error) {

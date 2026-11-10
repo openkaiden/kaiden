@@ -32,11 +32,17 @@ vi.mock(import('node:os'));
 const execFileAsync = vi.mocked(promisify(execFile));
 const readdirMock = vi.mocked(readdir as (path: string) => Promise<string[]>);
 
+const EXECUTABLES = ['mke2fs', 'debugfs', 'e2fsck'];
+
 const MKE2FS_OTOOL = `/rt/mke2fs:
 \t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
 `;
 const DEBUGFS_OTOOL = `/rt/debugfs:
 \t@@HOMEBREW_PREFIX@@/opt/gettext/lib/libintl.8.dylib (compatibility version 13.0.0, current version 13.6.0)
+\t@@HOMEBREW_CELLAR@@/e2fsprogs/1.47.4/lib/libext2fs.2.1.dylib (compatibility version 1.0.0, current version 2.1.0)
+\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+`;
+const E2FSCK_OTOOL = `/rt/e2fsck:
 \t@@HOMEBREW_CELLAR@@/e2fsprogs/1.47.4/lib/libext2fs.2.1.dylib (compatibility version 1.0.0, current version 2.1.0)
 \t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
 `;
@@ -68,12 +74,13 @@ beforeEach(() => {
 });
 
 test('rewrites Homebrew placeholders to @loader_path and re-signs each file', async () => {
-  queueOutputs([MKE2FS_OTOOL, '', DEBUGFS_OTOOL, '', '', LIBEXT2FS_OTOOL, '', '', LIBINTL_OTOOL]);
+  queueOutputs([MKE2FS_OTOOL, '', DEBUGFS_OTOOL, '', '', E2FSCK_OTOOL, '', '', LIBEXT2FS_OTOOL, '', '', LIBINTL_OTOOL]);
 
-  await expect(new HomebrewRelocator().relocate('/rt')).resolves.toBe(true);
+  await expect(new HomebrewRelocator().relocate('/rt', EXECUTABLES)).resolves.toBe(true);
 
   expect(chmod).toHaveBeenCalledWith('/rt/mke2fs', 0o755);
   expect(chmod).toHaveBeenCalledWith('/rt/debugfs', 0o755);
+  expect(chmod).toHaveBeenCalledWith('/rt/e2fsck', 0o755);
   expect(chmod).toHaveBeenCalledWith('/rt/lib/libext2fs.2.1.dylib', 0o644);
   expect(chmod).toHaveBeenCalledWith('/rt/lib/libintl.8.dylib', 0o644);
   expect(argsOf('/usr/bin/install_name_tool')).toEqual([
@@ -85,6 +92,12 @@ test('rewrites Homebrew placeholders to @loader_path and re-signs each file', as
       '@@HOMEBREW_CELLAR@@/e2fsprogs/1.47.4/lib/libext2fs.2.1.dylib',
       '@loader_path/lib/libext2fs.2.1.dylib',
       '/rt/debugfs',
+    ],
+    [
+      '-change',
+      '@@HOMEBREW_CELLAR@@/e2fsprogs/1.47.4/lib/libext2fs.2.1.dylib',
+      '@loader_path/lib/libext2fs.2.1.dylib',
+      '/rt/e2fsck',
     ],
     [
       '-id',
@@ -109,6 +122,7 @@ test('rewrites Homebrew placeholders to @loader_path and re-signs each file', as
   expect(argsOf('/usr/bin/codesign')).toEqual([
     ['--force', '--sign', '-', '/rt/mke2fs'],
     ['--force', '--sign', '-', '/rt/debugfs'],
+    ['--force', '--sign', '-', '/rt/e2fsck'],
     ['--force', '--sign', '-', '/rt/lib/libext2fs.2.1.dylib'],
     ['--force', '--sign', '-', '/rt/lib/libintl.8.dylib'],
   ]);
@@ -117,7 +131,7 @@ test('rewrites Homebrew placeholders to @loader_path and re-signs each file', as
 test.each(['linux', 'win32'] as const)('skips relocation when downloading macOS binaries on %s', async host => {
   vi.mocked(platform).mockReturnValue(host);
 
-  await expect(new HomebrewRelocator().relocate('/rt')).resolves.toBe(false);
+  await expect(new HomebrewRelocator().relocate('/rt', EXECUTABLES)).resolves.toBe(false);
 
   expect(execFileAsync).not.toHaveBeenCalled();
   expect(chmod).not.toHaveBeenCalled();
@@ -127,7 +141,7 @@ test('propagates install_name_tool failures', async () => {
   queueOutputs([MKE2FS_OTOOL, '', DEBUGFS_OTOOL]);
   execFileAsync.mockRejectedValueOnce(new Error('install_name_tool failed'));
 
-  await expect(new HomebrewRelocator().relocate('/rt')).rejects.toThrow('install_name_tool failed');
+  await expect(new HomebrewRelocator().relocate('/rt', EXECUTABLES)).rejects.toThrow('install_name_tool failed');
   expect(argsOf('/usr/bin/codesign')).toEqual([['--force', '--sign', '-', '/rt/mke2fs']]);
 });
 
@@ -138,7 +152,7 @@ test('fails when a Homebrew dependency is not bundled', async () => {
     '/rt/debugfs:\n\t@@HOMEBREW_PREFIX@@/opt/foo/lib/libfoo.1.dylib (compatibility version 1.0.0, current version 1.0.0)\n',
   ]);
 
-  await expect(new HomebrewRelocator().relocate('/rt')).rejects.toThrow(
+  await expect(new HomebrewRelocator().relocate('/rt', EXECUTABLES)).rejects.toThrow(
     'Cannot relocate /rt/debugfs: bundled library not found for @@HOMEBREW_PREFIX@@/opt/foo/lib/libfoo.1.dylib',
   );
   expect(argsOf('/usr/bin/install_name_tool')).toEqual([]);
