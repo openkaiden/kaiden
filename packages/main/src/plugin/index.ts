@@ -75,6 +75,7 @@ import { NavigationManager } from '/@/plugin/navigation/navigation-manager.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { OpenshellGatewayConfig } from '/@/plugin/openshell-cli/openshell-gateway-config.js';
 import { OpenshellGatewayManager } from '/@/plugin/openshell-cli/openshell-gateway-manager.js';
+import { OpenshellGatewayPoller } from '/@/plugin/openshell-cli/openshell-gateway-poller.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
 import { OpenshellImageBuilder } from '/@/plugin/openshell-cli/openshell-image-builder.js';
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
@@ -624,6 +625,7 @@ export class PluginSystem {
     container.bind<OpenshellSdkFileTransfer>(OpenshellSdkFileTransfer).toSelf().inSingletonScope();
     container.bind<OpenshellGateway>(OpenshellGateway).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayStateManager>(OpenshellGatewayStateManager).toSelf().inSingletonScope();
+    container.bind<OpenshellGatewayPoller>(OpenshellGatewayPoller).toSelf().inSingletonScope();
     container.bind<OpenshellProfileOwnership>(OpenshellProfileOwnership).toSelf().inSingletonScope();
     container.bind<OpenshellProfileSynchronizer>(OpenshellProfileSynchronizer).toSelf().inSingletonScope();
     container.bind<OpenshellImageBuilder>(OpenshellImageBuilder).toSelf().inSingletonScope();
