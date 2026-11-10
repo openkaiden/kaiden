@@ -38,7 +38,7 @@ prepare:
       # passt provides pasta: OpenShell fails closed unless Podman reports
       # rootlessNetworkCmd=pasta, so install it explicitly rather than rely on
       # podman's transitive deps.
-      dnf install -y alsa-lib at-spi2-atk atk cairo cups-libs gcc-c++ git gnome-keyring gtk3 libdrm libX11 libXcomposite libXdamage libXext libXfixes libXi libXrandr libXScrnSaver libXtst mesa-libgbm nss pango passt podman xdg-utils xorg-x11-server-Xvfb
+      dnf install -y alsa-lib at-spi2-atk atk cairo cups-libs gcc-c++ git gnome-keyring gtk3 libdrm libX11 libXcomposite libXdamage libXext libXfixes libXi libXrandr libXScrnSaver libXtst mesa-libgbm nss pango passt podman xdg-utils xorg-x11-server-Xvfb zstd
   - name: Enable rootless Podman for an unprivileged user
     how: shell
     script: |
