@@ -202,6 +202,7 @@ const providerRegistry = {
 let gatewayStartCallback: (() => void) | undefined;
 let gatewayInitFailedCallback: ((message: string) => void) | undefined;
 let gatewayStateUpdateCallback: (() => void) | undefined;
+let gatewayPollCallback: ((gateways: readonly GatewayInfo[]) => void) | undefined;
 
 const openshellGateway = {
   createLocalGateway: vi.fn(),
@@ -225,6 +226,10 @@ const openshellGatewayStateManager = {
   whenReady: vi.fn(),
   onDidUpdateGateways: vi.fn((cb: () => void) => {
     gatewayStateUpdateCallback = cb;
+    return { dispose: vi.fn() };
+  }),
+  onDidPoll: vi.fn((cb: (gateways: readonly GatewayInfo[]) => void) => {
+    gatewayPollCallback = cb;
     return { dispose: vi.fn() };
   }),
 } as unknown as OpenshellGatewayStateManager;
@@ -309,6 +314,7 @@ beforeEach(() => {
   gatewayStartCallback = undefined;
   gatewayInitFailedCallback = undefined;
   gatewayStateUpdateCallback = undefined;
+  gatewayPollCallback = undefined;
   manager = new AgentWorkspaceManager(
     apiSender,
     ipcHandle,
@@ -455,6 +461,126 @@ describe('init', () => {
   test('sends gateway update event when monitored gateway state changes', () => {
     gatewayStateUpdateCallback!();
     expect(apiSender.send).toHaveBeenCalledWith('agent-gateway-update');
+  });
+});
+
+describe('sandbox polling', () => {
+  const reachableGateway: GatewayInfo = {
+    ...TEST_GATEWAY,
+    gatewayState: { reachable: true, health: 'healthy', compatible: true },
+  };
+  const unreachableGateway: GatewayInfo = {
+    ...ADDITIONAL_GATEWAY,
+    gatewayState: { reachable: false, health: 'unknown', compatible: false },
+  };
+  const never = (): Promise<never> => new Promise<never>(() => {});
+
+  beforeEach(() => {
+    console.warn = vi.fn();
+  });
+
+  // Triggers a poll tick and lets it settle (the SDK mocks resolve as microtasks), so ticks never overlap.
+  async function poll(gateways: readonly GatewayInfo[]): Promise<void> {
+    assert(gatewayPollCallback);
+    gatewayPollCallback(gateways);
+    await new Promise(resolve => setImmediate(resolve));
+  }
+
+  function workspaceUpdateCount(): number {
+    return vi.mocked(apiSender.send).mock.calls.filter(([channel]) => channel === 'agent-workspace-update').length;
+  }
+
+  test('sends a workspace update when the sandbox list changes', async () => {
+    mockSdkListSandboxes([]);
+    await poll([reachableGateway]);
+    await vi.waitFor(() => expect(workspaceUpdateCount()).toBe(1));
+
+    mockSdkListSandboxes();
+    await poll([reachableGateway]);
+
+    await vi.waitFor(() => expect(workspaceUpdateCount()).toBe(2));
+  });
+
+  test('does not send a workspace update when the sandbox list is unchanged', async () => {
+    mockSdkListSandboxes();
+    await poll([reachableGateway]);
+    await poll([reachableGateway]);
+
+    expect(workspaceUpdateCount()).toBe(1);
+  });
+
+  test('does not send a workspace update when only the resource version changed', async () => {
+    mockSdkListSandboxes();
+    await poll([reachableGateway]);
+
+    mockSdkListSandboxes(TEST_SDK_REFS.map(ref => ({ ...ref, resourceVersion: `${ref.resourceVersion}0` })));
+    await poll([reachableGateway]);
+
+    expect(workspaceUpdateCount()).toBe(1);
+  });
+
+  test('keeps the last sandbox list when listing fails on a reachable gateway', async () => {
+    mockSdkListSandboxes();
+    await poll([reachableGateway]);
+    await vi.waitFor(() => expect(workspaceUpdateCount()).toBe(1));
+
+    vi.mocked(openshellSdkClientManager.getClient).mockRejectedValue(new Error('connection refused'));
+    await poll([reachableGateway]);
+    expect(workspaceUpdateCount()).toBe(1);
+
+    mockSdkListSandboxes();
+    await poll([reachableGateway]);
+
+    expect(workspaceUpdateCount()).toBe(1);
+  });
+
+  test('logs a failing gateway once until it recovers', async () => {
+    vi.mocked(openshellSdkClientManager.getClient).mockRejectedValue(new Error('connection refused'));
+    await poll([reachableGateway]);
+    await poll([reachableGateway]);
+    expect(console.warn).toHaveBeenCalledOnce();
+
+    mockSdkListSandboxes();
+    await poll([reachableGateway]);
+    vi.mocked(openshellSdkClientManager.getClient).mockRejectedValue(new Error('connection refused'));
+    await poll([reachableGateway]);
+
+    expect(console.warn).toHaveBeenCalledTimes(2);
+  });
+
+  test('does not list sandboxes on unreachable gateways', async () => {
+    mockSdkListSandboxes();
+
+    await poll([reachableGateway, unreachableGateway]);
+
+    expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith(reachableGateway.name);
+    expect(openshellSdkClientManager.getClient).not.toHaveBeenCalledWith(unreachableGateway.name);
+  });
+
+  test('sends one update when a gateway becomes unreachable, then stops listing it', async () => {
+    mockSdkListSandboxes();
+    await poll([reachableGateway]);
+    const listCalls = vi.mocked(openshellSdkClientManager.getClient).mock.calls.length;
+
+    const unreachable: GatewayInfo = {
+      ...reachableGateway,
+      gatewayState: { reachable: false, health: 'unknown', compatible: false },
+    };
+    await poll([unreachable]);
+    await poll([unreachable]);
+
+    expect(workspaceUpdateCount()).toBe(2);
+    expect(openshellSdkClientManager.getClient).toHaveBeenCalledTimes(listCalls);
+  });
+
+  test('skips a tick while the previous poll is still running', async () => {
+    mockSdkListSandboxes();
+    vi.mocked(openshellSdkClientManager.getClient).mockReturnValue(never());
+
+    await poll([reachableGateway]);
+    await poll([reachableGateway]);
+
+    expect(openshellSdkClientManager.getClient).toHaveBeenCalledOnce();
   });
 });
 
