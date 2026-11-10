@@ -155,6 +155,7 @@ export class CliToolRegistry {
         extensionInfo: cliTool.extensionInfo,
         version: cliTool.version,
         path: cliTool.path,
+        installationSource: cliTool.installationSource,
         newVersion,
         canUpdate,
         canInstall,

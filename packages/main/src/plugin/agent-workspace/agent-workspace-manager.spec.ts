@@ -32,7 +32,6 @@ import type { AgentRegistry } from '/@/plugin/agent-registry.js';
 import * as configWriter from '/@/plugin/agent-workspace/workspace-config-writer.js';
 import type { IPCHandle } from '/@/plugin/api.js';
 import type { Directories } from '/@/plugin/directories.js';
-import type { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { type GatewayPollOptions, OpenshellGatewayPoller } from '/@/plugin/openshell-cli/openshell-gateway-poller.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
@@ -40,6 +39,7 @@ import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-networ
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
+import type { OpenshellSshHostManager } from '/@/plugin/openshell-cli/openshell-ssh-host-manager.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import type { TaskManager } from '/@/plugin/tasks/task-manager.js';
@@ -222,9 +222,9 @@ const openshellGateway = {
   }),
 } as unknown as OpenshellGateway;
 
-const openshellCli = {
-  installSandboxSshConfig: vi.fn(),
-} as unknown as OpenshellCli;
+const openshellSshHostManager = {
+  install: vi.fn(),
+} as unknown as OpenshellSshHostManager;
 
 const openshellGatewayStateManager = {
   listGateways: vi.fn(),
@@ -333,7 +333,7 @@ beforeEach(() => {
     directories,
     openshellPolicyManager,
     openshellNetworkPolicy,
-    openshellCli,
+    openshellSshHostManager,
     TEST_SHELL_COMMAND,
     new OpenshellGatewayPoller(openshellGatewayStateManager),
   );
@@ -2018,16 +2018,16 @@ describe('deleteOpenshellSandbox', () => {
 });
 
 describe('installSandboxSshConfig', () => {
-  test('installs the SSH config of the sandbox on the requested gateway', async () => {
+  test('installs the SSH host of the sandbox on the requested gateway', async () => {
     await manager.installSandboxSshConfig('my-workspace', 'remote-gateway');
 
-    expect(openshellCli.installSandboxSshConfig).toHaveBeenCalledWith('remote-gateway', 'my-workspace');
+    expect(openshellSshHostManager.install).toHaveBeenCalledWith('my-workspace', 'remote-gateway');
     expect(mockTask.status).toBe('success');
     expect(mockTask.state).toBe('completed');
   });
 
-  test('reports the failure and rethrows when the CLI fails', async () => {
-    vi.mocked(openshellCli.installSandboxSshConfig).mockRejectedValue(new Error('ssh config failed'));
+  test('reports the failure and rethrows when the SSH host installation fails', async () => {
+    vi.mocked(openshellSshHostManager.install).mockRejectedValue(new Error('ssh config failed'));
 
     await expect(manager.installSandboxSshConfig('my-workspace', 'remote-gateway')).rejects.toThrow(
       'Failed to install SSH host for workspace "my-workspace": ssh config failed',

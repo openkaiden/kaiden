@@ -32,7 +32,6 @@ import { updateWorkspaceConfig, writeWorkspaceConfig } from '/@/plugin/agent-wor
 import { WritableConfigurationFile } from '/@/plugin/agent-workspace/writable-configuration-file.js';
 import { IPCHandle, WebContentsType } from '/@/plugin/api.js';
 import { Directories } from '/@/plugin/directories.js';
-import { OpenshellCli } from '/@/plugin/openshell-cli/openshell-cli.js';
 import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
 import { OpenshellGatewayPoller } from '/@/plugin/openshell-cli/openshell-gateway-poller.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
@@ -41,6 +40,7 @@ import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
 import { mapSdkSandboxRef } from '/@/plugin/openshell-cli/openshell-sdk-sandbox-mapper.js';
+import { OpenshellSshHostManager } from '/@/plugin/openshell-cli/openshell-ssh-host-manager.js';
 import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import { type SandboxSecretResult, SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
@@ -191,8 +191,8 @@ export class AgentWorkspaceManager implements Disposable {
     private readonly openshellPolicyManager: OpenshellPolicyManager,
     @inject(OpenshellNetworkPolicy)
     private readonly openshellNetworkPolicy: OpenshellNetworkPolicy,
-    @inject(OpenshellCli)
-    private readonly openshellCli: OpenshellCli,
+    @inject(OpenshellSshHostManager)
+    private readonly openshellSshHostManager: OpenshellSshHostManager,
     @inject(InteractiveShellCommand)
     private readonly interactiveShellCommand: readonly string[],
     @inject(OpenshellGatewayPoller)
@@ -858,7 +858,7 @@ export class AgentWorkspaceManager implements Disposable {
     task.state = 'running';
     task.status = 'in-progress';
     try {
-      await this.openshellCli.installSandboxSshConfig(gateway, name);
+      await this.openshellSshHostManager.install(name, gateway);
       task.status = 'success';
     } catch (err: unknown) {
       const detail = err instanceof Error ? err.message : String(err);

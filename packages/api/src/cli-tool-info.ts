@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { CliToolState, ProviderImages } from '@openkaiden/api';
+import type { CliToolInstallationSource, CliToolState, ProviderImages } from '@openkaiden/api';
 
 export type CliToolExtensionInfo = {
   id: string;
@@ -34,6 +34,7 @@ export interface CliToolInfo {
   extensionInfo: CliToolExtensionInfo;
   version?: string;
   path?: string;
+  installationSource?: CliToolInstallationSource;
   newVersion?: string;
   canUpdate: boolean;
   canInstall: boolean;
