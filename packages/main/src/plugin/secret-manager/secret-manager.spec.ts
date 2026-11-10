@@ -28,7 +28,7 @@ import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { IPCHandle } from '/@/plugin/api.js';
 import type { ContainerProviderRegistry } from '/@/plugin/container-registry.js';
 import type { FilesystemMonitoring } from '/@/plugin/filesystem-monitoring.js';
-import type { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
+import { type GatewayPollOptions, OpenshellGatewayPoller } from '/@/plugin/openshell-cli/openshell-gateway-poller.js';
 import type { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
@@ -42,6 +42,7 @@ import type { SkillManager } from '/@/plugin/skill/skill-manager.js';
 import { Properties } from '/@/plugin/util/properties.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { IConfigurationPropertyRecordedSchema, IConfigurationRegistry } from '/@api/configuration/models.js';
+import type { GatewayInfo } from '/@api/openshell-gateway-info.js';
 import type { SecretCreateOptions } from '/@api/secret-info.js';
 
 import { DefaultProviderFactory } from './default-provider-factory.js';
@@ -51,6 +52,7 @@ import { SecretManager } from './secret-manager.js';
 
 vi.mock(import('node:crypto'));
 
+vi.mock(import('/@/plugin/openshell-cli/openshell-gateway-poller.js'));
 vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-client-manager.js'));
 vi.mock(import('/@/plugin/openshell-registry.js'));
 vi.mock(import('/@/plugin/provider-impl.js'));
@@ -107,8 +109,6 @@ const mockProvider = new ProviderImpl(
 );
 Object.defineProperty(mockProvider, 'extensionId', { value: 'kaiden.openai' });
 
-let gatewayStartCallback: (() => void) | undefined;
-
 const providerRegistry = {
   getInferenceConnectionFromModel: vi.fn(),
   getProvider: vi.fn(),
@@ -126,13 +126,6 @@ const configurationRegistry = {
 const safeStorageRegistry = {
   getExtensionStorage: vi.fn().mockReturnValue(extensionStorageMock),
 } as unknown as SafeStorageRegistry;
-
-const openshellGateway = {
-  onDidGatewayStart: vi.fn((cb: () => void) => {
-    gatewayStartCallback = cb;
-    return { dispose: vi.fn() };
-  }),
-} as unknown as OpenshellGateway;
 
 const openshellGatewayStateManager = {
   whenReady: vi.fn().mockResolvedValue(undefined),
@@ -153,7 +146,6 @@ const filesystemMonitoring = {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  gatewayStartCallback = undefined;
   vi.mocked(filesystemMonitoring.createFileSystemWatcher).mockReturnValue(mockWatcher);
   vi.mocked(safeStorageRegistry.getExtensionStorage).mockReturnValue(extensionStorageMock);
   vi.mocked(openshellGatewayStateManager.whenReady).mockResolvedValue(undefined);
@@ -162,6 +154,7 @@ beforeEach(() => {
   ]);
   vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
   vi.mocked(randomUUID).mockReturnValue('00-01-02-03-04');
+  vi.mocked(OpenshellGatewayPoller.prototype.watch).mockReturnValue({ dispose: vi.fn() });
   manager = new TestSecretManager(
     apiSender,
     ipcHandle,
@@ -169,10 +162,10 @@ beforeEach(() => {
     providerRegistry,
     configurationRegistry,
     safeStorageRegistry,
-    openshellGateway,
     openshellGatewayStateManager,
     openshellNetworkPolicy,
     openshellRegistry,
+    new OpenshellGatewayPoller(openshellGatewayStateManager),
   );
   manager.init();
 });
@@ -189,14 +182,61 @@ describe('init', () => {
   test('registers IPC handler for remove', () => {
     expect(ipcHandle).toHaveBeenCalledWith('secret-manager:remove', expect.any(Function));
   });
+});
 
-  test('subscribes to gateway start event', () => {
-    expect(openshellGateway.onDidGatewayStart).toHaveBeenCalled();
+describe('provider polling', () => {
+  const gateway: GatewayInfo = {
+    canStop: false,
+    canStart: false,
+    name: 'kaiden',
+    endpoint: 'http://localhost',
+    gatewayState: { reachable: true, health: 'healthy', compatible: true },
+  };
+
+  function watchedProviders(): GatewayPollOptions<unknown> {
+    const [options] = vi.mocked(OpenshellGatewayPoller.prototype.watch).mock.calls[0] ?? [];
+    assert(options);
+    return options;
+  }
+
+  test('watches providers on the gateway poll', () => {
+    expect(OpenshellGatewayPoller.prototype.watch).toHaveBeenCalledWith(
+      expect.objectContaining({ label: 'providers' }),
+    );
   });
 
-  test('sends secret-manager-update when gateway starts', () => {
-    gatewayStartCallback!();
+  test('lists the providers of the polled gateway', async () => {
+    mockRaw.listProviders.mockResolvedValue({ providers: [{ metadata: { name: 'my-openai' }, type: 'openai' }] });
+
+    const providers = await watchedProviders().list(gateway);
+
+    expect(sdkClientManager.getClient).toHaveBeenCalledWith('kaiden');
+    expect(providers).toEqual([expect.objectContaining({ name: 'my-openai', gateway: 'kaiden' })]);
+  });
+
+  test('serializes a different value when the providers change', async () => {
+    const { list, serialize } = watchedProviders();
+    mockRaw.listProviders.mockResolvedValue({ providers: [] });
+    const initial = serialize(await list(gateway));
+
+    mockRaw.listProviders.mockResolvedValue({ providers: [{ metadata: { name: 'my-openai' }, type: 'openai' }] });
+
+    expect(serialize(await list(gateway))).not.toBe(initial);
+  });
+
+  test('sends secret-manager-update when the providers changed', () => {
+    watchedProviders().onChange();
+
     expect(apiSender.send).toHaveBeenCalledWith('secret-manager-update');
+  });
+
+  test('stops watching providers when disposed', () => {
+    const [subscription] = vi.mocked(OpenshellGatewayPoller.prototype.watch).mock.results;
+    assert(subscription?.type === 'return');
+
+    manager.dispose();
+
+    expect(subscription.value.dispose).toHaveBeenCalledOnce();
   });
 });
 
@@ -213,7 +253,6 @@ describe('openshellAdapter', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    gatewayStartCallback = undefined;
     vi.mocked(filesystemMonitoring.createFileSystemWatcher).mockReturnValue(mockWatcher);
     vi.mocked(safeStorageRegistry.getExtensionStorage).mockReturnValue(extensionStorageMock);
     vi.mocked(openshellGatewayStateManager.whenReady).mockResolvedValue(undefined);
@@ -221,6 +260,7 @@ describe('openshellAdapter', () => {
       { canStop: false, canStart: false, name: 'kaiden', endpoint: 'http://localhost' },
     ]);
     vi.mocked(sdkClientManager.getClient).mockResolvedValue(mockClient);
+    vi.mocked(OpenshellGatewayPoller.prototype.watch).mockReturnValue({ dispose: vi.fn() });
     manager = new TestSecretManager(
       apiSender,
       ipcHandle,
@@ -228,10 +268,10 @@ describe('openshellAdapter', () => {
       providerRegistry,
       configurationRegistry,
       safeStorageRegistry,
-      openshellGateway,
       openshellGatewayStateManager,
       openshellNetworkPolicy,
       openshellRegistry,
+      new OpenshellGatewayPoller(openshellGatewayStateManager),
     );
     manager.init();
   });

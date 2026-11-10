@@ -19,11 +19,11 @@
 import { randomUUID } from 'node:crypto';
 import { isAbsolute } from 'node:path';
 
-import type { Configuration, InferenceProviderConnection } from '@openkaiden/api';
-import { inject, injectable } from 'inversify';
+import type { Configuration, Disposable, InferenceProviderConnection } from '@openkaiden/api';
+import { inject, injectable, preDestroy } from 'inversify';
 
 import { IPCHandle } from '/@/plugin/api.js';
-import { OpenshellGateway } from '/@/plugin/openshell-cli/openshell-gateway.js';
+import { OpenshellGatewayPoller } from '/@/plugin/openshell-cli/openshell-gateway-poller.js';
 import { OpenshellGatewayStateManager } from '/@/plugin/openshell-cli/openshell-gateway-state-manager.js';
 import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-network-policy.js';
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
@@ -63,7 +63,9 @@ interface ResolveProfileOptions {
  *
  */
 @injectable()
-export class SecretManager {
+export class SecretManager implements Disposable {
+  private readonly disposables: Disposable[] = [];
+
   constructor(
     @inject(ApiSenderType)
     private readonly apiSender: ApiSenderType,
@@ -77,14 +79,14 @@ export class SecretManager {
     private readonly configurationRegistry: IConfigurationRegistry,
     @inject(SafeStorageRegistry)
     private readonly safeStorageRegistry: SafeStorageRegistry,
-    @inject(OpenshellGateway)
-    private readonly openshellGateway: OpenshellGateway,
     @inject(OpenshellGatewayStateManager)
     private readonly openshellGatewayStateManager: OpenshellGatewayStateManager,
     @inject(OpenshellNetworkPolicy)
     private readonly openshellNetworkPolicy: OpenshellNetworkPolicy,
     @inject(OpenShellRegistry)
     private readonly openshellRegistry: OpenShellRegistry,
+    @inject(OpenshellGatewayPoller)
+    private readonly openshellGatewayPoller: OpenshellGatewayPoller,
   ) {}
 
   private get cli(): SecretCliBackend {
@@ -291,9 +293,14 @@ export class SecretManager {
   }
 
   init(): void {
-    this.openshellGateway.onDidGatewayStart(() => {
-      this.apiSender.send('secret-manager-update');
-    });
+    this.disposables.push(
+      this.openshellGatewayPoller.watch({
+        label: 'providers',
+        list: gateway => this.list(gateway.name),
+        serialize: providers => JSON.stringify(providers),
+        onChange: () => this.apiSender.send('secret-manager-update'),
+      }),
+    );
 
     this.ipcHandle(
       'secret-manager:create',
@@ -319,5 +326,11 @@ export class SecretManager {
         return this.listServices(gateway);
       },
     );
+  }
+
+  @preDestroy()
+  dispose(): void {
+    for (const disposable of this.disposables) disposable.dispose();
+    this.disposables.length = 0;
   }
 }
