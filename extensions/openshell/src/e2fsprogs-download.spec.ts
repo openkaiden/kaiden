@@ -58,6 +58,7 @@ async function createLinuxBottle(): Promise<Buffer> {
   await Promise.all([
     writeFile(join(bottleRoot, 'sbin', 'mke2fs'), 'mke2fs-binary'),
     writeFile(join(bottleRoot, 'sbin', 'debugfs'), 'debugfs-binary'),
+    writeFile(join(bottleRoot, 'sbin', 'e2fsck'), 'e2fsck-binary'),
     writeFile(join(bottleRoot, '.bottle', 'etc', 'mke2fs.conf'), '[defaults]\n'),
     writeFile(join(bottleRoot, 'NOTICE'), 'license notice'),
     writeFile(join(bottleRoot, 'README'), 'readme'),
@@ -81,6 +82,7 @@ async function createDarwinBottle(): Promise<Buffer> {
   await Promise.all([
     writeFile(join(bottleRoot, 'sbin', 'mke2fs'), 'mke2fs-binary'),
     writeFile(join(bottleRoot, 'sbin', 'debugfs'), 'debugfs-binary'),
+    writeFile(join(bottleRoot, 'sbin', 'e2fsck'), 'e2fsck-binary'),
     writeFile(join(bottleRoot, '.bottle', 'etc', 'mke2fs.conf'), '[defaults]\n'),
     writeFile(join(bottleRoot, 'NOTICE'), 'license notice'),
     writeFile(join(bottleRoot, 'README'), 'readme'),
@@ -244,6 +246,7 @@ describe('linux', () => {
     expect(await readFile(join(outputDir, 'openshell-driver-vm'), 'utf-8')).toBe('vm-driver');
     expect(await readFile(join(outputDir, 'e2fsprogs', 'mke2fs'), 'utf-8')).toBe('mke2fs-binary');
     expect(await readFile(join(outputDir, 'e2fsprogs', 'debugfs'), 'utf-8')).toBe('debugfs-binary');
+    expect(await readFile(join(outputDir, 'e2fsprogs', 'e2fsck'), 'utf-8')).toBe('e2fsck-binary');
     expect(await readFile(join(outputDir, 'e2fsprogs', 'NOTICE'), 'utf-8')).toBe('license notice');
     for (const library of LINUX_LIBRARIES) {
       expect(await readFile(join(outputDir, 'e2fsprogs', 'lib', library), 'utf-8')).toBe(library);
@@ -253,6 +256,7 @@ describe('linux', () => {
     if (process.platform !== 'win32') {
       expect((await stat(join(outputDir, 'mkfs.ext4'))).mode & 0o111).not.toBe(0);
       expect((await stat(join(outputDir, 'debugfs'))).mode & 0o111).not.toBe(0);
+      expect((await stat(join(outputDir, 'e2fsck'))).mode & 0o111).not.toBe(0);
     }
     expect(await readFile(join(outputDir, 'mkfs.ext4'), 'utf-8')).toContain('--argv0 "mkfs.ext4"');
     expect(await readFile(join(outputDir, 'mkfs.ext4'), 'utf-8')).toContain('runtime_dir="$bin_dir/e2fsprogs"');
@@ -263,6 +267,7 @@ describe('linux', () => {
       'mkfs.ext4 requires the glibc loader at $loader',
     );
     expect(await readFile(join(outputDir, 'debugfs'), 'utf-8')).toContain('--argv0 "debugfs"');
+    expect(await readFile(join(outputDir, 'e2fsck'), 'utf-8')).toContain('--argv0 "e2fsck"');
     expect(timeoutSpy.mock.calls).toEqual([[30_000], [30_000], [30_000], [5 * 60_000]]);
 
     const callsAfterDownload = fetchMock.mock.calls.length;
@@ -306,6 +311,7 @@ describe('darwin', () => {
     expect(await readFile(join(outputDir, 'openshell-driver-vm'), 'utf-8')).toBe('vm-driver');
     expect(await readFile(join(outputDir, '.mkfs-ext4', 'mke2fs'), 'utf-8')).toBe('mke2fs-binary');
     expect(await readFile(join(outputDir, '.mkfs-ext4', 'debugfs'), 'utf-8')).toBe('debugfs-binary');
+    expect(await readFile(join(outputDir, '.mkfs-ext4', 'e2fsck'), 'utf-8')).toBe('e2fsck-binary');
     expect(await readFile(join(outputDir, '.mkfs-ext4', 'mke2fs.conf'), 'utf-8')).toBe('[defaults]\n');
     expect(await readFile(join(outputDir, '.mkfs-ext4-version'), 'utf-8')).toBe(`${VERSION}-darwin-arm64-relocated`);
 
@@ -324,8 +330,10 @@ describe('darwin', () => {
     if (process.platform !== 'win32') {
       expect((await stat(join(outputDir, 'mkfs.ext4'))).mode & 0o111).not.toBe(0);
       expect((await stat(join(outputDir, 'debugfs'))).mode & 0o111).not.toBe(0);
+      expect((await stat(join(outputDir, 'e2fsck'))).mode & 0o111).not.toBe(0);
       expect((await stat(join(outputDir, '.mkfs-ext4', 'mke2fs'))).mode & 0o111).not.toBe(0);
       expect((await stat(join(outputDir, '.mkfs-ext4', 'debugfs'))).mode & 0o111).not.toBe(0);
+      expect((await stat(join(outputDir, '.mkfs-ext4', 'e2fsck'))).mode & 0o111).not.toBe(0);
 
       const symlinkTarget = await readlink(join(outputDir, '.mkfs-ext4', 'mkfs.ext4'));
       expect(symlinkTarget).toBe('mke2fs');
@@ -339,6 +347,10 @@ describe('darwin', () => {
     const debugfsWrapper = await readFile(join(outputDir, 'debugfs'), 'utf-8');
     expect(debugfsWrapper).toContain('DYLD_LIBRARY_PATH');
     expect(debugfsWrapper).toContain('$runtime_dir/debugfs');
+
+    const e2fsckWrapper = await readFile(join(outputDir, 'e2fsck'), 'utf-8');
+    expect(e2fsckWrapper).toContain('DYLD_LIBRARY_PATH');
+    expect(e2fsckWrapper).toContain('$runtime_dir/e2fsck');
 
     expect(await readFile(join(outputDir, '.mkfs-ext4', 'NOTICE'), 'utf-8')).toBe('license notice');
     await expect(stat(join(outputDir, 'NOTICE'))).rejects.toThrow();
@@ -394,6 +406,7 @@ describe('darwin', () => {
 
     expect(existsSync(join(outputDir, 'mkfs.ext4'))).toBe(false);
     expect(existsSync(join(outputDir, 'debugfs'))).toBe(false);
+    expect(existsSync(join(outputDir, 'e2fsck'))).toBe(false);
     expect(existsSync(join(outputDir, '.mkfs-ext4'))).toBe(false);
     expect(existsSync(join(outputDir, '.mkfs-ext4-version'))).toBe(false);
   });
@@ -471,6 +484,7 @@ describe('darwin', () => {
     await expect(downloadMkfsExt4(VERSION, 'arm64', 'darwin', outputDir)).rejects.toThrow('checksum mismatch');
 
     expect(existsSync(join(outputDir, 'mkfs.ext4'))).toBe(false);
+    expect(existsSync(join(outputDir, 'e2fsck'))).toBe(false);
     expect(existsSync(join(outputDir, '.mkfs-ext4'))).toBe(false);
     expect(existsSync(join(outputDir, '.mkfs-ext4-version'))).toBe(false);
   });
