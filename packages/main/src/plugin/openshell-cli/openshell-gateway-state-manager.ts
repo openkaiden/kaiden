@@ -63,6 +63,10 @@ export class OpenshellGatewayStateManager implements Disposable {
   readonly #onDidUpdateGateways = new Emitter<readonly GatewayInfo[]>();
   readonly onDidUpdateGateways: Event<readonly GatewayInfo[]> = this.#onDidUpdateGateways.event;
 
+  readonly #onDidPoll = new Emitter<readonly GatewayInfo[]>();
+  /** Fires after each periodic refresh so consumers can poll gateway resources on the same schedule. */
+  readonly onDidPoll: Event<readonly GatewayInfo[]> = this.#onDidPoll.event;
+
   constructor(
     @inject(OpenshellGatewayManager)
     private readonly gatewayManager: OpenshellGatewayManager,
@@ -98,8 +102,13 @@ export class OpenshellGatewayStateManager implements Disposable {
       Math.max(MIN_GATEWAY_POLL_INTERVAL_SECONDS, configuredPollIntervalSeconds),
     );
     this.#pollInterval = setInterval(() => {
-      this.refresh().catch((err: unknown) => this.logRefreshError(err));
+      this.poll().catch((err: unknown) => this.logRefreshError(err));
     }, pollIntervalSeconds * 1000);
+  }
+
+  private async poll(): Promise<void> {
+    await this.refresh();
+    this.#onDidPoll.fire(this.listGateways());
   }
 
   listGateways(): readonly GatewayInfo[] {
@@ -286,5 +295,6 @@ export class OpenshellGatewayStateManager implements Disposable {
     this.#warnedGateways.clear();
     this.#pidReadFailedGateways.clear();
     this.#onDidUpdateGateways.dispose();
+    this.#onDidPoll.dispose();
   }
 }

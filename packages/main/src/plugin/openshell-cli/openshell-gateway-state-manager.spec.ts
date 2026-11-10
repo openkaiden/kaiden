@@ -407,6 +407,35 @@ test('polls gateways and stops polling when disposed', async () => {
   expect(gatewayManager.listGateways).toHaveBeenCalledTimes(2);
 });
 
+test('fires onDidPoll with the refreshed gateways after each poll tick only', async () => {
+  vi.useFakeTimers();
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+  const listener = vi.fn();
+  manager.onDidPoll(listener);
+
+  manager.init();
+  await vi.advanceTimersByTimeAsync(0);
+  await manager.refresh();
+  expect(listener).not.toHaveBeenCalled();
+
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(listener).toHaveBeenCalledOnce();
+  expect(listener).toHaveBeenCalledWith([expect.objectContaining({ name: 'local' })]);
+});
+
+test('does not fire onDidPoll when the poll refresh fails', async () => {
+  vi.useFakeTimers();
+  vi.mocked(gatewayManager.listGateways).mockRejectedValue(new Error('boom'));
+  const listener = vi.fn();
+  manager.onDidPoll(listener);
+
+  manager.init();
+  await vi.advanceTimersByTimeAsync(5000);
+
+  expect(listener).not.toHaveBeenCalled();
+});
+
 test('waits for the initial refresh before becoming ready', async () => {
   let resolveListGateways: (gateways: []) => void;
   vi.mocked(gatewayManager.listGateways).mockReturnValue(

@@ -145,6 +145,11 @@ export class AgentWorkspaceManager implements Disposable {
   // bumped on every renderer reload so that a terminal request from the previous renderer is dropped
   private rendererGeneration = 0;
   private readonly disposables: Disposable[] = [];
+  // last sandbox list seen by the poll per gateway, used to notify the renderer only on change
+  private sandboxSnapshots = new Map<string, string>();
+  // gateways whose last sandbox poll failed, so the failure is logged once until it recovers
+  private readonly sandboxPollFailures = new Set<string>();
+  private sandboxPollInFlight = false;
 
   constructor(
     @inject(ApiSenderType)
@@ -722,17 +727,7 @@ export class AgentWorkspaceManager implements Disposable {
     const results: GatewaySandboxes[] = [];
     for (const gateway of gateways) {
       try {
-        const client = await this.openshellSdkClientManager.getClient(gateway.name);
-        const refs = client.sandbox.list({
-          workspace: OpenshellWorkspaceDefaults.WORKSPACE,
-        });
-        const sandboxes: SandboxInfo[] = (await refs.all()).map(mapSdkSandboxRef);
-        for (const sandbox of sandboxes) {
-          if (sandbox.labels) {
-            sandbox.sourcePath = decodeWorkspaceLabels(sandbox.labels);
-          }
-        }
-        results.push({ gateway, sandboxes });
+        results.push({ gateway, sandboxes: await this.listGatewaySandboxes(gateway) });
       } catch (err: unknown) {
         console.warn(
           `[openshell] failed to list sandboxes for gateway ${gateway.name}: ${err instanceof Error ? err.message : String(err)}`,
@@ -741,6 +736,64 @@ export class AgentWorkspaceManager implements Disposable {
       }
     }
     return results;
+  }
+
+  private async listGatewaySandboxes(gateway: GatewayInfo): Promise<SandboxInfo[]> {
+    const client = await this.openshellSdkClientManager.getClient(gateway.name);
+    const refs = client.sandbox.list({
+      workspace: OpenshellWorkspaceDefaults.WORKSPACE,
+    });
+    const sandboxes: SandboxInfo[] = (await refs.all()).map(mapSdkSandboxRef);
+    for (const sandbox of sandboxes) {
+      if (sandbox.labels) {
+        sandbox.sourcePath = decodeWorkspaceLabels(sandbox.labels);
+      }
+    }
+    return sandboxes;
+  }
+
+  // Lists sandboxes of reachable gateways only, so polling stops while a gateway is unhealthy.
+  // A failed listing keeps the previous snapshot of that gateway instead of reporting it empty.
+  private async pollSandboxes(gateways: readonly GatewayInfo[]): Promise<void> {
+    if (this.sandboxPollInFlight) {
+      return;
+    }
+    this.sandboxPollInFlight = true;
+    try {
+      const snapshots = new Map<string, string>();
+      const reachable = gateways.filter(gw => gw.gatewayState?.reachable);
+      for (const gateway of reachable) {
+        try {
+          const sandboxes = await this.listGatewaySandboxes(gateway);
+          // only the fields the list displays: resource_version may change without a visible difference
+          snapshots.set(gateway.name, JSON.stringify(sandboxes.map(s => [s.id, s.name, s.phase, s.labels])));
+          this.sandboxPollFailures.delete(gateway.name);
+        } catch (err: unknown) {
+          if (!this.sandboxPollFailures.has(gateway.name)) {
+            this.sandboxPollFailures.add(gateway.name);
+            console.warn(`[AgentWorkspaceManager] unable to poll sandboxes of gateway ${gateway.name}:`, err);
+          }
+          const previous = this.sandboxSnapshots.get(gateway.name);
+          if (previous !== undefined) {
+            snapshots.set(gateway.name, previous);
+          }
+        }
+      }
+      for (const name of this.sandboxPollFailures) {
+        if (!reachable.some(gw => gw.name === name)) {
+          this.sandboxPollFailures.delete(name);
+        }
+      }
+      const changed =
+        snapshots.size !== this.sandboxSnapshots.size ||
+        [...snapshots].some(([name, snapshot]) => this.sandboxSnapshots.get(name) !== snapshot);
+      this.sandboxSnapshots = snapshots;
+      if (changed) {
+        this.apiSender.send('agent-workspace-update');
+      }
+    } finally {
+      this.sandboxPollInFlight = false;
+    }
   }
 
   async listOpenshellGateways(): Promise<GatewayInfo[]> {
@@ -1344,6 +1397,14 @@ export class AgentWorkspaceManager implements Disposable {
     this.disposables.push(
       this.openshellGatewayStateManager.onDidUpdateGateways(() => {
         this.apiSender.send('agent-gateway-update');
+      }),
+    );
+
+    this.disposables.push(
+      this.openshellGatewayStateManager.onDidPoll(gateways => {
+        this.pollSandboxes(gateways).catch((err: unknown) => {
+          console.warn('[AgentWorkspaceManager] unable to poll sandboxes:', err);
+        });
       }),
     );
   }
