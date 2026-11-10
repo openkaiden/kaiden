@@ -74,6 +74,8 @@ if [ "$(id -u)" -eq 0 ]; then
   # verified against its checksum, without its GPU backends: this guest is
   # CPU only.
   if [[ -n "${KAIDEN_OLLAMA_MODEL:-}" ]]; then
+    # To bump: change the version; the checksum comes from that release's
+    # sha256sum.txt. Renovate/dependabot don't see this pin.
     ollama_version=0.40.11
     ollama_dir="$(mktemp -d)"
     ollama_base="https://github.com/ollama/ollama/releases/download/v${ollama_version}"
@@ -110,9 +112,12 @@ fi
 # Fail fast if a covered key is missing so its scenarios can't skip silently.
 # The ollama leg (KAIDEN_OLLAMA_MODEL) runs only the Ollama scenarios, kept out
 # of the cloud-provider run because a running local runtime changes which models
-# the wizard offers. It still gets and checks these keys: the redaction list
-# below is built from them.
-for key in OPENAI_API_KEY GEMINI_API_KEY; do
+# the wizard offers, so the workflow sends it no provider keys.
+provider_keys="OPENAI_API_KEY GEMINI_API_KEY"
+if [[ -n "${KAIDEN_OLLAMA_MODEL:-}" ]]; then
+  provider_keys=""
+fi
+for key in $provider_keys; do
   if [ -z "${!key:-}" ]; then
     echo "Missing required provider secret ${key}; scenarios would silently skip" >&2
     exit 1
@@ -138,7 +143,7 @@ mkdir -p "$test_data_dir"
 # redaction list from the provider keys for the sibling sanitizer (mktemp already
 # creates the file mode 0600).
 secrets_file="$(mktemp)"
-for key in OPENAI_API_KEY GEMINI_API_KEY; do
+for key in $provider_keys; do
   printf '%s=%s\n' "$key" "${!key}" >> "$secrets_file"
 done
 
@@ -186,6 +191,8 @@ if [[ -n "${KAIDEN_OLLAMA_MODEL:-}" ]]; then
   # Serve on 127.0.0.1:11434, where the ollama extension auto-detects it, like
   # the GHA setup-ollama action. Fail closed: a missing model would make the
   # Ollama scenarios skip silently.
+  # Published as-is, outside the sanitizer: this leg receives no provider keys
+  # and the server log holds none.
   ollama serve > "$test_data_dir/ollama-serve.log" 2>&1 &
   ollama_pid=$!
   for _ in $(seq 30); do ollama list > /dev/null 2>&1 && break; sleep 2; done
@@ -203,6 +210,8 @@ if [[ -n "${KAIDEN_OLLAMA_MODEL:-}" ]]; then
   done
   ollama list
   export OLLAMA_ENABLED=true
+  # Same contract as the GHA setup-ollama action.
+  export INFERENCE_MODEL="$KAIDEN_OLLAMA_MODEL"
   playwright_args=(--grep 'with Ollama model')
 fi
 
