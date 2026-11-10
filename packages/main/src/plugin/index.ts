@@ -81,6 +81,7 @@ import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-networ
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import { OpenshellProfileOwnership } from '/@/plugin/openshell-cli/openshell-profile-ownership.js';
 import { OpenshellProfileSynchronizer } from '/@/plugin/openshell-cli/openshell-profile-synchronizer.js';
+import { OpenshellSandboxPoller } from '/@/plugin/openshell-cli/openshell-sandbox-poller.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
@@ -626,6 +627,7 @@ export class PluginSystem {
     container.bind<OpenshellGatewayStateManager>(OpenshellGatewayStateManager).toSelf().inSingletonScope();
     container.bind<OpenshellProfileOwnership>(OpenshellProfileOwnership).toSelf().inSingletonScope();
     container.bind<OpenshellProfileSynchronizer>(OpenshellProfileSynchronizer).toSelf().inSingletonScope();
+    container.bind<OpenshellSandboxPoller>(OpenshellSandboxPoller).toSelf().inSingletonScope();
     container.bind<OpenshellImageBuilder>(OpenshellImageBuilder).toSelf().inSingletonScope();
     container.bind<AgentWorkspaceManager>(AgentWorkspaceManager).toSelf().inSingletonScope();
     container.bind<HostPresetRegistry>(HostPresetRegistry).toSelf().inSingletonScope();
@@ -735,6 +737,8 @@ export class PluginSystem {
     openshellGatewayStateManager.init();
     const openshellProfileSynchronizer = container.get<OpenshellProfileSynchronizer>(OpenshellProfileSynchronizer);
     openshellProfileSynchronizer.init();
+    const openshellSandboxPoller = container.get<OpenshellSandboxPoller>(OpenshellSandboxPoller);
+    openshellSandboxPoller.init();
 
     const secretManager = container.get<SecretManager>(SecretManager);
     secretManager.init();
