@@ -45,6 +45,7 @@ const DARWIN_LIBRARY_STEMS = ['libblkid', 'libcom_err', 'libe2p', 'libext2fs', '
 const BINARIES = [
   { name: 'mkfs.ext4', payload: 'mke2fs' },
   { name: 'debugfs', payload: 'debugfs' },
+  { name: 'e2fsck', payload: 'e2fsck' },
 ];
 
 interface OciDescriptor {

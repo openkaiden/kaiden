@@ -40,6 +40,11 @@ const DEBUGFS_OTOOL = `/rt/debugfs:
 \t@@HOMEBREW_CELLAR@@/e2fsprogs/1.47.4/lib/libext2fs.2.1.dylib (compatibility version 1.0.0, current version 2.1.0)
 \t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
 `;
+const E2FSCK_OTOOL = `/rt/e2fsck:
+\t@@HOMEBREW_PREFIX@@/opt/gettext/lib/libintl.8.dylib (compatibility version 13.0.0, current version 13.6.0)
+\t@@HOMEBREW_CELLAR@@/e2fsprogs/1.47.4/lib/libext2fs.2.1.dylib (compatibility version 1.0.0, current version 2.1.0)
+\t/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)
+`;
 const LIBEXT2FS_OTOOL = `/rt/lib/libext2fs.2.1.dylib:
 \t@@HOMEBREW_PREFIX@@/opt/e2fsprogs/lib/libext2fs.2.1.dylib (compatibility version 1.0.0, current version 2.1.0)
 \t@@HOMEBREW_PREFIX@@/opt/gettext/lib/libintl.8.dylib (compatibility version 13.0.0, current version 13.6.0)
@@ -68,12 +73,13 @@ beforeEach(() => {
 });
 
 test('rewrites Homebrew placeholders to @loader_path and re-signs each file', async () => {
-  queueOutputs([MKE2FS_OTOOL, '', DEBUGFS_OTOOL, '', '', LIBEXT2FS_OTOOL, '', '', LIBINTL_OTOOL]);
+  queueOutputs([MKE2FS_OTOOL, '', DEBUGFS_OTOOL, '', '', E2FSCK_OTOOL, '', '', LIBEXT2FS_OTOOL, '', '', LIBINTL_OTOOL]);
 
   await expect(new HomebrewRelocator().relocate('/rt')).resolves.toBe(true);
 
   expect(chmod).toHaveBeenCalledWith('/rt/mke2fs', 0o755);
   expect(chmod).toHaveBeenCalledWith('/rt/debugfs', 0o755);
+  expect(chmod).toHaveBeenCalledWith('/rt/e2fsck', 0o755);
   expect(chmod).toHaveBeenCalledWith('/rt/lib/libext2fs.2.1.dylib', 0o644);
   expect(chmod).toHaveBeenCalledWith('/rt/lib/libintl.8.dylib', 0o644);
   expect(argsOf('/usr/bin/install_name_tool')).toEqual([
@@ -85,6 +91,15 @@ test('rewrites Homebrew placeholders to @loader_path and re-signs each file', as
       '@@HOMEBREW_CELLAR@@/e2fsprogs/1.47.4/lib/libext2fs.2.1.dylib',
       '@loader_path/lib/libext2fs.2.1.dylib',
       '/rt/debugfs',
+    ],
+    [
+      '-change',
+      '@@HOMEBREW_PREFIX@@/opt/gettext/lib/libintl.8.dylib',
+      '@loader_path/lib/libintl.8.dylib',
+      '-change',
+      '@@HOMEBREW_CELLAR@@/e2fsprogs/1.47.4/lib/libext2fs.2.1.dylib',
+      '@loader_path/lib/libext2fs.2.1.dylib',
+      '/rt/e2fsck',
     ],
     [
       '-id',
@@ -109,6 +124,7 @@ test('rewrites Homebrew placeholders to @loader_path and re-signs each file', as
   expect(argsOf('/usr/bin/codesign')).toEqual([
     ['--force', '--sign', '-', '/rt/mke2fs'],
     ['--force', '--sign', '-', '/rt/debugfs'],
+    ['--force', '--sign', '-', '/rt/e2fsck'],
     ['--force', '--sign', '-', '/rt/lib/libext2fs.2.1.dylib'],
     ['--force', '--sign', '-', '/rt/lib/libintl.8.dylib'],
   ]);

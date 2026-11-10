@@ -39,7 +39,7 @@ export class HomebrewRelocator {
     const libDir = join(runtimeDir, 'lib');
     const dylibs = (await readdir(libDir)).filter(file => file.endsWith('.dylib'));
     const targets = [
-      ...['mke2fs', 'debugfs'].map(file => ({
+      ...['mke2fs', 'debugfs', 'e2fsck'].map(file => ({
         path: join(runtimeDir, file),
         prefix: '@loader_path/lib/',
         mode: 0o755,
