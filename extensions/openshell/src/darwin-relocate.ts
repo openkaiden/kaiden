@@ -28,9 +28,12 @@ import { promisify } from 'node:util';
  * DYLD_LIBRARY_PATH, which hardened runtime ignores once the app is signed.
  *
  * Resolves `false` without changing anything when the host is not macOS, `true` once relocated.
+ *
+ * @param runtimeDir directory holding the executables, with their libraries in its `lib` subdirectory
+ * @param executables file names of the executables to relocate, relative to `runtimeDir`
  */
 export class HomebrewRelocator {
-  async relocate(runtimeDir: string): Promise<boolean> {
+  async relocate(runtimeDir: string, executables: string[]): Promise<boolean> {
     if (platform() !== 'darwin') {
       console.warn(`Skipping relocation of macOS e2fsprogs binaries in ${runtimeDir}: host is not macOS`);
       return false;
@@ -39,7 +42,7 @@ export class HomebrewRelocator {
     const libDir = join(runtimeDir, 'lib');
     const dylibs = (await readdir(libDir)).filter(file => file.endsWith('.dylib'));
     const targets = [
-      ...['mke2fs', 'debugfs'].map(file => ({
+      ...executables.map(file => ({
         path: join(runtimeDir, file),
         prefix: '@loader_path/lib/',
         mode: 0o755,
