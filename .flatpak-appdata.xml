@@ -18,6 +18,7 @@
   <content_rating type="oars-1.1" />
   <update_contact>fbenoit_at_redhat_com</update_contact>
   <releases>
+    <release version="0.4.3" date="2026-11-10"/>
     <release version="0.4.2" date="2026-11-09"/>
     <release version="0.4.1" date="2026-11-05"/>
     <release version="0.4.0" date="2026-11-04"/>
