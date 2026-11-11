@@ -25,9 +25,9 @@
 set -euo pipefail
 
 tag="${TESTING_BUILD:?TESTING_BUILD is required}"
+# TEMPORARY: allow running other specs (INPUT_REF) against the build's binary.
 if [[ -n "${INPUT_REF:-}" ]]; then
-  echo "::error::Leave ref empty when testing_build is set; the build's own commit is tested"
-  exit 1
+  echo "::notice::Testing build ${tag} binary with specs from ref ${INPUT_REF}"
 fi
 
 # Testing build tags end with the short SHA they were built from.

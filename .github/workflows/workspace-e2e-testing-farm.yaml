@@ -28,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Branch, tag, or full SHA of openkaiden/kaiden to test; defaults to the dispatch ref (leave empty with testing_build)'
+        description: 'Branch, tag, or full SHA of openkaiden/kaiden to test; defaults to the dispatch ref; with testing_build, overrides the specs tested against its binary (temporary)'
         required: false
         type: string
       npm_target:
