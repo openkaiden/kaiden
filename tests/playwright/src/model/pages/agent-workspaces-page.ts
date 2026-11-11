@@ -52,6 +52,13 @@ export class AgentWorkspacesPage extends BaseTablePage {
 
   async expectWorkspaceCreated(workspaceName: string): Promise<void> {
     await this.waitForLoad();
+    await this.throwIfCreationFailed();
+    await this.ensureRowExists(workspaceName, TIMEOUTS.WORKSPACE_READY);
+    await this.waitForCreationTask(workspaceName);
+    await this.throwIfCreationFailed();
+  }
+
+  private async throwIfCreationFailed(): Promise<void> {
     const creationError = this.page.getByText(/Error while creating workspace/i);
     if (await creationError.isVisible()) {
       const detail = (await creationError.textContent()) ?? 'unknown error';
@@ -61,7 +68,29 @@ export class AgentWorkspacesPage extends BaseTablePage {
       }
       throw new Error(`Workspace creation failed: ${detail}`);
     }
-    await this.ensureRowExists(workspaceName, TIMEOUTS.WORKSPACE_READY);
+  }
+
+  /**
+   * The row shows Running before Kaiden finishes creating the workspace (uploads, network policy, agent start).
+   * Acting on it in that window races the creation task (openkaiden/kaiden#3192), so wait for the task to end.
+   */
+  private async waitForCreationTask(workspaceName: string): Promise<void> {
+    const runningTask = this.page.getByRole('button', { name: 'Toggle Task Manager' }).getByRole('status');
+    await expect
+      .poll(
+        async () => {
+          if (!(await runningTask.isVisible())) {
+            return true;
+          }
+          const title = (await runningTask.textContent()) ?? '';
+          return !title.includes(`Creating workspace "${workspaceName}"`) && !/tasks running/.test(title);
+        },
+        {
+          timeout: TIMEOUTS.WORKSPACE_READY,
+          message: `Creation task for workspace "${workspaceName}" did not finish`,
+        },
+      )
+      .toBe(true);
   }
 
   private getStatCardValue(label: 'Active Sessions' | 'Total Sessions' | 'Configured Agents'): Locator {
