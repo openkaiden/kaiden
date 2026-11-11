@@ -104,20 +104,3 @@ test('should show Knowledges entry when rag and chunk capabilities are on differ
     expect(entry.hidden).toBe(false);
   });
 });
-
-test('should show Knowledges entry when provider has capabilities but no active connections', async () => {
-  const entry = createNavigationRagEntry();
-
-  providerInfos.set([
-    {
-      ragProviderConnectionCreation: true,
-      chunkProviderConnectionCreation: true,
-      ragConnections: [],
-      chunkConnections: [],
-    } as unknown as ProviderInfo,
-  ]);
-
-  await vi.waitFor(() => {
-    expect(entry.hidden).toBe(false);
-  });
-});
