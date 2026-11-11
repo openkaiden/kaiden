@@ -668,19 +668,47 @@ describe('init port allocation', () => {
     );
   });
 
-  test('blocks auto-start when the recorded PID is still alive', async () => {
+  test('keeps kaiden-local registered without auto-starting while the previous gateway process is alive', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const previousGateway = listed('kaiden-local', 'http://127.0.0.1:29670', { gateway_port: 29670 });
+    vi.mocked(gatewayManager.listGateways).mockResolvedValue([previousGateway]);
+    vi.mocked(gatewayManager.getGateway).mockResolvedValue(previousGateway.metadata);
     // Signal 0 checks this test process without sending it a signal or mocking the global process.
     vi.mocked(readFile).mockResolvedValue(String(process.pid));
-    vi.mocked(gatewayManager.health).mockRejectedValueOnce(new Error('default port is not a healthy gateway'));
+    vi.mocked(gatewayManager.health).mockRejectedValue(new Error('previous gateway is shutting down'));
+    const failListener = vi.fn();
+    gateway.onDidGatewayInitFailed(failListener);
 
     await gateway.init();
 
-    const message = `A process recorded for kaiden-local is still alive (PID ${process.pid}). Stop it before restarting.`;
+    expect(readFile).toHaveBeenCalledOnce();
+    expect(gatewayManager.removeGateway).not.toHaveBeenCalled();
+    expect(gatewayManager.addGateway).not.toHaveBeenCalled();
     expect(getFreePort).not.toHaveBeenCalled();
     expect(spawn).not.toHaveBeenCalled();
-    expect(notificationRegistry.addNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ body: message, type: 'error' }),
+    // The gateway banner reports the conflict, so no notification is added on top of it.
+    expect(notificationRegistry.addNotification).not.toHaveBeenCalled();
+    expect(failListener).toHaveBeenCalledExactlyOnceWith(
+      `A process recorded for kaiden-local is still alive (PID ${process.pid}).`,
     );
+  });
+
+  test('logs a failed removal of the stale kaiden-local registration and still auto-starts', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const removeError = new Error('registry is read-only');
+    vi.mocked(gatewayManager.removeGateway).mockRejectedValue(removeError);
+    vi.mocked(gatewayManager.health)
+      .mockRejectedValueOnce(new Error('default port is not a healthy gateway'))
+      .mockResolvedValue({ status: 'healthy', version: '1.0.0' });
+
+    await gateway.init();
+
+    expect(gatewayManager.removeGateway).toHaveBeenCalledExactlyOnceWith('kaiden-local');
+    expect(warn).toHaveBeenCalledWith(
+      '[openshell-gateway] failed to remove the stale kaiden-local registration:',
+      removeError,
+    );
+    expect(spawn).toHaveBeenCalledWith(GATEWAY_BINARY, expect.arrayContaining(['--port', '29670']), expect.anything());
   });
 
   test('blocks auto-start when the recorded PID cannot be read', async () => {
@@ -691,6 +719,8 @@ describe('init port allocation', () => {
     await gateway.init();
 
     const message = 'Failed to read the PID file of gateway "kaiden-local": EACCES: permission denied';
+    expect(readFile).toHaveBeenCalledOnce();
+    expect(gatewayManager.removeGateway).not.toHaveBeenCalled();
     expect(getFreePort).not.toHaveBeenCalled();
     expect(spawn).not.toHaveBeenCalled();
     expect(notificationRegistry.addNotification).toHaveBeenCalledWith(

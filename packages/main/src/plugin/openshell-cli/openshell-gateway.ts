@@ -247,7 +247,6 @@ export class OpenshellGateway implements IAsyncDisposable {
         this._onDidGatewayStart.fire();
         return;
       }
-      await this.gatewayManager.removeGateway(DEFAULT_GATEWAY_NAME).catch(() => {});
     } catch {
       // Registration or health check failed, fall through to auto-start
     }
@@ -256,10 +255,16 @@ export class OpenshellGateway implements IAsyncDisposable {
     try {
       const pid = await this.readAndValidatePid(DEFAULT_GATEWAY_NAME);
       if (pid !== undefined) {
-        throw new Error(
-          `A process recorded for ${DEFAULT_GATEWAY_NAME} is still alive (PID ${pid}). Stop it before restarting.`,
-        );
+        // A kaiden-local process from a previous session may still be shutting down. Keep its registration so
+        // the gateway banner reports the conflict and the gateway can be started once that process has exited.
+        const message = `A process recorded for ${DEFAULT_GATEWAY_NAME} is still alive (PID ${pid}).`;
+        console.warn(`[openshell-gateway] auto-start skipped: ${message}`);
+        this._onDidGatewayInitFailed.fire(message);
+        return;
       }
+      await this.gatewayManager.removeGateway(DEFAULT_GATEWAY_NAME).catch((err: unknown) => {
+        console.warn(`[openshell-gateway] failed to remove the stale ${DEFAULT_GATEWAY_NAME} registration:`, err);
+      });
       const port = await this.allocateDefaultGatewayPort(reservedPorts);
       await this.start({ port });
       // Preserve default-port deduplication without deleting registrations on fallback ports.

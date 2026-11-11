@@ -18,9 +18,16 @@
 
 import { expect, test } from 'vitest';
 
-import { type GatewayInfo, MIN_GATEWAY_VERSION } from '/@api/openshell-gateway-info';
+import { type GatewayInfo, type GatewayState, MIN_GATEWAY_VERSION } from '/@api/openshell-gateway-info';
 
-import { getWarningMessage, noUsableGateways } from './no-usable-gateway-warning';
+import {
+  getStartableGateway,
+  getStartButtonLabel,
+  getStartError,
+  getWarningMessage,
+  hasPidConflict,
+  noUsableGateways,
+} from './no-usable-gateway-warning';
 
 const usable: GatewayInfo = {
   name: 'gw',
@@ -48,6 +55,29 @@ const unreachable: GatewayInfo = {
   gatewayState: { reachable: false, health: 'unknown', compatible: true },
 };
 
+const pidConflictState: GatewayState = {
+  reachable: false,
+  health: 'unknown',
+  compatible: true,
+  process: { pid: 4242, status: 'running' },
+};
+
+const pidConflict: GatewayInfo = {
+  name: 'kaiden-local',
+  endpoint: 'http://127.0.0.1:29670',
+  canStop: false,
+  canStart: false,
+  gatewayState: pidConflictState,
+};
+
+const stopped: GatewayInfo = {
+  name: 'stopped',
+  endpoint: 'http://127.0.0.1:29671',
+  canStop: false,
+  canStart: true,
+  gatewayState: { reachable: false, health: 'unknown', compatible: true, process: { status: 'not-running' } },
+};
+
 test('noUsableGateways returns true for empty list', () => {
   expect(noUsableGateways([])).toBe(true);
 });
@@ -70,4 +100,55 @@ test('getWarningMessage includes minimum version when a reachable gateway is inc
 
 test('getWarningMessage omits minimum version when gateways are unreachable', () => {
   expect(getWarningMessage([unreachable])).toBe('No usable OpenShell gateways available.');
+});
+
+test('getWarningMessage reports a PID conflict without asking to start the gateway yet', () => {
+  expect(getWarningMessage([unreachable, pidConflict])).toBe(
+    'A conflicting process (PID 4242) is blocking the default kaiden-local gateway. Please wait for it to exit before restarting, clear it, or create a new gateway.',
+  );
+});
+
+test('getWarningMessage names a non-default gateway in a PID conflict', () => {
+  expect(getWarningMessage([{ ...pidConflict, name: 'local-dev' }])).toBe(
+    'A conflicting process (PID 4242) is blocking the local-dev gateway. Please wait for it to exit before restarting, clear it, or create a new gateway.',
+  );
+});
+
+test.each<[string, GatewayInfo, boolean]>([
+  ['an unreachable gateway with a running process it cannot stop', pidConflict, true],
+  ['a gateway still starting in this session', { ...pidConflict, canStop: true }, false],
+  [
+    'a reachable gateway with a running process',
+    { ...pidConflict, gatewayState: { ...pidConflictState, reachable: true } },
+    false,
+  ],
+  ['an unreachable gateway without a running process', unreachable, false],
+])('hasPidConflict for %s is %s', (_label, gateway, expected) => {
+  expect(hasPidConflict(gateway)).toBe(expected);
+});
+
+test('getStartableGateway only returns a gateway that can be started, and none during a PID conflict', () => {
+  expect(getStartableGateway([unreachable, pidConflict])).toBeUndefined();
+  expect(getStartableGateway([pidConflict, stopped])).toBeUndefined();
+  expect(getStartableGateway([unreachable, stopped])).toBe(stopped);
+  expect(getStartableGateway([unreachable, incompatible])).toBeUndefined();
+});
+
+test('getStartableGateway prefers the default gateway when several can be started', () => {
+  const stoppedDefault: GatewayInfo = { ...stopped, name: 'kaiden-local' };
+  expect(getStartableGateway([stopped, stoppedDefault])).toBe(stoppedDefault);
+});
+
+test.each([
+  ['kaiden-local', 'Start default gateway'],
+  ['local-dev', 'Start gateway local-dev'],
+])('getStartButtonLabel for %s is "%s"', (name, label) => {
+  expect(getStartButtonLabel({ ...stopped, name })).toBe(label);
+});
+
+test('getStartError returns the start error of the offered gateway, also after a refetch', () => {
+  const errors = new Map([['stopped', 'Port 29671 is busy']]);
+  expect(getStartError(errors, { ...stopped })).toBe('Port 29671 is busy');
+  expect(getStartError(errors, { ...stopped, name: 'other' })).toBeUndefined();
+  expect(getStartError(errors, undefined)).toBeUndefined();
 });
