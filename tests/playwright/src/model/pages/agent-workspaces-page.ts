@@ -79,10 +79,8 @@ export class AgentWorkspacesPage extends BaseTablePage {
     await expect
       .poll(
         async () => {
-          if (!(await runningTask.isVisible())) {
-            return true;
-          }
-          const title = (await runningTask.textContent()) ?? '';
+          // allTextContents() does not wait: the indicator can disappear at any moment
+          const [title = ''] = await runningTask.allTextContents();
           return !title.includes(`Creating workspace "${workspaceName}"`) && !/tasks running/.test(title);
         },
         {
