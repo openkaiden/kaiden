@@ -241,6 +241,7 @@ export function registerWorkspaceLifecycleTests(
         WORKSPACE_STATUS.RUNNING,
         TIMEOUTS.WORKSPACE_READY,
       );
+      await agentWorkspacesPage.waitForCreationToFinish(config.workspaceName);
     },
   );
 

@@ -54,6 +54,15 @@ export class AgentWorkspacesPage extends BaseTablePage {
     await this.waitForLoad();
     await this.throwIfCreationFailed();
     await this.ensureRowExists(workspaceName, TIMEOUTS.WORKSPACE_READY);
+    await this.waitForCreationToFinish(workspaceName);
+  }
+
+  /**
+   * The row shows Running before Kaiden finishes creating the workspace (uploads, network policy, agent start).
+   * Acting on it in that window races the creation task (openkaiden/kaiden#3192): wait for the task to end, then
+   * fail here if it ended in an error rather than leaving the error dialog to block later tests.
+   */
+  async waitForCreationToFinish(workspaceName: string): Promise<void> {
     await this.waitForCreationTask(workspaceName);
     await this.throwIfCreationFailed();
   }
@@ -70,10 +79,6 @@ export class AgentWorkspacesPage extends BaseTablePage {
     }
   }
 
-  /**
-   * The row shows Running before Kaiden finishes creating the workspace (uploads, network policy, agent start).
-   * Acting on it in that window races the creation task (openkaiden/kaiden#3192), so wait for the task to end.
-   */
   private async waitForCreationTask(workspaceName: string): Promise<void> {
     const runningTask = this.page.getByRole('button', { name: 'Toggle Task Manager' }).getByRole('status');
     await expect
