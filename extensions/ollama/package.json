@@ -2,7 +2,7 @@
   "name": "ollama",
   "displayName": "Ollama",
   "description": "Register Ollama models to Kaiden.",
-  "version": "0.5.0-next",
+  "version": "0.4.4",
   "icon": {
     "light": "icon_light.png",
     "dark": "icon_dark.png"
