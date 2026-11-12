@@ -55,6 +55,7 @@ import { lookup } from 'mime-types';
 import { AcpInit } from '/@/plugin/acp/acp-init.js';
 import { AcpIPCHandler } from '/@/plugin/acp/acp-ipc-handler.js';
 import { AcpSessionManager } from '/@/plugin/acp/acp-session-manager.js';
+import { AddonRegistry } from '/@/plugin/addon-registry.js';
 import { AgentRegistry } from '/@/plugin/agent-registry.js';
 import { AgentWorkspaceManager } from '/@/plugin/agent-workspace/agent-workspace-manager.js';
 import { HostPresetRegistry } from '/@/plugin/agent-workspace/host-preset-registry.js';
@@ -631,6 +632,7 @@ export class PluginSystem {
     container.bind<OpenshellImageBuilder>(OpenshellImageBuilder).toSelf().inSingletonScope();
     container.bind<AgentWorkspaceManager>(AgentWorkspaceManager).toSelf().inSingletonScope();
     container.bind<HostPresetRegistry>(HostPresetRegistry).toSelf().inSingletonScope();
+    container.bind<AddonRegistry>(AddonRegistry).toSelf().inSingletonScope();
     container.bind(SelectableProviderFactoryToken).to(GcloudAdcProviderFactory).inSingletonScope();
     container.bind(DefaultProviderFactory).to(DefaultProviderFactory).inSingletonScope();
     container.bind<OpenshellSecretAdapter>(OpenshellSecretAdapter).toSelf().inSingletonScope();
