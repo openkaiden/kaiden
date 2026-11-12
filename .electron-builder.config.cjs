@@ -384,7 +384,9 @@ const config = {
   },
   publish: {
     provider: 'github',
-    timeout: 10000,
+    // GitHub can take longer than 10s to answer after receiving a large asset
+    // (Linux tarballs, flatpak), which made uploads fail with "Request timed out".
+    timeout: 120000,
   },
   /*extraMetadata: {
     version: process.env.VITE_APP_VERSION,
