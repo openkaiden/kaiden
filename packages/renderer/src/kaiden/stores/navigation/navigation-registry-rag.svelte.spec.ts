@@ -41,13 +41,13 @@ test('should hide Knowledges entry when no providers exist', async () => {
   });
 });
 
-test('should hide Knowledges entry when no rag connections exist', async () => {
+test('should hide Knowledges entry when no rag provider capability exists', async () => {
   const entry = createNavigationRagEntry();
 
   providerInfos.set([
     {
-      ragConnections: [],
-      chunkConnections: [{ id: 'chunk1', name: 'Chunk Provider' }],
+      ragProviderConnectionCreation: false,
+      chunkProviderConnectionCreation: true,
     } as unknown as ProviderInfo,
   ]);
 
@@ -56,13 +56,13 @@ test('should hide Knowledges entry when no rag connections exist', async () => {
   });
 });
 
-test('should hide Knowledges entry when no chunk connections exist', async () => {
+test('should hide Knowledges entry when no chunk provider capability exists', async () => {
   const entry = createNavigationRagEntry();
 
   providerInfos.set([
     {
-      ragConnections: [{ name: 'RAG Provider' }],
-      chunkConnections: [],
+      ragProviderConnectionCreation: true,
+      chunkProviderConnectionCreation: false,
     } as unknown as ProviderInfo,
   ]);
 
@@ -71,13 +71,13 @@ test('should hide Knowledges entry when no chunk connections exist', async () =>
   });
 });
 
-test('should show Knowledges entry when both rag and chunk connections exist', async () => {
+test('should show Knowledges entry when both rag and chunk provider capabilities exist', async () => {
   const entry = createNavigationRagEntry();
 
   providerInfos.set([
     {
-      ragConnections: [{ name: 'RAG Provider' }],
-      chunkConnections: [{ id: 'chunk1', name: 'Chunk Provider' }],
+      ragProviderConnectionCreation: true,
+      chunkProviderConnectionCreation: true,
     } as unknown as ProviderInfo,
   ]);
 
@@ -86,17 +86,17 @@ test('should show Knowledges entry when both rag and chunk connections exist', a
   });
 });
 
-test('should show Knowledges entry when rag and chunk connections are on different providers', async () => {
+test('should show Knowledges entry when rag and chunk capabilities are on different providers', async () => {
   const entry = createNavigationRagEntry();
 
   providerInfos.set([
     {
-      ragConnections: [{ name: 'RAG Provider' }],
-      chunkConnections: [],
+      ragProviderConnectionCreation: true,
+      chunkProviderConnectionCreation: false,
     } as unknown as ProviderInfo,
     {
-      ragConnections: [],
-      chunkConnections: [{ id: 'chunk1', name: 'Chunk Provider' }],
+      ragProviderConnectionCreation: false,
+      chunkProviderConnectionCreation: true,
     } as unknown as ProviderInfo,
   ]);
 

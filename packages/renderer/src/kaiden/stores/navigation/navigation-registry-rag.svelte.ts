@@ -25,9 +25,9 @@ let configHidden = $state(false);
 
 export function createNavigationRagEntry(): NavigationRegistryEntry {
   providerInfos.subscribe(providers => {
-    const hasRagConnections = providers.some(provider => provider.ragConnections.length > 0);
-    const hasChunkConnections = providers.some(provider => provider.chunkConnections.length > 0);
-    noProviders = !hasRagConnections || !hasChunkConnections;
+    const hasRagProvider = providers.some(provider => provider.ragProviderConnectionCreation);
+    const hasChunkProvider = providers.some(provider => provider.chunkProviderConnectionCreation);
+    noProviders = !hasRagProvider || !hasChunkProvider;
   });
 
   const registry: NavigationRegistryEntry = {
