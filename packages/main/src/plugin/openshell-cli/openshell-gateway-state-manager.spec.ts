@@ -224,6 +224,57 @@ test('omits version from gateway when runtime info does not include it', async (
   expect(gw.gatewayState?.compatible).toBe(false);
 });
 
+// The VM driver advertises itself as "openshell-driver-vm" in capabilities.driver_name while the compute driver
+// name is "vm" (openkaiden/kaiden#3255): the driver must come from the name.
+test.each([
+  { name: 'vm', capabilityName: 'openshell-driver-vm' },
+  { name: 'podman', capabilityName: 'openshell-driver-podman' },
+  { name: 'docker', capabilityName: 'openshell-driver-docker' },
+] as const)('derives driver $name from compute_drivers[0].name when driver_name is $capabilityName', async ({
+  name,
+  capabilityName,
+}) => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValueOnce({
+    status: 'healthy',
+    compute_drivers: [{ name, capabilities: { driver_name: capabilityName } }],
+  });
+
+  await manager.refresh();
+
+  const [gw] = manager.listGateways();
+  assert(gw);
+  expect(gw.driver).toBe(name);
+});
+
+test('omits driver when compute_drivers is empty', async () => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValueOnce({
+    status: 'healthy',
+    compute_drivers: [],
+  });
+
+  await manager.refresh();
+
+  const [gw] = manager.listGateways();
+  assert(gw);
+  expect(gw).not.toHaveProperty('driver');
+});
+
+test('omits driver when compute_drivers[0].name is unrecognised even if driver_name is known', async () => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local', 'http://127.0.0.1:17670')]);
+  vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValueOnce({
+    status: 'healthy',
+    compute_drivers: [{ name: 'unknown-driver', capabilities: { driver_name: 'podman' } }],
+  });
+
+  await manager.refresh();
+
+  const [gw] = manager.listGateways();
+  assert(gw);
+  expect(gw).not.toHaveProperty('driver');
+});
+
 const aboveMin = inc(MIN_GATEWAY_VERSION, 'patch');
 assert(aboveMin);
 

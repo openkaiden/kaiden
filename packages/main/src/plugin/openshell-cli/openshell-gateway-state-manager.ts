@@ -173,7 +173,7 @@ export class OpenshellGatewayStateManager implements Disposable {
         const { pid, pidReadFailed } = await this.readGatewayPid(base);
         try {
           const runtimeInfo = await this.gatewayManager.getGatewayInfo(listed.metadata.name);
-          const reportedDriver = runtimeInfo.compute_drivers[0]?.capabilities.driver_name;
+          const reportedDriver = runtimeInfo.compute_drivers[0]?.name;
           const driver: LocalGatewayDriver | undefined =
             reportedDriver === 'vm' || reportedDriver === 'podman' || reportedDriver === 'docker'
               ? reportedDriver
