@@ -16,35 +16,50 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { once } from 'node:events';
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { request, type Server } from 'node:http';
+import { IncomingMessage, request, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import {
+  type ExecInteractiveSessionControl,
+  type ExecStreamEvent,
+  OpenShellClient,
+  SandboxClient,
+} from '@nvidia/openshell-sdk';
 import type { Configuration } from '@openkaiden/api';
 import { Container, injectable, injectFromBase } from 'inversify';
-import { beforeEach, expect, test, vi } from 'vitest';
+import { assert, beforeEach, expect, test, vi } from 'vitest';
+import { WebSocket } from 'ws';
 
 import { AgentWorkspaceManager } from '/@/plugin/agent-workspace/agent-workspace-manager.js';
 import { ConfigurationRegistry } from '/@/plugin/configuration-registry.js';
 import { Directories } from '/@/plugin/directories.js';
 import { LegacyDirectories } from '/@/plugin/directories-legacy.js';
 import { Emitter } from '/@/plugin/events/emitter.js';
+import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { ApiServerSettings } from '/@api/api-server-settings.js';
 import { type IConfigurationChangeEvent, IConfigurationRegistry } from '/@api/configuration/models.js';
 import type { GatewayInfo, GatewaySandboxes } from '/@api/openshell-gateway-info.js';
 
 import { ApiServer } from './api-server.js';
 
+vi.mock(import('@nvidia/openshell-sdk'));
 vi.mock(import('/@/plugin/agent-workspace/agent-workspace-manager.js'));
 vi.mock(import('/@/plugin/configuration-registry.js'));
 vi.mock(import('/@/plugin/directories-legacy.js'));
+vi.mock(import('/@/plugin/openshell-cli/openshell-sdk-client-manager.js'));
 
 @injectable()
 @injectFromBase()
 class TestApiServer extends ApiServer {
   static get portFilename(): string {
     return this.PORT_FILENAME;
+  }
+
+  static lookupError(failure: 'not-found' | 'ambiguous'): string {
+    return this.LOOKUP_ERRORS[failure];
   }
 
   get httpServer(): Server | undefined {
@@ -62,6 +77,7 @@ let apiServer: TestApiServer | undefined;
 
 function newApiServer(directory: string): TestApiServer {
   const container = new Container();
+  container.bind(OpenshellSdkClientManager).toConstantValue(Object.create(OpenshellSdkClientManager.prototype));
   vi.mocked(LegacyDirectories.prototype.getDataDirectory).mockReturnValue(directory);
   container.bind(Directories).toConstantValue(Object.create(LegacyDirectories.prototype));
   container.bind(AgentWorkspaceManager).toConstantValue(Object.create(AgentWorkspaceManager.prototype));
@@ -100,8 +116,61 @@ function call(
   });
 }
 
+async function connect(port: number, token: string, path: string): Promise<WebSocket> {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}${path}`, { headers: { authorization: `Bearer ${token}` } });
+  await once(ws, 'open');
+  return ws;
+}
+
+function upgradeStatus(port: number, path: string, headers: Record<string, string>): Promise<number | undefined> {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}${path}`, { headers });
+  return new Promise(resolve => {
+    ws.on('unexpected-response', (_req, res) => resolve(res.statusCode));
+    ws.on('error', () => resolve(undefined));
+  });
+}
+
+function connectionCount(server: Server | undefined): Promise<number> {
+  assert(server);
+  return new Promise((resolve, reject) => server.getConnections((err, count) => (err ? reject(err) : resolve(count))));
+}
+
+async function nextMessage(ws: WebSocket): Promise<{ data: Buffer; isBinary: boolean }> {
+  const [data, isBinary] = await once(ws, 'message');
+  assert(Buffer.isBuffer(data) && typeof isBinary === 'boolean');
+  return { data, isBinary };
+}
+
+// a promise that never settles: the operation stays in progress for the whole test
+function never(): Promise<never> {
+  return new Promise<never>(() => {});
+}
+
 function sandboxes(gateway: GatewayInfo, ...names: string[]): GatewaySandboxes {
   return { gateway, sandboxes: names.map(name => ({ id: `id-${name}`, name, phase: 'Ready' })) };
+}
+
+function fakeExecSession(output?: AsyncIterable<ExecStreamEvent>): {
+  session: ExecInteractiveSessionControl;
+  exit: (code: number) => void;
+} {
+  const exited = Promise.withResolvers<number>();
+  const session: ExecInteractiveSessionControl = {
+    write: vi.fn(),
+    resize: vi.fn(),
+    close: vi.fn(),
+    closeInput: vi.fn(),
+    cancel: vi.fn(),
+    exitCode: undefined,
+    done: exited.promise,
+    output:
+      output ??
+      (async function* (): AsyncGenerator<ExecStreamEvent> {
+        yield { stream: 'stdout', data: Buffer.from('hello') };
+        yield { type: 'exit', exitCode: await exited.promise };
+      })(),
+  };
+  return { session, exit: exited.resolve };
 }
 
 beforeEach(async () => {
@@ -119,6 +188,10 @@ beforeEach(async () => {
   configurationChanged = new Emitter<IConfigurationChangeEvent>();
   vi.mocked(configuration.get).mockReturnValue(true);
   vi.mocked(ConfigurationRegistry.prototype.getConfiguration).mockReturnValue(configuration);
+  const client: OpenShellClient = Object.assign(Object.create(OpenShellClient.prototype), {
+    sandbox: Object.create(SandboxClient.prototype),
+  });
+  vi.mocked(OpenshellSdkClientManager.prototype.getClient).mockResolvedValue(client);
   vi.mocked(AgentWorkspaceManager.prototype.listOpenshellSandboxes).mockResolvedValue([sandboxes(gateway1, 'ws1')]);
 });
 
@@ -338,6 +411,323 @@ test('rejects invalid names and does not leak internal errors', async () => {
   expect(console.error).toHaveBeenCalledWith('API server error deleting workspace', expect.any(Error));
 });
 
+test('rejects websocket upgrades without the token or with invalid names', async () => {
+  const { port, token } = await startServer();
+  const auth = { authorization: `Bearer ${token}` };
+  expect(await upgradeStatus(port, '/api/workspaces/ws1/pty', {})).toBe(401);
+  expect(await upgradeStatus(port, '/api/workspaces/a%20b/pty', auth)).toBe(400);
+  expect(await upgradeStatus(port, '/api/workspaces/ws1/pty?gateway=a&gateway=b', auth)).toBe(400);
+});
+
+test('logs a path segment that is not valid percent-encoding and rejects the upgrade', async () => {
+  const { port, token } = await startServer();
+
+  expect(await upgradeStatus(port, '/api/workspaces/%E0/pty', { authorization: `Bearer ${token}` })).toBe(400);
+  expect(console.debug).toHaveBeenCalledWith('API server: invalid path segment "%E0"', expect.any(URIError));
+});
+
+test('pty session queues input sent during setup, clamps sizes and forwards output and exit code', async () => {
+  const { port, token } = await startServer();
+  const { session, exit } = fakeExecSession();
+  const execReady = Promise.withResolvers<ExecInteractiveSessionControl>();
+  vi.mocked(SandboxClient.prototype.execInteractive).mockReturnValue(execReady.promise);
+
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty?gateway=gw1');
+  ws.send(JSON.stringify({ command: ['bash', '-l'], cols: 100, rows: 30 }));
+  ws.send(Buffer.from('typed early'), { binary: true });
+  ws.send(JSON.stringify({ type: 'resize', cols: 5000, rows: 40 }));
+  await vi.waitFor(() => expect(SandboxClient.prototype.execInteractive).toHaveBeenCalled());
+  const output = nextMessage(ws);
+  execReady.resolve(session);
+
+  expect(await output).toEqual({ data: Buffer.from('hello'), isBinary: true });
+  expect(OpenshellSdkClientManager.prototype.getClient).toHaveBeenCalledWith('gw1');
+  expect(SandboxClient.prototype.execInteractive).toHaveBeenCalledWith('ws1', ['bash', '-l'], {
+    tty: true,
+    cols: 100,
+    rows: 30,
+    signal: expect.any(AbortSignal),
+  });
+  expect(session.write).toHaveBeenCalledWith(Buffer.from('typed early'));
+  expect(session.resize).toHaveBeenCalledWith(80, 40);
+
+  const exitFrame = nextMessage(ws);
+  exit(3);
+  expect(JSON.parse((await exitFrame).data.toString())).toEqual({ type: 'exit', exitCode: 3 });
+  await once(ws, 'close');
+});
+
+test('pty session falls back to /bin/sh and aborts when the client disconnects', async () => {
+  const { port, token } = await startServer();
+  const { session } = fakeExecSession();
+  vi.mocked(SandboxClient.prototype.execInteractive).mockResolvedValue(session);
+
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty');
+  const output = nextMessage(ws);
+  ws.send(JSON.stringify({ command: [1] }));
+  await output;
+  ws.close();
+
+  await vi.waitFor(() => expect(session.close).toHaveBeenCalled());
+  const signal = vi.mocked(SandboxClient.prototype.execInteractive).mock.calls[0]?.[2]?.signal;
+  expect(signal?.aborted).toBe(true);
+  expect(SandboxClient.prototype.execInteractive).toHaveBeenCalledWith('ws1', ['/bin/sh'], expect.anything());
+});
+
+test('pty output stream failing while connected sends an error and closes the socket', async () => {
+  const { port, token } = await startServer();
+  const { session } = fakeExecSession({
+    [Symbol.asyncIterator]: (): AsyncIterator<ExecStreamEvent> => ({
+      next: () => Promise.reject(new Error('stream broke')),
+    }),
+  });
+  vi.mocked(SandboxClient.prototype.execInteractive).mockResolvedValue(session);
+
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty');
+  const message = nextMessage(ws);
+  const closed = once(ws, 'close');
+  ws.send(JSON.stringify({}));
+
+  expect(JSON.parse((await message).data.toString())).toEqual({ type: 'error', error: 'Failed: terminal session' });
+  await closed;
+  expect(console.error).toHaveBeenCalledWith('API server terminal session:', expect.any(Error));
+});
+
+test('agent session decodes multibyte input split across frames and detaches on close', async () => {
+  const { port, token } = await startServer();
+  const terminal = { write: vi.fn(), resize: vi.fn(), detach: vi.fn() };
+  vi.mocked(AgentWorkspaceManager.prototype.attachAgentTerminal).mockResolvedValue(terminal);
+
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty?agent=true');
+  ws.send(JSON.stringify({ cols: 120, rows: 40 }));
+  const e = Buffer.from('é');
+  ws.send(e.subarray(0, 1), { binary: true });
+  ws.send(e.subarray(1), { binary: true });
+
+  await vi.waitFor(() => expect(terminal.write.mock.calls.map(c => c[0]).join('')).toBe('é'));
+  expect(terminal.resize).toHaveBeenCalledWith(120, 40);
+  ws.close();
+  await vi.waitFor(() => expect(terminal.detach).toHaveBeenCalled());
+});
+
+test('agent session end sends an exit frame and closes the socket', async () => {
+  const { port, token } = await startServer();
+  const attached = Promise.withResolvers<() => void>();
+  vi.mocked(AgentWorkspaceManager.prototype.attachAgentTerminal).mockImplementation(async (_name, _gw, client) => {
+    attached.resolve(() => client.onEnd?.());
+    return { write: vi.fn(), resize: vi.fn(), detach: vi.fn() };
+  });
+
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty?agent=true');
+  const message = nextMessage(ws);
+  const closed = once(ws, 'close');
+  ws.send(JSON.stringify({}));
+  (await attached.promise)();
+
+  expect(JSON.parse((await message).data.toString())).toEqual({ type: 'exit', exitCode: 0 });
+  await closed;
+});
+
+test('agent attach failing while connected sends an error and closes the socket', async () => {
+  const { port, token } = await startServer();
+  vi.mocked(AgentWorkspaceManager.prototype.attachAgentTerminal).mockRejectedValue(new Error('attach failed'));
+
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty?agent=true');
+  const message = nextMessage(ws);
+  const closed = once(ws, 'close');
+  ws.send(JSON.stringify({}));
+
+  expect(JSON.parse((await message).data.toString())).toEqual({ type: 'error', error: 'Failed: agent session' });
+  await closed;
+  expect(console.error).toHaveBeenCalledWith('API server agent session:', expect.any(Error));
+});
+
+test.each([
+  'resolves',
+  'rejects',
+])('agent attach that %s after the client left detaches and is not reported as a failure', async outcome => {
+  const { port, token } = await startServer();
+  const terminal = { write: vi.fn(), resize: vi.fn(), detach: vi.fn() };
+  const attached = Promise.withResolvers<typeof terminal>();
+  vi.mocked(AgentWorkspaceManager.prototype.attachAgentTerminal).mockReturnValue(attached.promise);
+
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty?agent=true');
+  ws.send(JSON.stringify({}));
+  await vi.waitFor(() => expect(AgentWorkspaceManager.prototype.attachAgentTerminal).toHaveBeenCalled());
+  ws.close();
+  // the server has seen the disconnect once its upgraded socket is gone
+  await vi.waitFor(async () => expect(await connectionCount(apiServer?.httpServer)).toBe(0));
+  if (outcome === 'resolves') {
+    attached.resolve(terminal);
+    await vi.waitFor(() => expect(terminal.detach).toHaveBeenCalled());
+  } else {
+    attached.reject(new Error('attach failed'));
+    await vi.waitFor(() =>
+      expect(console.debug).toHaveBeenCalledWith(
+        'API server: client left while opening agent session on "ws1" (gateway any)',
+        expect.any(Error),
+      ),
+    );
+  }
+
+  // let a late rejection or #sendError run before asserting that nothing was logged
+  await new Promise(resolve => setImmediate(resolve));
+  expect(console.error).not.toHaveBeenCalled();
+});
+
+test('agent session is not attached when the client leaves during the workspace lookup', async () => {
+  const { port, token } = await startServer();
+  const lookup = Promise.withResolvers<GatewaySandboxes[]>();
+  vi.mocked(AgentWorkspaceManager.prototype.listOpenshellSandboxes).mockReturnValue(lookup.promise);
+
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty?agent=true');
+  ws.send(JSON.stringify({}));
+  await vi.waitFor(() => expect(AgentWorkspaceManager.prototype.listOpenshellSandboxes).toHaveBeenCalled());
+  ws.close();
+  await vi.waitFor(async () => expect(await connectionCount(apiServer?.httpServer)).toBe(0));
+  lookup.resolve([sandboxes(gateway1, 'ws1')]);
+
+  // let the resolved lookup run before asserting that nothing was attached
+  await new Promise(resolve => setImmediate(resolve));
+  expect(AgentWorkspaceManager.prototype.attachAgentTerminal).not.toHaveBeenCalled();
+  expect(console.error).not.toHaveBeenCalled();
+});
+
+test('agent stderr is forwarded as terminal output and keeps the session open', async () => {
+  const { port, token } = await startServer();
+  vi.mocked(AgentWorkspaceManager.prototype.attachAgentTerminal).mockImplementation(async (_name, _gw, client) => {
+    client.onError?.('warning on stderr');
+    return { write: vi.fn(), resize: vi.fn(), detach: vi.fn() };
+  });
+
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty?agent=true');
+  const message = nextMessage(ws);
+  ws.send(JSON.stringify({}));
+  expect(await message).toEqual({ data: Buffer.from('warning on stderr'), isBinary: true });
+  expect(ws.readyState).toBe(WebSocket.OPEN);
+});
+
+test.each([
+  'resolves',
+  'rejects',
+])('pty session opening that %s after the client left is closed and not reported as a failure', async outcome => {
+  const { port, token } = await startServer();
+  const { session } = fakeExecSession();
+  // settle only once the server has seen the disconnect, like the SDK honouring the abort signal
+  vi.mocked(SandboxClient.prototype.execInteractive).mockImplementation(
+    (_name, _command, options) =>
+      new Promise((resolve, reject) =>
+        options?.signal?.addEventListener('abort', () =>
+          outcome === 'resolves' ? resolve(session) : reject(new Error('aborted')),
+        ),
+      ),
+  );
+
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty');
+  ws.send(JSON.stringify({}));
+  await vi.waitFor(() => expect(SandboxClient.prototype.execInteractive).toHaveBeenCalled());
+  ws.close();
+
+  const signal = vi.mocked(SandboxClient.prototype.execInteractive).mock.calls[0]?.[2]?.signal;
+  await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+  if (outcome === 'resolves') {
+    await vi.waitFor(() => expect(session.close).toHaveBeenCalled());
+  } else {
+    await vi.waitFor(() =>
+      expect(console.debug).toHaveBeenCalledWith(
+        'API server: client left while opening terminal session on "ws1" (gateway any)',
+        expect.any(Error),
+      ),
+    );
+  }
+  // let a late rejection or #sendError run before asserting that nothing was logged
+  await new Promise(resolve => setImmediate(resolve));
+  expect(console.error).not.toHaveBeenCalled();
+});
+
+test.each([
+  { title: 'unknown to Kaiden', matches: [], error: TestApiServer.lookupError('not-found') },
+  {
+    title: 'on several gateways',
+    matches: [sandboxes(gateway1, 'ws1'), sandboxes(gateway2, 'ws1')],
+    error: TestApiServer.lookupError('ambiguous'),
+  },
+])('terminals refuse a workspace $title', async ({ matches, error }) => {
+  const { port, token } = await startServer();
+  vi.mocked(AgentWorkspaceManager.prototype.listOpenshellSandboxes).mockResolvedValue(matches);
+
+  for (const path of ['/api/workspaces/ws1/pty', '/api/workspaces/ws1/pty?agent=true']) {
+    const ws = await connect(port, token, path);
+    const message = nextMessage(ws);
+    const closed = once(ws, 'close');
+    ws.send(JSON.stringify({}));
+    expect(JSON.parse((await message).data.toString())).toEqual({ type: 'error', error });
+    await closed;
+  }
+  expect(SandboxClient.prototype.execInteractive).not.toHaveBeenCalled();
+  expect(AgentWorkspaceManager.prototype.attachAgentTerminal).not.toHaveBeenCalled();
+  expect(console.error).not.toHaveBeenCalled();
+});
+
+test('terminals open on the gateway the lookup found', async () => {
+  const { port, token } = await startServer();
+  vi.mocked(AgentWorkspaceManager.prototype.listOpenshellSandboxes).mockResolvedValue([sandboxes(gateway2, 'ws1')]);
+  vi.mocked(AgentWorkspaceManager.prototype.attachAgentTerminal).mockResolvedValue({
+    write: vi.fn(),
+    resize: vi.fn(),
+    detach: vi.fn(),
+  });
+
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty?agent=true');
+  ws.send(JSON.stringify({}));
+
+  await vi.waitFor(() =>
+    expect(AgentWorkspaceManager.prototype.attachAgentTerminal).toHaveBeenCalledWith('ws1', 'gw2', expect.anything()),
+  );
+  expect(AgentWorkspaceManager.prototype.listOpenshellSandboxes).toHaveBeenCalledWith(undefined);
+});
+
+test('a frame larger than 1 MiB closes the socket', async () => {
+  const { port, token } = await startServer();
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty');
+  const closed = once(ws, 'close');
+
+  ws.send(Buffer.alloc(1024 * 1024 + 1), { binary: true });
+
+  expect((await closed)[0]).toBe(1009);
+});
+
+test('more than 1 MiB of input before the session starts closes the socket', async () => {
+  const { port, token } = await startServer();
+  vi.mocked(SandboxClient.prototype.execInteractive).mockReturnValue(never());
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty');
+  const closed = once(ws, 'close');
+
+  ws.send(JSON.stringify({}));
+  for (let i = 0; i < 3; i++) ws.send(Buffer.alloc(512 * 1024), { binary: true });
+
+  expect((await closed)[0]).toBe(1009);
+});
+
+test('a protocol error on a websocket does not crash the server', async () => {
+  const { port, token } = await startServer();
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/api/workspaces/ws1/pty`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  // 'open' follows 'upgrade' in the same tick: listen to both before awaiting
+  const upgraded = once(ws, 'upgrade');
+  const opened = once(ws, 'open');
+  const [response] = await upgraded;
+  assert(response instanceof IncomingMessage);
+  await opened;
+  const closed = once(ws, 'close');
+  // masked frame with reserved opcode 0x3: the server must reject it through the websocket 'error' event
+  response.socket.write(Buffer.from([0x83, 0x80, 0, 0, 0, 0]));
+  await closed;
+
+  expect((await call(port, 'GET', '/api/workspaces', { authorization: `Bearer ${token}` })).status).toBe(200);
+});
+
 test('dispose stops listening and removes the port file', async () => {
   const { port, token, directory } = await startServer();
 
@@ -347,6 +737,23 @@ test('dispose stops listening and removes the port file', async () => {
   await expect(call(port, 'GET', '/api/workspaces', { authorization: `Bearer ${token}` })).rejects.toThrow(
     'ECONNREFUSED',
   );
+});
+
+test('dispose closes open terminals and removes the port file', async () => {
+  const { port, token, directory } = await startServer();
+  const { session } = fakeExecSession();
+  vi.mocked(SandboxClient.prototype.execInteractive).mockResolvedValue(session);
+  const ws = await connect(port, token, '/api/workspaces/ws1/pty');
+  const output = nextMessage(ws);
+  ws.send(JSON.stringify({}));
+  await output;
+
+  const closed = once(ws, 'close');
+  await apiServer?.dispose();
+  await closed;
+
+  await expect(stat(join(directory, TestApiServer.portFilename))).rejects.toThrow('ENOENT');
+  await vi.waitFor(() => expect(session.close).toHaveBeenCalled());
 });
 
 test('dispose removes its own port file but not one written by another instance', async () => {
