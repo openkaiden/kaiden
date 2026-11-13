@@ -61,6 +61,20 @@ let chunkConnectionOptions = $derived(
   ),
 );
 
+let showCreateChunkConnection = $state(false);
+let selectedChunkFactoryProviderId: string | undefined = $state(undefined);
+let chunkCreationInProgress = $state(false);
+let chunkCreationAttempt = $state(0);
+
+let chunkFactoryProviders = $derived(providers.filter(p => p.chunkProviderConnectionCreation === true));
+
+let activeChunkFactoryProvider = $derived.by((): ProviderInfo | undefined => {
+  if (selectedChunkFactoryProviderId)
+    return chunkFactoryProviders.find(p => p.internalId === selectedChunkFactoryProviderId);
+  if (chunkFactoryProviders.length === 1) return chunkFactoryProviders[0];
+  return undefined;
+});
+
 const selectedRagOption = $derived(ragConnectionOptions.find(option => option.key === selectedRagConnectionKey));
 const selectedChunkOption = $derived(
   chunkConnectionOptions.find(option => option.key === selectedChunkerConnectionKey),
@@ -88,6 +102,28 @@ $effect(() => {
     if (created) {
       selectedRagConnectionKey = created.key;
       showCreateRagConnection = false;
+    }
+  }
+});
+
+let prevChunkOptionsLength = $state(-1);
+
+$effect(() => {
+  const options = chunkConnectionOptions;
+  const prevLength = untrack(() => prevChunkOptionsLength);
+  const currentKey = untrack(() => selectedChunkerConnectionKey);
+  prevChunkOptionsLength = options.length;
+
+  if (currentKey && !options.find(o => o.key === currentKey)) {
+    selectedChunkerConnectionKey = '';
+  }
+
+  if (prevLength >= 0 && options.length > prevLength) {
+    const factoryId = untrack(() => activeChunkFactoryProvider?.id);
+    const created = factoryId ? options.filter(o => o.providerId === factoryId).at(-1) : options.at(-1);
+    if (created) {
+      selectedChunkerConnectionKey = created.key;
+      showCreateChunkConnection = false;
     }
   }
 });
@@ -125,6 +161,18 @@ function selectRagConnection(key: string): void {
 
 function selectChunkConnection(key: string): void {
   selectedChunkerConnectionKey = key;
+  showCreateChunkConnection = false;
+}
+
+function openCreateChunkConnection(): void {
+  showCreateChunkConnection = true;
+  selectedChunkerConnectionKey = '';
+  chunkCreationInProgress = false;
+  chunkCreationAttempt++;
+}
+
+function selectChunkFactoryProvider(internalId: string): void {
+  selectedChunkFactoryProviderId = internalId;
 }
 
 function openCreateRagConnection(): void {
@@ -253,7 +301,70 @@ function selectFactoryProvider(internalId: string): void {
       <!-- Embedding Model Selection -->
       <div role="group" aria-label="Embedding Model" class="flex flex-col space-y-3">
         <span class="text-sm font-medium text-[var(--pd-modal-text)]">Embedding Model</span>
+
+        {#if showCreateChunkConnection || (chunkConnectionOptions.length === 0 && chunkFactoryProviders.length > 0)}
+          <div class="flex flex-col gap-3">
+            {#if chunkFactoryProviders.length > 1}
+              <div class="flex flex-wrap gap-3" data-testid="chunk-factory-picker">
+                {#each chunkFactoryProviders as provider (provider.internalId)}
+                  {@const isActive = activeChunkFactoryProvider?.internalId === provider.internalId}
+                  <Button
+                    type={isActive ? 'primary' : 'secondary'}
+                    aria-label="Select {provider.chunkProviderConnectionCreationDisplayName ?? provider.name}"
+                    onclick={selectChunkFactoryProvider.bind(undefined, provider.internalId)}>
+                    {provider.chunkProviderConnectionCreationDisplayName ?? provider.name}
+                  </Button>
+                {/each}
+              </div>
+            {/if}
+
+            {#if activeChunkFactoryProvider}
+              {#key `${activeChunkFactoryProvider.internalId}-${chunkCreationAttempt}`}
+                <div class="rounded-lg border border-(--pd-content-card-border) bg-(--pd-content-card-bg) p-4" data-testid="inline-chunk-creation-form">
+                  <PreferencesConnectionCreationRendering
+                    providerInfo={activeChunkFactoryProvider}
+                    properties={$configurationProperties}
+                    propertyScope="ChunkProviderConnectionFactory"
+                    callback={window.createChunkProviderConnection}
+                    disableEmptyScreen={true}
+                    hideCloseButton={true}
+                    bind:inProgress={chunkCreationInProgress} />
+                </div>
+              {/key}
+            {/if}
+          </div>
+        {/if}
+
+        {#if chunkConnectionOptions.length === 0 && chunkFactoryProviders.length > 0}
+          <div class="flex flex-col items-center text-center py-4">
+            <p class="text-xs text-(--pd-content-card-text) opacity-60 max-w-sm mb-4">
+              No embedding models available. Create one to continue.
+            </p>
+          </div>
+        {/if}
+
         <div class="grid grid-cols-2 gap-4">
+          {#if chunkConnectionOptions.length > 0 && chunkFactoryProviders.length > 0}
+            <button
+              type="button"
+              aria-label="Create new embedding model"
+              class="border-2 border-dashed rounded-lg p-4 text-left transition-all cursor-pointer {showCreateChunkConnection
+                ? 'border-(--pd-content-card-border-selected) bg-(--pd-content-card-hover-inset-bg)'
+                : 'border-(--pd-content-card-border) bg-(--pd-content-card-bg) hover:border-(--pd-content-card-border-selected) hover:bg-(--pd-content-card-hover-inset-bg)'}"
+              onclick={openCreateChunkConnection}>
+              <div class="flex items-center gap-3 mb-2">
+                <div
+                  class="w-8 h-8 rounded-md flex items-center justify-center text-(--pd-label-primary-text) text-xs font-bold bg-(--pd-label-primary-bg)">
+                  <Icon icon={faPlus} size="1x" />
+                </div>
+                <div class="text-base font-medium text-(--pd-modal-text)">Create new</div>
+              </div>
+              <div class="text-xs text-(--pd-content-text) leading-relaxed">
+                Set up a new connection
+              </div>
+            </button>
+          {/if}
+
           {#each chunkConnectionOptions as option (option.key)}
             <button
               type="button"
