@@ -43,6 +43,8 @@ export const ModelRefSchema = z.object({
   useReasoning: z.boolean(),
 });
 
+export type ModelRef = z.infer<typeof ModelRefSchema>;
+
 export const DecisionRuleSchema = z.object({
   operator: z.enum(['AND', 'OR']),
   conditions: z.array(RuleConditionSchema),
