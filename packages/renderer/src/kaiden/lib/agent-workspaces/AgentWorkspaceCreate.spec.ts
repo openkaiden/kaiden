@@ -1814,6 +1814,26 @@ test('Expect custom mount strips trailing separators when deriving target from h
   );
 });
 
+test('Expect custom mount derives correct basename from Windows backslash host path', async () => {
+  render(AgentWorkspaceCreate);
+
+  await navigateToFileSystemStep();
+  await fireEvent.click(screen.getByRole('radio', { name: 'Use Custom Paths' }));
+
+  await fireEvent.input(screen.getByLabelText('Host path 1'), {
+    target: { value: 'C:\\Users\\alice\\configs' },
+  });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  await fireEvent.click(screen.getByRole('button', { name: 'Start Workspace' }));
+
+  expect(window.createAgentWorkspace).toHaveBeenCalledWith(
+    expect.objectContaining({
+      mounts: [{ host: 'C:\\Users\\alice\\configs', target: 'configs', ro: false }],
+    }),
+  );
+});
+
 test('Expect checkAgentWorkspaceConfigExists called when source path is entered', async () => {
   vi.mocked(window.checkAgentWorkspaceConfigExists).mockResolvedValue(false);
 

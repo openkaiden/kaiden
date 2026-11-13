@@ -497,6 +497,23 @@ test('Expect saving custom mount with trailing separator derives correct basenam
   });
 });
 
+test('Expect saving custom mount derives correct basename from Windows backslash host path', async () => {
+  render(AgentWorkspaceDetailsSettings, { workspaceId: 'ws-1', workspaceSummary, configuration: {} });
+
+  const fileAccessNav = screen.getByRole('link', { name: 'File Access' });
+  await fireEvent.click(fileAccessNav);
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Custom Paths' }));
+  const hostInput = screen.getByRole('textbox', { name: 'Host path 1' });
+  await fireEvent.input(hostInput, { target: { value: 'C:\\Users\\alice\\configs' } });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+  expect(window.updateAgentWorkspaceConfiguration).toHaveBeenCalledWith('ws-1', {
+    mounts: [{ host: 'C:\\Users\\alice\\configs', target: 'configs', ro: false }],
+  });
+});
+
 test('Expect discarding file access changes resets to original mode', async () => {
   render(AgentWorkspaceDetailsSettings, { workspaceId: 'ws-1', workspaceSummary, configuration });
 
