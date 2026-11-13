@@ -17,20 +17,83 @@
  ***********************************************************************/
 
 import type { HostPreset } from '@openkaiden/api';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import type { IPCHandle } from '/@/plugin/api.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 
 import { HostPresetRegistry } from './host-preset-registry.js';
 
 const apiSender: ApiSenderType = { send: vi.fn(), receive: vi.fn() };
+const ipcHandle: IPCHandle = vi.fn();
 
 let registry: HostPresetRegistry;
 
 describe('HostPresetRegistry', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    registry = new HostPresetRegistry(apiSender);
+    registry = new HostPresetRegistry(apiSender, ipcHandle);
+  });
+
+  test('init registers a handler that returns host presets', async () => {
+    const preset: HostPreset = { id: 'registries', name: 'Registries', hosts: [{ hostname: 'registry.npmjs.org' }] };
+
+    registry.init();
+    registry.registerHostPreset(preset);
+    expect(ipcHandle).toHaveBeenCalledWith('host-preset-registry:getHostPresets', expect.any(Function));
+
+    const handlerCall = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(([channel]) => channel === 'host-preset-registry:getHostPresets');
+    assert(handlerCall);
+    await expect(Reflect.apply(handlerCall[1], undefined, [])).resolves.toStrictEqual([preset]);
+  });
+
+  test('handler strips extra properties and functions from presets and hosts', async () => {
+    const preset = {
+      id: 'registries',
+      name: 'Registries',
+      description: 'Package registries',
+      extra: 'not cloneable',
+      toString: (): string => 'preset',
+      hosts: [{ hostname: 'registry.npmjs.org', port: 443, resolve: (): void => {} }],
+    };
+
+    registry.init();
+    registry.registerHostPreset(preset);
+
+    const handlerCall = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(([channel]) => channel === 'host-preset-registry:getHostPresets');
+    assert(handlerCall);
+    await expect(Reflect.apply(handlerCall[1], undefined, [])).resolves.toStrictEqual([
+      {
+        id: 'registries',
+        name: 'Registries',
+        description: 'Package registries',
+        hosts: [{ hostname: 'registry.npmjs.org' }],
+      },
+    ]);
+  });
+
+  test('handler omits description key when description is undefined', async () => {
+    const preset: HostPreset = {
+      id: 'registries',
+      name: 'Registries',
+      description: undefined,
+      hosts: [{ hostname: 'registry.npmjs.org' }],
+    };
+
+    registry.init();
+    registry.registerHostPreset(preset);
+
+    const handlerCall = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(([channel]) => channel === 'host-preset-registry:getHostPresets');
+    assert(handlerCall);
+    const result: unknown = await Reflect.apply(handlerCall[1], undefined, []);
+    assert(Array.isArray(result));
+    expect(result[0]).not.toHaveProperty('description');
   });
 
   test('registers and returns host presets', () => {
@@ -43,6 +106,17 @@ describe('HostPresetRegistry', () => {
     const preset: HostPreset = { id: 'registries', name: 'Registries', hosts: [{ hostname: 'registry.npmjs.org' }] };
     registry.registerHostPreset(preset);
     expect(apiSender.send).toHaveBeenCalledWith('host-preset-registry:updated');
+  });
+
+  test('sends update event when a preset is removed', () => {
+    const preset: HostPreset = { id: 'registries', name: 'Registries', hosts: [{ hostname: 'registry.npmjs.org' }] };
+    const registration = registry.registerHostPreset(preset);
+
+    registration.dispose();
+
+    expect(apiSender.send).toHaveBeenCalledTimes(2);
+    expect(apiSender.send).toHaveBeenNthCalledWith(1, 'host-preset-registry:updated');
+    expect(apiSender.send).toHaveBeenNthCalledWith(2, 'host-preset-registry:updated');
   });
 
   test('rejects a duplicate preset id', () => {
