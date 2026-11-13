@@ -60,6 +60,8 @@ import { AgentRegistry } from '/@/plugin/agent-registry.js';
 import { AgentWorkspaceManager } from '/@/plugin/agent-workspace/agent-workspace-manager.js';
 import { HostPresetRegistry } from '/@/plugin/agent-workspace/host-preset-registry.js';
 import { IPCHandle, IPCMainOn, WebContentsType } from '/@/plugin/api.js';
+import { ApiServer } from '/@/plugin/api-server/api-server.js';
+import { DevApiServer } from '/@/plugin/api-server/dev-api-server.js';
 import { ContainerfileParser } from '/@/plugin/containerfile-parser.js';
 import { ExtensionApiVersion } from '/@/plugin/extension/extension-api-version.js';
 import { ExtensionLoader } from '/@/plugin/extension/extension-loader.js';
@@ -633,6 +635,10 @@ export class PluginSystem {
     container.bind<AgentWorkspaceManager>(AgentWorkspaceManager).toSelf().inSingletonScope();
     container.bind<HostPresetRegistry>(HostPresetRegistry).toSelf().inSingletonScope();
     container.bind<AddonRegistry>(AddonRegistry).toSelf().inSingletonScope();
+    container
+      .bind<ApiServer>(ApiServer)
+      .to(import.meta.env.DEV ? DevApiServer : ApiServer)
+      .inSingletonScope();
     container.bind(SelectableProviderFactoryToken).to(GcloudAdcProviderFactory).inSingletonScope();
     container.bind(DefaultProviderFactory).to(DefaultProviderFactory).inSingletonScope();
     container.bind<OpenshellSecretAdapter>(OpenshellSecretAdapter).toSelf().inSingletonScope();
@@ -856,6 +862,9 @@ export class PluginSystem {
 
     const webviewRegistry = container.get<WebviewRegistry>(WebviewRegistry);
     await webviewRegistry.start();
+
+    // singletons are created lazily: getting it runs its @postConstruct, which starts the server
+    container.get<ApiServer>(ApiServer);
 
     container
       .bind<PromiseWithResolvers<BrowserWindow>>(Promise.withResolvers<BrowserWindow>)
