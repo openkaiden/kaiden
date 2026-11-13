@@ -722,7 +722,13 @@ test('Expect custom mounts section shown when Custom Paths selected on filesyste
   await fireEvent.click(screen.getByRole('radio', { name: 'Use Custom Paths' }));
 
   expect(screen.getByPlaceholderText('/path/on/host')).toBeInTheDocument();
-  expect(screen.getByPlaceholderText('Leave empty to use host path')).toBeInTheDocument();
+  expect(screen.getByPlaceholderText('Leave empty to place the folder at /sandbox/<folder name>')).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      'Mount host directories into the workspace. Only the sandbox working directory and /tmp are writable by default; ' +
+        'leave the target empty to place the folder at /sandbox/<folder name>.',
+    ),
+  ).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Add Another Mount' })).toBeInTheDocument();
 });
 
@@ -1774,7 +1780,7 @@ test('Expect createAgentWorkspace called with ro:true when read-only toggled for
   );
 });
 
-test('Expect custom mount defaults target to host path when target is empty', async () => {
+test('Expect custom mount defaults target to the host folder name when target is empty', async () => {
   render(AgentWorkspaceCreate);
 
   await navigateToFileSystemStep();
