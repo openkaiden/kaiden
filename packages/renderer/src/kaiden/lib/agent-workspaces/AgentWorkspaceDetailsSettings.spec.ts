@@ -440,7 +440,7 @@ test('Expect saving custom mount calls updateAgentWorkspaceConfiguration with mo
   await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
   expect(window.updateAgentWorkspaceConfiguration).toHaveBeenCalledWith('ws-1', {
-    mounts: [{ host: '/home/user/projects', target: 'projects', ro: false }],
+    mounts: [{ host: '/home/user/projects', target: '/home/user/projects', ro: false }],
   });
 });
 
@@ -463,7 +463,7 @@ test('Expect saving custom mounts calls updateAgentWorkspaceConfiguration', asyn
   });
 });
 
-test('Expect saving custom mount with empty target defaults to basename of host', async () => {
+test('Expect saving custom mount with empty target defaults to full host path', async () => {
   render(AgentWorkspaceDetailsSettings, { workspaceId: 'ws-1', workspaceSummary, configuration: {} });
 
   const fileAccessNav = screen.getByRole('link', { name: 'File Access' });
@@ -476,11 +476,11 @@ test('Expect saving custom mount with empty target defaults to basename of host'
   await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
   expect(window.updateAgentWorkspaceConfiguration).toHaveBeenCalledWith('ws-1', {
-    mounts: [{ host: '/home/user/data', target: 'data', ro: false }],
+    mounts: [{ host: '/home/user/data', target: '/home/user/data', ro: false }],
   });
 });
 
-test('Expect saving custom mount with trailing separator derives correct basename', async () => {
+test('Expect saving custom mount with trailing separator preserves full host path as target', async () => {
   render(AgentWorkspaceDetailsSettings, { workspaceId: 'ws-1', workspaceSummary, configuration: {} });
 
   const fileAccessNav = screen.getByRole('link', { name: 'File Access' });
@@ -493,7 +493,7 @@ test('Expect saving custom mount with trailing separator derives correct basenam
   await fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
   expect(window.updateAgentWorkspaceConfiguration).toHaveBeenCalledWith('ws-1', {
-    mounts: [{ host: '/home/user/data/', target: 'data', ro: false }],
+    mounts: [{ host: '/home/user/data/', target: '/home/user/data/', ro: false }],
   });
 });
 

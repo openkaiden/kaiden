@@ -1769,7 +1769,7 @@ test('Expect createAgentWorkspace called with ro:true when read-only toggled for
 
   expect(window.createAgentWorkspace).toHaveBeenCalledWith(
     expect.objectContaining({
-      mounts: [{ host: '/home/user/data', target: 'data', ro: true }],
+      mounts: [{ host: '/home/user/data', target: '/home/user/data', ro: true }],
     }),
   );
 });
@@ -1789,12 +1789,12 @@ test('Expect custom mount defaults target to host path when target is empty', as
 
   expect(window.createAgentWorkspace).toHaveBeenCalledWith(
     expect.objectContaining({
-      mounts: [{ host: '/home/user/configs', target: 'configs', ro: false }],
+      mounts: [{ host: '/home/user/configs', target: '/home/user/configs', ro: false }],
     }),
   );
 });
 
-test('Expect custom mount strips trailing separators when deriving target from host', async () => {
+test('Expect custom mount preserves host path with trailing separator as target', async () => {
   render(AgentWorkspaceCreate);
 
   await navigateToFileSystemStep();
@@ -1809,7 +1809,7 @@ test('Expect custom mount strips trailing separators when deriving target from h
 
   expect(window.createAgentWorkspace).toHaveBeenCalledWith(
     expect.objectContaining({
-      mounts: [{ host: '/home/user/data/', target: 'data', ro: false }],
+      mounts: [{ host: '/home/user/data/', target: '/home/user/data/', ro: false }],
     }),
   );
 });
