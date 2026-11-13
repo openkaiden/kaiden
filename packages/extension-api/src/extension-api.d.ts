@@ -5550,6 +5550,31 @@ declare module '@openkaiden/api' {
     export function registerAgent(agent: Agent): Disposable;
   }
 
+  /** An optional package or tool, provided as an OCI image, that can be added to an agent workspace image. */
+  export interface Addon {
+    /**
+     * Unique identifier for this addon. Duplicates are rejected.
+     */
+    readonly id: string;
+    /**
+     * Display name for this addon.
+     */
+    readonly name: string;
+    /**
+     * Optional description of this addon. Defaults to `undefined`.
+     */
+    readonly description?: string;
+    /**
+     * Reference of the OCI image providing the addon files (e.g. `ghcr.io/org/addon:1.0`).
+     */
+    readonly ociImage: string;
+  }
+
+  export namespace addons {
+    /** Register an addon for use by agent workspaces. The addon ID must be unique. */
+    export function registerAddon(addon: Addon): Disposable;
+  }
+
   export interface OpenShellGatewayFeatures {
     readonly supportMount: boolean;
   }

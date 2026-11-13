@@ -26,6 +26,7 @@ import AdmZip from 'adm-zip';
 import { app, clipboard as electronClipboard } from 'electron';
 import { inject, injectable, preDestroy } from 'inversify';
 
+import { AddonRegistry } from '/@/plugin/addon-registry.js';
 import { ColorRegistry } from '/@/plugin/color-registry.js';
 import { ExtensionApiVersion } from '/@/plugin/extension/extension-api-version.js';
 import { FeatureRegistry } from '/@/plugin/feature-registry.js';
@@ -206,6 +207,8 @@ export class ExtensionLoader implements IAsyncDisposable {
     private agentRegistry: AgentRegistry,
     @inject(HostPresetRegistry)
     private hostPresetRegistry: HostPresetRegistry,
+    @inject(AddonRegistry)
+    private addonRegistry: AddonRegistry,
     @inject(OpenShellRegistry)
     private openShellRegistry: OpenShellRegistry,
     @inject(NotificationRegistry)
@@ -1720,6 +1723,14 @@ export class ExtensionLoader implements IAsyncDisposable {
       },
     };
 
+    const addons: typeof containerDesktopAPI.addons = {
+      registerAddon(addon: containerDesktopAPI.Addon): containerDesktopAPI.Disposable {
+        const disposable = instance.addonRegistry.registerAddon(addon);
+        disposables.push(disposable);
+        return disposable;
+      },
+    };
+
     const workspace: typeof containerDesktopAPI.workspace = {
       registerHostPreset(preset: containerDesktopAPI.HostPreset): containerDesktopAPI.Disposable {
         const disposable = instance.hostPresetRegistry.registerHostPreset(preset);
@@ -1813,6 +1824,7 @@ export class ExtensionLoader implements IAsyncDisposable {
       net,
       mcpRegistry,
       agents,
+      addons,
       workspace,
       openshell,
     };

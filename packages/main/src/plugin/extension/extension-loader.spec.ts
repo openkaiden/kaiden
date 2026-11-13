@@ -25,6 +25,7 @@ import type * as containerDesktopAPI from '@openkaiden/api';
 import { app } from 'electron';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { AddonRegistry } from '/@/plugin/addon-registry.js';
 import type { Certificates } from '/@/plugin/certificates.js';
 import type { ContributionManager } from '/@/plugin/contribution-manager.js';
 import type { ExtensionApiVersion } from '/@/plugin/extension/extension-api-version.js';
@@ -239,6 +240,9 @@ const agentRegistry: AgentRegistry = {
 vi.mock(import('../agent-workspace/host-preset-registry.js'));
 const hostPresetRegistry = new HostPresetRegistry(apiSender);
 
+vi.mock(import('/@/plugin/addon-registry.js'));
+const addonRegistry = new AddonRegistry();
+
 const openShellRegistry: OpenShellRegistry = {
   registerGateway: vi.fn(),
   registerCLI: vi.fn(),
@@ -406,6 +410,7 @@ beforeEach(() => {
     cliToolRegistry,
     agentRegistry,
     hostPresetRegistry,
+    addonRegistry,
     openShellRegistry,
     notificationRegistry,
     imageCheckerImpl,
@@ -2168,6 +2173,23 @@ test('registerAgent', async () => {
   expect(disposables.length).toBe(1);
 
   expect(agentRegistry.registerAgent).toHaveBeenCalledWith(agent);
+});
+
+test('registerAddon', () => {
+  const disposables: IDisposable[] = [];
+  const api = createApi(disposables);
+  const addon: containerDesktopAPI.Addon = {
+    id: 'test-addon',
+    name: 'Test Addon',
+    description: 'A test addon',
+    ociImage: 'ghcr.io/test/addon:latest',
+  };
+  const registration = Disposable.create(() => {});
+  vi.mocked(addonRegistry.registerAddon).mockReturnValue(registration);
+
+  expect(api.addons.registerAddon(addon)).toBe(registration);
+  expect(disposables).toContain(registration);
+  expect(addonRegistry.registerAddon).toHaveBeenCalledWith(addon);
 });
 
 test('workspace host preset API registers and retrieves presets', () => {
