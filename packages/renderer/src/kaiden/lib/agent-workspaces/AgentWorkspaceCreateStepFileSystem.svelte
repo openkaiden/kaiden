@@ -56,6 +56,8 @@ let {
   onchange,
 }: Props = $props();
 
+const emptyTargetMountPath = '/sandbox/<folder name>';
+
 function selectOption(value: string): void {
   selectedFileAccess = value;
   onchange?.(value);
@@ -110,7 +112,7 @@ function selectOption(value: string): void {
 
 {#if selectedFileAccess === 'custom'}
   <div class="mt-4 p-4 rounded-xl border border-[var(--pd-content-card-border)] bg-[var(--pd-content-card-bg)]">
-    <p class="text-xs text-[var(--pd-content-card-text)] opacity-70 mb-3">Mount host directories into the workspace. Target is optional (defaults to the host path).</p>
+    <p class="text-xs text-[var(--pd-content-card-text)] opacity-70 mb-3">Mount host directories into the workspace. Only the sandbox working directory and /tmp are writable by default; leave the target empty to place the folder at {emptyTargetMountPath}.</p>
     {#each customMounts as mount, index (index)}
       <div class="flex flex-col gap-2 mb-3 p-3 rounded-lg bg-[var(--pd-content-card-inset-bg)] border border-[var(--pd-content-card-border)]">
         <div class="flex gap-3 items-center">
@@ -133,7 +135,7 @@ function selectOption(value: string): void {
             <span class="text-[11px] text-[var(--pd-table-body-text)] mb-1 block">Target path in workspace</span>
             <Input
               value={mount.target}
-              placeholder="Leave empty to use host path"
+              placeholder="Leave empty to place the folder at {emptyTargetMountPath}"
               class="flex-1 font-mono text-sm"
               aria-label="Target path {index + 1}"
               oninput={(e: Event): void => onUpdateCustomMount(index, 'target', (e.target as HTMLInputElement).value)}
