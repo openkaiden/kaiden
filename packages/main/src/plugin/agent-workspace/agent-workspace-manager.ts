@@ -626,6 +626,7 @@ export class AgentWorkspaceManager implements Disposable {
       this.apiSender.send('agent-workspace-update');
       this.closeWorkspaceTerminals(name, gateway);
       await rm(this.getGlobalConfigDir(gateway, name), { recursive: true, force: true });
+      await this.deleteAssociatedSshHost(name, gateway);
       await this.deleteAssociatedSecretAndProfile(labels?.[SECRET_LABEL], labels?.[PROFILE_LABEL], gateway);
       task.status = 'success';
     } catch (err: unknown) {
@@ -637,6 +638,26 @@ export class AgentWorkspaceManager implements Disposable {
       clearTimeout(earlyRefresh);
       this.apiSender.send('agent-workspace-update');
       task.state = 'completed';
+    }
+  }
+
+  /**
+   * Remove the SSH host Kaiden installed for a sandbox. Failures are logged but
+   * not rethrown so sandbox deletion itself is not blocked.
+   */
+  private async deleteAssociatedSshHost(name: string, gateway: string): Promise<void> {
+    try {
+      const removed = await this.openshellSshHostManager.remove(name, gateway);
+      if (removed > 0) {
+        console.log(
+          `[AgentWorkspaceManager] removed ${removed} SSH host block(s) for workspace "${name}" on gateway "${gateway}"`,
+        );
+      }
+    } catch (err: unknown) {
+      console.error(
+        `[AgentWorkspaceManager] failed to remove the SSH host for workspace "${name}" on gateway "${gateway}"`,
+        err,
+      );
     }
   }
 

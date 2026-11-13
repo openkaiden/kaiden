@@ -68,6 +68,15 @@ export class OpenshellSshHostManager {
     await this.sshConfig.installHost(alias, block, gatewayName);
   }
 
+  /**
+   * Removes the SSH host blocks installed for a sandbox, matched on the
+   * gateway and sandbox name their `ProxyCommand` targets. Returns the number
+   * of removed blocks.
+   */
+  async remove(sandboxName: string, gatewayName: string): Promise<number> {
+    return this.sshConfig.removeHost(sandboxName, gatewayName);
+  }
+
   #openshellTool(): CliToolInfo | undefined {
     return this.cliToolRegistry.getCliToolInfos().find(tool => tool.name === OPEN_SHELL_TOOL_NAME);
   }

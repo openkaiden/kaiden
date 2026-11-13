@@ -224,6 +224,7 @@ const openshellGateway = {
 
 const openshellSshHostManager = {
   install: vi.fn(),
+  remove: vi.fn(),
 } as unknown as OpenshellSshHostManager;
 
 const openshellGatewayStateManager = {
@@ -1997,6 +1998,26 @@ describe('deleteOpenshellSandbox', () => {
       recursive: true,
       force: true,
     });
+  });
+
+  test('removes the SSH host installed for the deleted sandbox', async () => {
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+    vi.mocked(openshellSshHostManager.remove).mockResolvedValue(1);
+
+    await manager.deleteOpenshellSandbox('my-workspace', 'remote-gateway');
+
+    expect(openshellSshHostManager.remove).toHaveBeenCalledWith('my-workspace', 'remote-gateway');
+  });
+
+  test('still deletes the sandbox when removing its SSH host fails', async () => {
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+    vi.mocked(openshellSshHostManager.remove).mockRejectedValue(new Error('permission denied'));
+
+    await manager.deleteOpenshellSandbox('my-workspace', 'remote-gateway');
+
+    expect(sdkSandbox.delete).toHaveBeenCalledWith('my-workspace');
+    expect(rm).toHaveBeenCalled();
+    expect(mockTask.status).toBe('success');
   });
 
   test('deletes associated secret via SECRET_LABEL', async () => {

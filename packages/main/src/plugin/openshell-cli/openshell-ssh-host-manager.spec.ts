@@ -173,6 +173,15 @@ test('quotes an embedded CLI path that contains spaces', async () => {
   );
 });
 
+test('removes the host block of a deleted sandbox', async () => {
+  vi.mocked(sshConfig.removeHost).mockResolvedValue(1);
+
+  const removed = await manager.remove('my-sandbox', 'remote-gateway');
+
+  expect(removed).toBe(1);
+  expect(sshConfig.removeHost).toHaveBeenCalledWith('my-sandbox', 'remote-gateway');
+});
+
 test('rejects sandbox names that could corrupt the SSH config', async () => {
   await expect(manager.install('bad name', 'remote-gateway')).rejects.toThrow('invalid sandbox name "bad name"');
 
