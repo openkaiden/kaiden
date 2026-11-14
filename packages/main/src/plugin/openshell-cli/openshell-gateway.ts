@@ -827,7 +827,12 @@ export class OpenshellGateway implements IAsyncDisposable {
     if (bookkeeping?.process || bookkeeping?.startups.size) {
       return false;
     }
-    return gateway.name === DEFAULT_GATEWAY_NAME || this.isCreatedGateway(gateway.name);
+    return this.isManagedGateway(gateway.name);
+  }
+
+  /** True for gateways Kaiden created: the default gateway or one with a Kaiden-written gateway.toml. */
+  async isManagedGateway(name: string): Promise<boolean> {
+    return name === DEFAULT_GATEWAY_NAME || this.isCreatedGateway(name);
   }
 
   async startManagedGateway(name: string): Promise<void> {

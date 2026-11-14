@@ -61,6 +61,11 @@ export const GatewayInfoSchema = z.object({
   canStop: z.boolean(),
   /** True when this Kaiden instance manages the gateway and it is stopped and unreachable, so it can be started. */
   canStart: z.boolean(),
+  /**
+   * True when Kaiden created the gateway: the default `kaiden-local` gateway or one created from the
+   * "Create local gateway" form. Defaults to `false` (a referenced gateway).
+   */
+  managed: z.boolean().optional(),
   auth: z.string().optional(),
   type: GatewayTypeSchema.optional(),
   source: z.string().optional(),

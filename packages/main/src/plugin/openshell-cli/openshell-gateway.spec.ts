@@ -1409,6 +1409,27 @@ describe('canStartGateway', () => {
   });
 });
 
+describe('isManagedGateway', () => {
+  test.each([
+    { name: 'kaiden-local', created: false, expected: true },
+    { name: 'local-dev', created: true, expected: true },
+    { name: 'external', created: false, expected: false },
+  ])('reports $name as managed: $expected', async ({ name, created, expected }) => {
+    if (created) {
+      vi.mocked(access).mockResolvedValue(undefined);
+    }
+    await expect(gateway.isManagedGateway(name)).resolves.toBe(expected);
+  });
+
+  test('reports a remote kaiden-created gateway as managed even though it cannot be started', async () => {
+    vi.mocked(access).mockResolvedValue(undefined);
+    await expect(gateway.isManagedGateway('local-dev')).resolves.toBe(true);
+    await expect(
+      gateway.canStartGateway({ name: 'local-dev', endpoint: 'https://gateway.example.com:17670', is_remote: true }),
+    ).resolves.toBe(false);
+  });
+});
+
 describe('startManagedGateway', () => {
   test('starts a stopped created gateway on its registered endpoint and notifies listeners', async () => {
     vi.mocked(access).mockResolvedValue(undefined);
