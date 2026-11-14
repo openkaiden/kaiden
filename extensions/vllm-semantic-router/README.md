@@ -64,7 +64,6 @@ A backend endpoint on `localhost` or `127.0.0.1` is reached from the containers 
 ### Platforms
 
 - **SELinux**: the configuration files are bind-mounted read-only with the `:Z` option, so that an SELinux enforcing host (for example Fedora with Podman) lets the containers read them. The option has no effect elsewhere.
-- **Windows**: the configuration files are mounted from their machine path (`C:\Users\...` becomes `/mnt/c/Users/...`).
 
 ## Configuration rules
 

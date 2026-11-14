@@ -45,7 +45,6 @@ import type { SRConfig } from '/@/api/sr-config-schema';
 import { ContainerFinder } from '/@/helper/container-finder';
 import { EnvoyConfigGenerator } from '/@/helper/envoy-config-generator';
 import { ImageHelper } from '/@/helper/image-helper';
-import { MountHelper } from '/@/helper/mount-helper';
 import { NetworkHelper } from '/@/helper/network-helper';
 import { SemanticRouterConfigParser } from '/@/helper/semantic-router-config-parser';
 import { ContainerExtensionAPISymbol, ExtensionContextSymbol, VllmSemanticRouterProvider } from '/@/inject/symbol';
@@ -98,9 +97,6 @@ export class SemanticRouterContainerManager {
 
   @inject(ImageHelper)
   private imageHelper: ImageHelper;
-
-  @inject(MountHelper)
-  private mountHelper: MountHelper;
 
   #connections: Map<string, ManagedConnection> = new Map();
   #factoryDisposable: Disposable | undefined;
@@ -398,9 +394,8 @@ export class SemanticRouterContainerManager {
           // the router api is only used for the readiness check: it stays on loopback
           [`${SemanticRouterPort.ROUTER_API}/tcp`]: [{ HostIp: '127.0.0.1', HostPort: String(apiHostPort) }],
         },
-        Binds: this.mountHelper.getReadOnlyFileBinds([
-          { source: configFilePath, target: SemanticRouterContainerManager.ROUTER_CONFIG_CONTAINER_PATH },
-        ]),
+        // read-only, relabelled with :Z so that SELinux enforcing hosts let the container read it (no effect elsewhere)
+        Binds: [`${configFilePath}:${SemanticRouterContainerManager.ROUTER_CONFIG_CONTAINER_PATH}:ro,Z`],
       },
     });
     createdContainers.push(routerContainer);
@@ -421,9 +416,7 @@ export class SemanticRouterContainerManager {
       },
       HostConfig: {
         NetworkMode: `container:${routerContainer.id}`,
-        Binds: this.mountHelper.getReadOnlyFileBinds([
-          { source: envoyConfigFilePath, target: SemanticRouterContainerManager.ENVOY_CONFIG_CONTAINER_PATH },
-        ]),
+        Binds: [`${envoyConfigFilePath}:${SemanticRouterContainerManager.ENVOY_CONFIG_CONTAINER_PATH}:ro,Z`],
       },
     });
     createdContainers.push(envoyContainer);

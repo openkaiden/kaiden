@@ -34,7 +34,6 @@ import { type SRConfig, SRConfigSchema } from '/@/api/sr-config-schema';
 import { ContainerFinder } from '/@/helper/container-finder';
 import { EnvoyConfigGenerator } from '/@/helper/envoy-config-generator';
 import { ImageHelper } from '/@/helper/image-helper';
-import { MountHelper } from '/@/helper/mount-helper';
 import { NetworkHelper } from '/@/helper/network-helper';
 import { SemanticRouterConfigParser } from '/@/helper/semantic-router-config-parser';
 import { ContainerExtensionAPISymbol, ExtensionContextSymbol, VllmSemanticRouterProvider } from '/@/inject/symbol';
@@ -47,7 +46,6 @@ vi.mock(import('/@/helper/network-helper'));
 vi.mock(import('/@/helper/semantic-router-config-parser'));
 vi.mock(import('/@/helper/envoy-config-generator'));
 vi.mock(import('/@/helper/image-helper'));
-vi.mock(import('/@/helper/mount-helper'));
 
 const connectionDisposable = { dispose: vi.fn() };
 const factoryDisposable = { dispose: vi.fn() };
@@ -158,10 +156,6 @@ describe('SemanticRouterContainerManager', () => {
     vi.mocked(SemanticRouterConfigParser.prototype.parseConfig).mockReturnValue(PARSED_CONFIG);
     vi.mocked(EnvoyConfigGenerator.prototype.generate).mockReturnValue(GENERATED_ENVOY_CONFIG);
     vi.mocked(ImageHelper.prototype.ensureImage).mockResolvedValue(undefined);
-    vi.mocked(MountHelper.prototype.getReadOnlyFileBinds)
-      .mockReturnValue([])
-      .mockReturnValueOnce(['router-config-bind'])
-      .mockReturnValueOnce(['envoy-config-bind']);
 
     const container = new Container();
     container.bind(SemanticRouterContainerManager).toSelf();
@@ -170,7 +164,6 @@ describe('SemanticRouterContainerManager', () => {
     container.bind(SemanticRouterConfigParser).toSelf();
     container.bind(EnvoyConfigGenerator).toSelf();
     container.bind(ImageHelper).toSelf();
-    container.bind(MountHelper).toSelf();
     container.bind(VllmSemanticRouterProvider).toConstantValue(providerMock);
     container.bind(ContainerExtensionAPISymbol).toConstantValue(containerExtensionAPIMock);
     container.bind(ExtensionContextSymbol).toConstantValue(extensionContextMock);
@@ -537,7 +530,8 @@ describe('SemanticRouterContainerManager', () => {
             '8801/tcp': [{ HostIp: '127.0.0.1', HostPort: '50001' }],
             '8080/tcp': [{ HostIp: '127.0.0.1', HostPort: '50002' }],
           },
-          Binds: ['router-config-bind'],
+          // read-only, relabelled for SELinux
+          Binds: [`${path.join(STORAGE_PATH, 'configs', 'my-router', 'config.yaml')}:/app/config.yaml:ro,Z`],
         }),
       }),
     );
@@ -552,18 +546,10 @@ describe('SemanticRouterContainerManager', () => {
         Labels: { [SemanticRouterLabel.NAME]: 'my-router', [SemanticRouterLabel.ROLE]: 'envoy' },
         HostConfig: {
           NetworkMode: 'container:router-container-id',
-          Binds: ['envoy-config-bind'],
+          Binds: [`${ENVOY_CONFIG_PATH}:/etc/envoy/envoy.yaml:ro,Z`],
         },
       },
     );
-
-    // the config files are mounted read-only through the mount helper
-    expect(MountHelper.prototype.getReadOnlyFileBinds).toHaveBeenNthCalledWith(1, [
-      { source: path.join(STORAGE_PATH, 'configs', 'my-router', 'config.yaml'), target: '/app/config.yaml' },
-    ]);
-    expect(MountHelper.prototype.getReadOnlyFileBinds).toHaveBeenNthCalledWith(2, [
-      { source: ENVOY_CONFIG_PATH, target: '/etc/envoy/envoy.yaml' },
-    ]);
 
     expect(routerStartMock).not.toHaveBeenCalled();
     expect(envoyStartMock).not.toHaveBeenCalled();

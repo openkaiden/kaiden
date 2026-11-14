@@ -23,7 +23,6 @@ import { assert, beforeEach, describe, expect, test, vi } from 'vitest';
 import { ContainerFinder } from '/@/helper/container-finder';
 import { EnvoyConfigGenerator } from '/@/helper/envoy-config-generator';
 import { ImageHelper } from '/@/helper/image-helper';
-import { MountHelper } from '/@/helper/mount-helper';
 import { NetworkHelper } from '/@/helper/network-helper';
 import { SemanticRouterConfigParser } from '/@/helper/semantic-router-config-parser';
 import { SemanticRouterContainerManager } from '/@/manager/semantic-router-container-manager';
@@ -57,7 +56,6 @@ describe('InversifyBinding', () => {
     ['SemanticRouterConfigParser', SemanticRouterConfigParser],
     ['EnvoyConfigGenerator', EnvoyConfigGenerator],
     ['ImageHelper', ImageHelper],
-    ['MountHelper', MountHelper],
     ['SemanticRouterContainerManager', SemanticRouterContainerManager],
   ])('resolves %s as a singleton', async (_name, serviceIdentifier) => {
     const container = await inversifyBinding.initBindings();
@@ -75,7 +73,6 @@ describe('InversifyBinding', () => {
     ['SemanticRouterConfigParser', SemanticRouterConfigParser],
     ['EnvoyConfigGenerator', EnvoyConfigGenerator],
     ['ImageHelper', ImageHelper],
-    ['MountHelper', MountHelper],
     ['SemanticRouterContainerManager', SemanticRouterContainerManager],
   ])('dispose unbinds everything', async (_name, serviceIdentifier) => {
     const container = await inversifyBinding.initBindings();

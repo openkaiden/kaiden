@@ -21,7 +21,6 @@ import { ContainerModule } from 'inversify';
 import { ContainerFinder } from './container-finder';
 import { EnvoyConfigGenerator } from './envoy-config-generator';
 import { ImageHelper } from './image-helper';
-import { MountHelper } from './mount-helper';
 import { NetworkHelper } from './network-helper';
 import { SemanticRouterConfigParser } from './semantic-router-config-parser';
 
@@ -31,7 +30,6 @@ const helpersModule = new ContainerModule(options => {
   options.bind<SemanticRouterConfigParser>(SemanticRouterConfigParser).toSelf().inSingletonScope();
   options.bind<EnvoyConfigGenerator>(EnvoyConfigGenerator).toSelf().inSingletonScope();
   options.bind<ImageHelper>(ImageHelper).toSelf().inSingletonScope();
-  options.bind<MountHelper>(MountHelper).toSelf().inSingletonScope();
 });
 
 export { helpersModule };
