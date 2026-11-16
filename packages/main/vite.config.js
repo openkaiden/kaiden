@@ -54,6 +54,7 @@ const config = {
         'ssh2',
         '@segment/analytics-node',
         'express',
+        'ws',
         'isomorphic-ws',
         '@xterm/headless',
         ...builtinModules.flatMap(p => [p, `node:${p}`]),
