@@ -17,4 +17,5 @@ Integrates Podman AI Lab inference servers with Kaiden. Automatically discovers 
 
 - The extension polls the AI Lab daemon (`/api/ps`) every 30 seconds
 - The daemon speaks Ollama protocol — only running inference servers are listed
+- Models are registered with the daemon's OpenAI-compatible endpoint (`/v1`), so agents can use them
 - Default API port is 10434 (configurable in AI Lab preferences under `ai-lab.apiPort`)
