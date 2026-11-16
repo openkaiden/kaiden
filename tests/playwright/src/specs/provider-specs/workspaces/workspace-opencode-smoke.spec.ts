@@ -122,3 +122,20 @@ test.describe
       },
     });
   });
+
+test.describe
+  .serial('OpenCode agent workspace with RamaLama model', { tag: '@workspace-provider' }, () => {
+    registerWorkspaceLifecycleTests(test, expect, {
+      testIdPrefix: 'WKS-RAMALAMA',
+      workspaceName: 'opencode-ramalama',
+      agent: CODING_AGENT.OPENCODE,
+      requiredResource: 'ramalama',
+      selectModel: async createPage => createPage.searchAndSelectByRuntime('ramalama', 'RamaLama'),
+      terminalReadyPatterns: TERMINAL_READY_PATTERNS.OPENCODE,
+      promptTimeout: 120_000,
+      promptTest: {
+        prompt: 'what is 123+456? reply with just the number',
+        expectedResponse: /579/,
+      },
+    });
+  });
