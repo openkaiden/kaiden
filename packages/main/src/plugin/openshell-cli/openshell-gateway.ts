@@ -476,14 +476,9 @@ export class OpenshellGateway implements IAsyncDisposable {
 
     // A gateway Kaiden started can outlive the session that started it (crash, force quit) and be
     // reused by the next one, so its saved config is checked even when this session has no process.
-    const fromConfig = await this.#supportsMountsFromConfig(gateway);
-    if (fromConfig !== undefined) {
-      return fromConfig;
-    }
-    if (this.#gatewayBookkeeping.get(gateway.name)?.process) {
-      return false;
-    }
-    return this.#supportsMountsFromRuntime(gateway);
+    // Without a saved config the gateway's bind mount settings can't be known (its driver name says
+    // nothing about them), so workspaces fall back to uploads.
+    return (await this.#supportsMountsFromConfig(gateway)) ?? false;
   }
 
   /** Returns undefined when Kaiden has no saved config for the gateway. */
@@ -513,19 +508,6 @@ export class OpenshellGateway implements IAsyncDisposable {
         return undefined;
       }
       console.warn(`[openshell-gateway] cannot read bind mount settings of "${gateway.name}" from ${configPath}:`, err);
-      return false;
-    }
-  }
-
-  async #supportsMountsFromRuntime(gateway: GatewayInfo): Promise<boolean> {
-    try {
-      const runtimeInfo = await this.gatewayManager.getGatewayInfo(gateway.name);
-      const driver = runtimeInfo.compute_drivers[0];
-      if (!driver) {
-        return false;
-      }
-      return driver.name === 'podman' || driver.name === 'docker';
-    } catch {
       return false;
     }
   }
