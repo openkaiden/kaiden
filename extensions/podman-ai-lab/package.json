@@ -18,7 +18,9 @@
     "watch": "vite build --watch"
   },
   "dependencies": {
-    "ollama-ai-provider-v2": "^3.5.0"
+    "inversify": "^7.10.4",
+    "ollama-ai-provider-v2": "^3.5.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@openkaiden/api": "workspace:*",

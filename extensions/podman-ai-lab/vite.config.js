@@ -33,6 +33,7 @@ const config = {
     alias: {
       '/@/': join(PACKAGE_ROOT, 'src') + '/',
     },
+    mainFields: ['module', 'jsnext:main', 'jsnext'], //https://github.com/vitejs/vite/issues/16444
   },
   build: {
     sourcemap: 'inline',
