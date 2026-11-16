@@ -20,7 +20,6 @@ interface Props {
 let { providers, closeCallback, onCreate }: Props = $props();
 
 let environmentName = $state('');
-let selectedChunkerConnectionKey = $state('');
 
 let ragConnectionOptions = $derived(
   providers.flatMap(provider =>
@@ -53,10 +52,15 @@ let chunkConnectionOptions = $derived(
   ),
 );
 
-const selectedRagOption = $derived(ragConnectionOptions.find(option => option.key === ragSelection.selectedKey));
-const selectedChunkOption = $derived(
-  chunkConnectionOptions.find(option => option.key === selectedChunkerConnectionKey),
+let chunkFactoryProviders = $derived(providers.filter(p => p.chunkProviderConnectionCreation === true));
+
+const chunkSelection = new ConnectionSelectionState(
+  () => chunkConnectionOptions,
+  () => chunkFactoryProviders,
 );
+
+const selectedRagOption = $derived(ragConnectionOptions.find(option => option.key === ragSelection.selectedKey));
+const selectedChunkOption = $derived(chunkConnectionOptions.find(option => option.key === chunkSelection.selectedKey));
 
 let isFormValid = $derived(
   environmentName.trim() !== '' && selectedRagOption !== undefined && selectedChunkOption !== undefined,
@@ -86,10 +90,6 @@ function onNameInput(
   },
 ): void {
   environmentName = event.currentTarget.value;
-}
-
-function selectChunkConnection(key: string): void {
-  selectedChunkerConnectionKey = key;
 }
 </script>
 
@@ -122,31 +122,17 @@ function selectChunkConnection(key: string): void {
         noProvidersMessage="No vector store providers installed. Install a compatible extension to create knowledge environments." />
 
       <!-- Embedding Model Selection -->
-      <div role="group" aria-label="Embedding Model" class="flex flex-col space-y-3">
-        <span class="text-sm font-medium text-[var(--pd-modal-text)]">Embedding Model</span>
-        <div class="grid grid-cols-2 gap-4">
-          {#each chunkConnectionOptions as option (option.key)}
-            <button
-              type="button"
-              class="border-2 rounded-lg p-4 text-left transition-all cursor-pointer {selectedChunkerConnectionKey ===
-              option.key
-                ? 'border-[var(--pd-content-card-border-selected)] bg-[var(--pd-content-card-hover-inset-bg)]'
-                : 'border-[var(--pd-content-card-border)] bg-[var(--pd-content-card-bg)] hover:border-[var(--pd-content-card-border-selected)] hover:bg-[var(--pd-content-card-hover-inset-bg)]'}"
-              onclick={selectChunkConnection.bind(undefined, option.key)}>
-              <div class="flex items-center gap-3 mb-2">
-                <div
-                  class="w-8 h-8 rounded-md flex items-center justify-center text-[var(--pd-label-primary-text)] text-xs font-bold bg-[var(--pd-label-primary-bg)]">
-                  {option.displayName.charAt(0).toUpperCase()}
-                </div>
-                <div class="text-base font-medium text-[var(--pd-modal-text)]">{option.displayName}</div>
-              </div>
-              <div class="text-xs text-[var(--pd-content-text)] leading-relaxed">
-                {option.providerName}
-              </div>
-            </button>
-          {/each}
-        </div>
-      </div>
+      <ConnectionSelection
+        label="Embedding Model"
+        selection={chunkSelection}
+        propertyScope="ChunkProviderConnectionFactory"
+        createCallback={window.createChunkProviderConnection}
+        factoryDisplayName={(provider): string => provider.chunkProviderConnectionCreationDisplayName ?? provider.name}
+        createNewAriaLabel="Create new embedding model"
+        factoryPickerTestId="chunk-factory-picker"
+        inlineFormTestId="inline-chunk-creation-form"
+        emptyMessage="No embedding models available. Create one to continue."
+        noProvidersMessage="No embedding model providers installed. Install a compatible extension to create knowledge environments." />
     </div>
   {/snippet}
 
