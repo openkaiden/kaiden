@@ -88,6 +88,15 @@ if [ "$(id -u)" -eq 0 ]; then
     rm -rf "$ollama_dir"
   fi
 
+  # The workflow's ramalama leg sets KAIDEN_RAMALAMA_MODEL; the server runs as
+  # the test user below. Pinned release, in a venv to keep pip off the system
+  # Python. Renovate/dependabot don't see this pin.
+  if [[ -n "${KAIDEN_RAMALAMA_MODEL:-}" ]]; then
+    python3 -m venv /opt/ramalama
+    /opt/ramalama/bin/pip install --quiet 'ramalama==0.26.0'
+    ln -sf /opt/ramalama/bin/ramalama /usr/local/bin/ramalama
+  fi
+
   uid="$(id -u "$KAIDEN_TEST_USER")"
   mkdir -p "$TMT_TEST_DATA"
   chown -R "$KAIDEN_TEST_USER" "$TMT_TEST_DATA"
@@ -110,11 +119,12 @@ fi
 # MISTRAL_API_KEY are not available to this repo (the workflow receives them
 # empty), so Claude and Mistral scenarios skip by design (requiredResource).
 # Fail fast if a covered key is missing so its scenarios can't skip silently.
-# The ollama leg (KAIDEN_OLLAMA_MODEL) runs only the Ollama scenarios, kept out
-# of the cloud-provider run because a running local runtime changes which models
-# the wizard offers, so the workflow sends it no provider keys.
+# The ollama and ramalama legs (KAIDEN_OLLAMA_MODEL, KAIDEN_RAMALAMA_MODEL) run
+# only their local-runtime scenarios, kept out of the cloud-provider run because
+# a running local runtime changes which models the wizard offers, so the
+# workflow sends them no provider keys.
 provider_keys="OPENAI_API_KEY GEMINI_API_KEY"
-if [[ -n "${KAIDEN_OLLAMA_MODEL:-}" ]]; then
+if [[ -n "${KAIDEN_OLLAMA_MODEL:-}${KAIDEN_RAMALAMA_MODEL:-}" ]]; then
   provider_keys=""
 fi
 for key in $provider_keys; do
@@ -213,6 +223,44 @@ if [[ -n "${KAIDEN_OLLAMA_MODEL:-}" ]]; then
   # Same contract as the GHA setup-ollama action.
   export INFERENCE_MODEL="$KAIDEN_OLLAMA_MODEL"
   playwright_args=(--grep 'with Ollama model')
+fi
+if [[ -n "${KAIDEN_RAMALAMA_MODEL:-}" ]]; then
+  # Serve in a rootless Podman container labelled ai.ramalama.*, which the
+  # ramalama extension discovers through the user's Podman socket, like the GHA
+  # setup-ramalama action. Fail closed: a missing server would make the RamaLama
+  # scenarios skip silently. The guest is discarded after the run, so the
+  # detached container is left running.
+  export RAMALAMA_CONTAINER_ENGINE=podman
+  ramalama_model="ollama://${KAIDEN_RAMALAMA_MODEL}"
+  ramalama_port=8080
+  ramalama_url="http://127.0.0.1:${ramalama_port}/v1/models"
+  for attempt in 1 2 3; do
+    ramalama pull "$ramalama_model" && break
+    if [[ "$attempt" -eq 3 ]]; then
+      echo "Failed to pull RamaLama model ${KAIDEN_RAMALAMA_MODEL}" >&2
+      exit 1
+    fi
+    sleep $((attempt * 10))
+  done
+  ramalama list
+  # serve waits for its own health check and may exit non-zero on a slow CPU
+  # load; the readiness loop below decides.
+  ramalama serve --detach --port "$ramalama_port" "$ramalama_model" || echo "ramalama serve exited non-zero; waiting for readiness" >&2
+  # The first request loads the model on CPU; allow up to 5 minutes.
+  ramalama_deadline=$((SECONDS + 300))
+  until curl --fail --silent --max-time 10 "$ramalama_url" > /dev/null; do
+    ((SECONDS < ramalama_deadline)) || break
+    sleep 2
+  done
+  # Published as-is, outside the sanitizer: this leg receives no provider keys.
+  podman ps --all --filter label=ai.ramalama --format '{{.ID}}' \
+    | xargs --no-run-if-empty podman logs > "$test_data_dir/ramalama-serve.log" 2>&1 || true
+  if ! curl --fail --silent --max-time 10 "$ramalama_url" > /dev/null; then
+    echo "RamaLama server failed to start; see ramalama-serve.log" >&2
+    exit 1
+  fi
+  export RAMALAMA_ENABLED=true
+  playwright_args=(--grep 'with RamaLama model')
 fi
 
 # Same steps as the selected npm target (as the Windows workflow runs it), split

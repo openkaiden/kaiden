@@ -58,14 +58,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 'cloud-providers' runs the cloud-provider scenarios; 'ollama' runs only
-        # the Ollama scenarios against a local Ollama server, kept apart because a
-        # running local runtime changes the models the wizard offers.
-        # filesystem-network has no Ollama scenario and goose's is skipped
-        # (https://github.com/openkaiden/kaiden/issues/1780), so they run the
-        # cloud-providers leg only. The whole matrix is one JSON value because a
-        # static include entry would re-add the ollama leg for those targets.
-        include: ${{ fromJSON(contains(fromJSON('["test:e2e:workspaces:filesystem-network","test:e2e:workspaces:goose"]'), inputs.npm_target) && '[{"inference":"cloud-providers"}]' || '[{"inference":"cloud-providers"},{"inference":"ollama","ollama_model":"granite3.2:2b"}]') }}
+        # 'cloud-providers' runs the cloud-provider scenarios; 'ollama' and
+        # 'ramalama' run only their scenarios against a local server, each kept
+        # apart because a running local runtime changes the models the wizard
+        # offers. filesystem-network has no local-runtime scenario and goose's
+        # are skipped (Ollama: https://github.com/openkaiden/kaiden/issues/1780;
+        # RamaLama: out of scope for 0.5.0), so they run the cloud-providers leg
+        # only. The whole matrix is one JSON value because a static include entry
+        # would re-add the local legs for those targets.
+        include: ${{ fromJSON(contains(fromJSON('["test:e2e:workspaces:filesystem-network","test:e2e:workspaces:goose"]'), inputs.npm_target) && '[{"inference":"cloud-providers"}]' || '[{"inference":"cloud-providers"},{"inference":"ollama","ollama_model":"granite3.2:2b"},{"inference":"ramalama","ramalama_model":"granite3.2:2b"}]') }}
     # Run only on the upstream repo: forks lack TEST_FARM_TOKEN and the
     # openkaiden/* allow-list means a fork dispatch could only test upstream
     # code anyway, so it could only fail.
@@ -111,7 +112,7 @@ jobs:
           compose: ${{ env.TESTING_FARM_COMPOSE }}
           arch: x86_64
           # Scheduled runs have no inputs, so they keep running the full suite.
-          variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.sha }};KAIDEN_NPM_TARGET=${{ inputs.npm_target || 'test:e2e:workspaces' }}${{ steps.build.outputs.url && format(';KAIDEN_BUILD_URL={0};KAIDEN_BUILD_SHA256={1}', steps.build.outputs.url, steps.build.outputs.sha256) }}${{ matrix.ollama_model && format(';KAIDEN_OLLAMA_MODEL={0}', matrix.ollama_model) || '' }}
+          variables: KAIDEN_REPOSITORY=${{ steps.source.outputs.repository }};KAIDEN_REF=${{ steps.source.outputs.sha }};KAIDEN_NPM_TARGET=${{ inputs.npm_target || 'test:e2e:workspaces' }}${{ steps.build.outputs.url && format(';KAIDEN_BUILD_URL={0};KAIDEN_BUILD_SHA256={1}', steps.build.outputs.url, steps.build.outputs.sha256) }}${{ matrix.ollama_model && format(';KAIDEN_OLLAMA_MODEL={0}', matrix.ollama_model) || '' }}${{ matrix.ramalama_model && format(';KAIDEN_RAMALAMA_MODEL={0}', matrix.ramalama_model) || '' }}
           # Covered providers only, and only to the leg that uses them; see
           # tests/tmt/scripts/workspace-provider.sh.
           secrets: ${{ matrix.inference == 'cloud-providers' && format('OPENAI_API_KEY={0};GEMINI_API_KEY={1}', secrets.OPENAI_API_KEY, secrets.GEMINI_API_KEY) || '' }}

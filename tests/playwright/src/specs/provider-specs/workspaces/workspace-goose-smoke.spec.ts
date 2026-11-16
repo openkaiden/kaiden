@@ -91,6 +91,8 @@ test.describe
 
 test.describe
   .serial('Goose agent workspace with RamaLama model', { tag: '@workspace-provider' }, () => {
+    test.skip(true, 'Goose with RamaLama is out of scope for the 0.5.0 release');
+
     registerWorkspaceLifecycleTests(test, expect, {
       testIdPrefix: 'WKS-RAMALAMA',
       workspaceName: 'goose-ramalama',
