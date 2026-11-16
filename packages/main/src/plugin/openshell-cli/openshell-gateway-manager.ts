@@ -18,14 +18,15 @@
 
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { connect as h2Connect, constants as h2constants } from 'node:http2';
 import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 
 import { OpenShellClient } from '@nvidia/openshell-sdk';
+import { ServiceStatus } from '@nvidia/openshell-sdk/raw';
 import { inject, injectable } from 'inversify';
 
 import {
+  type GatewayHealth,
   type GatewayMetadata,
   GatewayMetadataSchema,
   type GatewayMetadataSource,
@@ -41,10 +42,6 @@ const SYSTEM_GATEWAY_DIR_ENV = 'OPENSHELL_SYSTEM_GATEWAY_DIR';
 const DEFAULT_SYSTEM_CONFIG_DIR = '/etc/openshell';
 const METADATA_FILENAME = 'metadata.json';
 const ACTIVE_GATEWAY_FILENAME = 'active_gateway';
-
-const GRPC_GET_GATEWAY_INFO_PATH = '/openshell.v1.OpenShell/GetGatewayInfo';
-const GRPC_CALL_TIMEOUT_MS = 10_000;
-const GRPC_MAX_RESPONSE_BYTES = 1024 * 1024;
 
 /**
  * Manages OpenShell gateway registrations by reading and writing the
@@ -170,10 +167,6 @@ export class OpenshellGatewayManager {
   }
 
   // ── Runtime methods ────────────────────────────────────────────────
-  //
-  // GetGatewayInfo is not in the SDK's TypeScript codegen, so we call it
-  // as a raw gRPC unary request over HTTP/2 with a minimal protobuf
-  // decoder for the known response shape.
 
   async getGatewayInfo(gatewayName: string): Promise<GatewayRuntimeInfo> {
     const gateway = await this.getGateway(gatewayName);
@@ -181,14 +174,19 @@ export class OpenshellGatewayManager {
       name: gateway.name,
       endpoint: gateway.gateway_endpoint,
     });
+    const client = await OpenShellClient.connect(connectOpts);
+    const response = await client.raw.getGatewayInfo({});
 
-    const responseBytes = await this.#grpcUnaryCall(connectOpts.gateway, GRPC_GET_GATEWAY_INFO_PATH, Buffer.alloc(0), {
-      ca: connectOpts.caCert,
-      cert: connectOpts.clientCert,
-      key: connectOpts.clientKey,
+    return GatewayRuntimeInfoSchema.parse({
+      status: this.#serviceStatusToHealth(response.status),
+      gateway_version: response.gatewayVersion,
+      compute_drivers: response.computeDrivers.map(d => ({
+        name: d.name,
+        capabilities: {
+          driver_name: d.capabilities?.driverName ?? '',
+        },
+      })),
     });
-
-    return GatewayRuntimeInfoSchema.parse(decodeGetGatewayInfoResponse(responseBytes));
   }
 
   async health(gatewayName: string): Promise<{ status: string; version: string }> {
@@ -310,118 +308,17 @@ export class OpenshellGatewayManager {
     await rm(activePath, { force: true });
   }
 
-  #grpcUnaryCall(
-    gatewayUrl: string,
-    rpcPath: string,
-    requestMessage: Buffer,
-    tlsOpts: { ca?: Buffer; cert?: Buffer; key?: Buffer },
-  ): Promise<Buffer> {
-    const grpcFrame = Buffer.alloc(5 + requestMessage.length);
-    grpcFrame.writeUInt8(0, 0);
-    grpcFrame.writeUInt32BE(requestMessage.length, 1);
-    requestMessage.copy(grpcFrame, 5);
-
-    return new Promise((resolve, reject) => {
-      let session: ReturnType<typeof h2Connect>;
-      try {
-        const url = new URL(gatewayUrl);
-        const isHttps = url.protocol === 'https:';
-        session = h2Connect(url.origin, {
-          ...(isHttps ? { ca: tlsOpts.ca, cert: tlsOpts.cert, key: tlsOpts.key } : {}),
-        });
-      } catch (err) {
-        reject(err instanceof Error ? err : new Error(String(err)));
-        return;
-      }
-
-      let settled = false;
-      const timer = setTimeout(() => {
-        settle(reject, new Error('GetGatewayInfo gRPC call timed out'));
-        session.destroy();
-      }, GRPC_CALL_TIMEOUT_MS);
-
-      const settle = (fn: typeof resolve | typeof reject, value: Buffer | Error): void => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        (fn as (v: Buffer | Error) => void)(value);
-      };
-
-      session.on('error', err => {
-        settle(reject, err);
-        session.destroy();
-      });
-
-      const req = session.request({
-        [h2constants.HTTP2_HEADER_METHOD]: 'POST',
-        [h2constants.HTTP2_HEADER_PATH]: rpcPath,
-        [h2constants.HTTP2_HEADER_CONTENT_TYPE]: 'application/grpc',
-        te: 'trailers',
-      });
-
-      let statusCode = 0;
-      let grpcStatus = -1;
-      let grpcMessage = '';
-
-      req.on('response', headers => {
-        statusCode = Number(headers[h2constants.HTTP2_HEADER_STATUS]) || 0;
-      });
-
-      req.on('trailers', (trailers: Record<string, string>) => {
-        if (trailers['grpc-status'] !== undefined) {
-          grpcStatus = Number(trailers['grpc-status']);
-        }
-        if (trailers['grpc-message']) {
-          try {
-            grpcMessage = decodeURIComponent(trailers['grpc-message']);
-          } catch {
-            grpcMessage = trailers['grpc-message'];
-          }
-        }
-      });
-
-      const chunks: Buffer[] = [];
-      let receivedBytes = 0;
-      req.on('data', (chunk: Buffer) => {
-        receivedBytes += chunk.length;
-        if (receivedBytes > GRPC_MAX_RESPONSE_BYTES) {
-          settle(reject, new Error('GetGatewayInfo gRPC response exceeded maximum size'));
-          req.destroy();
-          session.destroy();
-          return;
-        }
-        chunks.push(chunk);
-      });
-      req.on('end', () => {
-        session.close();
-        if (statusCode !== 200) {
-          settle(reject, new Error(`GetGatewayInfo gRPC call failed (HTTP ${statusCode})`));
-          return;
-        }
-        if (grpcStatus > 0) {
-          settle(reject, new Error(`GetGatewayInfo gRPC error (status ${grpcStatus}): ${grpcMessage}`));
-          return;
-        }
-        const body = Buffer.concat(chunks);
-        if (body.length < 5) {
-          settle(reject, new Error('GetGatewayInfo gRPC response too short'));
-          return;
-        }
-        const msgLen = body.readUInt32BE(1);
-        if (body.length < 5 + msgLen) {
-          settle(reject, new Error('GetGatewayInfo gRPC response truncated'));
-          return;
-        }
-        settle(resolve, body.subarray(5, 5 + msgLen));
-      });
-      req.on('error', err => {
-        session.destroy();
-        settle(reject, err);
-      });
-
-      req.write(grpcFrame);
-      req.end();
-    });
+  #serviceStatusToHealth(status: ServiceStatus): GatewayHealth {
+    switch (status) {
+      case ServiceStatus.HEALTHY:
+        return 'healthy';
+      case ServiceStatus.DEGRADED:
+        return 'degraded';
+      case ServiceStatus.UNHEALTHY:
+        return 'unhealthy';
+      default:
+        return 'unknown';
+    }
   }
 
   #validateGatewayName(name: string): void {
@@ -434,106 +331,4 @@ export class OpenshellGatewayManager {
     if (!name || name === '.' || name === '..') return false;
     return !name.includes('/') && !name.includes('\\') && !name.includes('\0');
   }
-}
-
-// ── Minimal protobuf decoder for GetGatewayInfoResponse ─────────────
-//
-// Decodes the known wire structure without requiring @bufbuild/protobuf.
-// Proto layout:
-//   GetGatewayInfoResponse { ServiceStatus status=1; string gateway_version=2; repeated ComputeDriverInfo compute_drivers=3; }
-//   ComputeDriverInfo      { string name=1; ComputeDriverCapabilities capabilities=2; }
-//   ComputeDriverCapabilities { string driver_name=1; string driver_version=2; }
-
-const SERVICE_STATUS_NAMES: Record<number, string> = { 0: 'unknown', 1: 'healthy', 2: 'degraded', 3: 'unhealthy' };
-
-interface ProtoField {
-  fieldNumber: number;
-  wireType: number;
-  value: number | Buffer;
-}
-
-function readVarint(buf: Buffer, offset: number): [number, number] {
-  let result = 0;
-  let shift = 0;
-  let pos = offset;
-  const maxBytes = Math.min(offset + 5, buf.length);
-  while (pos < maxBytes) {
-    const byte = buf[pos]!;
-    result |= (byte & 0x7f) << shift;
-    pos++;
-    if ((byte & 0x80) === 0) return [result >>> 0, pos];
-    shift += 7;
-  }
-  return [result >>> 0, pos];
-}
-
-function parseFields(buf: Buffer): ProtoField[] {
-  const fields: ProtoField[] = [];
-  let offset = 0;
-  while (offset < buf.length) {
-    const [tag, afterTag] = readVarint(buf, offset);
-    const fieldNumber = tag >>> 3;
-    const wireType = tag & 0x07;
-    offset = afterTag;
-
-    if (wireType === 0) {
-      const [value, afterValue] = readVarint(buf, offset);
-      fields.push({ fieldNumber, wireType, value });
-      offset = afterValue;
-    } else if (wireType === 2) {
-      const [len, afterLen] = readVarint(buf, offset);
-      if (len > buf.length - afterLen) break;
-      fields.push({ fieldNumber, wireType, value: buf.subarray(afterLen, afterLen + len) });
-      offset = afterLen + len;
-    } else {
-      break;
-    }
-  }
-  return fields;
-}
-
-function decodeCapabilities(buf: Buffer): { driver_name: string; driver_version: string } {
-  const result = { driver_name: '', driver_version: '' };
-  for (const f of parseFields(buf)) {
-    if (f.fieldNumber === 1 && Buffer.isBuffer(f.value)) result.driver_name = f.value.toString('utf-8');
-    if (f.fieldNumber === 2 && Buffer.isBuffer(f.value)) result.driver_version = f.value.toString('utf-8');
-  }
-  return result;
-}
-
-function decodeComputeDriver(buf: Buffer): {
-  name: string;
-  capabilities: { driver_name: string; driver_version: string };
-} {
-  let name = '';
-  let capabilities = { driver_name: '', driver_version: '' };
-  for (const f of parseFields(buf)) {
-    if (f.fieldNumber === 1 && Buffer.isBuffer(f.value)) name = f.value.toString('utf-8');
-    if (f.fieldNumber === 2 && Buffer.isBuffer(f.value)) capabilities = decodeCapabilities(f.value);
-  }
-  return { name, capabilities };
-}
-
-function decodeGetGatewayInfoResponse(buf: Buffer): {
-  status: string;
-  gateway_version: string;
-  compute_drivers: { name: string; capabilities: { driver_name: string; driver_version: string } }[];
-} {
-  let status = 'unknown';
-  let gateway_version = '';
-  const compute_drivers: { name: string; capabilities: { driver_name: string; driver_version: string } }[] = [];
-
-  for (const f of parseFields(buf)) {
-    if (f.fieldNumber === 1 && typeof f.value === 'number') {
-      status = SERVICE_STATUS_NAMES[f.value] ?? 'unknown';
-    }
-    if (f.fieldNumber === 2 && Buffer.isBuffer(f.value)) {
-      gateway_version = f.value.toString('utf-8');
-    }
-    if (f.fieldNumber === 3 && Buffer.isBuffer(f.value)) {
-      compute_drivers.push(decodeComputeDriver(f.value));
-    }
-  }
-
-  return { status, gateway_version, compute_drivers };
 }
