@@ -19,14 +19,12 @@
 import { randomInt } from 'node:crypto';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { pipeline } from 'node:stream/promises';
 
 import type { Disposable, ExtensionContext } from '@openkaiden/api';
 import * as extensionApi from '@openkaiden/api';
 import type { ContainerExtensionAPI, EndpointConnection } from '@openkaiden/container-extension-api';
 import type Dockerode from 'dockerode';
 import { inject, injectable } from 'inversify';
-import * as tar from 'tar';
 
 import { SocketHelper } from '/@/helper/socket-helper';
 import { ContainerExtensionAPISymbol, ExtensionContextSymbol } from '/@/inject/symbol';
@@ -216,6 +214,10 @@ export class GatewayContainerManager implements Disposable {
   private async generateCerts(dockerode: Dockerode, gatewayDir: string): Promise<void> {
     console.log(`${LOG_PREFIX} generating certificates`);
 
+    // The bind-mount source must exist before the container is created
+    await rm(gatewayDir, { recursive: true, force: true });
+    await mkdir(gatewayDir, { recursive: true });
+
     const certContainer = await dockerode.createContainer({
       Image: GATEWAY_IMAGE,
       Cmd: [
@@ -230,19 +232,32 @@ export class GatewayContainerManager implements Disposable {
         '/kaiden',
       ],
       User: '0',
+      HostConfig: {
+        SecurityOpt: ['label=disable'],
+        Mounts: [
+          {
+            Source: convertToWslPath(gatewayDir),
+            Type: 'bind',
+            Target: '/kaiden',
+          },
+        ],
+      },
     });
 
-    await certContainer.start();
-    await certContainer.wait();
-
-    await rm(gatewayDir, { recursive: true, force: true });
-    await mkdir(gatewayDir, { recursive: true });
-
-    const archiveStream = await certContainer.getArchive({ path: '/kaiden' });
-    await pipeline(archiveStream, tar.extract({ cwd: gatewayDir, strip: 1 }));
-
-    await certContainer.remove();
-    console.log(`${LOG_PREFIX} certificates generated and copied to ${gatewayDir}`);
+    // No AutoRemove: an auto-removed container can disappear before wait() is registered and its exit code is lost.
+    // An exited container that still exists returns its exit code right away, so waiting after start is always safe.
+    try {
+      await certContainer.start();
+      const { StatusCode } = await certContainer.wait();
+      if (StatusCode !== 0) {
+        throw new Error(`certificate generation failed with exit code ${StatusCode}`);
+      }
+    } finally {
+      await certContainer
+        .remove({ force: true })
+        .catch((err: unknown) => console.error(`${LOG_PREFIX} failed to remove certificate container`, err));
+    }
+    console.log(`${LOG_PREFIX} certificates generated in ${gatewayDir}`);
   }
 
   private async writeGatewayConfig(gatewayDir: string): Promise<void> {
