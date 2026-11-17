@@ -79,6 +79,8 @@ beforeEach(async () => {
   vi.mocked(Dockerode.prototype.listContainers).mockResolvedValue([]);
   vi.mocked(Dockerode.prototype.createContainer).mockResolvedValue(containerMock);
   vi.mocked(Dockerode.prototype.getContainer).mockReturnValue(containerMock);
+  vi.mocked(Dockerode.prototype.getImage).mockReturnValue(new Dockerode.Image({}, GATEWAY_IMAGE));
+  vi.mocked(Dockerode.Image.prototype.inspect).mockRejectedValue(new Error('no such image'));
   vi.mocked(Dockerode.prototype.pull).mockResolvedValue({} as unknown as NodeJS.ReadableStream);
 
   containerExtensionAPIMock = {
@@ -231,6 +233,36 @@ describe('GatewayContainerManager', () => {
       }),
     );
     expect(Dockerode.Container.prototype.start).toHaveBeenCalled();
+  });
+
+  test('should skip image pull when image already exists locally', async () => {
+    Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
+    setupCliMock('/usr/bin/openshell');
+    setupFollowProgress();
+    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
+
+    vi.mocked(Dockerode.Image.prototype.inspect).mockResolvedValue({} as unknown as Dockerode.ImageInspectInfo);
+
+    await gatewayContainerManager.init();
+
+    expect(Dockerode.prototype.getImage).toHaveBeenCalledWith(GATEWAY_IMAGE);
+    expect(Dockerode.prototype.pull).not.toHaveBeenCalled();
+    expect(Dockerode.prototype.createContainer).toHaveBeenCalled();
+  });
+
+  test('should pull image when it does not exist locally', async () => {
+    Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
+    setupCliMock('/usr/bin/openshell');
+    setupFollowProgress();
+    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
+
+    vi.mocked(Dockerode.Image.prototype.inspect).mockRejectedValue(new Error('no such image'));
+
+    await gatewayContainerManager.init();
+
+    expect(Dockerode.prototype.getImage).toHaveBeenCalledWith(GATEWAY_IMAGE);
+    expect(Dockerode.prototype.pull).toHaveBeenCalledWith(GATEWAY_IMAGE);
+    expect(Dockerode.prototype.createContainer).toHaveBeenCalled();
   });
 
   test('should create container with correct port configuration', async () => {
