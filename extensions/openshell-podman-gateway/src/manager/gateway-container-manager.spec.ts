@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { pipeline } from 'node:stream/promises';
+import { join } from 'node:path';
 
 import type { CliToolInfo } from '@openkaiden/api';
 import { cli, env, process as processApi } from '@openkaiden/api';
@@ -27,7 +27,6 @@ import DockerModem from 'docker-modem';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import Dockerode from 'dockerode';
 import { Container } from 'inversify';
-import { extract } from 'tar';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { SocketHelper } from '/@/helper/socket-helper';
@@ -39,14 +38,6 @@ vi.mock('node:fs/promises', () => ({
   rm: vi.fn().mockResolvedValue(undefined),
   mkdir: vi.fn().mockResolvedValue(undefined),
   writeFile: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('node:stream/promises', () => ({
-  pipeline: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('tar', () => ({
-  extract: vi.fn().mockReturnValue({}),
 }));
 
 // eslint-disable-next-line import/no-extraneous-dependencies
@@ -74,7 +65,6 @@ beforeEach(async () => {
 
   vi.mocked(Dockerode.Container.prototype.start).mockResolvedValue(undefined);
   vi.mocked(Dockerode.Container.prototype.wait).mockResolvedValue({ StatusCode: 0 });
-  vi.mocked(Dockerode.Container.prototype.getArchive).mockResolvedValue({} as unknown as NodeJS.ReadableStream);
   vi.mocked(Dockerode.Container.prototype.remove).mockResolvedValue(undefined);
   vi.mocked(Dockerode.prototype.listContainers).mockResolvedValue([]);
   vi.mocked(Dockerode.prototype.createContainer).mockResolvedValue(containerMock);
@@ -546,7 +536,7 @@ describe('GatewayContainerManager', () => {
     );
   });
 
-  test('should wait for cert container to exit and remove it', async () => {
+  test('should run cert container with auto-remove and wait for exit before starting', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
     setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
@@ -554,11 +544,18 @@ describe('GatewayContainerManager', () => {
 
     await gatewayContainerManager.init();
 
-    expect(Dockerode.Container.prototype.wait).toHaveBeenCalled();
-    expect(Dockerode.Container.prototype.remove).toHaveBeenCalled();
+    const certCreateCall = vi.mocked(Dockerode.prototype.createContainer).mock.calls[0]![0]!;
+    expect(certCreateCall.HostConfig?.AutoRemove).toBe(true);
+
+    expect(Dockerode.Container.prototype.wait).toHaveBeenCalledWith({ condition: 'next-exit' });
+    const waitOrder = vi.mocked(Dockerode.Container.prototype.wait).mock.invocationCallOrder[0]!;
+    const startOrder = vi.mocked(Dockerode.Container.prototype.start).mock.invocationCallOrder[0]!;
+    expect(waitOrder).toBeLessThan(startOrder);
+
+    expect(Dockerode.Container.prototype.remove).not.toHaveBeenCalled();
   });
 
-  test('should copy certs from container to gateway directory', async () => {
+  test('should bind mount gateway directory into cert container', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
     setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
@@ -566,11 +563,35 @@ describe('GatewayContainerManager', () => {
 
     await gatewayContainerManager.init();
 
-    expect(rm).toHaveBeenCalledWith(expect.stringContaining('gateway'), { recursive: true, force: true });
-    expect(mkdir).toHaveBeenCalledWith(expect.stringContaining('gateway'), { recursive: true });
-    expect(Dockerode.Container.prototype.getArchive).toHaveBeenCalledWith({ path: '/kaiden' });
-    expect(pipeline).toHaveBeenCalled();
-    expect(extract).toHaveBeenCalledWith(expect.objectContaining({ strip: 1 }));
+    const gatewayDir = join('/test/storage', 'gateway');
+    expect(rm).toHaveBeenCalledWith(gatewayDir, { recursive: true, force: true });
+    expect(mkdir).toHaveBeenCalledWith(gatewayDir, { recursive: true });
+
+    const createOrder = vi.mocked(Dockerode.prototype.createContainer).mock.invocationCallOrder[0]!;
+    expect(vi.mocked(rm).mock.invocationCallOrder[0]!).toBeLessThan(createOrder);
+    expect(vi.mocked(mkdir).mock.invocationCallOrder[0]!).toBeLessThan(createOrder);
+
+    const certCreateCall = vi.mocked(Dockerode.prototype.createContainer).mock.calls[0]![0]!;
+    expect(certCreateCall.HostConfig?.Mounts).toEqual([{ Source: gatewayDir, Type: 'bind', Target: '/kaiden' }]);
+  });
+
+  test('should not create gateway container when certificate generation fails', async () => {
+    Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
+    setupCliMock('/usr/bin/openshell');
+    setupFollowProgress();
+    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
+    vi.mocked(Dockerode.Container.prototype.wait).mockResolvedValue({ StatusCode: 1 });
+
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await gatewayContainerManager.init();
+
+    expect(Dockerode.prototype.createContainer).toHaveBeenCalledTimes(1);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('failed to ensure gateway container'),
+      expect.objectContaining({ message: 'certificate generation failed with exit code 1' }),
+    );
+    expect(processApi.exec).not.toHaveBeenCalledWith('/usr/bin/openshell', expect.arrayContaining(['add']));
   });
 
   test('should write gateway.toml config file', async () => {
