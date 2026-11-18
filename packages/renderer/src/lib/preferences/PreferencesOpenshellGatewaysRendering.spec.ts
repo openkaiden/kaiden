@@ -130,6 +130,71 @@ test('does not offer starting a running or unmanaged gateway', () => {
   expect(screen.queryByRole('button', { name: /Start gateway/ })).not.toBeInTheDocument();
 });
 
+test.each([true, false])('deletes a gateway after confirmation (active: %s)', async active => {
+  setOpenshellStarted();
+  const gateway: GatewayInfo = {
+    name: 'local-dev',
+    endpoint: 'http://localhost:17675',
+    active,
+    source: 'user',
+    canStop: true,
+    canStart: false,
+  };
+  openshellGateways.set([gateway]);
+  vi.mocked(window.showMessageBox).mockResolvedValue({ response: 0 });
+  const pending = Promise.withResolvers<void>();
+  vi.mocked(window.deleteOpenshellGateway).mockReturnValue(pending.promise);
+  render(PreferencesOpenshellGatewaysRendering);
+  const button = screen.getByRole('button', { name: 'Delete gateway local-dev' });
+  await fireEvent.click(button);
+  await vi.waitFor(() => expect(button).toHaveClass('disabled'));
+  expect(window.showMessageBox).toHaveBeenCalledOnce();
+  expect(window.deleteOpenshellGateway).toHaveBeenCalledExactlyOnceWith('local-dev');
+  openshellGateways.set([]);
+  pending.resolve();
+  expect(await screen.findByText('No gateways found')).toBeInTheDocument();
+  expect(screen.queryByText('local-dev')).not.toBeInTheDocument();
+});
+
+test('keeps the gateway when delete is cancelled', async () => {
+  setOpenshellStarted();
+  openshellGateways.set([{ name: 'local-dev', endpoint: 'http://localhost:17675', canStop: false, canStart: false }]);
+  vi.mocked(window.showMessageBox).mockResolvedValue({ response: 1 });
+  render(PreferencesOpenshellGatewaysRendering);
+  await fireEvent.click(screen.getByRole('button', { name: 'Delete gateway local-dev' }));
+  await vi.waitFor(() => expect(window.showMessageBox).toHaveBeenCalledOnce());
+  expect(window.deleteOpenshellGateway).not.toHaveBeenCalled();
+  expect(screen.getByText('local-dev')).toBeInTheDocument();
+});
+
+test('offers deleting user gateways but not system gateways', () => {
+  setOpenshellStarted();
+  openshellGateways.set([
+    {
+      name: 'remote',
+      endpoint: 'https://example.com',
+      is_remote: true,
+      source: 'user',
+      canStop: false,
+      canStart: false,
+    },
+    { name: 'system-gw', endpoint: 'http://localhost:17680', source: 'system', canStop: false, canStart: false },
+  ]);
+  render(PreferencesOpenshellGatewaysRendering);
+  expect(screen.getByRole('button', { name: 'Delete gateway remote' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Delete gateway system-gw' })).not.toBeInTheDocument();
+});
+
+test('shows delete errors', async () => {
+  setOpenshellStarted();
+  openshellGateways.set([{ name: 'local-dev', endpoint: 'http://localhost:17675', canStop: false, canStart: false }]);
+  vi.mocked(window.showMessageBox).mockResolvedValue({ response: 0 });
+  vi.mocked(window.deleteOpenshellGateway).mockRejectedValue(new Error('PID 42 is still alive'));
+  render(PreferencesOpenshellGatewaysRendering);
+  await fireEvent.click(screen.getByRole('button', { name: 'Delete gateway local-dev' }));
+  expect(await screen.findByText(/PID 42 is still alive/)).toBeInTheDocument();
+});
+
 test('shows start errors and permits retry', async () => {
   setOpenshellStarted();
   openshellGateways.set([{ name: 'local-dev', endpoint: 'http://localhost:17675', canStop: false, canStart: true }]);

@@ -19,7 +19,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { createWriteStream, type WriteStream } from 'node:fs';
-import { access, type FileHandle, mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { access, type FileHandle, mkdir, open, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import type * as Timers from 'node:timers/promises';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -143,6 +143,7 @@ const gatewayManager = {
   health: vi.fn(),
   addGateway: vi.fn(),
   removeGateway: vi.fn(),
+  deleteGateway: vi.fn(),
   getGateway: vi.fn(),
   getGatewayInfo: vi.fn(),
 } as unknown as OpenshellGatewayManager;
@@ -1389,6 +1390,190 @@ describe('stopManagedGateway', () => {
     await expect(gateway.stopManagedGateway('kaiden-local')).resolves.toBeUndefined();
     expect(proc.kill).not.toHaveBeenCalled();
     expect(gateway.isRunning()).toBe(false);
+  });
+});
+
+describe('deleteManagedGateway', () => {
+  const LOCAL_DEV_STORAGE = join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'local-dev');
+  const LOCAL_DEV_VM_STATE = join(KAIDEN_DATA_DIRECTORY, 'state', 'local-de-08846e81');
+  const LOCAL_DEV_METADATA = {
+    name: 'local-dev',
+    gateway_endpoint: 'http://127.0.0.1:17675',
+    is_remote: false,
+    gateway_port: 17675,
+  };
+
+  function exitOnKill(proc: ChildProcess): void {
+    vi.mocked(proc.kill).mockImplementation(() => {
+      proc.emit('exit', 0, undefined);
+      return true;
+    });
+  }
+
+  function registerCreatedLocalDev(): void {
+    vi.mocked(access).mockResolvedValue(undefined);
+    vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('local-dev', 'http://127.0.0.1:17675')]);
+  }
+
+  test('stops a running created gateway and wipes its storage before deleting its registration', async () => {
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    exitOnKill(proc);
+    await gateway.createLocalGateway({ name: 'local-dev', port: 17675, bindAddress: '127.0.0.1' });
+    registerCreatedLocalDev();
+
+    await gateway.deleteManagedGateway('local-dev');
+
+    expect(proc.kill).toHaveBeenCalledExactlyOnceWith('SIGTERM');
+    expect(rm).toHaveBeenNthCalledWith(1, LOCAL_DEV_VM_STATE, { recursive: true, force: true });
+    expect(rm).toHaveBeenNthCalledWith(2, LOCAL_DEV_STORAGE, { recursive: true, force: true });
+    expect(vi.mocked(proc.kill).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(rm).mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(vi.mocked(rm).mock.invocationCallOrder[1]).toBeLessThan(
+      vi.mocked(gatewayManager.deleteGateway).mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(gatewayManager.deleteGateway).toHaveBeenCalledExactlyOnceWith('local-dev');
+    expect(gateway.canStopGateway('local-dev')).toBe(false);
+  });
+
+  test('deletes a stopped kaiden-local gateway and closes its log stream', async () => {
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    await gateway.start();
+    proc.emit('exit', 0, undefined);
+    vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('kaiden-local', 'http://127.0.0.1:29670')]);
+
+    await gateway.deleteManagedGateway('kaiden-local');
+
+    expect(proc.kill).not.toHaveBeenCalled();
+    expect(gatewayLogStream.end).toHaveBeenCalledOnce();
+    expect(rm).toHaveBeenCalledWith(join(KAIDEN_DATA_DIRECTORY, 'state', 'kaiden-l-dff66a28'), {
+      recursive: true,
+      force: true,
+    });
+    expect(rm).toHaveBeenCalledWith(GATEWAY_STORAGE_DIRECTORY, { recursive: true, force: true });
+    expect(gatewayManager.deleteGateway).toHaveBeenCalledExactlyOnceWith('kaiden-local');
+  });
+
+  test('refuses when a process from another session is still recorded for the gateway', async () => {
+    registerCreatedLocalDev();
+    // Signal 0 checks this test process without sending it a signal or mocking the global process.
+    vi.mocked(readFile).mockResolvedValue(String(process.pid));
+
+    await expect(gateway.deleteManagedGateway('local-dev')).rejects.toThrow(
+      `A process recorded for local-dev is still alive (PID ${process.pid}). Stop it before deleting.`,
+    );
+    expect(gateway.stoppedGatewayNames).toEqual([]);
+    expect(gatewayManager.deleteGateway).not.toHaveBeenCalled();
+    expect(rm).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { case: 'is not registered', registrations: [], error: 'Gateway "local-dev" is not registered' },
+    {
+      case: 'is a system gateway',
+      registrations: [{ ...listed('local-dev', 'http://127.0.0.1:17675'), source: 'system' as const }],
+      error: 'Gateway "local-dev" is installed by the system and cannot be deleted',
+    },
+  ])('refuses when the gateway $case', async ({ registrations, error }) => {
+    vi.mocked(access).mockResolvedValue(undefined);
+    vi.mocked(gatewayManager.listGateways).mockResolvedValue(registrations);
+
+    await expect(gateway.deleteManagedGateway('local-dev')).rejects.toThrow(error);
+    expect(gateway.stoppedGatewayNames).toEqual([]);
+    expect(gatewayManager.deleteGateway).not.toHaveBeenCalled();
+    expect(rm).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { case: 'a gateway Kaiden did not create', name: 'remote', created: false, is_remote: false },
+    { case: 'a created name now registered to a remote gateway', name: 'local-dev', created: true, is_remote: true },
+  ])('only removes the registration of $case', async ({ name, created, is_remote }) => {
+    if (created) {
+      vi.mocked(access).mockResolvedValue(undefined);
+    }
+    vi.mocked(gatewayManager.listGateways).mockResolvedValue([
+      listed(name, 'https://gateway.example.com:443', { is_remote }),
+    ]);
+
+    await gateway.deleteManagedGateway(name);
+
+    expect(readFile).not.toHaveBeenCalled();
+    expect(gateway.stoppedGatewayNames).toEqual([]);
+    expect(rm).not.toHaveBeenCalled();
+    expect(gatewayManager.deleteGateway).toHaveBeenCalledExactlyOnceWith(name);
+  });
+
+  test('keeps the registration when its storage cannot be removed, so the delete can be retried', async () => {
+    registerCreatedLocalDev();
+    vi.mocked(rm).mockRejectedValueOnce(new Error('EBUSY'));
+
+    await expect(gateway.deleteManagedGateway('local-dev')).rejects.toThrow('EBUSY');
+    expect(gatewayManager.deleteGateway).not.toHaveBeenCalled();
+
+    await gateway.deleteManagedGateway('local-dev');
+    expect(rm).toHaveBeenLastCalledWith(LOCAL_DEV_STORAGE, { recursive: true, force: true });
+    expect(gatewayManager.deleteGateway).toHaveBeenCalledExactlyOnceWith('local-dev');
+  });
+
+  describe('while a delete is running', () => {
+    let registrations: PromiseWithResolvers<ListedGateway[]>;
+    let deleting: Promise<void>;
+
+    beforeEach(() => {
+      vi.mocked(access).mockResolvedValue(undefined);
+      vi.mocked(gatewayManager.getGateway).mockResolvedValue(LOCAL_DEV_METADATA);
+      registrations = Promise.withResolvers<ListedGateway[]>();
+      vi.mocked(gatewayManager.listGateways).mockReturnValueOnce(registrations.promise);
+      deleting = gateway.deleteManagedGateway('local-dev');
+    });
+
+    async function finishDelete(): Promise<void> {
+      registrations.resolve([listed('local-dev', 'http://127.0.0.1:17675')]);
+      await deleting;
+    }
+
+    test('rejects a second delete of the same gateway', async () => {
+      await expect(gateway.deleteManagedGateway('local-dev')).rejects.toThrow(
+        'Gateway "local-dev" is already being deleted',
+      );
+      await finishDelete();
+      expect(gatewayManager.deleteGateway).toHaveBeenCalledOnce();
+    });
+
+    test('rejects starting the gateway', async () => {
+      await expect(gateway.startManagedGateway('local-dev')).rejects.toThrow('Gateway "local-dev" is being deleted');
+      await finishDelete();
+      expect(spawn).not.toHaveBeenCalled();
+    });
+
+    test('rejects creating a gateway with the same name', async () => {
+      await expect(
+        gateway.createLocalGateway({ name: 'local-dev', port: 17675, bindAddress: '127.0.0.1' }),
+      ).rejects.toThrow('Gateway "local-dev" is being deleted');
+      await finishDelete();
+      expect(spawn).not.toHaveBeenCalled();
+    });
+  });
+
+  test('stops a start admitted before the delete', async () => {
+    const proc = createMockChildProcess();
+    vi.mocked(spawn).mockReturnValue(proc);
+    exitOnKill(proc);
+    registerCreatedLocalDev();
+    vi.mocked(gatewayManager.getGateway).mockResolvedValue(LOCAL_DEV_METADATA);
+    // The gateway never becomes ready, so the start is still in flight when the delete runs.
+    vi.mocked(gatewayManager.getGatewayInfo).mockReturnValue(new Promise<never>(() => {}));
+    const starting = gateway.startManagedGateway('local-dev');
+    await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce());
+
+    await gateway.deleteManagedGateway('local-dev');
+
+    await expect(starting).rejects.toThrow('startup cancelled by Stop');
+    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(gateway.canStopGateway('local-dev')).toBe(false);
+    expect(gatewayManager.deleteGateway).toHaveBeenCalledExactlyOnceWith('local-dev');
   });
 });
 
