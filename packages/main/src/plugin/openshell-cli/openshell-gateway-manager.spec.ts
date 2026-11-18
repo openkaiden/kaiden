@@ -27,7 +27,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { GatewayMetadata } from '/@api/openshell-gateway-info.js';
 
 import type { OpenshellGatewayConfig } from './openshell-gateway-config.js';
-import { OpenshellGatewayManager } from './openshell-gateway-manager.js';
+import { GRPC_CALL_TIMEOUT_MS, OpenshellGatewayManager } from './openshell-gateway-manager.js';
 
 vi.mock(import('node:fs'));
 vi.mock(import('node:fs/promises'));
@@ -380,7 +380,7 @@ describe('OpenshellGatewayManager', () => {
         name: 'my-gw',
         endpoint: 'http://127.0.0.1:17670',
       });
-      expect(mockGetGatewayInfo).toHaveBeenCalledWith({}, { timeoutMs: 10_000 });
+      expect(mockGetGatewayInfo).toHaveBeenCalledWith({}, { timeoutMs: GRPC_CALL_TIMEOUT_MS });
       expect(result.status).toBe('healthy');
       expect(result.gateway_version).toBe('0.0.69');
       expect(result.compute_drivers).toHaveLength(1);
