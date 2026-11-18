@@ -148,10 +148,9 @@ pnpm --version
 mkdir -p "$test_data_dir"
 
 # Testing Farm publishes $TMT_TEST_DATA as (publicly readable) artifacts, and the
-# workspace specs type provider API keys into the UI, so Playwright traces,
-# videos, screenshots and the HTML report can contain them in clear text. Build a
-# redaction list from the provider keys for the sibling sanitizer (mktemp already
-# creates the file mode 0600).
+# specs enter these secrets in the UI, so they can end up in clear text in the
+# published logs and reports. Build a redaction list for the sanitizer in
+# cleanup (mktemp already creates the file mode 0600).
 secrets_file="$(mktemp)"
 for key in $provider_keys; do
   printf '%s=%s\n' "$key" "${!key}" >> "$secrets_file"
@@ -163,19 +162,20 @@ cleanup() {
   if [[ -d tests/playwright/output ]]; then
     dest="$test_data_dir/playwright-output"
     mkdir -p "$dest"
-    # Allow-list only the plain-text reports the sanitizer can redact
-    # (test-results.json, junit-results.xml, *.log) plus the final failure.png.
-    # The failure screenshot is a single frame and the provider key inputs are
-    # password fields, so it never shows a key in clear text. Everything else is
-    # dropped by default: traces and videos capture every typed-in key, the
-    # HTML report embeds the data as base64, and error-context.md holds page
-    # snapshots — none can be reliably redacted.
+    # Allow-list the plain-text reports the sanitizer redacts (test-results.json,
+    # junit-results.xml, *.log), plus failure.png and video.webm. The frames
+    # are not redacted: this assumes the specs enter secrets only into password
+    # fields (fillSecret) and never reveal them, so frames show dots. Everything
+    # else is dropped: trace.zip can hold DOM snapshots with the entered values
+    # and the sanitizer cannot redact inside zips, the HTML report only
+    # repackages these files, and error-context.md holds page snapshots.
     while IFS= read -r -d '' file; do
       rel="${file#tests/playwright/output/}"
       mkdir -p "$dest/$(dirname "$rel")"
       cp "$file" "$dest/$rel"
     done < <(find tests/playwright/output -type f \
-      \( -name 'test-results.json' -o -name 'junit-results.xml' -o -name '*.log' -o -name 'failure.png' \) -print0)
+      \( -name 'test-results.json' -o -name 'junit-results.xml' -o -name '*.log' \
+      -o -name 'failure.png' -o -name 'video.webm' \) -print0)
     # Fail closed: if redaction fails, drop the artifacts rather than publish
     # unredacted provider keys.
     if ! SECRETS_FILE="$secrets_file" bash .github/scripts/pde2e/sanitize-collected-logs.sh "$dest"; then
