@@ -38,7 +38,7 @@ import { OpenshellGatewayManager } from '/@/plugin/openshell-cli/openshell-gatew
 import { NotificationRegistry } from '/@/plugin/tasks/notification-registry.js';
 import { Exec } from '/@/plugin/util/exec.js';
 import { getFreePort, isFreePort } from '/@/plugin/util/port.js';
-import { isLinux, isMac } from '/@/util.js';
+import { isLinux, isMac, isWindows } from '/@/util.js';
 import type { IAsyncDisposable } from '/@api/async-disposable.js';
 import type { Event } from '/@api/event.js';
 import {
@@ -233,6 +233,11 @@ export class OpenshellGateway implements IAsyncDisposable {
       console.warn(`[openshell-gateway] failed to discover gateways: ${message}`);
     }
     if (this.#disposed) return;
+
+    if (isWindows()) {
+      console.log('[openshell-gateway] no existing gateways found, skipping local gateway auto-start on Windows');
+      return;
+    }
 
     const binaryPath = this.getGatewayBinaryPath();
     if (!binaryPath) {
