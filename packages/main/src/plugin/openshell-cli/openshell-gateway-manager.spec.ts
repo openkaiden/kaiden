@@ -380,7 +380,7 @@ describe('OpenshellGatewayManager', () => {
         name: 'my-gw',
         endpoint: 'http://127.0.0.1:17670',
       });
-      expect(mockGetGatewayInfo).toHaveBeenCalledWith({});
+      expect(mockGetGatewayInfo).toHaveBeenCalledWith({}, { timeoutMs: 10_000 });
       expect(result.status).toBe('healthy');
       expect(result.gateway_version).toBe('0.0.69');
       expect(result.compute_drivers).toHaveLength(1);

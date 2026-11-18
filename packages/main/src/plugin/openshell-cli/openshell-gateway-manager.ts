@@ -42,6 +42,7 @@ const SYSTEM_GATEWAY_DIR_ENV = 'OPENSHELL_SYSTEM_GATEWAY_DIR';
 const DEFAULT_SYSTEM_CONFIG_DIR = '/etc/openshell';
 const METADATA_FILENAME = 'metadata.json';
 const ACTIVE_GATEWAY_FILENAME = 'active_gateway';
+const GRPC_CALL_TIMEOUT_MS = 10_000;
 
 /**
  * Manages OpenShell gateway registrations by reading and writing the
@@ -175,7 +176,7 @@ export class OpenshellGatewayManager {
       endpoint: gateway.gateway_endpoint,
     });
     const client = await OpenShellClient.connect(connectOpts);
-    const response = await client.raw.getGatewayInfo({});
+    const response = await client.raw.getGatewayInfo({}, { timeoutMs: GRPC_CALL_TIMEOUT_MS });
 
     return GatewayRuntimeInfoSchema.parse({
       status: this.#serviceStatusToHealth(response.status),
