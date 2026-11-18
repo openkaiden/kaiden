@@ -17,10 +17,14 @@
  ***********************************************************************/
 
 import { existsSync } from 'node:fs';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import type { Page, TestInfo, Video } from '@playwright/test';
 
 import { TIMEOUTS } from '/@/model/core/types';
+import { redactTrace, secretValuesFromEnv } from '/@/utils/trace-redaction';
 
 type PendingVideo = {
   video: Video;
@@ -29,6 +33,8 @@ type PendingVideo = {
 };
 
 const pendingVideos: PendingVideo[] = [];
+// Removal of private trace directories whose trace was still being written.
+const pendingTraceCleanups: Promise<unknown>[] = [];
 
 function attach(testInfo: TestInfo, name: string, path: string, contentType: string): void {
   if (existsSync(path)) {
@@ -81,12 +87,24 @@ export async function saveTestArtifacts(page: Page, testInfo: TestInfo): Promise
     });
   }
 
+  // Traces record entered values, DOM snapshots and the launch environment.
+  // Write the trace to a private directory and only put redacted bytes in the
+  // output directory: a write that completes after the timeout stays private.
+  const traceDir = await mkdtemp(join(tmpdir(), 'kaiden-trace-'));
+  const rawTracePath = join(traceDir, 'trace.zip');
+
+  let traceWritten = false;
+  const writingTrace = context.tracing
+    .stopChunk({ path: rawTracePath })
+    .catch((error: unknown) => {
+      console.error('Failed to save trace:', error);
+    })
+    .finally(() => {
+      traceWritten = true;
+    });
+
   await Promise.all([
-    withTimeout(
-      context.tracing.stopChunk({ path: tracePath }).catch(() => {}),
-      'trace',
-      testInfo,
-    ),
+    withTimeout(writingTrace, 'trace', testInfo),
     withTimeout(
       page.screenshot({ path: screenshotPath, fullPage: true }).catch((error: unknown) => {
         console.error('Failed to capture failure screenshot:', error);
@@ -96,11 +114,42 @@ export async function saveTestArtifacts(page: Page, testInfo: TestInfo): Promise
     ),
   ]);
 
+  try {
+    // No file: stopChunk failed (logged above) or did not finish in time (annotated).
+    const raw = await readFile(rawTracePath).catch((error: unknown) => {
+      console.error('No trace to save:', error);
+      return undefined;
+    });
+    const redacted = raw && redactTrace(raw, secretValuesFromEnv());
+    if (redacted) {
+      await writeFile(tracePath, redacted);
+    } else if (raw) {
+      testInfo.annotations.push({
+        type: 'warning',
+        description: 'trace removed: it could not be redacted',
+      });
+    }
+  } catch (error: unknown) {
+    console.error('Failed to save the redacted trace:', error);
+  } finally {
+    const removeTraceDir = (): Promise<void> => rm(traceDir, { recursive: true, force: true });
+    if (traceWritten) {
+      await removeTraceDir();
+    } else {
+      // Still writing after the timeout: remove it once done (awaited in savePendingVideos).
+      pendingTraceCleanups.push(writingTrace.then(removeTraceDir));
+    }
+  }
   attach(testInfo, 'trace', tracePath, 'application/zip');
   attach(testInfo, 'screenshot', screenshotPath, 'image/png');
 }
 
 export async function savePendingVideos(): Promise<void> {
+  await Promise.all(
+    pendingTraceCleanups
+      .splice(0, pendingTraceCleanups.length)
+      .map(cleanup => cleanup.catch((error: unknown) => console.error('Failed to remove a private trace:', error))),
+  );
   const queued = pendingVideos.splice(0, pendingVideos.length);
   await Promise.all(
     queued.map(async ({ video, videoPath, testInfo }) => {

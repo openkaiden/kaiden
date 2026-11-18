@@ -163,19 +163,20 @@ cleanup() {
     dest="$test_data_dir/playwright-output"
     mkdir -p "$dest"
     # Allow-list the plain-text reports the sanitizer redacts (test-results.json,
-    # junit-results.xml, *.log), plus failure.png and video.webm. The frames
-    # are not redacted: this assumes the specs enter secrets only into password
-    # fields (fillSecret) and never reveal them, so frames show dots. Everything
-    # else is dropped: trace.zip can hold DOM snapshots with the entered values
-    # and the sanitizer cannot redact inside zips, the HTML report only
-    # repackages these files, and error-context.md holds page snapshots.
+    # junit-results.xml, *.log), failure.png, video.webm and trace.zip. The
+    # frames are not redacted: this assumes the specs enter secrets only into
+    # password fields (fillSecret) and never reveal them, so frames show dots.
+    # The test fixture removes the secret values from each trace when it is
+    # saved and deletes a trace it cannot clean. Everything else is dropped:
+    # the HTML report only repackages these files, and error-context.md holds
+    # page snapshots.
     while IFS= read -r -d '' file; do
       rel="${file#tests/playwright/output/}"
       mkdir -p "$dest/$(dirname "$rel")"
       cp "$file" "$dest/$rel"
     done < <(find tests/playwright/output -type f \
       \( -name 'test-results.json' -o -name 'junit-results.xml' -o -name '*.log' \
-      -o -name 'failure.png' -o -name 'video.webm' \) -print0)
+      -o -name 'failure.png' -o -name 'video.webm' -o -name 'trace.zip' \) -print0)
     # Fail closed: if redaction fails, drop the artifacts rather than publish
     # unredacted provider keys.
     if ! SECRETS_FILE="$secrets_file" bash .github/scripts/pde2e/sanitize-collected-logs.sh "$dest"; then
