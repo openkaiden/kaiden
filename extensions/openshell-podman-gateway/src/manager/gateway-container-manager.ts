@@ -251,7 +251,22 @@ export class GatewayContainerManager implements Disposable {
     console.log(`${LOG_PREFIX} gateway config written to ${configPath}`);
   }
 
+  private async checkImageExists(dockerode: Dockerode): Promise<boolean> {
+    try {
+      await dockerode.getImage(GATEWAY_IMAGE).inspect();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async pullImage(dockerode: Dockerode): Promise<void> {
+    const imageExists = await this.checkImageExists(dockerode);
+    if (imageExists) {
+      console.log(`${LOG_PREFIX} image ${GATEWAY_IMAGE} already available locally, skipping pull`);
+      return;
+    }
+
     console.log(`${LOG_PREFIX} pulling image ${GATEWAY_IMAGE}`);
     const { promise, resolve, reject } = Promise.withResolvers<void>();
     try {
