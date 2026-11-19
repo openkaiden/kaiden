@@ -5,7 +5,7 @@ import { Button, EmptyScreen, ErrorMessage } from '@podman-desktop/ui-svelte';
 import { openshellGateways } from '/@/kaiden/stores/openshell-gateways';
 import EngineIcon from '/@/lib/ui/EngineIcon.svelte';
 import { extensionInfos } from '/@/stores/extensions';
-import { type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME } from '/@api/openshell-gateway-info';
+import type { GatewayInfo } from '/@api/openshell-gateway-info';
 
 import { GatewayStartAction } from './gateway-start-action.svelte';
 import { GatewayStopAction } from './gateway-stop-action.svelte';
@@ -34,7 +34,7 @@ function closeCreateGateway(): void {
 }
 
 function getTypeBadge(gateway: GatewayInfo): string {
-  if (gateway.name === KAIDEN_LOCAL_GATEWAY_NAME) {
+  if (gateway.managed) {
     return 'Managed';
   }
   return 'Referenced';
