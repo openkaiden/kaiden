@@ -17,6 +17,7 @@
  ***********************************************************************/
 
 import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
 import type { CliToolInfo } from '@openkaiden/api';
@@ -66,6 +67,7 @@ const endpointMock: EndpointConnection = {
 
 let gatewayContainerManager: GatewayContainerManager;
 let containerExtensionAPIMock: ContainerExtensionAPI;
+let extensionContextMock: { storagePath: string; subscriptions: unknown[] };
 let onEndpointsChangedCallback: (() => void) | undefined;
 
 beforeEach(async () => {
@@ -92,7 +94,7 @@ beforeEach(async () => {
     }),
   } as unknown as ContainerExtensionAPI;
 
-  const extensionContextMock = {
+  extensionContextMock = {
     storagePath: '/test/storage',
     subscriptions: [],
   };
@@ -634,6 +636,7 @@ describe('GatewayContainerManager', () => {
   });
 
   test('should use raw gatewayDir as mount source without path conversion', async () => {
+    extensionContextMock.storagePath = 'C:\\Users\\test\\storage';
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
     setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
@@ -646,13 +649,7 @@ describe('GatewayContainerManager', () => {
     const mounts = gatewayCreateCall.HostConfig!.Mounts!;
     const kaidenMount = mounts.find(m => m.Target === '/kaiden');
 
-    expect(kaidenMount).toEqual(
-      expect.objectContaining({
-        Source: expect.stringContaining('/test/storage'),
-        Type: 'bind',
-        Target: '/kaiden',
-      }),
-    );
+    expect(kaidenMount?.Source).toBe(join('C:\\Users\\test\\storage', 'gateway'));
   });
 
   test('should include --config in gateway container Cmd', async () => {
