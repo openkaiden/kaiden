@@ -21,7 +21,7 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import type { WriteStream } from 'node:fs';
 import { createWriteStream } from 'node:fs';
-import { access, mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, open, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -112,6 +112,8 @@ export class OpenshellGateway implements IAsyncDisposable {
   ]);
 
   #disposed = false;
+  // Gateways being deleted; starting or creating one is rejected so it cannot outlive the delete.
+  readonly #deletingGateways = new Set<string>();
 
   private getOrCreateGatewayBookkeeping(name: string): GatewayBookkeeping {
     let gateway = this.#gatewayBookkeeping.get(name);
@@ -375,6 +377,9 @@ export class OpenshellGateway implements IAsyncDisposable {
   async createLocalGateway(options: CreateLocalGatewayOptions): Promise<void> {
     const name = options.name.trim();
     this.validateGatewayName(name, false);
+    if (this.#deletingGateways.has(name)) {
+      throw new Error(`Gateway "${name}" is being deleted`);
+    }
     const driver = options.driver ?? this.getDefaultLocalGatewayDriver();
     const gateway = this.getOrCreateGatewayBookkeeping(name);
     await this.runGatewayStartup(gateway, signal => this.createContainerGateway(name, options, driver, signal));
@@ -850,6 +855,9 @@ export class OpenshellGateway implements IAsyncDisposable {
     if (bookkeeping?.process || bookkeeping?.startups.size) {
       throw new Error(`Gateway "${name}" is already running or starting`);
     }
+    if (this.#deletingGateways.has(name)) {
+      throw new Error(`Gateway "${name}" is being deleted`);
+    }
     if (name === DEFAULT_GATEWAY_NAME) {
       const port = this.getEndpointPort(endpoint);
       const bindAddress = new URL(endpoint).hostname;
@@ -858,6 +866,69 @@ export class OpenshellGateway implements IAsyncDisposable {
       await this.startCreatedGateway(name, endpoint);
     }
     this._onDidGatewayStart.fire();
+  }
+
+  /** True for kaiden-local and gateways created from Kaiden, whose storage Kaiden owns. */
+  private async isKaidenGateway(name: string): Promise<boolean> {
+    return name === DEFAULT_GATEWAY_NAME || this.isCreatedGateway(name);
+  }
+
+  /**
+   * Deletes a registered gateway. For a local gateway whose storage Kaiden owns, the gateway is stopped
+   * and its VM driver state and storage folder are wiped before its registration is removed, which also
+   * removes the sandboxes of a VM gateway. Any other gateway only loses its registration. kaiden-local
+   * may be registered again on a later launch.
+   */
+  async deleteManagedGateway(name: string): Promise<void> {
+    if (this.#deletingGateways.has(name)) {
+      throw new Error(`Gateway "${name}" is already being deleted`);
+    }
+    // Marked before the first await so a start admitted from now on is rejected.
+    this.#deletingGateways.add(name);
+    try {
+      const registration = (await this.gatewayManager.listGateways()).find(gw => gw.metadata.name === name);
+      if (!registration) {
+        throw new Error(`Gateway "${name}" is not registered`);
+      }
+      if (registration.source === 'system') {
+        throw new Error(`Gateway "${name}" is installed by the system and cannot be deleted`);
+      }
+      // A name Kaiden once created can be re-registered to another gateway, so ownership also needs a
+      // local registration, as for Start.
+      const ownsStorage =
+        !registration.metadata.is_remote &&
+        this.isLocalEndpoint(registration.metadata.gateway_endpoint) &&
+        (await this.isKaidenGateway(name));
+      if (ownsStorage) {
+        const bookkeeping = this.#gatewayBookkeeping.get(name);
+        if (!bookkeeping?.process && !bookkeeping?.startups.size) {
+          const pid = await this.readAndValidatePid(name);
+          if (pid !== undefined) {
+            throw new Error(`A process recorded for ${name} is still alive (PID ${pid}). Stop it before deleting.`);
+          }
+        }
+        // Covers a start admitted before the delete was marked, including one that finished meanwhile.
+        await this.stopAndDrainGateway(name);
+        if (name === DEFAULT_GATEWAY_NAME) {
+          // The log stream would otherwise keep writing into the deleted folder after a restart.
+          this.closeGatewayLog();
+        }
+        // Storage goes before the registration so a failed removal can be retried. The storage folder
+        // holds gateway.toml, which marks the gateway as Kaiden's, so it goes last.
+        const vmStateDirectory = this.getVmDriverStateDirectory(name, 'vm');
+        if (vmStateDirectory) {
+          await rm(vmStateDirectory, { recursive: true, force: true });
+        }
+        await rm(this.getGatewayStorageDirectory(name), { recursive: true, force: true });
+      }
+
+      await this.gatewayManager.deleteGateway(name);
+      if (name !== DEFAULT_GATEWAY_NAME) {
+        this.#gatewayBookkeeping.delete(name);
+      }
+    } finally {
+      this.#deletingGateways.delete(name);
+    }
   }
 
   // Cancels any in-flight startup, then waits for both the process exit and the startup to settle.

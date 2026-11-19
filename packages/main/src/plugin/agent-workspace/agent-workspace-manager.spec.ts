@@ -158,6 +158,7 @@ const sdkSandbox = {
 };
 const openshellSdkClientManager = {
   getClient: vi.fn().mockResolvedValue({ sandbox: sdkSandbox }),
+  invalidate: vi.fn(),
 } as unknown as OpenshellSdkClientManager;
 
 const agentRegistry = {
@@ -210,6 +211,7 @@ const openshellGateway = {
   getDefaultLocalGatewayDriver: vi.fn(),
   stopManagedGateway: vi.fn(),
   startManagedGateway: vi.fn(),
+  deleteManagedGateway: vi.fn(),
   supportsMounts: vi.fn(),
   onDidGatewayStart: vi.fn((cb: () => void) => {
     gatewayStartCallback = cb;
@@ -365,6 +367,10 @@ describe('init', () => {
 
   test('registers IPC handler for startOpenshellGateway', () => {
     expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:startOpenshellGateway', expect.any(Function));
+  });
+
+  test('registers IPC handler for deleteOpenshellGateway', () => {
+    expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:deleteOpenshellGateway', expect.any(Function));
   });
 
   test('returns the default local gateway driver from the gateway service', async () => {
@@ -3136,5 +3142,81 @@ describe('startOpenshellGateway', () => {
     expect(mockTask.status).toBe('failure');
     expect(mockTask.error).toBe('Gateway "local-dev" started, but failed to refresh gateway state: refresh failed');
     expect(mockTask.state).toBe('completed');
+  });
+});
+
+describe('deleteOpenshellGateway', () => {
+  test('deletes the gateway, its workspace configs and cached client, then refreshes its state', async () => {
+    await manager.deleteOpenshellGateway('local-dev');
+
+    expect(openshellGateway.deleteManagedGateway).toHaveBeenCalledExactlyOnceWith('local-dev');
+    expect(openshellSdkClientManager.invalidate).toHaveBeenCalledExactlyOnceWith('local-dev');
+    expect(rm).toHaveBeenCalledExactlyOnceWith(join('/mock/data/agent-workspaces', 'local-dev'), {
+      recursive: true,
+      force: true,
+    });
+    expect(openshellGatewayStateManager.refresh).toHaveBeenCalledOnce();
+    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+    expect(mockTask.status).toBe('success');
+    expect(mockTask.state).toBe('completed');
+  });
+
+  test.each([new Error('delete failed'), 'delete failed'])('reports gateway delete failures: %s', async cause => {
+    vi.mocked(openshellGateway.deleteManagedGateway).mockRejectedValue(cause);
+
+    await expect(manager.deleteOpenshellGateway('local-dev')).rejects.toMatchObject({
+      message: 'Failed to delete gateway "local-dev": delete failed',
+      cause,
+    });
+
+    expect(rm).not.toHaveBeenCalled();
+    expect(openshellSdkClientManager.invalidate).not.toHaveBeenCalled();
+    expect(openshellGatewayStateManager.refresh).not.toHaveBeenCalled();
+    expect(apiSender.send).not.toHaveBeenCalledWith('agent-workspace-update');
+    expect(mockTask.status).toBe('failure');
+    expect(mockTask.error).toBe('Failed to delete gateway "local-dev": delete failed');
+    expect(mockTask.state).toBe('completed');
+  });
+
+  test.each([
+    { step: 'the workspace settings cannot be removed', failRm: true },
+    { step: 'the gateway state cannot be refreshed', failRm: false },
+  ])('reports a deleted gateway as deleted and still updates the UI when $step', async ({ failRm }) => {
+    if (failRm) {
+      vi.mocked(rm).mockRejectedValue(new Error('cleanup failed'));
+    } else {
+      vi.mocked(openshellGatewayStateManager.refresh).mockRejectedValue(new Error('cleanup failed'));
+    }
+
+    await expect(manager.deleteOpenshellGateway('local-dev')).rejects.toThrow(
+      'Gateway "local-dev" deleted, but cleanup after the delete failed: cleanup failed',
+    );
+
+    expect(openshellGateway.deleteManagedGateway).toHaveBeenCalledExactlyOnceWith('local-dev');
+    expect(openshellGatewayStateManager.refresh).toHaveBeenCalledOnce();
+    expect(apiSender.send).toHaveBeenCalledExactlyOnceWith('agent-workspace-update');
+    expect(mockTask.status).toBe('failure');
+    expect(mockTask.state).toBe('completed');
+  });
+
+  test('delete IPC handler forwards the gateway name', async () => {
+    const handler = vi
+      .mocked(ipcHandle)
+      .mock.calls.find(([channel]) => channel === 'agent-workspace:deleteOpenshellGateway')?.[1];
+    assert(handler);
+    const event: IpcMainInvokeEvent = {
+      sender: webContents,
+      senderFrame: webContents.mainFrame,
+      processId: 1,
+      frameId: 1,
+      type: 'frame',
+      defaultPrevented: false,
+      preventDefault: vi.fn(),
+    };
+
+    await handler(event, 'local-dev');
+
+    expect(openshellGateway.deleteManagedGateway).toHaveBeenCalledWith('local-dev');
+    expect(mockTask.status).toBe('success');
   });
 });
