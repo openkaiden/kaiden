@@ -33,7 +33,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { SocketHelper } from '/@/helper/socket-helper';
 import { ContainerExtensionAPISymbol, ExtensionContextSymbol } from '/@/inject/symbol';
 
-import { convertToWslPath, GATEWAY_IMAGE, GatewayContainerManager } from './gateway-container-manager';
+import { GATEWAY_IMAGE, GatewayContainerManager } from './gateway-container-manager';
 
 vi.mock('node:fs/promises', () => ({
   rm: vi.fn().mockResolvedValue(undefined),
@@ -633,7 +633,7 @@ describe('GatewayContainerManager', () => {
     );
   });
 
-  test('should mount gateway directory to /kaiden in gateway container', async () => {
+  test('should use raw gatewayDir as mount source without path conversion', async () => {
     Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
     setupCliMock('/usr/bin/openshell');
     setupFollowProgress();
@@ -644,14 +644,14 @@ describe('GatewayContainerManager', () => {
     const createCalls = vi.mocked(Dockerode.prototype.createContainer).mock.calls;
     const gatewayCreateCall = createCalls[1]![0]!;
     const mounts = gatewayCreateCall.HostConfig!.Mounts!;
+    const kaidenMount = mounts.find(m => m.Target === '/kaiden');
 
-    expect(mounts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          Type: 'bind',
-          Target: '/kaiden',
-        }),
-      ]),
+    expect(kaidenMount).toEqual(
+      expect.objectContaining({
+        Source: expect.stringContaining('/test/storage'),
+        Type: 'bind',
+        Target: '/kaiden',
+      }),
     );
   });
 
@@ -667,23 +667,5 @@ describe('GatewayContainerManager', () => {
     const gatewayCreateCall = createCalls[1]![0]!;
 
     expect(gatewayCreateCall.Cmd).toEqual(expect.arrayContaining(['--config', '/kaiden/gateway.toml']));
-  });
-});
-
-describe('convertToWslPath', () => {
-  test('should convert Windows drive path to WSL mount path', () => {
-    expect(convertToWslPath('C:\\Users\\Jeff\\storage\\gateway')).toBe('/mnt/c/Users/Jeff/storage/gateway');
-  });
-
-  test('should handle lowercase drive letter', () => {
-    expect(convertToWslPath('d:\\data\\files')).toBe('/mnt/d/data/files');
-  });
-
-  test('should handle forward slashes in Windows path', () => {
-    expect(convertToWslPath('C:/Users/Jeff/storage')).toBe('/mnt/c/Users/Jeff/storage');
-  });
-
-  test('should return non-Windows paths unchanged', () => {
-    expect(convertToWslPath('/usr/local/bin')).toBe('/usr/local/bin');
   });
 });

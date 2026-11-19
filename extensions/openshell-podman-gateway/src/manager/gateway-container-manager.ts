@@ -50,8 +50,6 @@ kid_path = "/kaiden/jwt/kid"
 ttl_secs = 0
 `;
 
-const WINDOWS_PATH_REGEXP = /^([A-Za-z]):[/\\](.*)$/;
-
 @injectable()
 export class GatewayContainerManager implements Disposable {
   @inject(ContainerExtensionAPISymbol)
@@ -193,7 +191,7 @@ export class GatewayContainerManager implements Disposable {
             Target: '/run/user/0/podman/podman.sock',
           },
           {
-            Source: convertToWslPath(gatewayDir),
+            Source: gatewayDir,
             Type: 'bind',
             Target: '/kaiden',
           },
@@ -320,14 +318,4 @@ export class GatewayContainerManager implements Disposable {
   dispose(): void {
     this.#disposed = true;
   }
-}
-
-export function convertToWslPath(windowsPath: string): string {
-  const match = WINDOWS_PATH_REGEXP.exec(windowsPath);
-  if (!match) {
-    return windowsPath;
-  }
-  const drive = match[1]!.toLowerCase();
-  const rest = match[2]!.replace(/\\/g, '/');
-  return `/mnt/${drive}/${rest}`;
 }
