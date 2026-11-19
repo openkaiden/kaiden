@@ -26,7 +26,11 @@ let extensionContextMock: ExtensionContext;
 
 vi.mock(import('./podman-ai-lab-extension'));
 
-beforeEach(() => {
+beforeEach(async () => {
+  vi.resetAllMocks();
+
+  // reset the module-level extension instance between tests
+  await deactivate();
   vi.resetAllMocks();
 
   extensionContextMock = {} as ExtensionContext;

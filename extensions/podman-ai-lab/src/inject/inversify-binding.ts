@@ -20,7 +20,7 @@ import type { Provider } from '@openkaiden/api';
 import { Container } from 'inversify';
 
 import { helpersModule } from '/@/helper/_helper-module';
-import { PodmanAiLabProviderSymbol } from '/@/inject/symbol';
+import { PodmanAiLabProvider } from '/@/inject/symbol';
 import { managersModule } from '/@/manager/_manager-module';
 
 export class InversifyBinding {
@@ -35,7 +35,7 @@ export class InversifyBinding {
   async initBindings(): Promise<Container> {
     this.#container = new Container();
 
-    this.#container.bind(PodmanAiLabProviderSymbol).toConstantValue(this.#provider);
+    this.#container.bind(PodmanAiLabProvider).toConstantValue(this.#provider);
 
     await this.#container.load(helpersModule, managersModule);
     return this.#container;

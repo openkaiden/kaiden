@@ -26,7 +26,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AiLabDaemonClient } from '/@/helper/ai-lab-daemon-client';
 import { ContainerHostResolver } from '/@/helper/container-host-resolver';
-import { PodmanAiLabProviderSymbol } from '/@/inject/symbol';
+import { PodmanAiLabProvider } from '/@/inject/symbol';
 
 import { InferenceModelManager } from './inference-model-manager';
 
@@ -38,6 +38,7 @@ vi.mock(import('/@/helper/container-host-resolver'));
 describe('InferenceModelManager', () => {
   let aiLabProvider: Provider;
   let manager: InferenceModelManager;
+  let consoleDebugSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
     vi.resetAllMocks();
@@ -49,12 +50,15 @@ describe('InferenceModelManager', () => {
     } as unknown as Provider;
     vi.mocked(randomUUID).mockReturnValue('00000000-0000-0000-0000-000000000000');
     vi.mocked(ContainerHostResolver.prototype.getReachableHost).mockReturnValue('localhost');
+    vi.mocked(AiLabDaemonClient.prototype.getPort).mockReturnValue(10434);
+    vi.mocked(AiLabDaemonClient.prototype.getBaseURL).mockReturnValue('http://localhost:10434');
+    consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
 
     const container = new Container();
     container.bind(InferenceModelManager).toSelf();
     container.bind(AiLabDaemonClient).toConstantValue(new AiLabDaemonClient());
     container.bind(ContainerHostResolver).toConstantValue(new ContainerHostResolver());
-    container.bind(PodmanAiLabProviderSymbol).toConstantValue(aiLabProvider);
+    container.bind(PodmanAiLabProvider).toConstantValue(aiLabProvider);
     manager = await container.getAsync(InferenceModelManager);
   });
 
@@ -99,6 +103,70 @@ describe('InferenceModelManager', () => {
 
     expect(aiLabProvider.updateStatus).toHaveBeenCalledWith('stopped');
     expect(aiLabProvider.registerInferenceProviderConnection).not.toHaveBeenCalled();
+  });
+
+  test('should use the configured port for the SDK and the endpoint', async () => {
+    vi.mocked(AiLabDaemonClient.prototype.getPort).mockReturnValue(12345);
+    vi.mocked(AiLabDaemonClient.prototype.getBaseURL).mockReturnValue('http://localhost:12345');
+    vi.mocked(AiLabDaemonClient.prototype.listRunningModels).mockResolvedValue(['m1']);
+
+    await manager.init();
+
+    expect(createOllama).toHaveBeenCalledWith({ baseURL: 'http://localhost:12345/api' });
+    expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'http://localhost:12345/v1' }),
+    );
+  });
+
+  test('should replace the connection when the port changes and the models do not', async () => {
+    const firstDispose = vi.fn();
+    vi.mocked(aiLabProvider.registerInferenceProviderConnection).mockReturnValueOnce({ dispose: firstDispose });
+    vi.mocked(AiLabDaemonClient.prototype.listRunningModels).mockResolvedValue(['m1']);
+
+    await manager.init();
+    vi.mocked(AiLabDaemonClient.prototype.getPort).mockReturnValue(12345);
+    vi.mocked(AiLabDaemonClient.prototype.getBaseURL).mockReturnValue('http://localhost:12345');
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(firstDispose).toHaveBeenCalled();
+    expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledTimes(2);
+    expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenLastCalledWith(
+      expect.objectContaining({ endpoint: 'http://localhost:12345/v1' }),
+    );
+  });
+
+  test('should register the models sorted by name', async () => {
+    vi.mocked(AiLabDaemonClient.prototype.listRunningModels).mockResolvedValue(['b-model', 'a-model']);
+
+    await manager.init();
+
+    expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ models: [{ label: 'a-model' }, { label: 'b-model' }] }),
+    );
+  });
+
+  test('should log the unreachable daemon once until it is reachable again', async () => {
+    vi.mocked(AiLabDaemonClient.prototype.listRunningModels)
+      .mockRejectedValueOnce(new Error('down'))
+      .mockRejectedValueOnce(new Error('down'))
+      .mockResolvedValueOnce(['m1'])
+      .mockRejectedValueOnce(new Error('down again'));
+
+    await manager.init();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(consoleDebugSpy).toHaveBeenCalledTimes(1);
+    expect(consoleDebugSpy).toHaveBeenCalledWith(
+      'Podman AI Lab daemon at http://localhost:10434 is unreachable:',
+      expect.objectContaining({ message: 'down' }),
+    );
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(consoleDebugSpy).toHaveBeenCalledTimes(2);
+    expect(consoleDebugSpy).toHaveBeenLastCalledWith(
+      'Podman AI Lab daemon at http://localhost:10434 is unreachable:',
+      expect.objectContaining({ message: 'down again' }),
+    );
   });
 
   test('should not register a connection when no model is running', async () => {

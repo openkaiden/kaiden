@@ -16,35 +16,65 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
+import { configuration } from '@openkaiden/api';
 import { injectable } from 'inversify';
 import { z } from 'zod';
-
-// default value of the AI Lab `ai-lab.apiPort` preference
-export const AI_LAB_API_PORT = 10434;
-export const AI_LAB_DAEMON_URL = `http://localhost:${AI_LAB_API_PORT}`;
-
-const RunningModelSchema = z.object({ name: z.string() });
-
-// a payload without a `models` array is treated as "no running model"
-const ProcessListSchema = z.object({ models: z.array(z.unknown()) }).catch({ models: [] });
 
 /**
  * Talks to the AI Lab daemon, the Ollama-compatible HTTP API exposed by Podman AI Lab.
  */
 @injectable()
 export class AiLabDaemonClient {
+  // default value of the AI Lab `ai-lab.apiPort` preference
+  protected static readonly DEFAULT_API_PORT = 10434;
+  protected static readonly CONFIGURATION_SECTION = 'podman-ai-lab';
+  protected static readonly API_PORT_KEY = 'apiPort';
+
+  protected static readonly ApiPortSchema = z.number().int().min(1).max(65535);
+  protected static readonly RunningModelSchema = z.object({ name: z.string() });
+  // a payload without a `models` array is treated as "no running model"
+  protected static readonly ProcessListSchema = z.object({ models: z.array(z.unknown()) }).catch({ models: [] });
+
+  /**
+   * Port of the AI Lab daemon, read from the `podman-ai-lab.apiPort` setting on every call
+   * so that a change applies without restarting the extension.
+   */
+  getPort(): number {
+    const configured = configuration
+      .getConfiguration(AiLabDaemonClient.CONFIGURATION_SECTION)
+      .get<number>(AiLabDaemonClient.API_PORT_KEY);
+    if (configured === undefined) {
+      return AiLabDaemonClient.DEFAULT_API_PORT;
+    }
+    const parsed = AiLabDaemonClient.ApiPortSchema.safeParse(configured);
+    if (!parsed.success) {
+      console.warn(
+        `Invalid ${AiLabDaemonClient.CONFIGURATION_SECTION}.${AiLabDaemonClient.API_PORT_KEY} value '${configured}', using ${AiLabDaemonClient.DEFAULT_API_PORT}`,
+      );
+      return AiLabDaemonClient.DEFAULT_API_PORT;
+    }
+    return parsed.data;
+  }
+
+  /**
+   * Base URL of the daemon, as reachable from Kaiden itself.
+   */
+  getBaseURL(): string {
+    return `http://localhost:${this.getPort()}`;
+  }
+
   /**
    * Lists the names of the models whose inference server is running (`GET /api/ps`).
    * Rejects when the daemon is unreachable or answers with an error status.
    */
   async listRunningModels(signal?: AbortSignal): Promise<string[]> {
-    const res = await fetch(`${AI_LAB_DAEMON_URL}/api/ps`, { signal });
+    const res = await fetch(`${this.getBaseURL()}/api/ps`, { signal });
     if (!res.ok) {
       throw new Error(`HTTP error, status: ${res.status}`);
     }
-    const { models } = ProcessListSchema.parse(await res.json());
+    const { models } = AiLabDaemonClient.ProcessListSchema.parse(await res.json());
     return models.flatMap(entry => {
-      const parsed = RunningModelSchema.safeParse(entry);
+      const parsed = AiLabDaemonClient.RunningModelSchema.safeParse(entry);
       return parsed.success ? [parsed.data.name] : [];
     });
   }

@@ -24,7 +24,7 @@ import { ContainerHostResolver } from '/@/helper/container-host-resolver';
 import { InferenceModelManager } from '/@/manager/inference-model-manager';
 
 import { InversifyBinding } from './inversify-binding';
-import { PodmanAiLabProviderSymbol } from './symbol';
+import { PodmanAiLabProvider } from './symbol';
 
 vi.mock(import('@openkaiden/api'));
 
@@ -41,7 +41,7 @@ describe('InversifyBinding', () => {
   test('should bind the provider and resolve helpers and managers as singletons', async () => {
     const container = await inversifyBinding.initBindings();
 
-    expect(container.get(PodmanAiLabProviderSymbol)).toBe(aiLabProvider);
+    expect(container.get(PodmanAiLabProvider)).toBe(aiLabProvider);
     expect(container.get(AiLabDaemonClient)).toBeInstanceOf(AiLabDaemonClient);
     expect(container.get(ContainerHostResolver)).toBeInstanceOf(ContainerHostResolver);
     const manager = await container.getAsync(InferenceModelManager);
@@ -54,7 +54,7 @@ describe('InversifyBinding', () => {
 
     await inversifyBinding.dispose();
 
-    expect(container.isBound(PodmanAiLabProviderSymbol)).toBe(false);
+    expect(container.isBound(PodmanAiLabProvider)).toBe(false);
     expect(container.isBound(InferenceModelManager)).toBe(false);
   });
 });

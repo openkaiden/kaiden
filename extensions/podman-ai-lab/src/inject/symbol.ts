@@ -16,4 +16,4 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-export const PodmanAiLabProviderSymbol = Symbol.for('PodmanAiLabProvider');
+export const PodmanAiLabProvider = Symbol.for('PodmanAiLabProvider');

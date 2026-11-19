@@ -4,6 +4,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -20,9 +21,9 @@ import { type ExtensionContext, provider } from '@openkaiden/api';
 import { InversifyBinding } from '/@/inject/inversify-binding';
 import { InferenceModelManager } from '/@/manager/inference-model-manager';
 
-export const PROVIDER_ID = 'podman-ai-lab';
-
 export class PodmanAiLabExtension {
+  private static readonly PROVIDER_ID = 'podman-ai-lab';
+
   #extensionContext: ExtensionContext;
 
   #inversifyBinding: InversifyBinding | undefined;
@@ -36,7 +37,7 @@ export class PodmanAiLabExtension {
     const aiLabProvider = provider.createProvider({
       name: 'Podman AI Lab',
       status: 'unknown',
-      id: PROVIDER_ID,
+      id: PodmanAiLabExtension.PROVIDER_ID,
       images: {
         icon: './icon.png',
         logo: './icon.png',

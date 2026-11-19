@@ -22,11 +22,9 @@ import type { Disposable, Provider } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
 import { createOllama } from 'ollama-ai-provider-v2';
 
-import { AI_LAB_API_PORT, AI_LAB_DAEMON_URL, AiLabDaemonClient } from '/@/helper/ai-lab-daemon-client';
+import { AiLabDaemonClient } from '/@/helper/ai-lab-daemon-client';
 import { ContainerHostResolver } from '/@/helper/container-host-resolver';
-import { PodmanAiLabProviderSymbol } from '/@/inject/symbol';
-
-const POLL_INTERVAL_MS = 30_000;
+import { PodmanAiLabProvider } from '/@/inject/symbol';
 
 /**
  * Polls the AI Lab daemon and keeps one inference provider connection registered
@@ -34,7 +32,9 @@ const POLL_INTERVAL_MS = 30_000;
  */
 @injectable()
 export class InferenceModelManager implements Disposable {
-  @inject(PodmanAiLabProviderSymbol)
+  private static readonly POLL_INTERVAL_MS = 30_000;
+
+  @inject(PodmanAiLabProvider)
   private aiLabProvider: Provider;
 
   @inject(AiLabDaemonClient)
@@ -44,6 +44,8 @@ export class InferenceModelManager implements Disposable {
   private containerHostResolver: ContainerHostResolver;
 
   #currentModels: string[] = [];
+  #currentPort: number | undefined;
+  #daemonReachable: boolean | undefined;
   #connectionDisposable: Disposable | undefined;
   #interval: NodeJS.Timeout | undefined;
   #abortController: AbortController | undefined;
@@ -55,7 +57,7 @@ export class InferenceModelManager implements Disposable {
       this.#refresh().catch((error: unknown) => {
         console.error('Error updating Podman AI Lab models and status:', error);
       });
-    }, POLL_INTERVAL_MS);
+    }, InferenceModelManager.POLL_INTERVAL_MS);
   }
 
   async #refresh(): Promise<void> {
@@ -68,26 +70,35 @@ export class InferenceModelManager implements Disposable {
     } catch (err: unknown) {
       // aborted on dispose: nothing to update
       if (signal?.aborted) return;
-      console.debug('Podman AI Lab daemon unreachable:', err);
+      // log only the transition, the daemon is not running for most users
+      if (this.#daemonReachable !== false) {
+        console.debug(`Podman AI Lab daemon at ${this.daemonClient.getBaseURL()} is unreachable:`, err);
+      }
+      this.#daemonReachable = false;
       this.aiLabProvider.updateStatus('stopped');
       this.#unregisterConnection();
       this.#currentModels = [];
+      this.#currentPort = undefined;
       return;
     }
 
     if (signal?.aborted) return;
 
+    this.#daemonReachable = true;
     this.aiLabProvider.updateStatus('started');
 
+    const port = this.daemonClient.getPort();
     const sortedModels = models.toSorted((a, b) => a.localeCompare(b));
     const modelsChanged =
+      port !== this.#currentPort ||
       sortedModels.length !== this.#currentModels.length ||
       sortedModels.some((name, i) => name !== this.#currentModels[i]);
     if (!modelsChanged) return;
 
     this.#unregisterConnection();
     this.#currentModels = sortedModels;
-    if (models.length === 0) return;
+    this.#currentPort = port;
+    if (sortedModels.length === 0) return;
 
     const host = this.containerHostResolver.getReachableHost();
     this.#connectionDisposable = this.aiLabProvider.registerInferenceProviderConnection({
@@ -96,12 +107,12 @@ export class InferenceModelManager implements Disposable {
       type: 'local',
       llmMetadata: { name: 'ollama' },
       // agents consume the OpenAI-compatible layer served by the AI Lab daemon under /v1
-      endpoint: `http://${host}:${AI_LAB_API_PORT}/v1`,
-      sdk: createOllama({ baseURL: `${AI_LAB_DAEMON_URL}/api` }),
+      endpoint: `http://${host}:${port}/v1`,
+      sdk: createOllama({ baseURL: `${this.daemonClient.getBaseURL()}/api` }),
       status() {
         return 'started';
       },
-      models: models.map(name => ({ label: name })),
+      models: sortedModels.map(name => ({ label: name })),
       credentials() {
         return {};
       },
@@ -120,5 +131,7 @@ export class InferenceModelManager implements Disposable {
     this.#interval = undefined;
     this.#unregisterConnection();
     this.#currentModels = [];
+    this.#currentPort = undefined;
+    this.#daemonReachable = undefined;
   }
 }

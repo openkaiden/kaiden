@@ -28,7 +28,8 @@ import { injectable } from 'inversify';
 export class ContainerHostResolver {
   // WSL2: host.containers.internal doesn't reach Windows loopback.
   // Use the first non-internal address (the WSL2 gateway-facing NIC).
-  // Requires the AI Lab daemon to be bound to a non-loopback interface.
+  // The AI Lab API server listens on 0.0.0.0 (LISTENING_ADDRESS in its apiServer.ts), so it is
+  // reachable on this address without extra setup.
   getReachableHost(): string {
     if (env.isWindows) {
       for (const entries of Object.values(networkInterfaces())) {
