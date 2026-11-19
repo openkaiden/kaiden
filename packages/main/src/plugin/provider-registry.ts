@@ -2141,30 +2141,21 @@ export class ProviderRegistry {
   }
 
   getInferenceConnectionType(providerId: string, connectionId: string): InferenceProviderConnection['type'] {
-    const internalId = this.getMatchingProviderInternalId(providerId);
-    const provider = this.providers.get(internalId);
-    if (!provider) throw new Error('Provider not found');
-
-    const connection =
-      provider.inferenceConnections.find(({ id }) => id === connectionId) ??
-      provider.inferenceConnections.find(({ name }) => name === connectionId);
-    if (!connection) throw new Error('Connection not found');
+    const connection = this.getInferenceConnection(providerId, connectionId);
     return connection.type;
   }
 
   getInferenceConnectionEndpoint(providerId: string, connectionId: string): InferenceProviderConnection['endpoint'] {
-    const internalId = this.getMatchingProviderInternalId(providerId);
-    const provider = this.providers.get(internalId);
-    if (!provider) throw new Error('Provider not found');
-
-    const connection =
-      provider.inferenceConnections.find(({ id }) => id === connectionId) ??
-      provider.inferenceConnections.find(({ name }) => name === connectionId);
-    if (!connection) throw new Error('Connection not found');
+    const connection = this.getInferenceConnection(providerId, connectionId);
     return connection.endpoint;
   }
 
   getInferenceConnectionName(providerId: string, connectionId: string): string {
+    const connection = this.getInferenceConnection(providerId, connectionId);
+    return connection.name;
+  }
+
+  getInferenceConnection(providerId: string, connectionId: string): InferenceProviderConnection {
     const internalId = this.getMatchingProviderInternalId(providerId);
     const provider = this.providers.get(internalId);
     if (!provider) throw new Error('Provider not found');
@@ -2173,9 +2164,8 @@ export class ProviderRegistry {
       provider.inferenceConnections.find(({ id }) => id === connectionId) ??
       provider.inferenceConnections.find(({ name }) => name === connectionId);
     if (!connection) throw new Error('Connection not found');
-    return connection.name;
+    return connection;
   }
-
   getFirstInferenceSDK(providerName: string): ProviderV3 | ProviderV4 {
     const provider = this.providers.values().find(provider => provider.id === providerName);
     if (!provider) throw new Error('Provider not found');
