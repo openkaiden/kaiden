@@ -245,6 +245,16 @@ export const TERMINAL_READY_PATTERNS = {
 // OpenAI model selected by the workspace smoke specs; update here when OpenAI retires it.
 export const OPENAI_SMOKE_MODEL = 'gpt-4.1-mini';
 
+// Ollama models served for the run (INFERENCE_MODEL / INFERENCE_SECOND_MODEL, set by the setup-ollama action).
+// Ollama lists untagged models as '<name>:latest'; duplicates are dropped so each entry is a distinct model.
+export const INFERENCE_MODELS: readonly string[] = [
+  ...new Set(
+    [process.env.INFERENCE_MODEL, process.env.INFERENCE_SECOND_MODEL]
+      .filter((model): model is string => Boolean(model))
+      .map(model => (model.includes(':') ? model : `${model}:latest`)),
+  ),
+];
+
 export const ENABLED_CODING_AGENTS = [
   CODING_AGENT.OPENCODE,
   CODING_AGENT.CLAUDE,
