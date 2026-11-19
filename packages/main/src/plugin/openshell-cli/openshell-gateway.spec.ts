@@ -1804,7 +1804,7 @@ describe('supportsMounts', () => {
     await gateway.start();
   });
 
-  test('queries runtime info for a discovered gateway without a saved Kaiden config', async () => {
+  test('returns false for a discovered gateway without a saved Kaiden config', async () => {
     vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' }));
     vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
       status: 'healthy',
@@ -1819,12 +1819,12 @@ describe('supportsMounts', () => {
         type: 'local',
         driver: 'podman',
       }),
-    ).resolves.toBe(true);
+    ).resolves.toBe(false);
     expect(readFile).toHaveBeenCalledWith(
       join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'discovered', 'gateway.toml'),
       'utf-8',
     );
-    expect(gatewayManager.getGatewayInfo).toHaveBeenCalledWith('discovered');
+    expect(gatewayManager.getGatewayInfo).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -2015,18 +2015,23 @@ describe('supportsMounts (non-managed gateways)', () => {
         type: 'local',
         driver: 'podman',
       }),
-    ).resolves.toBe(true);
+    ).resolves.toBe(false);
     expect(readFile).not.toHaveBeenCalled();
-    expect(gatewayManager.getGatewayInfo).toHaveBeenCalledWith('../outside');
+    expect(gatewayManager.getGatewayInfo).not.toHaveBeenCalled();
   });
 
   test.each([
-    'podman',
-    'docker',
-  ] as const)('returns true for a non-managed local gateway with %s driver', async driverName => {
+    { driver: 'podman' },
+    { driver: 'docker' },
+    { driver: 'vm' },
+    { driver: undefined },
+  ] as const)('returns false without querying runtime info for a non-managed local gateway with $driver driver', async ({
+    driver,
+  }) => {
+    const reportedDriver = driver ?? 'podman';
     vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
       status: 'healthy',
-      compute_drivers: [{ name: driverName, capabilities: { driver_name: driverName } }],
+      compute_drivers: [{ name: reportedDriver, capabilities: { driver_name: reportedDriver } }],
     });
 
     await expect(
@@ -2036,81 +2041,14 @@ describe('supportsMounts (non-managed gateways)', () => {
         name: 'external-gw',
         endpoint: 'http://127.0.0.1:17671',
         type: 'local',
-        driver: driverName,
-      }),
-    ).resolves.toBe(true);
-    expect(gatewayManager.getGatewayInfo).toHaveBeenCalledWith('external-gw');
-  });
-
-  test('queries runtime info for a non-managed local gateway whose driver is not known yet', async () => {
-    vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
-      status: 'healthy',
-      compute_drivers: [{ name: 'podman', capabilities: { driver_name: 'podman' } }],
-    });
-
-    await expect(
-      gateway.supportsMounts({
-        canStop: false,
-        canStart: false,
-        name: 'external-gw',
-        endpoint: 'http://127.0.0.1:17671',
-        type: 'local',
-        driver: undefined,
-      }),
-    ).resolves.toBe(true);
-    expect(gatewayManager.getGatewayInfo).toHaveBeenCalledWith('external-gw');
-  });
-
-  test('returns false for a non-managed local gateway with vm driver', async () => {
-    vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
-      status: 'healthy',
-      compute_drivers: [{ name: 'vm', capabilities: { driver_name: 'vm' } }],
-    });
-
-    await expect(
-      gateway.supportsMounts({
-        canStop: false,
-        canStart: false,
-        name: 'external-gw',
-        endpoint: 'http://127.0.0.1:17671',
-        type: 'local',
-        driver: 'vm',
+        driver,
       }),
     ).resolves.toBe(false);
-    expect(gatewayManager.getGatewayInfo).toHaveBeenCalledWith('external-gw');
-  });
-
-  test('returns false when getGatewayInfo fails for a non-managed gateway', async () => {
-    vi.mocked(gatewayManager.getGatewayInfo).mockRejectedValue(new Error('connection refused'));
-
-    await expect(
-      gateway.supportsMounts({
-        canStop: false,
-        canStart: false,
-        name: 'external-gw',
-        endpoint: 'http://127.0.0.1:17671',
-        type: 'local',
-        driver: 'podman',
-      }),
-    ).resolves.toBe(false);
-  });
-
-  test('returns false when the non-managed gateway has no compute drivers', async () => {
-    vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
-      status: 'healthy',
-      compute_drivers: [],
-    });
-
-    await expect(
-      gateway.supportsMounts({
-        canStop: false,
-        canStart: false,
-        name: 'external-gw',
-        endpoint: 'http://127.0.0.1:17671',
-        type: 'local',
-        driver: 'podman',
-      }),
-    ).resolves.toBe(false);
+    expect(readFile).toHaveBeenCalledWith(
+      join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'external-gw', 'gateway.toml'),
+      'utf-8',
+    );
+    expect(gatewayManager.getGatewayInfo).not.toHaveBeenCalled();
   });
 
   test('returns false for a non-managed remote gateway with podman driver', async () => {
@@ -2142,11 +2080,8 @@ describe('supportsMounts (non-managed gateways)', () => {
     expect(gatewayManager.getGatewayInfo).not.toHaveBeenCalled();
   });
 
-  test('returns true for a non-managed gateway bound to IPv6 loopback [::1]', async () => {
-    vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({
-      status: 'healthy',
-      compute_drivers: [{ name: 'podman', capabilities: { driver_name: 'podman' } }],
-    });
+  test('returns true for a Kaiden gateway bound to IPv6 loopback [::1] whose saved config enables bind mounts', async () => {
+    vi.mocked(readFile).mockResolvedValue(`[openshell.drivers.podman]\n${BIND_MOUNT_DRIVER_SETTINGS}`);
 
     await expect(
       gateway.supportsMounts({
@@ -2158,7 +2093,10 @@ describe('supportsMounts (non-managed gateways)', () => {
         driver: 'podman',
       }),
     ).resolves.toBe(true);
-    expect(gatewayManager.getGatewayInfo).toHaveBeenCalledWith('ipv6-gw');
+    expect(readFile).toHaveBeenCalledWith(
+      join(KAIDEN_DATA_DIRECTORY, 'openshell-gateways', 'ipv6-gw', 'gateway.toml'),
+      'utf-8',
+    );
   });
 });
 
