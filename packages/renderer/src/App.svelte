@@ -208,8 +208,9 @@ tablePersistence.storage = new PodmanDesktopStoragePersist();
         {/if}
       {/each}
 
+      <!-- *:min-h-0 lets routed pages shrink to make room for the gateway warning banner -->
       <div
-        class="flex flex-col w-full h-full overflow-hidden"
+        class="flex flex-col w-full h-full overflow-hidden *:min-h-0"
         class:bg-[var(--pd-content-bg)]={!meta.url.startsWith('/preferences')}
         class:bg-[var(--pd-invert-content-bg)]={meta.url.startsWith('/preferences')}>
         <TaskManager />
