@@ -16,23 +16,21 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { EventEmitter } from 'node:events';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { connect } from 'node:http2';
 import { join } from 'node:path';
 
 import { OpenShellClient } from '@nvidia/openshell-sdk';
+import { ServiceStatus } from '@nvidia/openshell-sdk/raw';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { GatewayMetadata } from '/@api/openshell-gateway-info.js';
 
 import type { OpenshellGatewayConfig } from './openshell-gateway-config.js';
-import { OpenshellGatewayManager } from './openshell-gateway-manager.js';
+import { GRPC_CALL_TIMEOUT_MS, OpenshellGatewayManager } from './openshell-gateway-manager.js';
 
 vi.mock(import('node:fs'));
 vi.mock(import('node:fs/promises'));
-vi.mock(import('node:http2'));
 vi.mock(import('@nvidia/openshell-sdk'));
 
 const USER_CONFIG = '/home/testuser/.config';
@@ -53,82 +51,6 @@ function validMetadata(overrides: Partial<GatewayMetadata> = {}): GatewayMetadat
 const gatewayConfig = {
   buildConnectOptions: vi.fn().mockResolvedValue({ gateway: 'http://127.0.0.1:17670' }),
 } as unknown as OpenshellGatewayConfig;
-
-function encodeVarint(value: number): Buffer {
-  const bytes: number[] = [];
-  let remaining = value;
-  while (remaining > 0x7f) {
-    bytes.push((remaining & 0x7f) | 0x80);
-    remaining >>>= 7;
-  }
-  bytes.push(remaining & 0x7f);
-  return Buffer.from(bytes);
-}
-
-function encodeString(fieldNumber: number, value: string): Buffer {
-  const tag = encodeVarint((fieldNumber << 3) | 2);
-  const content = Buffer.from(value, 'utf-8');
-  const len = encodeVarint(content.length);
-  return Buffer.concat([tag, len, content]);
-}
-
-function encodeMessage(fieldNumber: number, content: Buffer): Buffer {
-  const tag = encodeVarint((fieldNumber << 3) | 2);
-  const len = encodeVarint(content.length);
-  return Buffer.concat([tag, len, content]);
-}
-
-function encodeGatewayInfoResponse(opts: {
-  status: number;
-  gatewayVersion?: string;
-  drivers?: { name: string; driverName: string; driverVersion?: string }[];
-}): Buffer {
-  const parts: Buffer[] = [];
-  if (opts.status) parts.push(Buffer.concat([encodeVarint((1 << 3) | 0), encodeVarint(opts.status)]));
-  if (opts.gatewayVersion) parts.push(encodeString(2, opts.gatewayVersion));
-  for (const d of opts.drivers ?? []) {
-    const caps = Buffer.concat([
-      encodeString(1, d.driverName),
-      ...(d.driverVersion ? [encodeString(2, d.driverVersion)] : []),
-    ]);
-    const driver = Buffer.concat([encodeString(1, d.name), encodeMessage(2, caps)]);
-    parts.push(encodeMessage(3, driver));
-  }
-  const msg = Buffer.concat(parts);
-  const frame = Buffer.alloc(5 + msg.length);
-  frame.writeUInt8(0, 0);
-  frame.writeUInt32BE(msg.length, 1);
-  msg.copy(frame, 5);
-  return frame;
-}
-
-async function mockGrpcResponse(
-  statusCode: number,
-  grpcBody: Buffer,
-  trailers?: Record<string, string>,
-): Promise<void> {
-  vi.mocked(connect).mockImplementation(() => {
-    const session = new EventEmitter() as ReturnType<typeof connect>;
-    session.close = vi.fn();
-    session.destroy = vi.fn() as never;
-
-    session.request = vi.fn().mockImplementation(() => {
-      const stream = new EventEmitter();
-      Object.assign(stream, { write: vi.fn(), end: vi.fn() });
-
-      process.nextTick(() => {
-        stream.emit('response', { ':status': statusCode });
-        stream.emit('data', grpcBody);
-        if (trailers) stream.emit('trailers', trailers);
-        stream.emit('end');
-      });
-
-      return stream;
-    });
-
-    return session;
-  });
-}
 
 let manager: OpenshellGatewayManager;
 
@@ -442,15 +364,15 @@ describe('OpenshellGatewayManager', () => {
   });
 
   describe('getGatewayInfo', () => {
-    test('makes a gRPC call and returns parsed runtime info', async () => {
+    test('uses SDK raw client and returns parsed runtime info', async () => {
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'my-gw' })));
 
-      const grpcBody = encodeGatewayInfoResponse({
-        status: 1,
+      const mockGetGatewayInfo = vi.fn().mockResolvedValue({
+        status: ServiceStatus.HEALTHY,
         gatewayVersion: '0.0.69',
-        drivers: [{ name: 'docker', driverName: 'docker', driverVersion: '1.0' }],
+        computeDrivers: [{ name: 'docker', capabilities: { driverName: 'docker', driverVersion: '1.0' } }],
       });
-      await mockGrpcResponse(200, grpcBody);
+      vi.mocked(OpenShellClient.connect).mockResolvedValue({ raw: { getGatewayInfo: mockGetGatewayInfo } } as never);
 
       const result = await manager.getGatewayInfo('my-gw');
 
@@ -458,83 +380,92 @@ describe('OpenshellGatewayManager', () => {
         name: 'my-gw',
         endpoint: 'http://127.0.0.1:17670',
       });
+      expect(mockGetGatewayInfo).toHaveBeenCalledWith({}, { timeoutMs: GRPC_CALL_TIMEOUT_MS });
       expect(result.status).toBe('healthy');
+      expect(result.gateway_version).toBe('0.0.69');
       expect(result.compute_drivers).toHaveLength(1);
       expect(result.compute_drivers[0]!.capabilities.driver_name).toBe('docker');
     });
 
-    test('decodes degraded status from protobuf enum', async () => {
+    test('maps degraded status from ServiceStatus enum', async () => {
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'gw' })));
 
-      await mockGrpcResponse(200, encodeGatewayInfoResponse({ status: 2 }));
+      vi.mocked(OpenShellClient.connect).mockResolvedValue({
+        raw: {
+          getGatewayInfo: vi.fn().mockResolvedValue({
+            status: ServiceStatus.DEGRADED,
+            gatewayVersion: '',
+            computeDrivers: [],
+          }),
+        },
+      } as never);
 
       const result = await manager.getGatewayInfo('gw');
 
       expect(result.status).toBe('degraded');
     });
 
-    test('throws on HTTP error response', async () => {
+    test('maps unhealthy status from ServiceStatus enum', async () => {
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'gw' })));
 
-      await mockGrpcResponse(401, Buffer.alloc(0));
+      vi.mocked(OpenShellClient.connect).mockResolvedValue({
+        raw: {
+          getGatewayInfo: vi.fn().mockResolvedValue({
+            status: ServiceStatus.UNHEALTHY,
+            gatewayVersion: '',
+            computeDrivers: [],
+          }),
+        },
+      } as never);
 
-      await expect(manager.getGatewayInfo('gw')).rejects.toThrow(/HTTP 401/);
+      const result = await manager.getGatewayInfo('gw');
+
+      expect(result.status).toBe('unhealthy');
     });
 
-    test('throws on non-zero grpc-status trailer', async () => {
+    test('maps unrecognized status to unknown', async () => {
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'gw' })));
 
-      await mockGrpcResponse(200, Buffer.alloc(0), { 'grpc-status': '13', 'grpc-message': 'internal%20error' });
+      vi.mocked(OpenShellClient.connect).mockResolvedValue({
+        raw: {
+          getGatewayInfo: vi.fn().mockResolvedValue({
+            status: 99,
+            gatewayVersion: '',
+            computeDrivers: [],
+          }),
+        },
+      } as never);
 
-      await expect(manager.getGatewayInfo('gw')).rejects.toThrow(/gRPC error \(status 13\): internal error/);
+      const result = await manager.getGatewayInfo('gw');
+
+      expect(result.status).toBe('unknown');
     });
 
-    test('handles malformed percent-encoding in grpc-message trailer', async () => {
+    test('propagates SDK connection errors', async () => {
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'gw' })));
 
-      await mockGrpcResponse(200, Buffer.alloc(0), { 'grpc-status': '2', 'grpc-message': 'bad%ZZencoding' });
+      vi.mocked(OpenShellClient.connect).mockRejectedValue(new Error('connection refused'));
 
-      await expect(manager.getGatewayInfo('gw')).rejects.toThrow(/gRPC error \(status 2\): bad%ZZencoding/);
+      await expect(manager.getGatewayInfo('gw')).rejects.toThrow('connection refused');
     });
 
-    test('rejects when response exceeds maximum size', async () => {
+    test('handles driver without capabilities', async () => {
       vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(validMetadata({ name: 'gw' })));
 
-      const destroyedStreams: { req: boolean; session: boolean } = { req: false, session: false };
+      vi.mocked(OpenShellClient.connect).mockResolvedValue({
+        raw: {
+          getGatewayInfo: vi.fn().mockResolvedValue({
+            status: ServiceStatus.HEALTHY,
+            gatewayVersion: '1.0.0',
+            computeDrivers: [{ name: 'bare-metal', capabilities: undefined }],
+          }),
+        },
+      } as never);
 
-      vi.mocked(connect).mockImplementation(() => {
-        const session = new EventEmitter() as ReturnType<typeof connect>;
-        session.close = vi.fn();
-        session.destroy = vi.fn(() => {
-          destroyedStreams.session = true;
-        }) as never;
+      const result = await manager.getGatewayInfo('gw');
 
-        session.request = vi.fn().mockImplementation(() => {
-          const stream = new EventEmitter();
-          Object.assign(stream, {
-            write: vi.fn(),
-            end: vi.fn(),
-            destroy: vi.fn(() => {
-              destroyedStreams.req = true;
-            }),
-          });
-
-          process.nextTick(() => {
-            stream.emit('response', { ':status': 200 });
-            const oversizedChunk = Buffer.alloc(1024 * 1024 + 1);
-            stream.emit('data', oversizedChunk);
-            stream.emit('end');
-          });
-
-          return stream;
-        });
-
-        return session;
-      });
-
-      await expect(manager.getGatewayInfo('gw')).rejects.toThrow(/exceeded maximum size/);
-      expect(destroyedStreams.req).toBe(true);
-      expect(destroyedStreams.session).toBe(true);
+      expect(result.compute_drivers[0]!.name).toBe('bare-metal');
+      expect(result.compute_drivers[0]!.capabilities.driver_name).toBe('');
     });
   });
 
