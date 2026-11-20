@@ -90,8 +90,13 @@ export async function saveTestArtifacts(page: Page, testInfo: TestInfo): Promise
   // Traces record entered values, DOM snapshots and the launch environment.
   // Write the trace to a private directory and only put redacted bytes in the
   // output directory: a write that completes after the timeout stays private.
-  const traceDir = await mkdtemp(join(tmpdir(), 'kaiden-trace-'));
-  const rawTracePath = join(traceDir, 'trace.zip');
+  // Without a private directory the chunk is still stopped (and discarded) so
+  // the next test can start its own.
+  const traceDir = await mkdtemp(join(tmpdir(), 'kaiden-trace-')).catch((error: unknown) => {
+    console.error(`Failed to create a private trace directory for "${testInfo.title}":`, error);
+    return undefined;
+  });
+  const rawTracePath = traceDir && join(traceDir, 'trace.zip');
 
   let traceWritten = false;
   const writingTrace = context.tracing
@@ -113,6 +118,11 @@ export async function saveTestArtifacts(page: Page, testInfo: TestInfo): Promise
       testInfo,
     ),
   ]);
+
+  if (!traceDir || !rawTracePath) {
+    attach(testInfo, 'screenshot', screenshotPath, 'image/png');
+    return;
+  }
 
   try {
     // No file: stopChunk failed (logged above) or did not finish in time (annotated).
