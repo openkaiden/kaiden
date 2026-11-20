@@ -13,7 +13,9 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",
+    "@types/adm-zip": "^0.5.7",
     "@types/node": "^24",
+    "adm-zip": "^0.5.16",
     "typescript": "5.9.2"
   }
 }

@@ -155,7 +155,13 @@ export const workerTest = test.extend<ElectronFixtures, WorkerElectronFixtures>(
   workerPage: [
     async ({ workerElectronApp }, use): Promise<void> => {
       const page = await getFirstPage(workerElectronApp);
+      // One trace per worker, one chunk per test: saveTestArtifacts stops each test's chunk.
+      await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
       await use(page);
+      await page
+        .context()
+        .tracing.stop()
+        .catch((error: unknown) => console.error('Failed to stop tracing:', error));
     },
     { scope: 'worker' },
   ],
@@ -165,6 +171,10 @@ export const workerTest = test.extend<ElectronFixtures, WorkerElectronFixtures>(
   },
 
   page: async ({ workerPage }, use, testInfo): Promise<void> => {
+    await workerPage
+      .context()
+      .tracing.startChunk()
+      .catch((error: unknown) => console.error(`Failed to start trace chunk for "${testInfo.title}":`, error));
     await use(workerPage);
     await saveTestArtifacts(workerPage, testInfo);
   },

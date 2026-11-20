@@ -1103,9 +1103,15 @@ importers:
       '@playwright/test':
         specifier: ^1.54.2
         version: 1.57.0
+      '@types/adm-zip':
+        specifier: ^0.5.7
+        version: 0.5.7
       '@types/node':
         specifier: ^24
         version: 24.11.0
+      adm-zip:
+        specifier: ^0.5.16
+        version: 0.5.16
       typescript:
         specifier: 5.9.2
         version: 5.9.2
