@@ -105,8 +105,7 @@ export class AiLabPortResolver {
    * - Linux falls back to the XDG layout for new installations
    */
   #settingsFiles(): string[] {
-    // biome-ignore lint/complexity/useLiteralKeys: PODMAN_DESKTOP_HOME_DIR comes from an index signature
-    const homeDirOverride = process.env['PODMAN_DESKTOP_HOME_DIR'];
+    const homeDirOverride = process.env.PODMAN_DESKTOP_HOME_DIR;
     if (homeDirOverride) {
       return [join(homeDirOverride, 'configuration', 'settings.json')];
     }
@@ -115,8 +114,7 @@ export class AiLabPortResolver {
       join(homedir(), '.local', 'share', 'containers', 'podman-desktop', 'configuration', 'settings.json'),
     ];
     if (env.isLinux) {
-      // biome-ignore lint/complexity/useLiteralKeys: XDG_CONFIG_HOME comes from an index signature
-      const xdgConfigHome = process.env['XDG_CONFIG_HOME'] ?? join(homedir(), '.config');
+      const xdgConfigHome = process.env.XDG_CONFIG_HOME ?? join(homedir(), '.config');
       files.push(join(xdgConfigHome, 'containers', 'podman-desktop', 'settings.json'));
     }
     return files;
