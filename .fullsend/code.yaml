@@ -1,4 +1,4 @@
 base: https://raw.githubusercontent.com/fullsend-ai/agents/81b0e9bde0fae533bb4e26a731c0bca343340d79/harness/code.yaml#sha256=f9c2adb87ef43a6ecffcfa1a44791bc6ce54ef7023cc96352519c427f9740a57
-image: ghcr.io/openkaiden/kaiden-fullsend-image@sha256:752de42626946c37a453a0b0ddd2effd7a2a4cecda86595586097d14b1c21635
+image: ghcr.io/openkaiden/kaiden-fullsend-image@sha256:717b25f7b38fd39b8c654ff3080f18ded22e09ae82338f859c804da0407300a6
 policy: policies/kaiden.yaml
 model: claude-opus-5-5
