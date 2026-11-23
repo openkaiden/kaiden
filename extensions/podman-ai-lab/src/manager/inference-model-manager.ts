@@ -23,6 +23,7 @@ import { inject, injectable } from 'inversify';
 import { createOllama } from 'ollama-ai-provider-v2';
 
 import { AiLabDaemonClient } from '/@/helper/ai-lab-daemon-client';
+import { AiLabPortResolver } from '/@/helper/ai-lab-port-resolver';
 import { ContainerHostResolver } from '/@/helper/container-host-resolver';
 import { PodmanAiLabProvider } from '/@/inject/symbol';
 
@@ -39,6 +40,9 @@ export class InferenceModelManager implements Disposable {
 
   @inject(AiLabDaemonClient)
   private daemonClient: AiLabDaemonClient;
+
+  @inject(AiLabPortResolver)
+  private portResolver: AiLabPortResolver;
 
   @inject(ContainerHostResolver)
   private containerHostResolver: ContainerHostResolver;
@@ -64,15 +68,20 @@ export class InferenceModelManager implements Disposable {
     const signal = this.#abortController?.signal;
     if (signal?.aborted) return;
 
+    // read the port once: the models, the endpoint and the SDK must all target the daemon that answered
+    const port = await this.portResolver.getPort();
+    if (signal?.aborted) return;
+    const baseURL = this.daemonClient.getBaseURL(port);
+
     let models: string[];
     try {
-      models = await this.daemonClient.listRunningModels(signal);
+      models = await this.daemonClient.listRunningModels(port, signal);
     } catch (err: unknown) {
       // aborted on dispose: nothing to update
       if (signal?.aborted) return;
       // log only the transition, the daemon is not running for most users
       if (this.#daemonReachable !== false) {
-        console.debug(`Podman AI Lab daemon at ${this.daemonClient.getBaseURL()} is unreachable:`, err);
+        console.debug(`Podman AI Lab daemon at ${baseURL} is unreachable:`, err);
       }
       this.#daemonReachable = false;
       this.aiLabProvider.updateStatus('stopped');
@@ -87,7 +96,6 @@ export class InferenceModelManager implements Disposable {
     this.#daemonReachable = true;
     this.aiLabProvider.updateStatus('started');
 
-    const port = this.daemonClient.getPort();
     const sortedModels = models.toSorted((a, b) => a.localeCompare(b));
     const modelsChanged =
       port !== this.#currentPort ||
@@ -108,7 +116,7 @@ export class InferenceModelManager implements Disposable {
       llmMetadata: { name: 'ollama' },
       // agents consume the OpenAI-compatible layer served by the AI Lab daemon under /v1
       endpoint: `http://${host}:${port}/v1`,
-      sdk: createOllama({ baseURL: `${this.daemonClient.getBaseURL()}/api` }),
+      sdk: createOllama({ baseURL: `${baseURL}/api` }),
       status() {
         return 'started';
       },

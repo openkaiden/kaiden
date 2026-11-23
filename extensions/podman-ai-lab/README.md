@@ -1,11 +1,11 @@
 # Podman AI Lab Extension
 
-Integrates Podman AI Lab inference servers with Kaiden. Automatically discovers and registers running models via the AI Lab daemon on localhost:10434.
+Integrates Podman AI Lab inference servers with Kaiden. Automatically discovers and registers running models via the AI Lab daemon on localhost (port 10434 by default).
 
 ## Requirements
 
 - [Podman Desktop](https://podman-desktop.io/) with the [AI Lab](https://developers.redhat.com/products/podman-desktop/podman-ai-lab) extension installed
-- A Podman AI Lab version that serves the OpenAI-compatible `/v1` API with an older version models are listed but agents cannot use them
+- A Podman AI Lab version that serves the OpenAI-compatible `/v1` API. With an older version, models are listed but agents cannot use them
 - At least one model service running in AI Lab
 
 ## Usage
@@ -19,4 +19,5 @@ Integrates Podman AI Lab inference servers with Kaiden. Automatically discovers 
 - The extension polls the AI Lab daemon (`/api/ps`) every 30 seconds
 - The daemon speaks Ollama protocol — only running inference servers are listed
 - Models are registered with the daemon's OpenAI-compatible endpoint (`/v1`), so agents can use them
-- Default API port is 10434. If you changed it in AI Lab (`ai-lab.apiPort`), set the same value in Kaiden in the Podman AI Lab settings (`podman-ai-lab.apiPort`). AI Lab's random port mode (`0`) is not supported, as Kaiden cannot discover the port
+- The daemon port is read from the Podman Desktop settings (`ai-lab.apiPort` in Podman Desktop's `settings.json`) on every poll, so a port changed in AI Lab is picked up without any Kaiden setting. It defaults to 10434 when the preference is not set
+- AI Lab's random port mode (`0`) is not supported, as the port is not published anywhere Kaiden can read. A Podman Desktop installed as a Flatpak or a custom Podman Desktop home outside `PODMAN_DESKTOP_HOME_DIR` is not detected either, and the default port is used

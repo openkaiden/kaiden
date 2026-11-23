@@ -19,10 +19,12 @@
 import { ContainerModule } from 'inversify';
 
 import { AiLabDaemonClient } from './ai-lab-daemon-client';
+import { AiLabPortResolver } from './ai-lab-port-resolver';
 import { ContainerHostResolver } from './container-host-resolver';
 
 const helpersModule = new ContainerModule(options => {
   options.bind<AiLabDaemonClient>(AiLabDaemonClient).toSelf().inSingletonScope();
+  options.bind<AiLabPortResolver>(AiLabPortResolver).toSelf().inSingletonScope();
   options.bind<ContainerHostResolver>(ContainerHostResolver).toSelf().inSingletonScope();
 });
 

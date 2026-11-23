@@ -25,6 +25,7 @@ import { createOllama } from 'ollama-ai-provider-v2';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AiLabDaemonClient } from '/@/helper/ai-lab-daemon-client';
+import { AiLabPortResolver } from '/@/helper/ai-lab-port-resolver';
 import { ContainerHostResolver } from '/@/helper/container-host-resolver';
 import { PodmanAiLabProvider } from '/@/inject/symbol';
 
@@ -33,6 +34,7 @@ import { InferenceModelManager } from './inference-model-manager';
 vi.mock(import('node:crypto'));
 vi.mock(import('ollama-ai-provider-v2'));
 vi.mock(import('/@/helper/ai-lab-daemon-client'));
+vi.mock(import('/@/helper/ai-lab-port-resolver'));
 vi.mock(import('/@/helper/container-host-resolver'));
 
 describe('InferenceModelManager', () => {
@@ -50,13 +52,14 @@ describe('InferenceModelManager', () => {
     } as unknown as Provider;
     vi.mocked(randomUUID).mockReturnValue('00000000-0000-0000-0000-000000000000');
     vi.mocked(ContainerHostResolver.prototype.getReachableHost).mockReturnValue('localhost');
-    vi.mocked(AiLabDaemonClient.prototype.getPort).mockReturnValue(10434);
-    vi.mocked(AiLabDaemonClient.prototype.getBaseURL).mockReturnValue('http://localhost:10434');
+    vi.mocked(AiLabPortResolver.prototype.getPort).mockResolvedValue(10434);
+    vi.mocked(AiLabDaemonClient.prototype.getBaseURL).mockImplementation(port => `http://localhost:${port}`);
     consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
 
     const container = new Container();
     container.bind(InferenceModelManager).toSelf();
     container.bind(AiLabDaemonClient).toConstantValue(new AiLabDaemonClient());
+    container.bind(AiLabPortResolver).toConstantValue(new AiLabPortResolver());
     container.bind(ContainerHostResolver).toConstantValue(new ContainerHostResolver());
     container.bind(PodmanAiLabProvider).toConstantValue(aiLabProvider);
     manager = await container.getAsync(InferenceModelManager);
@@ -69,7 +72,7 @@ describe('InferenceModelManager', () => {
 
     await manager.init();
 
-    expect(AiLabDaemonClient.prototype.listRunningModels).toHaveBeenCalledWith(expect.any(AbortSignal));
+    expect(AiLabDaemonClient.prototype.listRunningModels).toHaveBeenCalledWith(10434, expect.any(AbortSignal));
     expect(aiLabProvider.updateStatus).toHaveBeenCalledWith('started');
     expect(createOllama).toHaveBeenCalledWith({ baseURL: 'http://localhost:10434/api' });
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledWith(
@@ -105,17 +108,51 @@ describe('InferenceModelManager', () => {
     expect(aiLabProvider.registerInferenceProviderConnection).not.toHaveBeenCalled();
   });
 
-  test('should use the configured port for the SDK and the endpoint', async () => {
-    vi.mocked(AiLabDaemonClient.prototype.getPort).mockReturnValue(12345);
-    vi.mocked(AiLabDaemonClient.prototype.getBaseURL).mockReturnValue('http://localhost:12345');
+  test('should use the port of the AI Lab daemon for the request, the SDK and the endpoint', async () => {
+    vi.mocked(AiLabPortResolver.prototype.getPort).mockResolvedValue(12345);
     vi.mocked(AiLabDaemonClient.prototype.listRunningModels).mockResolvedValue(['m1']);
 
     await manager.init();
 
+    expect(AiLabDaemonClient.prototype.listRunningModels).toHaveBeenCalledWith(12345, expect.any(AbortSignal));
     expect(createOllama).toHaveBeenCalledWith({ baseURL: 'http://localhost:12345/api' });
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledWith(
       expect.objectContaining({ endpoint: 'http://localhost:12345/v1' }),
     );
+  });
+
+  test('should read the port once per refresh', async () => {
+    vi.mocked(AiLabDaemonClient.prototype.listRunningModels).mockResolvedValue(['m1']);
+
+    await manager.init();
+
+    expect(AiLabPortResolver.prototype.getPort).toHaveBeenCalledTimes(1);
+  });
+
+  test('should target the same port for the models and the connection when the port changes during the request', async () => {
+    vi.mocked(AiLabPortResolver.prototype.getPort).mockResolvedValueOnce(10434).mockResolvedValue(12345);
+    vi.mocked(AiLabDaemonClient.prototype.listRunningModels).mockResolvedValue(['m1']);
+
+    await manager.init();
+
+    expect(AiLabDaemonClient.prototype.listRunningModels).toHaveBeenCalledWith(10434, expect.any(AbortSignal));
+    expect(createOllama).toHaveBeenCalledWith({ baseURL: 'http://localhost:10434/api' });
+    expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'http://localhost:10434/v1' }),
+    );
+  });
+
+  test('should ignore the port read after dispose', async () => {
+    const { promise, resolve } = Promise.withResolvers<number>();
+    vi.mocked(AiLabPortResolver.prototype.getPort).mockReturnValue(promise);
+
+    const init = manager.init();
+    manager.dispose();
+    resolve(10434);
+    await init;
+
+    expect(AiLabDaemonClient.prototype.listRunningModels).not.toHaveBeenCalled();
+    expect(aiLabProvider.updateStatus).not.toHaveBeenCalled();
   });
 
   test('should replace the connection when the port changes and the models do not', async () => {
@@ -124,8 +161,7 @@ describe('InferenceModelManager', () => {
     vi.mocked(AiLabDaemonClient.prototype.listRunningModels).mockResolvedValue(['m1']);
 
     await manager.init();
-    vi.mocked(AiLabDaemonClient.prototype.getPort).mockReturnValue(12345);
-    vi.mocked(AiLabDaemonClient.prototype.getBaseURL).mockReturnValue('http://localhost:12345');
+    vi.mocked(AiLabPortResolver.prototype.getPort).mockResolvedValue(12345);
     await vi.advanceTimersByTimeAsync(30_000);
 
     expect(firstDispose).toHaveBeenCalled();
@@ -239,6 +275,8 @@ describe('InferenceModelManager', () => {
     vi.mocked(AiLabDaemonClient.prototype.listRunningModels).mockReturnValue(promise);
 
     const init = manager.init();
+    // let the port be read so that the request is pending
+    await vi.advanceTimersByTimeAsync(0);
     manager.dispose();
     resolve(['m1']);
     await init;
@@ -252,6 +290,8 @@ describe('InferenceModelManager', () => {
     vi.mocked(AiLabDaemonClient.prototype.listRunningModels).mockReturnValue(promise);
 
     const init = manager.init();
+    // let the port be read so that the request is pending
+    await vi.advanceTimersByTimeAsync(0);
     manager.dispose();
     reject(new DOMException('aborted', 'AbortError'));
     await init;

@@ -11,21 +11,6 @@
   },
   "main": "./dist/extension.js",
   "source": "./src/extension.ts",
-  "contributes": {
-    "configuration": {
-      "title": "Podman AI Lab",
-      "properties": {
-        "podman-ai-lab.apiPort": {
-          "type": "number",
-          "scope": "DEFAULT",
-          "default": 10434,
-          "minimum": 1,
-          "maximum": 65535,
-          "description": "Port of the Podman AI Lab API server. Must match the 'ai-lab.apiPort' preference of Podman AI Lab (random port mode is not supported)."
-        }
-      }
-    }
-  },
   "scripts": {
     "build": "vite build && node ./scripts/build.js",
     "test": "vitest run --coverage",
