@@ -1732,6 +1732,9 @@ export class ExtensionLoader implements IAsyncDisposable {
       getAddons(): ReadonlyArray<containerDesktopAPI.Addon> {
         return instance.addonRegistry.getAddons();
       },
+      findAddon(query: containerDesktopAPI.AddonQuery): containerDesktopAPI.Addon | undefined {
+        return instance.addonRegistry.findAddon(query);
+      },
     };
 
     const workspace: typeof containerDesktopAPI.workspace = {

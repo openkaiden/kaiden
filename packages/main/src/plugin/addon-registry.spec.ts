@@ -103,3 +103,11 @@ test('init exposes addons over IPC', async () => {
   const result = await handler({} as IpcMainInvokeEvent);
   expect(result).toStrictEqual([addon]);
 });
+
+test.each([
+  { label: 'the addon by id', query: { id: 'claude' }, expected: 'ghcr.io/test/claude:1' },
+  { label: 'nothing for an unknown id', query: { id: 'missing' }, expected: undefined },
+])('findAddon returns $label', ({ query, expected }) => {
+  registry.registerAddon({ id: 'claude', name: 'Claude Code', ociImage: 'ghcr.io/test/claude:1', category: 'agents' });
+  expect(registry.findAddon(query)?.ociImage).toBe(expected);
+});

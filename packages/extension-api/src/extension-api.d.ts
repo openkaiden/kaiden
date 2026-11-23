@@ -5583,11 +5583,21 @@ declare module '@openkaiden/api' {
     readonly icon?: string | { light: string; dark: string };
   }
 
+  /** Criteria to look up a registered addon. */
+  export interface AddonQuery {
+    /**
+     * Identifier of the addon (e.g. `claude`).
+     */
+    readonly id: string;
+  }
+
   export namespace addons {
     /** Register an addon for use by agent workspaces. The addon ID must be unique. */
     export function registerAddon(addon: Addon): Disposable;
     /** Get all currently registered addons. */
     export function getAddons(): ReadonlyArray<Addon>;
+    /** Find the registered addon matching the query, or `undefined` when none matches. */
+    export function findAddon(query: AddonQuery): Addon | undefined;
   }
 
   export interface OpenShellGatewayFeatures {

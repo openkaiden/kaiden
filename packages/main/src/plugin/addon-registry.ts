@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { Addon } from '@openkaiden/api';
+import type { Addon, AddonQuery } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
 
 import { IPCHandle } from '/@/plugin/api.js';
@@ -55,5 +55,9 @@ export class AddonRegistry {
 
   getAddons(): ReadonlyArray<Addon> {
     return Array.from(this.addons.values());
+  }
+
+  findAddon(query: AddonQuery): Addon | undefined {
+    return this.addons.get(query.id);
   }
 }

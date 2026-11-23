@@ -2194,6 +2194,15 @@ test('addons API registers and retrieves addons', () => {
   expect(api.addons.getAddons()).toStrictEqual([addon]);
 });
 
+test('addons API finds an addon', () => {
+  const api = createApi([]);
+  const addon: containerDesktopAPI.Addon = { id: 'claude', name: 'Claude Code', ociImage: 'ghcr.io/test/claude:1' };
+  vi.mocked(addonRegistry.findAddon).mockReturnValue(addon);
+
+  expect(api.addons.findAddon({ id: 'claude' })).toBe(addon);
+  expect(addonRegistry.findAddon).toHaveBeenCalledWith({ id: 'claude' });
+});
+
 test('workspace host preset API registers and retrieves presets', () => {
   const disposables: IDisposable[] = [];
   const api = createApi(disposables);
