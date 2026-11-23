@@ -11,7 +11,7 @@ slug: bsl-webupd
 trigger: |
   event.source.system == "schedule"
 
-model: opus
+model: claude-opus-5-5
 effort: high
 timeout_minutes: 30
 

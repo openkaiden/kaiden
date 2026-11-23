@@ -26,6 +26,8 @@ agents:
       source: code.yaml
     - name: fix
       source: fix.yaml
+    - name: triage
+      source: triage.yaml
     - name: webupd
       source: harness/webupd.yaml
 inference:
