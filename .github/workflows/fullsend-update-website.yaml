@@ -50,7 +50,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: fullsend-ai/fullsend
-          ref: 4665685a1d9d471a7a044908a68f00bed78caba7 # v0.42.0
+          ref: d11de3ea0dde5aa652110b6716c19e000c426df7 # v0.57.1
           path: .defaults
           sparse-checkout: |
             internal/scaffold/fullsend-repo/
@@ -71,6 +71,10 @@ jobs:
             fi
           done
           rm -rf .defaults
+          # The shared config.yaml still uses the create_issues layout read by
+          # the fullsend v0.42.0 workflows; this newer fullsend only accepts
+          # tracker.github.allowed_targets, so convert it for this job only.
+          yq -i '.tracker.github.allowed_targets = .create_issues.allow_targets | del(.create_issues)' .fullsend/config.yaml
 
       - name: Authenticate to GCP via WIF
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
@@ -82,7 +86,7 @@ jobs:
         run: bash .fullsend/scripts/prepare-sandbox-credentials.sh
 
       - name: Install fullsend CLI
-        uses: fullsend-ai/fullsend@4665685a1d9d471a7a044908a68f00bed78caba7 # v0.42.0
+        uses: fullsend-ai/fullsend@d11de3ea0dde5aa652110b6716c19e000c426df7 # v0.57.1
         with:
           agent: __install_only__
 
