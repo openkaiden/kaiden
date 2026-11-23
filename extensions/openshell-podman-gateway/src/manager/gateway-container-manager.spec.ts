@@ -32,7 +32,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { SocketHelper } from '/@/helper/socket-helper';
 import { ContainerExtensionAPISymbol, ExtensionContextSymbol } from '/@/inject/symbol';
 
-import { convertToWslPath, GATEWAY_IMAGE, GatewayContainerManager } from './gateway-container-manager';
+import { GATEWAY_IMAGE, GatewayContainerManager } from './gateway-container-manager';
 
 vi.mock('node:fs/promises', () => ({
   rm: vi.fn().mockResolvedValue(undefined),
@@ -58,6 +58,7 @@ const endpointMock: EndpointConnection = {
 let gatewayContainerManager: GatewayContainerManager;
 let containerExtensionAPIMock: ContainerExtensionAPI;
 let onEndpointsChangedCallback: (() => void) | undefined;
+let extensionContextMock: { storagePath: string; subscriptions: unknown[] };
 
 beforeEach(async () => {
   vi.resetAllMocks();
@@ -83,7 +84,7 @@ beforeEach(async () => {
     }),
   } as unknown as ContainerExtensionAPI;
 
-  const extensionContextMock = {
+  extensionContextMock = {
     storagePath: '/test/storage',
     subscriptions: [],
   };
@@ -626,7 +627,7 @@ describe('GatewayContainerManager', () => {
       expect.objectContaining({
         Cmd: expect.arrayContaining(['generate-certs']),
         HostConfig: expect.objectContaining({
-          Mounts: [{ Source: convertToWslPath(gatewayDir), Type: 'bind', Target: '/kaiden' }],
+          Mounts: [{ Source: gatewayDir, Type: 'bind', Target: '/kaiden' }],
         }),
       }),
     );
@@ -793,22 +794,34 @@ describe('GatewayContainerManager', () => {
 
     expect(gatewayCreateCall.Cmd).toEqual(expect.arrayContaining(['--config', '/kaiden/gateway.toml']));
   });
-});
 
-describe('convertToWslPath', () => {
-  test('should convert Windows drive path to WSL mount path', () => {
-    expect(convertToWslPath('C:\\Users\\Jeff\\storage\\gateway')).toBe('/mnt/c/Users/Jeff/storage/gateway');
-  });
+  test('should pass Windows host path unconverted as /kaiden mount source for cert and gateway containers', async () => {
+    extensionContextMock.storagePath = 'C:\\Users\\test\\storage';
+    Object.defineProperty(env, 'isWindows', { value: true, configurable: true });
+    setupCliMock('/usr/bin/openshell');
+    setupFollowProgress();
+    vi.mocked(processApi.exec).mockResolvedValue({ stdout: '', stderr: '', command: '' });
 
-  test('should handle lowercase drive letter', () => {
-    expect(convertToWslPath('d:\\data\\files')).toBe('/mnt/d/data/files');
-  });
+    await gatewayContainerManager.init();
 
-  test('should handle forward slashes in Windows path', () => {
-    expect(convertToWslPath('C:/Users/Jeff/storage')).toBe('/mnt/c/Users/Jeff/storage');
-  });
-
-  test('should return non-Windows paths unchanged', () => {
-    expect(convertToWslPath('/usr/local/bin')).toBe('/usr/local/bin');
+    const gatewayDir = join('C:\\Users\\test\\storage', 'gateway');
+    const kaidenMount = { Source: gatewayDir, Type: 'bind', Target: '/kaiden' };
+    expect(Dockerode.prototype.createContainer).toHaveBeenCalledTimes(2);
+    expect(Dockerode.prototype.createContainer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        Cmd: expect.arrayContaining(['generate-certs']),
+        HostConfig: expect.objectContaining({
+          Mounts: expect.arrayContaining([kaidenMount]),
+        }),
+      }),
+    );
+    expect(Dockerode.prototype.createContainer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        Cmd: expect.arrayContaining(['--config', '/kaiden/gateway.toml']),
+        HostConfig: expect.objectContaining({
+          Mounts: expect.arrayContaining([kaidenMount]),
+        }),
+      }),
+    );
   });
 });
