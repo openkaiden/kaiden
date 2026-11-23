@@ -1,5 +1,5 @@
 agent: agents/webupd.md
-image: ghcr.io/openkaiden/kaiden-fullsend-image@sha256:752de42626946c37a453a0b0ddd2effd7a2a4cecda86595586097d14b1c21635
+image: ghcr.io/openkaiden/kaiden-fullsend-image@sha256:717b25f7b38fd39b8c654ff3080f18ded22e09ae82338f859c804da0407300a6
 policy: https://raw.githubusercontent.com/fullsend-ai/agents/ec2f8a5b4369b844323ee1ee87c1d4a599a42817/policies/base.yaml#sha256=3ed634401d87a1327fffe5e266272d930321484ce8a91dfa5fe447d4f2e00470
 openshell:
   profiles:
