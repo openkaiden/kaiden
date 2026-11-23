@@ -38,7 +38,7 @@ vi.mock(import('/@/helper/ai-lab-port-resolver'));
 vi.mock(import('/@/helper/container-host-resolver'));
 
 describe('InferenceModelManager', () => {
-  let aiLabProvider: Provider;
+  let aiLabProvider: Pick<Provider, 'updateStatus' | 'registerInferenceProviderConnection'>;
   let manager: InferenceModelManager;
   let consoleDebugSpy: ReturnType<typeof vi.spyOn>;
 
@@ -49,7 +49,7 @@ describe('InferenceModelManager', () => {
     aiLabProvider = {
       updateStatus: vi.fn(),
       registerInferenceProviderConnection: vi.fn(),
-    } as unknown as Provider;
+    };
     vi.mocked(randomUUID).mockReturnValue('00000000-0000-0000-0000-000000000000');
     vi.mocked(ContainerHostResolver.prototype.getReachableHost).mockReturnValue('localhost');
     vi.mocked(AiLabPortResolver.prototype.getPort).mockResolvedValue(10434);
@@ -283,6 +283,42 @@ describe('InferenceModelManager', () => {
 
     expect(aiLabProvider.updateStatus).not.toHaveBeenCalled();
     expect(aiLabProvider.registerInferenceProviderConnection).not.toHaveBeenCalled();
+  });
+
+  test('should not start polling when disposed during the first refresh', async () => {
+    const { promise, resolve } = Promise.withResolvers<string[]>();
+    vi.mocked(AiLabDaemonClient.prototype.listRunningModels).mockReturnValue(promise);
+
+    const init = manager.init();
+    // let the port be read so that the request is pending
+    await vi.advanceTimersByTimeAsync(0);
+    manager.dispose();
+    resolve(['m1']);
+    await init;
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(AiLabDaemonClient.prototype.listRunningModels).toHaveBeenCalledTimes(1);
+    expect(aiLabProvider.registerInferenceProviderConnection).not.toHaveBeenCalled();
+  });
+
+  test('should keep the same connection id when the connection is replaced', async () => {
+    vi.mocked(AiLabDaemonClient.prototype.listRunningModels)
+      .mockResolvedValueOnce(['m1'])
+      .mockResolvedValueOnce(['m1', 'm2']);
+
+    await manager.init();
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(randomUUID).toHaveBeenCalledTimes(1);
+    expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledTimes(2);
+    expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: '00000000-0000-0000-0000-000000000000' }),
+    );
+    expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ id: '00000000-0000-0000-0000-000000000000' }),
+    );
   });
 
   test('should not report stopped when the request is aborted by dispose', async () => {

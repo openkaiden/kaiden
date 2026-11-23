@@ -47,6 +47,9 @@ export class InferenceModelManager implements Disposable {
   @inject(ContainerHostResolver)
   private containerHostResolver: ContainerHostResolver;
 
+  // one id for the lifetime of the manager: replacing the connection when the models change keeps it
+  readonly #connectionId = randomUUID();
+
   #currentModels: string[] = [];
   #currentPort: number | undefined;
   #daemonReachable: boolean | undefined;
@@ -55,8 +58,11 @@ export class InferenceModelManager implements Disposable {
   #abortController: AbortController | undefined;
 
   async init(): Promise<void> {
-    this.#abortController = new AbortController();
+    const abortController = new AbortController();
+    this.#abortController = abortController;
     await this.#refresh();
+    // disposed during the first refresh: do not start polling
+    if (abortController.signal.aborted) return;
     this.#interval = setInterval(() => {
       this.#refresh().catch((error: unknown) => {
         console.error('Error updating Podman AI Lab models and status:', error);
@@ -110,7 +116,7 @@ export class InferenceModelManager implements Disposable {
 
     const host = this.containerHostResolver.getReachableHost();
     this.#connectionDisposable = this.aiLabProvider.registerInferenceProviderConnection({
-      id: randomUUID(),
+      id: this.#connectionId,
       name: 'podman-ai-lab',
       type: 'local',
       llmMetadata: { name: 'ollama' },

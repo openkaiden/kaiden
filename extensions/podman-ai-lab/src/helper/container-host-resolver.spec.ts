@@ -28,6 +28,32 @@ vi.mock(import('node:os'));
 vi.mock(import('@openkaiden/api'));
 
 describe('ContainerHostResolver', () => {
+  const loopback: NetworkInterfaceInfo = {
+    address: '127.0.0.1',
+    netmask: '255.0.0.0',
+    family: 'IPv4',
+    mac: '00:00:00:00:00:00',
+    internal: true,
+    cidr: '127.0.0.1/8',
+  };
+  const ethernetIPv4: NetworkInterfaceInfo = {
+    address: '192.168.1.100',
+    netmask: '255.255.255.0',
+    family: 'IPv4',
+    mac: '00:11:22:33:44:55',
+    internal: false,
+    cidr: '192.168.1.100/24',
+  };
+  const ethernetIPv6: NetworkInterfaceInfo = {
+    address: 'fe80::1',
+    netmask: 'ffff:ffff:ffff:ffff::',
+    family: 'IPv6',
+    mac: '00:11:22:33:44:55',
+    internal: false,
+    cidr: 'fe80::1/64',
+    scopeid: 0,
+  };
+
   let resolver: ContainerHostResolver;
 
   beforeEach(() => {
@@ -44,8 +70,8 @@ describe('ContainerHostResolver', () => {
   test('should return the first non-internal IPv4 address on Windows', () => {
     vi.mocked(env).isWindows = true;
     vi.mocked(networkInterfaces).mockReturnValue({
-      lo: [{ address: '127.0.0.1', family: 'IPv4', internal: true } as NetworkInterfaceInfo],
-      eth0: [{ address: '192.168.1.100', family: 'IPv4', internal: false } as NetworkInterfaceInfo],
+      lo: [loopback],
+      eth0: [ethernetIPv4],
     });
 
     expect(resolver.getReachableHost()).toBe('192.168.1.100');
@@ -54,7 +80,7 @@ describe('ContainerHostResolver', () => {
   test('should wrap an IPv6 address in brackets on Windows', () => {
     vi.mocked(env).isWindows = true;
     vi.mocked(networkInterfaces).mockReturnValue({
-      eth0: [{ address: 'fe80::1', family: 'IPv6', internal: false } as NetworkInterfaceInfo],
+      eth0: [ethernetIPv6],
     });
 
     expect(resolver.getReachableHost()).toBe('[fe80::1]');
@@ -63,7 +89,7 @@ describe('ContainerHostResolver', () => {
   test('should fall back to localhost on Windows when only internal interfaces exist', () => {
     vi.mocked(env).isWindows = true;
     vi.mocked(networkInterfaces).mockReturnValue({
-      lo: [{ address: '127.0.0.1', family: 'IPv4', internal: true } as NetworkInterfaceInfo],
+      lo: [loopback],
     });
 
     expect(resolver.getReachableHost()).toBe('localhost');

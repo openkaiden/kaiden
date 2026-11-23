@@ -25,8 +25,7 @@ import { z } from 'zod';
 @injectable()
 export class AiLabDaemonClient {
   protected static readonly RunningModelSchema = z.object({ name: z.string() });
-  // a payload without a `models` array is treated as "no running model"
-  protected static readonly ProcessListSchema = z.object({ models: z.array(z.unknown()) }).catch({ models: [] });
+  protected static readonly ProcessListSchema = z.object({ models: z.array(z.unknown()) });
 
   /**
    * Base URL of the daemon listening on the given port, as reachable from Kaiden itself.
@@ -40,12 +39,18 @@ export class AiLabDaemonClient {
    * Rejects when the daemon is unreachable or answers with an error status.
    */
   async listRunningModels(port: number, signal?: AbortSignal): Promise<string[]> {
-    const res = await fetch(`${this.getBaseURL(port)}/api/ps`, { signal });
+    const url = `${this.getBaseURL(port)}/api/ps`;
+    const res = await fetch(url, { signal });
     if (!res.ok) {
       throw new Error(`HTTP error, status: ${res.status}`);
     }
-    const { models } = AiLabDaemonClient.ProcessListSchema.parse(await res.json());
-    return models.flatMap(entry => {
+    const processList = AiLabDaemonClient.ProcessListSchema.safeParse(await res.json());
+    if (!processList.success) {
+      // another service may answer on this port, or the AI Lab payload changed: say why no model is listed
+      console.debug(`Unexpected response from ${url}, no running model listed:`, processList.error);
+      return [];
+    }
+    return processList.data.models.flatMap(entry => {
       const parsed = AiLabDaemonClient.RunningModelSchema.safeParse(entry);
       return parsed.success ? [parsed.data.name] : [];
     });
