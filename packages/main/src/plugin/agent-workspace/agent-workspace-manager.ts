@@ -240,9 +240,18 @@ export class AgentWorkspaceManager implements Disposable {
         throw new Error(`Unable to create workspace: agent ${options.agent} not registered`);
       }
 
+      const agentInfo = await this.agentRegistry.getAgent(options.agent);
+      const addonImages = [...new Set([...(agentInfo?.addonImages ?? []), ...(options.addonImages ?? [])])];
+
       const secretResult = await this.ensureModelSecret(options, sandboxName, agent.command);
       try {
-        const workspaceId = await this.createOpenshell(options, gateway, sandboxName, agent, secretResult);
+        const workspaceId = await this.createOpenshell(
+          { ...options, addonImages },
+          gateway,
+          sandboxName,
+          agent,
+          secretResult,
+        );
         task.status = 'success';
         return workspaceId;
       } catch (err: unknown) {
