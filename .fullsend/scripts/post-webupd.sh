@@ -112,8 +112,8 @@ fi
 echo "Changes to commit:"
 git --no-pager diff --cached --stat
 
-git config --local user.name "openkaiden-bot"
-git config --local user.email "233296430+openkaiden-bot@users.noreply.github.com"
+git config --local user.name "openkaiden-ai"
+git config --local user.email "345905886+openkaiden-ai@users.noreply.github.com"
 
 
 git commit -m "${PR_TITLE}"
