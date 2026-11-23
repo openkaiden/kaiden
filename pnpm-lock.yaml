@@ -814,9 +814,6 @@ importers:
       inversify:
         specifier: ^7.10.4
         version: 7.11.0(reflect-metadata@0.2.2)
-      tar:
-        specifier: ^7.5.3
-        version: 7.5.16
     devDependencies:
       '@openkaiden/api':
         specifier: workspace:*
