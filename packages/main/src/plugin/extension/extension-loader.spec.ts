@@ -241,7 +241,7 @@ vi.mock(import('../agent-workspace/host-preset-registry.js'));
 const hostPresetRegistry = new HostPresetRegistry(apiSender);
 
 vi.mock(import('/@/plugin/addon-registry.js'));
-const addonRegistry = new AddonRegistry();
+const addonRegistry = new AddonRegistry(apiSender, vi.fn());
 
 const openShellRegistry: OpenShellRegistry = {
   registerGateway: vi.fn(),

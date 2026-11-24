@@ -17,7 +17,11 @@
  ***********************************************************************/
 
 import type { Addon } from '@openkaiden/api';
-import { beforeEach, expect, test } from 'vitest';
+import type { IpcMainInvokeEvent } from 'electron';
+import { assert, beforeEach, expect, test, vi } from 'vitest';
+
+import type { IPCHandle } from '/@/plugin/api.js';
+import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 
 import { AddonRegistry } from './addon-registry.js';
 
@@ -28,10 +32,14 @@ const addon: Addon = {
   ociImage: 'ghcr.io/test/addon:latest',
 };
 
+const apiSender: ApiSenderType = { send: vi.fn(), receive: vi.fn() };
+const ipcHandle: IPCHandle = vi.fn();
+
 let registry: AddonRegistry;
 
 beforeEach(() => {
-  registry = new AddonRegistry();
+  vi.resetAllMocks();
+  registry = new AddonRegistry(apiSender, ipcHandle);
 });
 
 test('registers and returns addons', () => {
@@ -66,4 +74,22 @@ test('allows registering the same id again after disposal', () => {
   registry.registerAddon(addon).dispose();
   registry.registerAddon(addon);
   expect(registry.getAddons()).toStrictEqual([addon]);
+});
+
+test('notifies the renderer on register and dispose', () => {
+  const registration = registry.registerAddon(addon);
+  expect(apiSender.send).toHaveBeenCalledWith('addon-registry:updated');
+  vi.mocked(apiSender.send).mockClear();
+  registration.dispose();
+  expect(apiSender.send).toHaveBeenCalledWith('addon-registry:updated');
+});
+
+test('init exposes addons over IPC', async () => {
+  registry.init();
+  registry.registerAddon(addon);
+  expect(ipcHandle).toHaveBeenCalledWith('addon-registry:getAddons', expect.any(Function));
+  const handler = vi.mocked(ipcHandle).mock.calls[0]?.[1];
+  assert(handler);
+  const result = await handler({} as unknown as IpcMainInvokeEvent);
+  expect(result).toStrictEqual([addon]);
 });
