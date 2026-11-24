@@ -17,13 +17,27 @@
  ***********************************************************************/
 
 import type { Addon } from '@openkaiden/api';
-import { injectable } from 'inversify';
+import { inject, injectable } from 'inversify';
+
+import { IPCHandle } from '/@/plugin/api.js';
+import { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 
 import { Disposable } from './types/disposable.js';
 
 @injectable()
 export class AddonRegistry {
   private readonly addons = new Map<string, Addon>();
+
+  constructor(
+    @inject(ApiSenderType) private readonly apiSender: ApiSenderType,
+    @inject(IPCHandle) private readonly ipcHandle: IPCHandle,
+  ) {}
+
+  init(): void {
+    this.ipcHandle('addon-registry:getAddons', async (): Promise<ReadonlyArray<Addon>> => {
+      return this.getAddons();
+    });
+  }
 
   registerAddon(addon: Addon): Disposable {
     const id = addon.id;
@@ -32,8 +46,10 @@ export class AddonRegistry {
     }
 
     this.addons.set(id, addon);
+    this.apiSender.send('addon-registry:updated');
     return Disposable.create(() => {
       this.addons.delete(id);
+      this.apiSender.send('addon-registry:updated');
     });
   }
 

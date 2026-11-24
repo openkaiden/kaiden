@@ -754,6 +754,8 @@ export class PluginSystem {
     const skillManager = container.get<SkillManager>(SkillManager);
     await skillManager.init();
 
+    container.get<AddonRegistry>(AddonRegistry).init();
+
     const inferenceManager = container.get<InferenceManager>(InferenceManager);
     inferenceManager.init();
 

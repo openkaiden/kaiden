@@ -1898,6 +1898,10 @@ export function initExposure(): void {
     return ipcInvoke('agent-registry:getAgentInfos');
   });
 
+  contextBridge.exposeInMainWorld('getAddons', async (): Promise<containerDesktopAPI.Addon[]> => {
+    return ipcInvoke('addon-registry:getAddons');
+  });
+
   contextBridge.exposeInMainWorld('selectCliToolVersionToUpdate', async (id: string): Promise<string> => {
     return ipcInvoke('cli-tool-registry:selectCliToolVersionToUpdate', id);
   });
