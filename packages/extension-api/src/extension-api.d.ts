@@ -5568,6 +5568,19 @@ declare module '@openkaiden/api' {
      * Reference of the OCI image providing the addon files (e.g. `ghcr.io/org/addon:1.0`).
      */
     readonly ociImage: string;
+    /**
+     * Optional category used to group addons (e.g. `agents`, `devtools`, `runtimes`). Defaults to `undefined`.
+     */
+    readonly category?: string;
+    /**
+     * Optional version of the tool provided by this addon (e.g. `2.56.1`). Defaults to `undefined`.
+     */
+    readonly version?: string;
+    /**
+     * Optional icon shown in the addons catalog: a single image (URL or `data:` URI) or one per theme.
+     * Defaults to `undefined`.
+     */
+    readonly icon?: string | { light: string; dark: string };
   }
 
   export namespace addons {
