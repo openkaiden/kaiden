@@ -46,6 +46,17 @@ test('registers an addon without a description', () => {
   expect(registry.getAddons()).toStrictEqual([addon, addonWithoutDescription]);
 });
 
+test('propagates optional category, version and icon', () => {
+  const fullAddon: Addon = {
+    ...addon,
+    category: 'agents',
+    version: '2.56.1',
+    icon: { light: 'data:image/png;base64,AAAA', dark: 'data:image/png;base64,BBBB' },
+  };
+  registry.registerAddon(fullAddon);
+  expect(registry.getAddons()).toStrictEqual([fullAddon]);
+});
+
 test('rejects a duplicate addon id', () => {
   registry.registerAddon(addon);
   expect(() => registry.registerAddon(addon)).toThrow(`Addon with id 'test-addon' is already registered`);
