@@ -79,9 +79,8 @@ test('allows registering the same id again after disposal', () => {
 test('notifies the renderer on register and dispose', () => {
   const registration = registry.registerAddon(addon);
   expect(apiSender.send).toHaveBeenCalledWith('addon-registry:updated');
-  vi.mocked(apiSender.send).mockClear();
   registration.dispose();
-  expect(apiSender.send).toHaveBeenCalledWith('addon-registry:updated');
+  expect(apiSender.send).toHaveBeenNthCalledWith(2, 'addon-registry:updated');
 });
 
 test('init exposes addons over IPC', async () => {
@@ -90,6 +89,6 @@ test('init exposes addons over IPC', async () => {
   expect(ipcHandle).toHaveBeenCalledWith('addon-registry:getAddons', expect.any(Function));
   const handler = vi.mocked(ipcHandle).mock.calls[0]?.[1];
   assert(handler);
-  const result = await handler({} as unknown as IpcMainInvokeEvent);
+  const result = await handler({} as IpcMainInvokeEvent);
   expect(result).toStrictEqual([addon]);
 });
