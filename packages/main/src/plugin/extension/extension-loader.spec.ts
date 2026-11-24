@@ -238,7 +238,7 @@ const agentRegistry: AgentRegistry = {
 } as unknown as AgentRegistry;
 
 vi.mock(import('../agent-workspace/host-preset-registry.js'));
-const hostPresetRegistry = new HostPresetRegistry(apiSender);
+const hostPresetRegistry = new HostPresetRegistry(apiSender, vi.fn());
 
 vi.mock(import('/@/plugin/addon-registry.js'));
 const addonRegistry = new AddonRegistry();
