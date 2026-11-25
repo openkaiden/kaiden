@@ -32,6 +32,7 @@ export interface AgentInfo {
   command: string;
   acp?: AcpConfigurationInfo;
   baseImage?: string;
+  addonImages?: string[];
   destinationSkillsFolder: string;
   supportedModelTypes?: ReadonlyArray<ModelType>;
 }
