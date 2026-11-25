@@ -19,6 +19,7 @@
 import type { Agent, AgentRegisteredEvent, AgentUnregisteredEvent, ModelType } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
 
+import { AddonRegistry } from '/@/plugin/addon-registry.js';
 import { ModelRegistry } from '/@/plugin/model-registry.js';
 import { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { AgentInfo } from '/@api/agent-info.js';
@@ -39,8 +40,10 @@ export class AgentRegistry {
     @inject(ApiSenderType) private apiSender: ApiSenderType,
     @inject(ModelRegistry) private modelRegistry: ModelRegistry,
     @inject(ProviderRegistry) private providerRegistry: ProviderRegistry,
+    @inject(AddonRegistry) private addonRegistry: AddonRegistry,
   ) {
     modelRegistry.onChange(() => this.invalidate());
+    addonRegistry.onDidChange(() => this.invalidate());
     providerRegistry.onDidSetConnectionFactory(e => {
       if (e.type === 'inference') {
         this.invalidate();
@@ -103,6 +106,7 @@ export class AgentRegistry {
       command: agent.command,
       acp: agent.acp,
       baseImage: agent.baseImage,
+      addonImages: this.getAddonImages(agent),
       destinationSkillsFolder: agent.destinationSkillsFolder,
       supportedModelTypes,
     };
@@ -139,6 +143,15 @@ export class AgentRegistry {
     }
     agentRegistration.agentInfo ??= await this.toAgentInfo(agentRegistration.agent);
     return agentRegistration.agentInfo;
+  }
+
+  /** Images of the registered addons providing the agent, in the order of its addon ids. */
+  private getAddonImages(agent: Agent): string[] | undefined {
+    if (agent.addonIds === undefined) {
+      return undefined;
+    }
+    const addonIds = typeof agent.addonIds === 'string' ? [agent.addonIds] : agent.addonIds;
+    return addonIds.flatMap(id => this.addonRegistry.getAddon(id)?.ociImage ?? []);
   }
 
   getAgentRegistration(id: string): Agent | undefined {

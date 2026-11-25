@@ -5530,6 +5530,13 @@ declare module '@openkaiden/api' {
     readonly configurationFiles: ReadonlyArray<AgentConfigurationBase>;
     readonly baseImage?: string;
     /**
+     * Optional id, or list of ids, of the registered addons providing the agent (e.g. `claude`).
+     * The OCI image of each registered addon with one of these ids is exposed in the agent's addon images.
+     * A single string is the same as a one-element list.
+     * Defaults to `undefined`.
+     */
+    readonly addonIds?: string | ReadonlyArray<string>;
+    /**
      * If relative path taken as relative to home folder of the sandbox user or
      * ${HOME}/path1/path2
      */

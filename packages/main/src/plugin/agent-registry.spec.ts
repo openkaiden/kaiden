@@ -16,13 +16,16 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { Agent } from '@openkaiden/api';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import type { Addon, Agent } from '@openkaiden/api';
+import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import type { IPCHandle } from '/@/plugin/api.js';
+import { Emitter } from '/@/plugin/events/emitter.js';
 import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 import type { CatalogModelInfo } from '/@api/model-registry-info.js';
 import type { ProviderInfo } from '/@api/provider-info.js';
 
+import { AddonRegistry } from './addon-registry.js';
 import { AgentRegistry } from './agent-registry.js';
 import type { ModelRegistry } from './model-registry.js';
 import type { ProviderRegistry } from './provider-registry.js';
@@ -43,7 +46,17 @@ const providerRegistry: ProviderRegistry = {
   onDidUnsetConnectionFactory: vi.fn(),
 } as unknown as ProviderRegistry;
 
+vi.mock(import('./addon-registry.js'));
+
+const ipcHandle: IPCHandle = vi.fn();
+const addonRegistry = new AddonRegistry(apiSender, ipcHandle);
+
+let addonsChanged: Emitter<void>;
 let agentRegistry: AgentRegistry;
+
+function mockRegisteredAddons(addons: Addon[]): void {
+  vi.mocked(AddonRegistry.prototype.getAddon).mockImplementation(id => addons.find(addon => addon.id === id));
+}
 
 function createAgent(overrides?: Partial<Agent>): Agent {
   return {
@@ -85,7 +98,10 @@ function createProviderInfo(llmMetadataName?: string): ProviderInfo {
 
 describe('AgentRegistry', () => {
   beforeEach(() => {
-    agentRegistry = new AgentRegistry(apiSender, modelRegistry, providerRegistry);
+    // Automocked classes do not get instance fields, so expose the event the agent registry subscribes to.
+    addonsChanged = new Emitter<void>();
+    Object.defineProperty(addonRegistry, 'onDidChange', { value: addonsChanged.event, configurable: true });
+    agentRegistry = new AgentRegistry(apiSender, modelRegistry, providerRegistry, addonRegistry);
     vi.mocked(modelRegistry.getCatalogModels).mockReturnValue([]);
     vi.mocked(providerRegistry.getProviderInfos).mockReturnValue([]);
   });
@@ -204,6 +220,59 @@ describe('AgentRegistry', () => {
       const result = await agentRegistry.getAgent('test-agent');
       expect(result).toBeDefined();
       expect(result!.name).toBe('Test Agent');
+    });
+  });
+
+  describe('addonImages', () => {
+    const first: Addon = { id: 'first', name: 'First', ociImage: 'ghcr.io/my-org/first@sha256:1111' };
+    const second: Addon = { id: 'second', name: 'Second', ociImage: 'ghcr.io/my-org/second@sha256:2222' };
+
+    test('resolves the image of a single addon id', async () => {
+      mockRegisteredAddons([first, second]);
+      agentRegistry.registerAgent(createAgent({ addonIds: 'second' }));
+      const info = await agentRegistry.getAgent('test-agent');
+      assert(info);
+      expect(info.addonImages).toStrictEqual([second.ociImage]);
+    });
+
+    test('resolves the images of a list of addon ids in order, skipping unregistered ones', async () => {
+      mockRegisteredAddons([first, second]);
+      agentRegistry.registerAgent(createAgent({ addonIds: ['second', 'missing', 'first'] }));
+      const [info] = await agentRegistry.getAgentInfos();
+      assert(info);
+      expect(info.addonImages).toStrictEqual([second.ociImage, first.ociImage]);
+    });
+
+    test('is empty when no addon with the id is registered', async () => {
+      mockRegisteredAddons([]);
+      agentRegistry.registerAgent(createAgent({ addonIds: 'missing' }));
+      const info = await agentRegistry.getAgent('test-agent');
+      assert(info);
+      expect(info.addonImages).toStrictEqual([]);
+    });
+
+    test('is undefined when the agent has no addonIds', async () => {
+      mockRegisteredAddons([first]);
+      agentRegistry.registerAgent(createAgent());
+      const info = await agentRegistry.getAgent('test-agent');
+      assert(info);
+      expect(info.addonImages).toBeUndefined();
+    });
+
+    test('invalidates cached agent infos and notifies the renderer when addons change', async () => {
+      mockRegisteredAddons([]);
+      agentRegistry.registerAgent(createAgent({ addonIds: 'first' }));
+      const before = await agentRegistry.getAgent('test-agent');
+      assert(before);
+      expect(before.addonImages).toStrictEqual([]);
+
+      mockRegisteredAddons([first]);
+      addonsChanged.fire();
+
+      expect(apiSender.send).toHaveBeenCalledWith('agent-registry:updated');
+      const after = await agentRegistry.getAgent('test-agent');
+      assert(after);
+      expect(after.addonImages).toStrictEqual([first.ociImage]);
     });
   });
 

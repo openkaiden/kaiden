@@ -103,3 +103,16 @@ test('init exposes addons over IPC', async () => {
   const result = await handler({} as IpcMainInvokeEvent);
   expect(result).toStrictEqual([addon]);
 });
+
+test('getAddon returns the addon with the given id', () => {
+  registry.registerAddon(addon);
+  expect(registry.getAddon('test-addon')).toStrictEqual(addon);
+  expect(registry.getAddon('missing')).toBeUndefined();
+});
+
+test('fires onDidChange on register and dispose', () => {
+  const listener = vi.fn();
+  registry.onDidChange(listener);
+  registry.registerAddon(addon).dispose();
+  expect(listener).toHaveBeenCalledTimes(2);
+});
