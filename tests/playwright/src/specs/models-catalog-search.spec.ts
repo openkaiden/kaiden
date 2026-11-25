@@ -34,6 +34,7 @@ function canBeToldApart(target: string, other: string): boolean {
 }
 
 test.describe('Models catalog search', { tag: '@smoke' }, () => {
+  test.skip(!process.env.OLLAMA_ENABLED, 'Requires Ollama (OLLAMA_ENABLED)');
   test.skip(INFERENCE_MODELS.length < 2, 'Requires two distinct models in INFERENCE_MODEL and INFERENCE_SECOND_MODEL');
 
   test.beforeEach(async ({ page, navigationBar }) => {
