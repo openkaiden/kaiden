@@ -35,6 +35,8 @@ describe('AiLabDaemonClient', () => {
     server = setupServer();
     server.listen({ onUnhandledRequest: 'error' });
 
+    console.debug = vi.fn();
+
     client = new AiLabDaemonClient();
   });
 
@@ -67,11 +69,10 @@ describe('AiLabDaemonClient', () => {
     });
 
     test('should return no model and log why when the payload has no models array', async () => {
-      const consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
       server?.use(http.get(PS_URL, () => HttpResponse.json({ unexpected: 'data' })));
 
       await expect(client.listRunningModels(10434)).resolves.toEqual([]);
-      expect(consoleDebugSpy).toHaveBeenCalledWith(expect.stringContaining(PS_URL), expect.anything());
+      expect(console.debug).toHaveBeenCalledWith(expect.stringContaining(PS_URL), expect.anything());
     });
 
     test('should reject on an error status', async () => {

@@ -16,8 +16,6 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { randomUUID } from 'node:crypto';
-
 import type { Provider } from '@openkaiden/api';
 import { Container } from 'inversify';
 import type { OllamaProvider } from 'ollama-ai-provider-v2';
@@ -31,7 +29,6 @@ import { PodmanAiLabProvider } from '/@/inject/symbol';
 
 import { InferenceModelManager } from './inference-model-manager';
 
-vi.mock(import('node:crypto'));
 vi.mock(import('ollama-ai-provider-v2'));
 vi.mock(import('/@/helper/ai-lab-daemon-client'));
 vi.mock(import('/@/helper/ai-lab-port-resolver'));
@@ -40,7 +37,6 @@ vi.mock(import('/@/helper/container-host-resolver'));
 describe('InferenceModelManager', () => {
   let aiLabProvider: Pick<Provider, 'updateStatus' | 'registerInferenceProviderConnection'>;
   let manager: InferenceModelManager;
-  let consoleDebugSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
     vi.resetAllMocks();
@@ -50,11 +46,10 @@ describe('InferenceModelManager', () => {
       updateStatus: vi.fn(),
       registerInferenceProviderConnection: vi.fn(),
     };
-    vi.mocked(randomUUID).mockReturnValue('00000000-0000-0000-0000-000000000000');
     vi.mocked(ContainerHostResolver.prototype.getReachableHost).mockReturnValue('localhost');
     vi.mocked(AiLabPortResolver.prototype.getPort).mockResolvedValue(10434);
     vi.mocked(AiLabDaemonClient.prototype.getBaseURL).mockImplementation(port => `http://localhost:${port}`);
-    consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    console.debug = vi.fn();
 
     const container = new Container();
     container.bind(InferenceModelManager).toSelf();
@@ -77,7 +72,7 @@ describe('InferenceModelManager', () => {
     expect(createOllama).toHaveBeenCalledWith({ baseURL: 'http://localhost:10434/api' });
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: '00000000-0000-0000-0000-000000000000',
+        id: '60697e2f-4109-47bc-832b-c1b4099b8687',
         name: 'podman-ai-lab',
         type: 'local',
         llmMetadata: { name: 'ollama' },
@@ -190,16 +185,16 @@ describe('InferenceModelManager', () => {
 
     await manager.init();
     await vi.advanceTimersByTimeAsync(30_000);
-    expect(consoleDebugSpy).toHaveBeenCalledTimes(1);
-    expect(consoleDebugSpy).toHaveBeenCalledWith(
+    expect(console.debug).toHaveBeenCalledTimes(1);
+    expect(console.debug).toHaveBeenCalledWith(
       'Podman AI Lab daemon at http://localhost:10434 is unreachable:',
       expect.objectContaining({ message: 'down' }),
     );
 
     await vi.advanceTimersByTimeAsync(30_000);
     await vi.advanceTimersByTimeAsync(30_000);
-    expect(consoleDebugSpy).toHaveBeenCalledTimes(2);
-    expect(consoleDebugSpy).toHaveBeenLastCalledWith(
+    expect(console.debug).toHaveBeenCalledTimes(2);
+    expect(console.debug).toHaveBeenLastCalledWith(
       'Podman AI Lab daemon at http://localhost:10434 is unreachable:',
       expect.objectContaining({ message: 'down again' }),
     );
@@ -301,7 +296,7 @@ describe('InferenceModelManager', () => {
     expect(aiLabProvider.registerInferenceProviderConnection).not.toHaveBeenCalled();
   });
 
-  test('should keep the same connection id when the connection is replaced', async () => {
+  test('should use the same constant connection id when the connection is replaced', async () => {
     vi.mocked(AiLabDaemonClient.prototype.listRunningModels)
       .mockResolvedValueOnce(['m1'])
       .mockResolvedValueOnce(['m1', 'm2']);
@@ -309,15 +304,14 @@ describe('InferenceModelManager', () => {
     await manager.init();
     await vi.advanceTimersByTimeAsync(30_000);
 
-    expect(randomUUID).toHaveBeenCalledTimes(1);
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenCalledTimes(2);
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ id: '00000000-0000-0000-0000-000000000000' }),
+      expect.objectContaining({ id: '60697e2f-4109-47bc-832b-c1b4099b8687' }),
     );
     expect(aiLabProvider.registerInferenceProviderConnection).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ id: '00000000-0000-0000-0000-000000000000' }),
+      expect.objectContaining({ id: '60697e2f-4109-47bc-832b-c1b4099b8687' }),
     );
   });
 

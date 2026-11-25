@@ -21,7 +21,6 @@ function fileNotFound(): Error {
 
 describe('AiLabPortResolver', () => {
   let resolver: AiLabPortResolver;
-  let consoleWarnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -29,7 +28,7 @@ describe('AiLabPortResolver', () => {
     vi.stubEnv('XDG_CONFIG_HOME', undefined);
     vi.mocked(env).isLinux = false;
     vi.mocked(homedir).mockReturnValue(HOME);
-    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    console.warn = vi.fn();
 
     resolver = new AiLabPortResolver();
   });
@@ -45,14 +44,14 @@ describe('AiLabPortResolver', () => {
     vi.mocked(readFile).mockResolvedValue(JSON.stringify({ 'other.setting': true }));
 
     await expect(resolver.getPort()).resolves.toBe(10434);
-    expect(consoleWarnSpy).not.toHaveBeenCalled();
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   test('should default to 10434 without warning when there is no settings file', async () => {
     vi.mocked(readFile).mockRejectedValue(fileNotFound());
 
     await expect(resolver.getPort()).resolves.toBe(10434);
-    expect(consoleWarnSpy).not.toHaveBeenCalled();
+    expect(console.warn).not.toHaveBeenCalled();
   });
 
   test('should read the settings of the PODMAN_DESKTOP_HOME_DIR override only', async () => {
@@ -117,14 +116,14 @@ describe('AiLabPortResolver', () => {
       vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('denied'), { code: 'EACCES' }));
 
       await expect(resolver.getPort()).resolves.toBe(10434);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(LEGACY_SETTINGS));
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(LEGACY_SETTINGS));
     });
 
     test('should default to 10434 and warn when the settings file is not valid JSON', async () => {
       vi.mocked(readFile).mockResolvedValue('{ not json');
 
       await expect(resolver.getPort()).resolves.toBe(10434);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Unable to parse'));
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('Unable to parse'));
     });
 
     test.each([
@@ -135,7 +134,7 @@ describe('AiLabPortResolver', () => {
       vi.mocked(readFile).mockResolvedValue(content);
 
       await expect(resolver.getPort()).resolves.toBe(10434);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Unexpected content'));
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('Unexpected content'));
     });
 
     test.each([
@@ -148,14 +147,14 @@ describe('AiLabPortResolver', () => {
       vi.mocked(readFile).mockResolvedValue(JSON.stringify({ 'ai-lab.apiPort': value }));
 
       await expect(resolver.getPort()).resolves.toBe(10434);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('ai-lab.apiPort'));
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('ai-lab.apiPort'));
     });
 
     test('should default to 10434 and warn when AI Lab uses a random port', async () => {
       vi.mocked(readFile).mockResolvedValue(JSON.stringify({ 'ai-lab.apiPort': 0 }));
 
       await expect(resolver.getPort()).resolves.toBe(10434);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('random API port'));
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('random API port'));
     });
 
     test('should warn once while the problem stays the same, and again when it comes back', async () => {
@@ -167,11 +166,11 @@ describe('AiLabPortResolver', () => {
 
       await resolver.getPort();
       await resolver.getPort();
-      expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
+      expect(console.warn).toHaveBeenCalledTimes(1);
 
       await expect(resolver.getPort()).resolves.toBe(12345);
       await resolver.getPort();
-      expect(consoleWarnSpy).toHaveBeenCalledTimes(2);
+      expect(console.warn).toHaveBeenCalledTimes(2);
     });
   });
 });

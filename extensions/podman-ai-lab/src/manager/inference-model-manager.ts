@@ -16,8 +16,6 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import { randomUUID } from 'node:crypto';
-
 import type { Disposable, Provider } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
 import { createOllama } from 'ollama-ai-provider-v2';
@@ -34,6 +32,8 @@ import { PodmanAiLabProvider } from '/@/inject/symbol';
 @injectable()
 export class InferenceModelManager implements Disposable {
   private static readonly POLL_INTERVAL_MS = 30_000;
+  // generated once and kept constant: unique, and model references stay valid when Kaiden or the extension restarts
+  private static readonly CONNECTION_ID = '60697e2f-4109-47bc-832b-c1b4099b8687';
 
   @inject(PodmanAiLabProvider)
   private aiLabProvider: Provider;
@@ -46,9 +46,6 @@ export class InferenceModelManager implements Disposable {
 
   @inject(ContainerHostResolver)
   private containerHostResolver: ContainerHostResolver;
-
-  // one id for the lifetime of the manager: replacing the connection when the models change keeps it
-  readonly #connectionId = randomUUID();
 
   #currentModels: string[] = [];
   #currentPort: number | undefined;
@@ -116,7 +113,7 @@ export class InferenceModelManager implements Disposable {
 
     const host = this.containerHostResolver.getReachableHost();
     this.#connectionDisposable = this.aiLabProvider.registerInferenceProviderConnection({
-      id: this.#connectionId,
+      id: InferenceModelManager.CONNECTION_ID,
       name: 'podman-ai-lab',
       type: 'local',
       llmMetadata: { name: 'ollama' },
