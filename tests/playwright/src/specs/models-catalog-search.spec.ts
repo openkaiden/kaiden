@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import { expect, workerTest as test } from '/@/fixtures/electron-app';
-import { INFERENCE_MODELS, TIMEOUTS } from '/@/model/core/types';
+import { INFERENCE_MODELS, PROVIDERS, TIMEOUTS } from '/@/model/core/types';
 import { waitForNavigationReady } from '/@/utils/app-ready';
 
 // The catalog splits queries on whitespace, '-' and '_' (renderer search-util.ts); cover each separator.
@@ -34,7 +34,7 @@ function canBeToldApart(target: string, other: string): boolean {
 }
 
 test.describe('Models catalog search', { tag: '@smoke' }, () => {
-  test.skip(!process.env.OLLAMA_ENABLED, 'Requires Ollama (OLLAMA_ENABLED)');
+  test.skip(!process.env[PROVIDERS.ollama.envVarName], `Requires Ollama (${PROVIDERS.ollama.envVarName})`);
   test.skip(INFERENCE_MODELS.length < 2, 'Requires two distinct models in INFERENCE_MODEL and INFERENCE_SECOND_MODEL');
 
   test.beforeEach(async ({ page, navigationBar }) => {
