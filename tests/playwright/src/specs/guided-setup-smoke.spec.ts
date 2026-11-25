@@ -17,7 +17,7 @@
  ***********************************************************************/
 
 import { bindGuidedSetupSession, expect, test } from '/@/fixtures/guided-setup-fixture';
-import { CODING_AGENT, ENABLED_CODING_AGENTS, WIZARD_STEP } from '/@/model/core/types';
+import { CODING_AGENT, ENABLED_CODING_AGENTS, INFERENCE_MODELS, WIZARD_STEP } from '/@/model/core/types';
 import { NavigationBar } from '/@/model/navigation/navigation';
 import { resolveAgentModelConnectionFor } from '/@/model/pages/agent-model-setup';
 import { AgentWorkspacesPage } from '/@/model/pages/agent-workspaces-page';
@@ -27,10 +27,6 @@ import {
   describeAgentOnboarding,
   expectDefaultsInWorkspaceWizard,
 } from '/@/model/pages/guided-setup-workflow';
-
-const candidateModels = [process.env.INFERENCE_MODEL, process.env.INFERENCE_SECOND_MODEL].filter(
-  (model): model is string => Boolean(model),
-);
 
 test.describe('Guided setup smoke', { tag: '@smoke' }, () => {
   describeAgentOnboarding(CODING_AGENT.OPENCODE, 'OpenCode onboarding', () => {
@@ -117,7 +113,7 @@ test.describe('Guided setup smoke', { tag: '@smoke' }, () => {
     test.describe('Onboarding - guided setup persistence (OpenCode)', () => {
       test.describe.configure({ mode: 'serial' });
 
-      for (const modelLabel of candidateModels) {
+      for (const modelLabel of INFERENCE_MODELS) {
         test.describe(`model: ${modelLabel}`, () => {
           const session = bindGuidedSetupSession();
 
