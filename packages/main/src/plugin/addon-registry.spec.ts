@@ -84,26 +84,26 @@ test('rejects an addon with the same publisher and name', () => {
 });
 
 test.each([
-  { label: 'an empty publisher name', publisherName: '', name: 'test-addon', error: "Invalid addon publisher name ''" },
+  { label: 'an empty publisher name', publisherName: '', name: 'test-addon', error: `Invalid addon publisher name ''` },
   {
     label: 'a dot in the publisher name',
     publisherName: 'a.b',
     name: 'test-addon',
-    error: "Invalid addon publisher name 'a.b'",
+    error: `Invalid addon publisher name 'a.b'`,
   },
   {
     label: 'uppercase in the publisher name',
     publisherName: 'Kaiden',
     name: 'test-addon',
-    error: "Invalid addon publisher name 'Kaiden'",
+    error: `Invalid addon publisher name 'Kaiden'`,
   },
-  { label: 'an empty addon name', publisherName: 'kaiden', name: '', error: "Invalid addon name ''" },
-  { label: 'a dot in the addon name', publisherName: 'kaiden', name: 'b.c', error: "Invalid addon name 'b.c'" },
+  { label: 'an empty addon name', publisherName: 'kaiden', name: '', error: `Invalid addon name ''` },
+  { label: 'a dot in the addon name', publisherName: 'kaiden', name: 'b.c', error: `Invalid addon name 'b.c'` },
   {
     label: 'a space in the addon name',
     publisherName: 'kaiden',
     name: 'my addon',
-    error: "Invalid addon name 'my addon'",
+    error: `Invalid addon name 'my addon'`,
   },
 ])('rejects $label', ({ publisherName, name, error }) => {
   expect(() =>
