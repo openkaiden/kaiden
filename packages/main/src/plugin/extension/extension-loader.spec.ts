@@ -2178,19 +2178,21 @@ test('registerAgent', async () => {
 test('addons API registers and retrieves addons', () => {
   const disposables: IDisposable[] = [];
   const api = createApi(disposables);
-  const addon: containerDesktopAPI.Addon = {
-    id: 'test-addon',
-    name: 'Test Addon',
+  const addonRegistration: containerDesktopAPI.AddonRegistration = {
+    name: 'test-addon',
+    displayName: 'Test Addon',
+    publisher: { name: 'kaiden', displayName: 'Kaiden' },
     description: 'A test addon',
     ociImage: 'ghcr.io/test/addon:latest',
   };
+  const addon: containerDesktopAPI.Addon = { ...addonRegistration, id: 'kaiden.test-addon' };
   const registration = Disposable.create(() => {});
   vi.mocked(addonRegistry.registerAddon).mockReturnValue(registration);
   vi.mocked(addonRegistry.getAddons).mockReturnValue([addon]);
 
-  expect(api.addons.registerAddon(addon)).toBe(registration);
+  expect(api.addons.registerAddon(addonRegistration)).toBe(registration);
   expect(disposables).toContain(registration);
-  expect(addonRegistry.registerAddon).toHaveBeenCalledWith(addon);
+  expect(addonRegistry.registerAddon).toHaveBeenCalledWith(addonRegistration);
   expect(api.addons.getAddons()).toStrictEqual([addon]);
 });
 

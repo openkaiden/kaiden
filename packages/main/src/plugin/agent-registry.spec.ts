@@ -224,8 +224,20 @@ describe('AgentRegistry', () => {
   });
 
   describe('addonImages', () => {
-    const first: Addon = { id: 'first', name: 'First', ociImage: 'ghcr.io/my-org/first@sha256:1111' };
-    const second: Addon = { id: 'second', name: 'Second', ociImage: 'ghcr.io/my-org/second@sha256:2222' };
+    const first: Addon = {
+      id: 'first',
+      name: 'first',
+      displayName: 'First',
+      publisher: { name: 'kaiden', displayName: 'Kaiden' },
+      ociImage: 'ghcr.io/my-org/first@sha256:1111',
+    };
+    const second: Addon = {
+      id: 'second',
+      name: 'second',
+      displayName: 'Second',
+      publisher: { name: 'kaiden', displayName: 'Kaiden' },
+      ociImage: 'ghcr.io/my-org/second@sha256:2222',
+    };
 
     test('resolves the image of a single addon id', async () => {
       mockRegisteredAddons([first, second]);

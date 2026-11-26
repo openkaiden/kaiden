@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { Addon } from '@openkaiden/api';
+import type { Addon, AddonRegistration } from '@openkaiden/api';
 import { inject, injectable } from 'inversify';
 
 import { IPCHandle } from '/@/plugin/api.js';
@@ -43,13 +43,13 @@ export class AddonRegistry {
     });
   }
 
-  registerAddon(addon: Addon): Disposable {
-    const id = addon.id;
+  registerAddon(registration: AddonRegistration): Disposable {
+    const id = `${registration.publisher.name}.${registration.name}`;
     if (this.addons.has(id)) {
       throw new Error(`Addon with id '${id}' is already registered`);
     }
 
-    this.addons.set(id, addon);
+    this.addons.set(id, { ...registration, id });
     this.notifyChange();
     return Disposable.create(() => {
       this.addons.delete(id);

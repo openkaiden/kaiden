@@ -1724,7 +1724,7 @@ export class ExtensionLoader implements IAsyncDisposable {
     };
 
     const addons: typeof containerDesktopAPI.addons = {
-      registerAddon(addon: containerDesktopAPI.Addon): containerDesktopAPI.Disposable {
+      registerAddon(addon: containerDesktopAPI.AddonRegistration): containerDesktopAPI.Disposable {
         const disposable = instance.addonRegistry.registerAddon(addon);
         disposables.push(disposable);
         return disposable;
