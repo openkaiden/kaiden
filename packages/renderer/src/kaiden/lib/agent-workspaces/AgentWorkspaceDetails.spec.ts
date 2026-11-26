@@ -246,3 +246,72 @@ test('Expect settings tab is present', async () => {
     expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 });
+
+function setWorkspacePhase(phase: GatewaySandboxes['sandboxes'][number]['phase']): void {
+  openshellSandboxes.set([
+    { ...workspaceSummary, sandboxes: workspaceSummary.sandboxes.map(sandbox => ({ ...sandbox, phase })) },
+  ]);
+}
+
+test.each([
+  { phase: 'Ready', name: 'Stop Workspace' },
+  { phase: 'Stopped', name: 'Start Workspace' },
+] as const)('Expect $name button for phase $phase', async ({ phase, name }) => {
+  setWorkspacePhase(phase);
+  render(AgentWorkspaceDetails, { workspaceId: 'ws-1' });
+
+  expect(await screen.findByRole('button', { name })).toBeEnabled();
+});
+
+test.each([
+  'Starting',
+  'Stopping',
+  'Provisioning',
+  'Deleting',
+] as const)('Expect start/stop button disabled while phase is %s', async phase => {
+  setWorkspacePhase(phase);
+  render(AgentWorkspaceDetails, { workspaceId: 'ws-1' });
+
+  const button = await screen.findByRole('button', { name: /^(Start|Stop) Workspace$/ });
+  expect(button).toBeDisabled();
+});
+
+test('Expect clicking stop button stops the sandbox on its gateway', async () => {
+  vi.mocked(window.stopOpenshellSandbox).mockResolvedValue(undefined);
+  setWorkspacePhase('Ready');
+  render(AgentWorkspaceDetails, { workspaceId: 'ws-1' });
+
+  await fireEvent.click(await screen.findByRole('button', { name: 'Stop Workspace' }));
+
+  await waitFor(() => expect(window.stopOpenshellSandbox).toHaveBeenCalledWith('api-refactor', 'kaiden'));
+  expect(window.startOpenshellSandbox).not.toHaveBeenCalled();
+});
+
+test('Expect clicking start button starts the sandbox on its gateway', async () => {
+  vi.mocked(window.startOpenshellSandbox).mockResolvedValue(undefined);
+  setWorkspacePhase('Stopped');
+  render(AgentWorkspaceDetails, { workspaceId: 'ws-1' });
+
+  await fireEvent.click(await screen.findByRole('button', { name: 'Start Workspace' }));
+
+  await waitFor(() => expect(window.startOpenshellSandbox).toHaveBeenCalledWith('api-refactor', 'kaiden'));
+  expect(window.stopOpenshellSandbox).not.toHaveBeenCalled();
+});
+
+test('Expect error dialog and re-enabled button when start fails', async () => {
+  vi.mocked(window.startOpenshellSandbox).mockRejectedValue(new Error('start failed'));
+  setWorkspacePhase('Stopped');
+  render(AgentWorkspaceDetails, { workspaceId: 'ws-1' });
+
+  await fireEvent.click(await screen.findByRole('button', { name: 'Start Workspace' }));
+
+  await waitFor(() =>
+    expect(window.showMessageBox).toHaveBeenCalledWith({
+      title: 'Agent Workspace',
+      type: 'error',
+      message: 'Error while starting workspace "api-refactor": Error: start failed',
+      buttons: ['OK'],
+    }),
+  );
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Start Workspace' })).toBeEnabled());
+});

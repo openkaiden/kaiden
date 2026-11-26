@@ -1,11 +1,17 @@
 <script lang="ts">
-import { faArrowsRotate, faTerminal, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faArrowsRotate, faPlay, faStop, faTerminal, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { ErrorMessage, Tab } from '@podman-desktop/ui-svelte';
 import { router } from 'tinro';
 
 import AgentWorkspaceDetailsOverview from '/@/kaiden/lib/agent-workspaces/AgentWorkspaceDetailsOverview.svelte';
 import AgentWorkspaceDetailsSettings from '/@/kaiden/lib/agent-workspaces/AgentWorkspaceDetailsSettings.svelte';
 import AgentWorkspaceTerminal from '/@/kaiden/lib/agent-workspaces/AgentWorkspaceTerminal.svelte';
+import {
+  getSandboxRunAction,
+  isSandboxRunActionEnabled,
+  isSandboxTransitioning,
+  runSandboxAction,
+} from '/@/kaiden/lib/agent-workspaces/workspace-utils';
 import { allOpenshellSandboxes } from '/@/kaiden/stores/openshell-sandboxes';
 import { withConfirmation } from '/@/lib/dialogs/messagebox-utils';
 import DetailsPage from '/@/lib/ui/DetailsPage.svelte';
@@ -27,6 +33,8 @@ const workspaceSummary = $derived($allOpenshellSandboxes.find(ws => ws.id === wo
 const status = $derived(workspaceSummary?.phase ?? 'Unknown');
 const isRunning = $derived(status === 'Ready' || status === 'Deleting');
 const inProgress = $derived(status === 'Provisioning' || status === 'Deleting');
+const runAction = $derived(getSandboxRunAction(status));
+let runActionPending = $state(false);
 
 let agentTerminalReconnectExhausted = $state(false);
 let agentTerminalReconnect: (() => void) | undefined = $state(undefined);
@@ -76,6 +84,24 @@ async function handleTerminal(): Promise<void> {
   router.goto(`/agent-workspaces/${encodeURIComponent(workspaceId)}/terminal-agent`);
 }
 
+async function handleStartStop(): Promise<void> {
+  if (!workspaceSummary) return;
+  const action = runAction;
+  runActionPending = true;
+  try {
+    await runSandboxAction(workspaceSummary, action);
+  } catch (error: unknown) {
+    await window.showMessageBox({
+      title: 'Agent Workspace',
+      type: 'error',
+      message: `Error while ${action === 'stop' ? 'stopping' : 'starting'} workspace "${workspaceSummary.name}": ${error}`,
+      buttons: ['OK'],
+    });
+  } finally {
+    runActionPending = false;
+  }
+}
+
 function handleRemove(): void {
   withConfirmation(
     () => {
@@ -99,6 +125,12 @@ function handleRemove(): void {
         onClick={terminalReconnect}
         icon={faArrowsRotate} />
     {/if}
+    <ListItemButtonIcon
+      title={runAction === 'stop' ? 'Stop Workspace' : 'Start Workspace'}
+      onClick={handleStartStop}
+      icon={runAction === 'stop' ? faStop : faPlay}
+      inProgress={runActionPending || isSandboxTransitioning(status)}
+      enabled={isSandboxRunActionEnabled(status)} />
     <ListItemButtonIcon
       title="Open Terminal"
       onClick={handleTerminal}

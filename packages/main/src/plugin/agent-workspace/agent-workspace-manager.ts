@@ -837,6 +837,41 @@ export class AgentWorkspaceManager implements Disposable {
     await this.deleteWorkspace(name, gateway, workspace?.labels);
   }
 
+  async startOpenshellSandbox(name: string, gateway: string): Promise<void> {
+    await this.changeSandboxRunState(name, gateway, 'start');
+  }
+
+  async stopOpenshellSandbox(name: string, gateway: string): Promise<void> {
+    await this.changeSandboxRunState(name, gateway, 'stop');
+  }
+
+  private async changeSandboxRunState(name: string, gateway: string, action: 'start' | 'stop'): Promise<void> {
+    const verb = action === 'start' ? 'Starting' : 'Stopping';
+    const task = this.taskManager.createTask({ title: `${verb} workspace "${name}"` });
+    task.state = 'running';
+    task.status = 'in-progress';
+    try {
+      const sdkClient = await this.openshellSdkClientManager.getClient(gateway);
+      const request = { name, workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE };
+      if (action === 'start') {
+        await sdkClient.raw.startSandbox(request);
+      } else {
+        await sdkClient.raw.stopSandbox(request);
+        this.closeWorkspaceTerminals(name, gateway);
+      }
+      task.status = 'success';
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error(`[AgentWorkspaceManager] failed to ${action} sandbox "${name}" on gateway "${gateway}"`, err);
+      task.status = 'failure';
+      task.error = `Failed to ${action} workspace: ${detail}`;
+      throw new Error(detail);
+    } finally {
+      this.apiSender.send('agent-workspace-update');
+      task.state = 'completed';
+    }
+  }
+
   async shellInAgentWorkspace(
     name: string,
     gateway: string,
@@ -1237,6 +1272,20 @@ export class AgentWorkspaceManager implements Disposable {
       'agent-workspace:deleteOpenshellSandbox',
       async (_listener: unknown, name: string, gateway: string): Promise<void> => {
         return this.deleteOpenshellSandbox(name, gateway);
+      },
+    );
+
+    this.ipcHandle(
+      'agent-workspace:startOpenshellSandbox',
+      async (_listener: unknown, name: string, gateway: string): Promise<void> => {
+        return this.startOpenshellSandbox(name, gateway);
+      },
+    );
+
+    this.ipcHandle(
+      'agent-workspace:stopOpenshellSandbox',
+      async (_listener: unknown, name: string, gateway: string): Promise<void> => {
+        return this.stopOpenshellSandbox(name, gateway);
       },
     );
 

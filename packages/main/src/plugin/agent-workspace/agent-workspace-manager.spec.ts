@@ -39,6 +39,7 @@ import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-networ
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
+import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import type { TaskManager } from '/@/plugin/tasks/task-manager.js';
@@ -1995,6 +1996,68 @@ describe('deleteOpenshellSandbox', () => {
   });
 });
 
+describe('start and stop OpenShell sandbox', () => {
+  const sdkRaw = {
+    startSandbox: vi.fn(),
+    stopSandbox: vi.fn(),
+  };
+
+  function getIpcHandler(channel: string): (listener: unknown, name: string, gateway: string) => Promise<void> {
+    const handler = vi.mocked(ipcHandle).mock.calls.find(call => call[0] === channel)?.[1];
+    assert(handler);
+    return handler as (listener: unknown, name: string, gateway: string) => Promise<void>;
+  }
+
+  beforeEach(() => {
+    vi.mocked(openshellSdkClientManager.getClient).mockResolvedValue({
+      sandbox: sdkSandbox,
+      raw: sdkRaw,
+    } as unknown as OpenShellClient);
+    sdkRaw.startSandbox.mockResolvedValue({});
+    sdkRaw.stopSandbox.mockResolvedValue({});
+  });
+
+  test.each([
+    { action: 'start', channel: 'agent-workspace:startOpenshellSandbox', rpc: sdkRaw.startSandbox, title: 'Starting' },
+    { action: 'stop', channel: 'agent-workspace:stopOpenshellSandbox', rpc: sdkRaw.stopSandbox, title: 'Stopping' },
+  ])('$action calls the SDK on the requested gateway through IPC', async ({ channel, rpc, title }) => {
+    await getIpcHandler(channel)({}, 'my-workspace', 'remote-gateway');
+
+    expect(openshellSdkClientManager.getClient).toHaveBeenCalledWith('remote-gateway');
+    expect(rpc).toHaveBeenCalledWith({
+      name: 'my-workspace',
+      workspaceScope: OpenshellWorkspaceDefaults.WORKSPACE_SCOPE,
+    });
+    expect(taskManager.createTask).toHaveBeenCalledWith({ title: `${title} workspace "my-workspace"` });
+    expect(mockTask.status).toBe('success');
+    expect(mockTask.state).toBe('completed');
+    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+  });
+
+  test.each([
+    { action: 'start', rpc: sdkRaw.startSandbox },
+    { action: 'stop', rpc: sdkRaw.stopSandbox },
+  ] as const)('$action records the failure on the task and rethrows', async ({ action, rpc }) => {
+    rpc.mockRejectedValue(new Error('sandbox not found'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const call =
+      action === 'start'
+        ? manager.startOpenshellSandbox('my-workspace', 'kaiden')
+        : manager.stopOpenshellSandbox('my-workspace', 'kaiden');
+    await expect(call).rejects.toThrow('sandbox not found');
+
+    expect(mockTask.status).toBe('failure');
+    expect(mockTask.error).toBe(`Failed to ${action} workspace: sandbox not found`);
+    expect(mockTask.state).toBe('completed');
+    expect(apiSender.send).toHaveBeenCalledWith('agent-workspace-update');
+    expect(errorSpy).toHaveBeenCalledWith(
+      `[AgentWorkspaceManager] failed to ${action} sandbox "my-workspace" on gateway "kaiden"`,
+      expect.any(Error),
+    );
+  });
+});
+
 describe('getConfiguration', () => {
   test('reads JSON configuration file from workspace directory', async () => {
     mockSdkListSandboxes();
@@ -2680,6 +2743,38 @@ describe('agent session lifecycle', () => {
     await manager.deleteOpenshellSandbox('agent-workspace', 'kaiden');
 
     expect(mock.session.close).toHaveBeenCalled();
+  });
+
+  test('stopping a sandbox closes its session', async () => {
+    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
+    vi.mocked(agentRegistry.getAgent).mockResolvedValue(testAgent);
+    const mock = createMockExecSession();
+    sdkSandbox.execInteractive.mockResolvedValue(mock.session);
+    await getTerminalHandler()({}, 'ws-agent', 10);
+    vi.mocked(openshellSdkClientManager.getClient).mockResolvedValue({
+      sandbox: sdkSandbox,
+      raw: { stopSandbox: vi.fn().mockResolvedValue({}) },
+    } as unknown as OpenShellClient);
+
+    await manager.stopOpenshellSandbox('agent-workspace', 'kaiden');
+
+    expect(mock.session.close).toHaveBeenCalled();
+  });
+
+  test('starting a sandbox keeps its session open', async () => {
+    mockSdkListSandboxes(SDK_REFS_WITH_AGENT);
+    vi.mocked(agentRegistry.getAgent).mockResolvedValue(testAgent);
+    const mock = createMockExecSession();
+    sdkSandbox.execInteractive.mockResolvedValue(mock.session);
+    await getTerminalHandler()({}, 'ws-agent', 10);
+    vi.mocked(openshellSdkClientManager.getClient).mockResolvedValue({
+      sandbox: sdkSandbox,
+      raw: { startSandbox: vi.fn().mockResolvedValue({}) },
+    } as unknown as OpenShellClient);
+
+    await manager.startOpenshellSandbox('agent-workspace', 'kaiden');
+
+    expect(mock.session.close).not.toHaveBeenCalled();
   });
 
   test('starts agents of ready workspaces when the gateway starts', async () => {
