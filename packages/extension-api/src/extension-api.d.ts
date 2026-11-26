@@ -5557,11 +5557,11 @@ declare module '@openkaiden/api' {
     export function registerAgent(agent: Agent): Disposable;
   }
 
-  /** An optional package or tool, provided as an OCI image, that can be added to an agent workspace image. */
   /** Publisher of an addon. */
   export interface AddonPublisher {
     /**
-     * Technical name of the publisher (e.g. `kaiden`). Used to compute the addon id.
+     * Technical name of the publisher (e.g. `kaiden`), made of lowercase letters, digits and `-`.
+     * Used to compute the addon id.
      */
     readonly name: string;
     /**
@@ -5570,10 +5570,13 @@ declare module '@openkaiden/api' {
     readonly displayName: string;
   }
 
-  /** Addon submitted by an extension through `addons.registerAddon`. */
+  /**
+   * An optional package or tool, provided as an OCI image, that can be added to an agent workspace image.
+   * Submitted by an extension through `addons.registerAddon`.
+   */
   export interface AddonRegistration {
     /**
-     * Technical name of the addon, unique for its publisher (e.g. `claude`).
+     * Technical name of the addon, unique for its publisher (e.g. `claude`), made of lowercase letters, digits and `-`.
      */
     readonly name: string;
     /**

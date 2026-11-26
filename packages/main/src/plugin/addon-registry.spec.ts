@@ -83,6 +83,42 @@ test('rejects an addon with the same publisher and name', () => {
   expect(registry.getAddons()).toStrictEqual([addon]);
 });
 
+test.each([
+  { label: 'an empty publisher name', publisherName: '', name: 'test-addon', error: "Invalid addon publisher name ''" },
+  {
+    label: 'a dot in the publisher name',
+    publisherName: 'a.b',
+    name: 'test-addon',
+    error: "Invalid addon publisher name 'a.b'",
+  },
+  {
+    label: 'uppercase in the publisher name',
+    publisherName: 'Kaiden',
+    name: 'test-addon',
+    error: "Invalid addon publisher name 'Kaiden'",
+  },
+  { label: 'an empty addon name', publisherName: 'kaiden', name: '', error: "Invalid addon name ''" },
+  { label: 'a dot in the addon name', publisherName: 'kaiden', name: 'b.c', error: "Invalid addon name 'b.c'" },
+  {
+    label: 'a space in the addon name',
+    publisherName: 'kaiden',
+    name: 'my addon',
+    error: "Invalid addon name 'my addon'",
+  },
+])('rejects $label', ({ publisherName, name, error }) => {
+  expect(() =>
+    registry.registerAddon({ ...registration, name, publisher: { name: publisherName, displayName: 'Publisher' } }),
+  ).toThrow(`${error}: only lowercase letters, digits and '-' are allowed`);
+  expect(registry.getAddons()).toStrictEqual([]);
+});
+
+test('keeps its own copy of the publisher', () => {
+  const publisher = { name: 'kaiden', displayName: 'Kaiden' };
+  registry.registerAddon({ ...registration, publisher });
+  publisher.displayName = 'Changed';
+  expect(registry.getAddons()).toStrictEqual([addon]);
+});
+
 test('removes an addon when its registration is disposed, using the id computed at registration', () => {
   const mutableRegistration = { ...registration };
   const disposable = registry.registerAddon(mutableRegistration);

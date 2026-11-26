@@ -225,14 +225,14 @@ describe('AgentRegistry', () => {
 
   describe('addonImages', () => {
     const first: Addon = {
-      id: 'first',
+      id: 'kaiden.first',
       name: 'first',
       displayName: 'First',
       publisher: { name: 'kaiden', displayName: 'Kaiden' },
       ociImage: 'ghcr.io/my-org/first@sha256:1111',
     };
     const second: Addon = {
-      id: 'second',
+      id: 'kaiden.second',
       name: 'second',
       displayName: 'Second',
       publisher: { name: 'kaiden', displayName: 'Kaiden' },
@@ -241,7 +241,7 @@ describe('AgentRegistry', () => {
 
     test('resolves the image of a single addon id', async () => {
       mockRegisteredAddons([first, second]);
-      agentRegistry.registerAgent(createAgent({ addonIds: 'second' }));
+      agentRegistry.registerAgent(createAgent({ addonIds: 'kaiden.second' }));
       const info = await agentRegistry.getAgent('test-agent');
       assert(info);
       expect(info.addonImages).toStrictEqual([second.ociImage]);
@@ -249,7 +249,7 @@ describe('AgentRegistry', () => {
 
     test('resolves the images of a list of addon ids in order, skipping unregistered ones', async () => {
       mockRegisteredAddons([first, second]);
-      agentRegistry.registerAgent(createAgent({ addonIds: ['second', 'missing', 'first'] }));
+      agentRegistry.registerAgent(createAgent({ addonIds: ['kaiden.second', 'kaiden.missing', 'kaiden.first'] }));
       const [info] = await agentRegistry.getAgentInfos();
       assert(info);
       expect(info.addonImages).toStrictEqual([second.ociImage, first.ociImage]);
@@ -257,7 +257,7 @@ describe('AgentRegistry', () => {
 
     test('is empty when no addon with the id is registered', async () => {
       mockRegisteredAddons([]);
-      agentRegistry.registerAgent(createAgent({ addonIds: 'missing' }));
+      agentRegistry.registerAgent(createAgent({ addonIds: 'kaiden.missing' }));
       const info = await agentRegistry.getAgent('test-agent');
       assert(info);
       expect(info.addonImages).toStrictEqual([]);
@@ -273,7 +273,7 @@ describe('AgentRegistry', () => {
 
     test('invalidates cached agent infos and notifies the renderer when addons change', async () => {
       mockRegisteredAddons([]);
-      agentRegistry.registerAgent(createAgent({ addonIds: 'first' }));
+      agentRegistry.registerAgent(createAgent({ addonIds: 'kaiden.first' }));
       const before = await agentRegistry.getAgent('test-agent');
       assert(before);
       expect(before.addonImages).toStrictEqual([]);

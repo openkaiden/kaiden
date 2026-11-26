@@ -27,6 +27,8 @@ import { Disposable } from './types/disposable.js';
 
 @injectable()
 export class AddonRegistry {
+  private static readonly NAME_PATTERN = /^[a-z0-9-]+$/;
+
   private readonly addons = new Map<string, Addon>();
 
   private readonly _onDidChange = new Emitter<void>();
@@ -44,17 +46,25 @@ export class AddonRegistry {
   }
 
   registerAddon(registration: AddonRegistration): Disposable {
+    this.checkName('publisher name', registration.publisher.name);
+    this.checkName('name', registration.name);
     const id = `${registration.publisher.name}.${registration.name}`;
     if (this.addons.has(id)) {
       throw new Error(`Addon with id '${id}' is already registered`);
     }
 
-    this.addons.set(id, { ...registration, id });
+    this.addons.set(id, { ...registration, publisher: { ...registration.publisher }, id });
     this.notifyChange();
     return Disposable.create(() => {
       this.addons.delete(id);
       this.notifyChange();
     });
+  }
+
+  private checkName(label: string, value: string): void {
+    if (!AddonRegistry.NAME_PATTERN.test(value)) {
+      throw new Error(`Invalid addon ${label} '${value}': only lowercase letters, digits and '-' are allowed`);
+    }
   }
 
   private notifyChange(): void {
