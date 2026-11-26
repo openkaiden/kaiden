@@ -216,6 +216,25 @@ const config = {
             `OpenShell assets not found at ${mxcAssetsDir}. Run "pnpm --filter openshell download" (or "pnpm --filter openshell download:all") before packaging.`,
           );
         }
+
+        // include pre-downloaded Linux openshell-admission-hook binary (runs inside the Podman machine)
+        const admissionHookAssetsDir = path.join(
+          'extensions',
+          'openshell-podman-gateway',
+          'assets',
+          `${context.electronPlatformName}-${openshellArch}`,
+        );
+        if (fs.existsSync(admissionHookAssetsDir)) {
+          context.packager.config.extraResources.push({
+            from: admissionHookAssetsDir,
+            to: 'openshell-admission-hook',
+            filter: ['!.openshell-admission-hook-version'],
+          });
+        } else {
+          throw new Error(
+            `openshell-admission-hook assets not found at ${admissionHookAssetsDir}. Run "pnpm --filter openshell-podman-gateway download" (or "pnpm --filter openshell-podman-gateway download:all") before packaging.`,
+          );
+        }
       }
 
       // include pre-downloaded openshell-image-builder binary (not available on Windows)

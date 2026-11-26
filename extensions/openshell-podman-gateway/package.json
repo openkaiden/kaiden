@@ -3,6 +3,7 @@
   "displayName": "OpenShell Podman Gateway",
   "description": "Auto-starts an OpenShell gateway container on Windows",
   "version": "0.5.0-next",
+  "openshellAdmissionHookVersion": "0.1.0",
   "publisher": "kaiden",
   "license": "Apache-2.0",
   "engines": {
@@ -14,9 +15,12 @@
   "main": "./dist/extension.js",
   "source": "./src/extension.ts",
   "scripts": {
-    "build": "vite build && node ./scripts/build.js",
+    "build": "vite build && node ./scripts/build.js && tsx ./scripts/download.ts",
+    "download": "tsx ./scripts/download.ts",
+    "download:all": "tsx ./scripts/download.ts --all",
     "test": "vitest run --coverage",
     "test:watch": "vitest watch --coverage",
+    "postinstall": "tsx ./scripts/download.ts",
     "watch": "vite build --watch"
   },
   "dependencies": {
@@ -26,6 +30,7 @@
     "@openkaiden/api": "workspace:*",
     "@openkaiden/container-extension-api": "workspace:*",
     "mkdirp": "^3.0.1",
+    "tsx": "^4.19.4",
     "vite": "^7.1.2",
     "vitest": "^4.0.10"
   }
