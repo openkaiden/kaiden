@@ -92,3 +92,55 @@ test('clears previous actionError before deleting again', async () => {
   await waitFor(() => expect(window.deleteOpenshellSandbox).toHaveBeenCalledWith('shared-name', 'remote-gateway'));
   expect(get(allOpenshellSandboxes).find(s => s.id === sandbox.id)?.actionError).toBeUndefined();
 });
+
+test.each([
+  { phase: 'Ready', name: 'Stop workspace' },
+  { phase: 'Stopped', name: 'Start workspace' },
+] as const)('shows enabled $name button when phase is $phase', ({ phase, name }) => {
+  render(SandboxActions, { object: { ...sandbox, phase } });
+
+  expect(screen.getByRole('button', { name })).toBeEnabled();
+});
+
+test.each([
+  'Starting',
+  'Stopping',
+  'Provisioning',
+  'Deleting',
+] as const)('disables start/stop button while phase is %s', phase => {
+  render(SandboxActions, { object: { ...sandbox, phase } });
+
+  expect(screen.getByRole('button', { name: /^(Start|Stop) workspace$/ })).toBeDisabled();
+});
+
+test('stops a running sandbox on its gateway', async () => {
+  vi.mocked(window.stopOpenshellSandbox).mockResolvedValue(undefined);
+  render(SandboxActions, { object: sandbox });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Stop workspace' }));
+
+  await waitFor(() => expect(window.stopOpenshellSandbox).toHaveBeenCalledWith('shared-name', 'remote-gateway'));
+  expect(window.startOpenshellSandbox).not.toHaveBeenCalled();
+});
+
+test('starts a stopped sandbox on its gateway', async () => {
+  vi.mocked(window.startOpenshellSandbox).mockResolvedValue(undefined);
+  render(SandboxActions, { object: { ...sandbox, phase: 'Stopped' } });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Start workspace' }));
+
+  await waitFor(() => expect(window.startOpenshellSandbox).toHaveBeenCalledWith('shared-name', 'remote-gateway'));
+  expect(window.stopOpenshellSandbox).not.toHaveBeenCalled();
+});
+
+test('sets actionError and re-enables the button when start fails', async () => {
+  vi.mocked(window.startOpenshellSandbox).mockRejectedValue(new Error('start failed'));
+  render(SandboxActions, { object: { ...sandbox, phase: 'Stopped' } });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Start workspace' }));
+
+  await waitFor(() =>
+    expect(get(allOpenshellSandboxes).find(s => s.id === sandbox.id)?.actionError).toBe('Error: start failed'),
+  );
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Start workspace' })).toBeEnabled());
+});
