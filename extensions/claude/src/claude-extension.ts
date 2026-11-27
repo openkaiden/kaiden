@@ -123,6 +123,7 @@ export class ClaudeExtension {
         },
       ],
       destinationSkillsFolder: '${HOME}/.claude/skills',
+      addonIds: 'kaiden.claude',
       isSupportedModelType: (type): boolean => type.name === 'anthropic' || type.name === 'vertexai',
       async preWorkspaceStart(context: AgentWorkspaceContext): Promise<void> {
         // Handle Vertex AI model configuration

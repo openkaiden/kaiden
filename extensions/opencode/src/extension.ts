@@ -99,6 +99,7 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
       },
     ],
     destinationSkillsFolder: '${HOME}/.opencode/skills',
+    addonIds: 'kaiden.opencode',
     isSupportedModelType(): boolean {
       return true;
     },

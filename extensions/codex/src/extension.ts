@@ -85,6 +85,7 @@ export async function activate(extensionContext: ExtensionContext): Promise<void
       },
     ],
     destinationSkillsFolder: '${HOME}/.agents/skills',
+    addonIds: 'kaiden.codex',
     isSupportedModelType(type): boolean {
       return type.name === 'openai';
     },
