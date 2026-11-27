@@ -68,6 +68,7 @@ beforeEach(() => {
   vi.mocked(openshellGateway.getGatewayPid).mockResolvedValue(undefined);
   vi.mocked(openshellGateway.canStopGateway).mockReturnValue(false);
   vi.mocked(openshellGateway.canStartGateway).mockResolvedValue(false);
+  vi.mocked(openshellGateway.isManagedGateway).mockResolvedValue(false);
   vi.mocked(gatewayManager.getActiveGateway).mockResolvedValue(undefined);
   manager = new OpenshellGatewayStateManager(gatewayManager, configurationRegistry, openshellGateway);
 });
@@ -191,6 +192,28 @@ test('builds a cached snapshot from registrations and runtime information', asyn
       gatewayState: { reachable: true, health: 'degraded', compatible: false },
     },
   ]);
+});
+
+test.each([
+  { reachable: true, managed: true },
+  { reachable: false, managed: true },
+  { reachable: true, managed: false },
+  { reachable: false, managed: false },
+])('flags Kaiden-created gateways as managed: %o', async ({ reachable, managed }) => {
+  vi.mocked(gatewayManager.listGateways).mockResolvedValue([listed('my-custom-gateway', 'http://127.0.0.1:17675')]);
+  if (reachable) {
+    vi.mocked(gatewayManager.getGatewayInfo).mockResolvedValue({ status: 'healthy', compute_drivers: [] });
+  } else {
+    vi.mocked(gatewayManager.getGatewayInfo).mockRejectedValue(new Error('unreachable'));
+  }
+  vi.mocked(openshellGateway.isManagedGateway).mockResolvedValue(managed);
+
+  await manager.refresh();
+
+  expect(openshellGateway.isManagedGateway).toHaveBeenCalledWith('my-custom-gateway');
+  const [gateway] = manager.listGateways();
+  assert(gateway);
+  expect(gateway.managed ?? false).toBe(managed);
 });
 
 test('extracts version from runtime info when present', async () => {

@@ -170,6 +170,9 @@ export class OpenshellGatewayStateManager implements Disposable {
           remote_host: listed.metadata.remote_host ?? undefined,
           resolved_host: listed.metadata.resolved_host ?? undefined,
         };
+        if (await this.openshellGateway.isManagedGateway(base.name)) {
+          base.managed = true;
+        }
         const { pid, pidReadFailed } = await this.readGatewayPid(base);
         try {
           const runtimeInfo = await this.gatewayManager.getGatewayInfo(listed.metadata.name);
