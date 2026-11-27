@@ -94,6 +94,7 @@ describe('activate', () => {
         description: expect.any(String),
         icon: expect.objectContaining({ icon: './icon.png' }),
         destinationSkillsFolder: '${HOME}/.agents/skills',
+        addonIds: 'kaiden.codex',
         isSupportedModelType: expect.any(Function),
       }),
     );

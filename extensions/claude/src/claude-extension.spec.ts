@@ -66,6 +66,7 @@ describe('ClaudeExtension', () => {
         acp: { command: 'claude-agent-acp', args: [] },
         tags: ['Cloud'],
         destinationSkillsFolder: '${HOME}/.claude/skills',
+        addonIds: 'kaiden.claude',
         isSupportedModelType: expect.any(Function),
       }),
     );

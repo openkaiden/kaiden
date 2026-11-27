@@ -50,6 +50,7 @@ describe('activate', () => {
         icon: expect.objectContaining({ icon: { dark: './icon_dark.png', light: './icon_light.png' } }),
         tags: ['Recommended'],
         destinationSkillsFolder: '${HOME}/.opencode/skills',
+        addonIds: 'kaiden.opencode',
         isSupportedModelType: expect.any(Function),
       }),
     );
