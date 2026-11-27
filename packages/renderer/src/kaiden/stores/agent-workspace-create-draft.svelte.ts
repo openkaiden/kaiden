@@ -47,6 +47,7 @@ interface WorkspaceCreateDraft {
   nameManuallyEdited: boolean;
   descriptionOpen: boolean;
   projectOpen: boolean;
+  registerSshHost: boolean;
   selectedSkillIds: string[];
   selectedMcpIds: string[];
   selectedSecretIds: string[];
@@ -78,6 +79,7 @@ function createInitialDraft(): WorkspaceCreateDraft {
     nameManuallyEdited: false,
     descriptionOpen: false,
     projectOpen: false,
+    registerSshHost: false,
     selectedSkillIds: [],
     selectedMcpIds: [],
     selectedSecretIds: [],

@@ -167,6 +167,16 @@ describe('collect calls to exposeInMainWorld and ipcRenderer.on and calls initEx
     expect(ipcRenderer.invoke).toHaveBeenCalledWith('agent-workspace:startOpenshellGateway', 'local-dev');
   });
 
+  test('installs the SSH config of a sandbox through IPC', async () => {
+    vi.mocked(ipcRenderer.invoke).mockResolvedValue({ result: undefined });
+    await getInMainWorld('installSandboxSshConfig')('my-workspace', 'local-dev');
+    expect(ipcRenderer.invoke).toHaveBeenCalledWith(
+      'agent-workspace:installSandboxSshConfig',
+      'my-workspace',
+      'local-dev',
+    );
+  });
+
   test('saveDialog', async () => {
     vi.mocked(ipcRenderer.invoke).mockResolvedValue({ error: undefined, result: undefined });
 

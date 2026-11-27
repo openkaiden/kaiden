@@ -39,6 +39,7 @@ import { OpenshellNetworkPolicy } from '/@/plugin/openshell-cli/openshell-networ
 import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy-manager.js';
 import type { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
+import type { OpenshellSshHostManager } from '/@/plugin/openshell-cli/openshell-ssh-host-manager.js';
 import type { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import type { SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
 import type { TaskManager } from '/@/plugin/tasks/task-manager.js';
@@ -221,6 +222,11 @@ const openshellGateway = {
   }),
 } as unknown as OpenshellGateway;
 
+const openshellSshHostManager = {
+  install: vi.fn(),
+  remove: vi.fn(),
+} as unknown as OpenshellSshHostManager;
+
 const openshellGatewayStateManager = {
   listGateways: vi.fn(),
   refresh: vi.fn(),
@@ -328,6 +334,7 @@ beforeEach(() => {
     directories,
     openshellPolicyManager,
     openshellNetworkPolicy,
+    openshellSshHostManager,
     TEST_SHELL_COMMAND,
     new OpenshellGatewayPoller(openshellGatewayStateManager),
   );
@@ -365,6 +372,10 @@ describe('init', () => {
 
   test('registers IPC handler for startOpenshellGateway', () => {
     expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:startOpenshellGateway', expect.any(Function));
+  });
+
+  test('registers IPC handler for installSandboxSshConfig', () => {
+    expect(ipcHandle).toHaveBeenCalledWith('agent-workspace:installSandboxSshConfig', expect.any(Function));
   });
 
   test('returns the default local gateway driver from the gateway service', async () => {
@@ -563,6 +574,23 @@ describe('create – OpenShell mode', () => {
     );
     expect(vi.mocked(sdkSandbox.waitReady).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(openshellSdkFileTransfer.uploadToSandbox).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  test('sets filesystem policy with /dev/pts and /dev/ptmx for PTY access at creation time', async () => {
+    await manager.create(defaultOptions);
+
+    expect(sdkSandbox.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        policy: {
+          filesystem: {
+            includeWorkdir: true,
+            readOnly: ['/bin', '/usr', '/lib', '/proc', '/dev/urandom', '/etc', '/var/log'],
+            readWrite: ['/tmp', '/dev/null', '/dev/pts', '/dev/ptmx'],
+          },
+          landlock: { compatibility: 'best_effort' },
+        },
+      }),
     );
   });
 
@@ -1179,7 +1207,6 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(options);
 
-    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellPolicyManager.updatePolicy).toHaveBeenCalledWith(
       'my-sandbox',
       openshellNetworkPolicy.buildPolicyObject(options.network),
@@ -1187,25 +1214,23 @@ describe('create – OpenShell mode', () => {
     );
   });
 
-  test('does not set policy for deny mode with no hosts and no model endpoint', async () => {
+  test('does not update network policy for deny mode with no hosts and no model endpoint', async () => {
     const options = { ...defaultOptions, network: { mode: 'deny' as const } };
 
     await manager.create(options);
 
-    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
-  test('does not set policy for deny mode with empty hosts and no model endpoint', async () => {
+  test('does not update network policy for deny mode with empty hosts and no model endpoint', async () => {
     const options = { ...defaultOptions, network: { mode: 'deny' as const, hosts: [] } };
 
     await manager.create(options);
 
-    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
-  test('does not set policy for allow mode with no model endpoint', async () => {
+  test('does not update network policy for allow mode with no model endpoint', async () => {
     const options = {
       ...defaultOptions,
       network: { mode: 'allow' as const, hosts: ['registry.npmjs.org'] },
@@ -1213,14 +1238,12 @@ describe('create – OpenShell mode', () => {
 
     await manager.create(options);
 
-    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
-  test('does not set policy when network is undefined and no model endpoint', async () => {
+  test('does not update network policy when network is undefined and no model endpoint', async () => {
     await manager.create(defaultOptions);
 
-    expect(sdkSandbox.create).toHaveBeenCalledWith(expect.not.objectContaining({ policy: expect.anything() }));
     expect(openshellPolicyManager.updatePolicy).not.toHaveBeenCalled();
   });
 
@@ -1977,6 +2000,26 @@ describe('deleteOpenshellSandbox', () => {
     });
   });
 
+  test('removes the SSH host installed for the deleted sandbox', async () => {
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+    vi.mocked(openshellSshHostManager.remove).mockResolvedValue(1);
+
+    await manager.deleteOpenshellSandbox('my-workspace', 'remote-gateway');
+
+    expect(openshellSshHostManager.remove).toHaveBeenCalledWith('my-workspace', 'remote-gateway');
+  });
+
+  test('still deletes the sandbox when removing its SSH host fails', async () => {
+    vi.mocked(sdkSandbox.delete).mockResolvedValue(undefined);
+    vi.mocked(openshellSshHostManager.remove).mockRejectedValue(new Error('permission denied'));
+
+    await manager.deleteOpenshellSandbox('my-workspace', 'remote-gateway');
+
+    expect(sdkSandbox.delete).toHaveBeenCalledWith('my-workspace');
+    expect(rm).toHaveBeenCalled();
+    expect(mockTask.status).toBe('success');
+  });
+
   test('deletes associated secret via SECRET_LABEL', async () => {
     mockSdkListSandboxes([
       {
@@ -1992,6 +2035,27 @@ describe('deleteOpenshellSandbox', () => {
     await manager.deleteOpenshellSandbox('my-workspace', 'kaiden');
 
     expect(secretManager.remove).toHaveBeenCalledWith('my-workspace-secret', 'kaiden');
+  });
+});
+
+describe('installSandboxSshConfig', () => {
+  test('installs the SSH host of the sandbox on the requested gateway', async () => {
+    await manager.installSandboxSshConfig('my-workspace', 'remote-gateway');
+
+    expect(openshellSshHostManager.install).toHaveBeenCalledWith('my-workspace', 'remote-gateway');
+    expect(mockTask.status).toBe('success');
+    expect(mockTask.state).toBe('completed');
+  });
+
+  test('reports the failure and rethrows when the SSH host installation fails', async () => {
+    vi.mocked(openshellSshHostManager.install).mockRejectedValue(new Error('ssh config failed'));
+
+    await expect(manager.installSandboxSshConfig('my-workspace', 'remote-gateway')).rejects.toThrow(
+      'Failed to install SSH host for workspace "my-workspace": ssh config failed',
+    );
+
+    expect(mockTask.status).toBe('failure');
+    expect(mockTask.state).toBe('completed');
   });
 });
 

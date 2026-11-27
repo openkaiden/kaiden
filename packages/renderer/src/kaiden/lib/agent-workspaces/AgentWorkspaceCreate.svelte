@@ -417,6 +417,34 @@ function buildMountsFrom(fileAccess: string, mounts: CustomMount[]): AgentWorksp
   return filtered.length > 0 ? filtered : undefined;
 }
 
+interface SshRegistrationDraft {
+  registerSshHost: boolean;
+  sessionName: string;
+  sourcePath: string;
+  selectedGateway: string;
+}
+
+async function registerSshHostIfRequested(draft: SshRegistrationDraft): Promise<void> {
+  if (!draft.registerSshHost) {
+    return;
+  }
+  const name = getEffectiveWorkspaceNameFromSnapshot(draft);
+  try {
+    await window.installSandboxSshConfig(name, draft.selectedGateway);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Failed to register workspace ${name} as an SSH host`, err);
+    await window
+      .showMessageBox({
+        title: 'Agent Workspace',
+        type: 'warning',
+        message: `Workspace "${name}" was created, but registering it as an SSH host failed: ${message}`,
+        buttons: ['OK'],
+      })
+      .catch(console.error);
+  }
+}
+
 function startAsIs(): void {
   if (
     !wizard.draft.selectedGateway ||
@@ -440,7 +468,10 @@ function startAsIs(): void {
       description: draftSnapshot.description || undefined,
       project: draftSnapshot.selectedProjectId,
     })
-    .then(() => resetDraft())
+    .then(async () => {
+      await registerSshHostIfRequested(draftSnapshot);
+      resetDraft();
+    })
     .catch((err: unknown) => {
       console.error('Failed to create agent workspace (as-is)', err);
       window
@@ -512,7 +543,10 @@ function startWorkspace(): void {
       replaceConfig: draftSnapshot.configExists && draftSnapshot.configAction === 'replace' ? true : undefined,
       project: draftSnapshot.selectedProjectId,
     })
-    .then(() => resetDraft())
+    .then(async () => {
+      await registerSshHostIfRequested(draftSnapshot);
+      resetDraft();
+    })
     .catch((err: unknown) => {
       console.error('Failed to create agent workspace', err);
       window
@@ -560,6 +594,7 @@ function startWorkspace(): void {
                 bind:nameManuallyEdited={wizard.draft.nameManuallyEdited}
                 bind:descriptionOpen={wizard.draft.descriptionOpen}
                 bind:projectOpen={wizard.draft.projectOpen}
+                bind:registerSshHost={wizard.draft.registerSshHost}
                 onBrowseSource={handleBrowseSource}
                 configExists={wizard.draft.configExists}
                 bind:configAction={wizard.draft.configAction}

@@ -87,6 +87,8 @@ import { OpenshellProfileOwnership } from '/@/plugin/openshell-cli/openshell-pro
 import { OpenshellProfileSynchronizer } from '/@/plugin/openshell-cli/openshell-profile-synchronizer.js';
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
+import { OpenshellSshConfig } from '/@/plugin/openshell-cli/openshell-ssh-config.js';
+import { OpenshellSshHostManager } from '/@/plugin/openshell-cli/openshell-ssh-host-manager.js';
 import { OpenShellRegistry } from '/@/plugin/openshell-registry.js';
 import { RagEnvironmentRegistry } from '/@/plugin/rag-environment-registry.js';
 import { SchedulerRegistry } from '/@/plugin/scheduler/scheduler-registry.js';
@@ -626,6 +628,8 @@ export class PluginSystem {
     container.bind<OpenshellGatewayManager>(OpenshellGatewayManager).toSelf().inSingletonScope();
     container.bind<OpenshellSdkClientManager>(OpenshellSdkClientManager).toSelf().inSingletonScope();
     container.bind<OpenshellSdkFileTransfer>(OpenshellSdkFileTransfer).toSelf().inSingletonScope();
+    container.bind<OpenshellSshConfig>(OpenshellSshConfig).toSelf().inSingletonScope();
+    container.bind<OpenshellSshHostManager>(OpenshellSshHostManager).toSelf().inSingletonScope();
     container.bind<OpenshellGateway>(OpenshellGateway).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayStateManager>(OpenshellGatewayStateManager).toSelf().inSingletonScope();
     container.bind<OpenshellGatewayPoller>(OpenshellGatewayPoller).toSelf().inSingletonScope();

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faPlug, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { ErrorMessage } from '@podman-desktop/ui-svelte';
 
 import {
@@ -28,9 +28,23 @@ function handleRemove(): void {
     }
   }, `remove workspace ${object.name}`);
 }
+
+async function handleInstallSshConfig(): Promise<void> {
+  clearSandboxActionError(object.id);
+  try {
+    await window.installSandboxSshConfig(object.name, object.gatewayName);
+  } catch (error: unknown) {
+    setSandboxActionError(object.id, String(error));
+  }
+}
 </script>
 
 {#if object.actionError}
   <ErrorMessage error={object.actionError} icon wrapMessage />
 {/if}
+<ListItemButtonIcon
+  title="Install as SSH Host"
+  icon={faPlug}
+  onClick={handleInstallSshConfig}
+  enabled={!isDeleting} />
 <ListItemButtonIcon title="Remove workspace" icon={faTrash} onClick={handleRemove} enabled={!isDeleting} />

@@ -63,6 +63,27 @@ test('Expect workspace name input is rendered', () => {
   expect(screen.getByPlaceholderText('e.g., front-refactor')).toBeInTheDocument();
 });
 
+test('Expect register as SSH host checkbox is rendered unchecked by default', () => {
+  render(AgentWorkspaceCreateStepWorkspace, defaultProps);
+
+  expect(screen.getByRole('checkbox', { name: 'Register as SSH Host' })).not.toBeChecked();
+});
+
+test('Expect register as SSH host checkbox reflects the initial value', () => {
+  render(AgentWorkspaceCreateStepWorkspace, { ...defaultProps, registerSshHost: true });
+
+  expect(screen.getByRole('checkbox', { name: 'Register as SSH Host' })).toBeChecked();
+});
+
+test('Expect register as SSH host checkbox toggles when clicked', async () => {
+  render(AgentWorkspaceCreateStepWorkspace, defaultProps);
+
+  const checkbox = screen.getByRole('checkbox', { name: 'Register as SSH Host' });
+  await fireEvent.click(checkbox);
+
+  expect(checkbox).toBeChecked();
+});
+
 test('Expect description section is collapsed by default', () => {
   render(AgentWorkspaceCreateStepWorkspace, defaultProps);
 

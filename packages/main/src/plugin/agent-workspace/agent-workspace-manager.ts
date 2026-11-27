@@ -40,6 +40,7 @@ import { OpenshellPolicyManager } from '/@/plugin/openshell-cli/openshell-policy
 import { OpenshellSdkClientManager } from '/@/plugin/openshell-cli/openshell-sdk-client-manager.js';
 import { OpenshellSdkFileTransfer } from '/@/plugin/openshell-cli/openshell-sdk-file-transfer.js';
 import { mapSdkSandboxRef } from '/@/plugin/openshell-cli/openshell-sdk-sandbox-mapper.js';
+import { OpenshellSshHostManager } from '/@/plugin/openshell-cli/openshell-ssh-host-manager.js';
 import { OpenshellWorkspaceDefaults } from '/@/plugin/openshell-cli/openshell-workspace-defaults.js';
 import { ProviderRegistry } from '/@/plugin/provider-registry.js';
 import { type SandboxSecretResult, SecretManager } from '/@/plugin/secret-manager/secret-manager.js';
@@ -86,6 +87,18 @@ const MOUNT_HOME_PREFIX = '$HOME';
 const SANDBOX_READY_TIMEOUT_SECONDS = 300;
 const SANDBOX_DELETE_TIMEOUT_SECONDS = 120;
 const DEFAULT_TERMINAL_SCROLLBACK = 1000;
+
+// Matches OpenShell's restrictive_default_policy() with /dev/pts and /dev/ptmx
+// added so the workload can self-allocate PTYs (required by the node-pty relay
+// used by Agentic dev environments).
+const SANDBOX_FILESYSTEM_POLICY = {
+  filesystem: {
+    includeWorkdir: true,
+    readOnly: ['/bin', '/usr', '/lib', '/proc', '/dev/urandom', '/etc', '/var/log'],
+    readWrite: ['/tmp', '/dev/null', '/dev/pts', '/dev/ptmx'],
+  },
+  landlock: { compatibility: 'best_effort' },
+};
 
 export interface AgentTerminalClient {
   onData: (content: string) => void;
@@ -178,6 +191,8 @@ export class AgentWorkspaceManager implements Disposable {
     private readonly openshellPolicyManager: OpenshellPolicyManager,
     @inject(OpenshellNetworkPolicy)
     private readonly openshellNetworkPolicy: OpenshellNetworkPolicy,
+    @inject(OpenshellSshHostManager)
+    private readonly openshellSshHostManager: OpenshellSshHostManager,
     @inject(InteractiveShellCommand)
     private readonly interactiveShellCommand: readonly string[],
     @inject(OpenshellGatewayPoller)
@@ -335,6 +350,7 @@ export class AgentWorkspaceManager implements Disposable {
         ...(secretResult?.clonedProfile ? { [PROFILE_LABEL]: secretResult.clonedProfile } : {}),
       },
       tty: true,
+      policy: SANDBOX_FILESYSTEM_POLICY,
       rawSpec:
         gateway.driver && mounts.length > 0
           ? {
@@ -610,6 +626,7 @@ export class AgentWorkspaceManager implements Disposable {
       this.apiSender.send('agent-workspace-update');
       this.closeWorkspaceTerminals(name, gateway);
       await rm(this.getGlobalConfigDir(gateway, name), { recursive: true, force: true });
+      await this.deleteAssociatedSshHost(name, gateway);
       await this.deleteAssociatedSecretAndProfile(labels?.[SECRET_LABEL], labels?.[PROFILE_LABEL], gateway);
       task.status = 'success';
     } catch (err: unknown) {
@@ -621,6 +638,26 @@ export class AgentWorkspaceManager implements Disposable {
       clearTimeout(earlyRefresh);
       this.apiSender.send('agent-workspace-update');
       task.state = 'completed';
+    }
+  }
+
+  /**
+   * Remove the SSH host Kaiden installed for a sandbox. Failures are logged but
+   * not rethrown so sandbox deletion itself is not blocked.
+   */
+  private async deleteAssociatedSshHost(name: string, gateway: string): Promise<void> {
+    try {
+      const removed = await this.openshellSshHostManager.remove(name, gateway);
+      if (removed > 0) {
+        console.log(
+          `[AgentWorkspaceManager] removed ${removed} SSH host block(s) for workspace "${name}" on gateway "${gateway}"`,
+        );
+      }
+    } catch (err: unknown) {
+      console.error(
+        `[AgentWorkspaceManager] failed to remove the SSH host for workspace "${name}" on gateway "${gateway}"`,
+        err,
+      );
     }
   }
 
@@ -835,6 +872,24 @@ export class AgentWorkspaceManager implements Disposable {
     const workspaces = await this.listOpenshellSandboxes(gateway);
     const workspace = workspaces.flatMap(entry => entry.sandboxes).find(ws => ws.name === name);
     await this.deleteWorkspace(name, gateway, workspace?.labels);
+  }
+
+  async installSandboxSshConfig(name: string, gateway: string): Promise<void> {
+    const task = this.taskManager.createTask({ title: `Installing SSH host for workspace "${name}"` });
+    task.state = 'running';
+    task.status = 'in-progress';
+    try {
+      await this.openshellSshHostManager.install(name, gateway);
+      task.status = 'success';
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : String(err);
+      task.status = 'failure';
+      task.error = `Failed to install SSH host for workspace "${name}": ${detail}`;
+      console.error(task.error);
+      throw new Error(task.error, { cause: err });
+    } finally {
+      task.state = 'completed';
+    }
   }
 
   async shellInAgentWorkspace(
@@ -1237,6 +1292,13 @@ export class AgentWorkspaceManager implements Disposable {
       'agent-workspace:deleteOpenshellSandbox',
       async (_listener: unknown, name: string, gateway: string): Promise<void> => {
         return this.deleteOpenshellSandbox(name, gateway);
+      },
+    );
+
+    this.ipcHandle(
+      'agent-workspace:installSandboxSshConfig',
+      async (_listener: unknown, name: string, gateway: string): Promise<void> => {
+        return this.installSandboxSshConfig(name, gateway);
       },
     );
 
