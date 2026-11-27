@@ -111,4 +111,6 @@ export interface AgentWorkspaceCreateOptions {
   workspaceConfiguration?: AgentWorkspaceConfiguration;
   mounts?: AgentWorkspaceMount[];
   replaceConfig?: boolean;
+  /** OCI images of the addons to add to the workspace. The agent addon image is always included. */
+  addonImages?: string[];
 }

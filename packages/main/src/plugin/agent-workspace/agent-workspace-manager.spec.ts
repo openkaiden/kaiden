@@ -1551,6 +1551,38 @@ describe('create – no-folder workspace', () => {
     );
   });
 
+  test.each([
+    { label: 'only the agent addons', addonImages: undefined, expected: ['ghcr.io/addons/claude@sha256:1'] },
+    {
+      label: 'the agent addons first, then the selected addons without duplicates',
+      addonImages: ['ghcr.io/addons/git@sha256:2', 'ghcr.io/addons/claude@sha256:1', 'ghcr.io/addons/git@sha256:2'],
+      expected: ['ghcr.io/addons/claude@sha256:1', 'ghcr.io/addons/git@sha256:2'],
+    },
+  ])('passes $label as addon images', async ({ addonImages, expected }) => {
+    vi.mocked(agentRegistry.getAgent).mockResolvedValue({
+      id: 'claude',
+      name: 'Claude',
+      description: 'Claude agent',
+      command: 'claude',
+      destinationSkillsFolder: '.claude/skills',
+      addonImages: ['ghcr.io/addons/claude@sha256:1'],
+    });
+    const spy = vi.spyOn(configWriter, 'writeWorkspaceConfig');
+
+    await manager.create({ ...noFolderOptions, addonImages });
+
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ addonImages: expected }), expect.any(String));
+    expect(agentRegistry.getAgent).toHaveBeenCalledWith('claude');
+  });
+
+  test('passes no addon images when the agent has no addons and none are selected', async () => {
+    const spy = vi.spyOn(configWriter, 'writeWorkspaceConfig');
+
+    await manager.create(noFolderOptions);
+
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ addonImages: [] }), expect.any(String));
+  });
+
   test('replaceConfig removes config from global directory when sourcePath is absent', async () => {
     await manager.create({ ...noFolderOptions, replaceConfig: true });
 
