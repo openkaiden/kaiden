@@ -6,7 +6,7 @@
   "openshellVersion": "0.1.9",
   "openshellImageBuilderVersion": "0.9.0",
   "e2fsprogsVersion": "1.47.4",
-  "openshellWindowsGatewayVersion": "c93b2fa7",
+  "openshellWindowsGatewayVersion": "0.1.10",
   "mxcVersion": "0.8.0",
   "icon": "icon.png",
   "publisher": "kaiden",
