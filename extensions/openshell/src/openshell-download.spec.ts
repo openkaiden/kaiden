@@ -416,6 +416,26 @@ describe('getRelease', () => {
     expect(release.version).toBe('c93b2fa7');
   });
 
+  test('keeps full v-prefixed tag for Windows gateway config', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => ({
+        tag_name: 'v0.1.10',
+        assets: [{ name: 'openshell-x86_64-pc-windows-msvc.zip', digest: 'sha256:abc123' }],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const release = await getRelease(OPENSHELL_WINDOWS_GATEWAY_DOWNLOAD, 'v0.1.10');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.github.com/repos/jeffmaury/openshell-dist/releases/tags/v0.1.10',
+      expect.any(Object),
+    );
+    expect(release.version).toBe('v0.1.10');
+    expect(release.digests.get('openshell-x86_64-pc-windows-msvc.zip')).toBe('abc123');
+  });
+
   test('uses default v tag prefix for MXC config', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
