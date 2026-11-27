@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ***********************************************************************/
 
-import type { Addon } from '@openkaiden/api';
+import type { Addon, AddonRegistration } from '@openkaiden/api';
 import type { IpcMainInvokeEvent } from 'electron';
 import { assert, beforeEach, expect, test, vi } from 'vitest';
 
@@ -25,12 +25,22 @@ import type { ApiSenderType } from '/@api/api-sender/api-sender-type.js';
 
 import { AddonRegistry } from './addon-registry.js';
 
-const addon: Addon = {
-  id: 'test-addon',
-  name: 'Test Addon',
+const registration: AddonRegistration = {
+  name: 'test-addon',
+  displayName: 'Test Addon',
+  publisher: { name: 'kaiden', displayName: 'Kaiden' },
   description: 'A test addon',
   ociImage: 'ghcr.io/test/addon:latest',
 };
+const addon: Addon = { ...registration, id: 'kaiden.test-addon' };
+
+const otherRegistration: AddonRegistration = {
+  name: 'other',
+  displayName: 'Other',
+  publisher: { name: 'kaiden', displayName: 'Kaiden' },
+  ociImage: 'ghcr.io/test/other:latest',
+};
+const other: Addon = { ...otherRegistration, id: 'kaiden.other' };
 
 const apiSender: ApiSenderType = { send: vi.fn(), receive: vi.fn() };
 const ipcHandle: IPCHandle = vi.fn();
@@ -42,61 +52,98 @@ beforeEach(() => {
   registry = new AddonRegistry(apiSender, ipcHandle);
 });
 
-test('registers and returns addons', () => {
-  registry.registerAddon(addon);
-  expect(registry.getAddons()).toStrictEqual([addon]);
+test('registers addons with an id computed from the publisher and addon names', () => {
+  registry.registerAddon(registration);
+  registry.registerAddon(otherRegistration);
+  expect(registry.getAddons()).toStrictEqual([addon, other]);
 });
 
-test('registers an addon without a description', () => {
-  const addonWithoutDescription: Addon = { id: 'other', name: 'Other', ociImage: 'ghcr.io/test/other:latest' };
-  registry.registerAddon(addon);
-  registry.registerAddon(addonWithoutDescription);
-  expect(registry.getAddons()).toStrictEqual([addon, addonWithoutDescription]);
+test('registers the same addon name for another publisher', () => {
+  registry.registerAddon(registration);
+  registry.registerAddon({ ...registration, publisher: { name: 'acme', displayName: 'Acme' } });
+  expect(registry.getAddons().map(({ id }) => id)).toStrictEqual(['kaiden.test-addon', 'acme.test-addon']);
 });
 
 test('propagates optional category, version and icon', () => {
-  const fullAddon: Addon = {
-    ...addon,
+  const fullRegistration: AddonRegistration = {
+    ...registration,
     category: 'agents',
     version: '2.56.1',
     icon: { light: 'data:image/png;base64,AAAA', dark: 'data:image/png;base64,BBBB' },
   };
-  registry.registerAddon(fullAddon);
-  expect(registry.getAddons()).toStrictEqual([fullAddon]);
+  registry.registerAddon(fullRegistration);
+  expect(registry.getAddons()).toStrictEqual([{ ...fullRegistration, id: 'kaiden.test-addon' }]);
 });
 
-test('rejects a duplicate addon id', () => {
-  registry.registerAddon(addon);
-  expect(() => registry.registerAddon(addon)).toThrow(`Addon with id 'test-addon' is already registered`);
+test('rejects an addon with the same publisher and name', () => {
+  registry.registerAddon(registration);
+  expect(() => registry.registerAddon({ ...registration, displayName: 'Another' })).toThrow(
+    `Addon with id 'kaiden.test-addon' is already registered`,
+  );
   expect(registry.getAddons()).toStrictEqual([addon]);
 });
 
-test('removes an addon when its registration is disposed, using the id captured at registration', () => {
-  const other: Addon = { id: 'other', name: 'Other', ociImage: 'ghcr.io/test/other:latest' };
-  const mutableAddon = { ...addon };
-  const registration = registry.registerAddon(mutableAddon);
-  registry.registerAddon(other);
-  mutableAddon.id = 'other';
-  registration.dispose();
+test.each([
+  { label: 'an empty publisher name', publisherName: '', name: 'test-addon', error: `Invalid addon publisher name ''` },
+  {
+    label: 'a dot in the publisher name',
+    publisherName: 'a.b',
+    name: 'test-addon',
+    error: `Invalid addon publisher name 'a.b'`,
+  },
+  {
+    label: 'uppercase in the publisher name',
+    publisherName: 'Kaiden',
+    name: 'test-addon',
+    error: `Invalid addon publisher name 'Kaiden'`,
+  },
+  { label: 'an empty addon name', publisherName: 'kaiden', name: '', error: `Invalid addon name ''` },
+  { label: 'a dot in the addon name', publisherName: 'kaiden', name: 'b.c', error: `Invalid addon name 'b.c'` },
+  {
+    label: 'a space in the addon name',
+    publisherName: 'kaiden',
+    name: 'my addon',
+    error: `Invalid addon name 'my addon'`,
+  },
+])('rejects $label', ({ publisherName, name, error }) => {
+  expect(() =>
+    registry.registerAddon({ ...registration, name, publisher: { name: publisherName, displayName: 'Publisher' } }),
+  ).toThrow(`${error}: only lowercase letters, digits and '-' are allowed`);
+  expect(registry.getAddons()).toStrictEqual([]);
+});
+
+test('keeps its own copy of the publisher', () => {
+  const publisher = { name: 'kaiden', displayName: 'Kaiden' };
+  registry.registerAddon({ ...registration, publisher });
+  publisher.displayName = 'Changed';
+  expect(registry.getAddons()).toStrictEqual([addon]);
+});
+
+test('removes an addon when its registration is disposed, using the id computed at registration', () => {
+  const mutableRegistration = { ...registration };
+  const disposable = registry.registerAddon(mutableRegistration);
+  registry.registerAddon(otherRegistration);
+  mutableRegistration.name = 'other';
+  disposable.dispose();
   expect(registry.getAddons()).toStrictEqual([other]);
 });
 
-test('allows registering the same id again after disposal', () => {
-  registry.registerAddon(addon).dispose();
-  registry.registerAddon(addon);
+test('allows registering the same addon again after disposal', () => {
+  registry.registerAddon(registration).dispose();
+  registry.registerAddon(registration);
   expect(registry.getAddons()).toStrictEqual([addon]);
 });
 
 test('notifies the renderer on register and dispose', () => {
-  const registration = registry.registerAddon(addon);
+  const disposable = registry.registerAddon(registration);
   expect(apiSender.send).toHaveBeenCalledWith('addon-registry:updated');
-  registration.dispose();
+  disposable.dispose();
   expect(apiSender.send).toHaveBeenNthCalledWith(2, 'addon-registry:updated');
 });
 
 test('init exposes addons over IPC', async () => {
   registry.init();
-  registry.registerAddon(addon);
+  registry.registerAddon(registration);
   expect(ipcHandle).toHaveBeenCalledWith('addon-registry:getAddons', expect.any(Function));
   const handler = vi.mocked(ipcHandle).mock.calls[0]?.[1];
   assert(handler);
@@ -105,14 +152,14 @@ test('init exposes addons over IPC', async () => {
 });
 
 test('getAddon returns the addon with the given id', () => {
-  registry.registerAddon(addon);
-  expect(registry.getAddon('test-addon')).toStrictEqual(addon);
-  expect(registry.getAddon('missing')).toBeUndefined();
+  registry.registerAddon(registration);
+  expect(registry.getAddon('kaiden.test-addon')).toStrictEqual(addon);
+  expect(registry.getAddon('test-addon')).toBeUndefined();
 });
 
 test('fires onDidChange on register and dispose', () => {
   const listener = vi.fn();
   registry.onDidChange(listener);
-  registry.registerAddon(addon).dispose();
+  registry.registerAddon(registration).dispose();
   expect(listener).toHaveBeenCalledTimes(2);
 });

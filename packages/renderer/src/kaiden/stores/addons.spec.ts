@@ -22,7 +22,13 @@ import { beforeEach, expect, test, vi } from 'vitest';
 
 import { addons } from './addons';
 
-const addon: Addon = { id: 'git', name: 'Git', ociImage: 'ghcr.io/addons/git:1' };
+const addon: Addon = {
+  id: 'kaiden.git',
+  name: 'git',
+  displayName: 'Git',
+  publisher: { name: 'kaiden', displayName: 'Kaiden' },
+  ociImage: 'ghcr.io/addons/git:1',
+};
 
 beforeEach(() => {
   vi.resetAllMocks();

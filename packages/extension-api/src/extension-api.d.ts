@@ -5530,7 +5530,7 @@ declare module '@openkaiden/api' {
     readonly configurationFiles: ReadonlyArray<AgentConfigurationBase>;
     readonly baseImage?: string;
     /**
-     * Optional id, or list of ids, of the registered addons providing the agent (e.g. `claude`).
+     * Optional id, or list of ids, of the registered addons providing the agent (e.g. `kaiden.claude`).
      * The OCI image of each registered addon with one of these ids is exposed in the agent's addon images.
      * A single string is the same as a one-element list.
      * Defaults to `undefined`.
@@ -5557,16 +5557,36 @@ declare module '@openkaiden/api' {
     export function registerAgent(agent: Agent): Disposable;
   }
 
-  /** An optional package or tool, provided as an OCI image, that can be added to an agent workspace image. */
-  export interface Addon {
+  /** Publisher of an addon. */
+  export interface AddonPublisher {
     /**
-     * Unique identifier for this addon. Duplicates are rejected.
-     */
-    readonly id: string;
-    /**
-     * Display name for this addon.
+     * Technical name of the publisher (e.g. `kaiden`), made of lowercase letters, digits and `-`.
+     * Used to compute the addon id.
      */
     readonly name: string;
+    /**
+     * Name of the publisher shown to users (e.g. `Kaiden`).
+     */
+    readonly displayName: string;
+  }
+
+  /**
+   * An optional package or tool, provided as an OCI image, that can be added to an agent workspace image.
+   * Submitted by an extension through `addons.registerAddon`.
+   */
+  export interface AddonRegistration {
+    /**
+     * Technical name of the addon, unique for its publisher (e.g. `claude`), made of lowercase letters, digits and `-`.
+     */
+    readonly name: string;
+    /**
+     * Name of the addon shown to users (e.g. `Claude Code`).
+     */
+    readonly displayName: string;
+    /**
+     * Publisher of the addon.
+     */
+    readonly publisher: AddonPublisher;
     /**
      * Optional description of this addon. Defaults to `undefined`.
      */
@@ -5590,9 +5610,17 @@ declare module '@openkaiden/api' {
     readonly icon?: string | { light: string; dark: string };
   }
 
+  /** Registered addon, with the id computed by Kaiden. */
+  export interface Addon extends AddonRegistration {
+    /**
+     * Unique id computed as `<publisher.name>.<name>` (e.g. `kaiden.claude`).
+     */
+    readonly id: string;
+  }
+
   export namespace addons {
-    /** Register an addon for use by agent workspaces. The addon ID must be unique. */
-    export function registerAddon(addon: Addon): Disposable;
+    /** Register an addon for use by agent workspaces. Its id `<publisher.name>.<name>` must be unique. */
+    export function registerAddon(addon: AddonRegistration): Disposable;
     /** Get all currently registered addons. */
     export function getAddons(): ReadonlyArray<Addon>;
   }
