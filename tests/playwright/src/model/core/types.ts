@@ -17,6 +17,7 @@
  ***********************************************************************/
 
 export const builtInExtensions = [
+  { name: 'Addons Catalog', locator: 'kaiden.addons-catalog' },
   { name: 'Default MCP Registries', locator: 'kaiden.mcp-registries' },
   { name: 'Claude', locator: 'kaiden.claude' },
   { name: 'Codex', locator: 'kaiden.codex' },
