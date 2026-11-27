@@ -1,0 +1,45 @@
+{
+  "name": "addons-catalog",
+  "displayName": "Addons Catalog",
+  "description": "Registers the addons of the OpenShell build image addons catalog",
+  "version": "0.5.0-next",
+  "icon": "icon.png",
+  "publisher": "kaiden",
+  "license": "Apache-2.0",
+  "engines": {
+    "kaiden": "^0.0.1"
+  },
+  "main": "./dist/extension.js",
+  "source": "./src/extension.ts",
+  "contributes": {
+    "configuration": {
+      "title": "Addons catalog",
+      "properties": {
+        "addons.catalog.url": {
+          "type": "string",
+          "scope": "DEFAULT",
+          "default": "https://addons.openkaiden.ai/api/addons.json",
+          "description": "URL of the addons catalog (Default is https://addons.openkaiden.ai/api/addons.json). Changes take effect after a restart."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "vite build && node ./scripts/build.js",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest watch --coverage",
+    "watch": "vite build --watch"
+  },
+  "dependencies": {
+    "inversify": "^7.10.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@openkaiden/api": "workspace:*",
+    "adm-zip": "^0.5.16",
+    "mkdirp": "^3.0.1",
+    "msw": "^2.12.7",
+    "vite": "^7.1.2",
+    "vitest": "^4.0.10"
+  }
+}

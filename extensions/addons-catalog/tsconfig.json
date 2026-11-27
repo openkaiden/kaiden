@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "esnext",
+    "lib": ["ES2024"],
+    "sourceMap": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "target": "esnext",
+    "moduleResolution": "Bundler",
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "paths": {
+      "/@/*": ["./src/*"]
+    }
+  },
+  "include": ["src"]
+}
