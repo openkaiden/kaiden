@@ -400,20 +400,20 @@ describe('getRelease', () => {
     );
   });
 
-  test('uses empty tag prefix for Windows gateway config', async () => {
+  test('uses tag prefix for Windows gateway config', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => ({ tag_name: 'c93b2fa7', assets: [] }),
+      json: () => ({ tag_name: 'v0.1.10', assets: [] }),
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const release = await getRelease(OPENSHELL_WINDOWS_GATEWAY_DOWNLOAD, 'c93b2fa7');
+    const release = await getRelease(OPENSHELL_WINDOWS_GATEWAY_DOWNLOAD, '0.1.10');
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.github.com/repos/jeffmaury/openshell-dist/releases/tags/c93b2fa7',
+      'https://api.github.com/repos/jeffmaury/openshell-dist/releases/tags/v0.1.10',
       expect.any(Object),
     );
-    expect(release.version).toBe('c93b2fa7');
+    expect(release.version).toBe('0.1.10');
   });
 
   test('uses default v tag prefix for MXC config', async () => {

@@ -136,7 +136,7 @@ export const OPENSHELL_IMAGE_BUILDER_DOWNLOAD: GitHubArtifactDownload = {
 export const OPENSHELL_WINDOWS_GATEWAY_DOWNLOAD: GitHubArtifactDownload = {
   name: 'openshell-windows-gateway',
   repository: 'jeffmaury/openshell-dist',
-  tagPrefix: '',
+  tagPrefix: 'v',
   assets: {
     'win32-x64': [{ assetName: 'openshell-x86_64-pc-windows-msvc.zip', binaryName: 'openshell-gateway.exe' }],
     'win32-arm64': [{ assetName: 'openshell-aarch64-pc-windows-msvc.zip', binaryName: 'openshell-gateway.exe' }],
