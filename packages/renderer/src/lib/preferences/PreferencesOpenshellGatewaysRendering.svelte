@@ -7,8 +7,10 @@ import EngineIcon from '/@/lib/ui/EngineIcon.svelte';
 import { extensionInfos } from '/@/stores/extensions';
 import { type GatewayInfo, KAIDEN_LOCAL_GATEWAY_NAME } from '/@api/openshell-gateway-info';
 
+import { GatewayDeleteAction } from './gateway-delete-action.svelte';
 import { GatewayStartAction } from './gateway-start-action.svelte';
 import { GatewayStopAction } from './gateway-stop-action.svelte';
+import GatewayDeleteButton from './GatewayDeleteButton.svelte';
 import GatewayStartButton from './GatewayStartButton.svelte';
 import GatewayStopButton from './GatewayStopButton.svelte';
 import PreferencesOpenshellGatewayCreate from './PreferencesOpenshellGatewayCreate.svelte';
@@ -24,6 +26,7 @@ let otherGateways: GatewayInfo[] = $derived($openshellGateways.filter(g => !g.ac
 let showCreateGateway = $state(false);
 const stopAction = new GatewayStopAction();
 const startAction = new GatewayStartAction();
+const deleteAction = new GatewayDeleteAction();
 
 function openCreateGateway(): void {
   showCreateGateway = true;
@@ -113,6 +116,9 @@ function getDetails(gateway: GatewayInfo): string {
     {#each startAction.errors as [name, error] (name)}
       <ErrorMessage {error} />
     {/each}
+    {#each deleteAction.errors as [name, error] (name)}
+      <ErrorMessage {error} />
+    {/each}
     {#if !openshellStarted}
       <EmptyScreen
         icon={EngineIcon}
@@ -151,8 +157,11 @@ function getDetails(gateway: GatewayInfo): string {
               {getTypeBadge(activeGateway)}
             </span>
             <span class="text-sm text-(--pd-content-card-text) opacity-70">{getDetails(activeGateway)}</span>
-            <GatewayStopButton gateway={activeGateway} {stopAction} />
-            <GatewayStartButton gateway={activeGateway} {startAction} />
+            <div class="ml-auto flex shrink-0 items-center gap-1">
+              <GatewayStopButton gateway={activeGateway} {stopAction} />
+              <GatewayStartButton gateway={activeGateway} {startAction} />
+              <GatewayDeleteButton gateway={activeGateway} {deleteAction} />
+            </div>
           </div>
         </div>
       </div>
@@ -179,8 +188,11 @@ function getDetails(gateway: GatewayInfo): string {
                   {getTypeBadge(gateway)}
                 </span>
                 <span class="text-sm text-(--pd-content-card-text) opacity-70">{getDetails(gateway)}</span>
-                <GatewayStopButton {gateway} {stopAction} />
-                <GatewayStartButton {gateway} {startAction} />
+                <div class="ml-auto flex shrink-0 items-center gap-1">
+                  <GatewayStopButton {gateway} {stopAction} />
+                  <GatewayStartButton {gateway} {startAction} />
+                  <GatewayDeleteButton {gateway} {deleteAction} />
+                </div>
               </div>
             </div>
           {/each}

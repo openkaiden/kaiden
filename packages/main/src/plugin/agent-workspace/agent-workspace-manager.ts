@@ -831,6 +831,39 @@ export class AgentWorkspaceManager implements Disposable {
     }
   }
 
+  async deleteOpenshellGateway(name: string): Promise<void> {
+    const task = this.taskManager.createTask({ title: `Deleting gateway "${name}"` });
+    task.state = 'running';
+    task.status = 'in-progress';
+    let deleted = false;
+    try {
+      await this.openshellGateway.deleteManagedGateway(name);
+      deleted = true;
+      this.openshellSdkClientManager.invalidate(name);
+      try {
+        // Only registered names reach this point, and the registry accepts single path components only.
+        await rm(join(this.directories.getAgentWorkspacesConfigDirectory(), name), { recursive: true, force: true });
+      } finally {
+        try {
+          await this.openshellGatewayStateManager.refresh();
+        } finally {
+          this.apiSender.send('agent-workspace-update');
+        }
+      }
+      task.status = 'success';
+    } catch (err: unknown) {
+      const detail = err instanceof Error ? err.message : String(err);
+      task.status = 'failure';
+      task.error = deleted
+        ? `Gateway "${name}" deleted, but cleanup after the delete failed: ${detail}`
+        : `Failed to delete gateway "${name}": ${detail}`;
+      console.error(task.error);
+      throw new Error(task.error, { cause: err });
+    } finally {
+      task.state = 'completed';
+    }
+  }
+
   async deleteOpenshellSandbox(name: string, gateway: string): Promise<void> {
     const workspaces = await this.listOpenshellSandboxes(gateway);
     const workspace = workspaces.flatMap(entry => entry.sandboxes).find(ws => ws.name === name);
@@ -1220,6 +1253,10 @@ export class AgentWorkspaceManager implements Disposable {
 
     this.ipcHandle('agent-workspace:startOpenshellGateway', async (_listener, name: string): Promise<void> => {
       return this.startOpenshellGateway(name);
+    });
+
+    this.ipcHandle('agent-workspace:deleteOpenshellGateway', async (_listener, name: string): Promise<void> => {
+      return this.deleteOpenshellGateway(name);
     });
 
     this.ipcHandle('agent-workspace:getDefaultLocalGatewayDriver', async (): Promise<LocalGatewayDriver> => {

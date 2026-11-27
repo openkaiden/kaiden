@@ -167,6 +167,12 @@ describe('collect calls to exposeInMainWorld and ipcRenderer.on and calls initEx
     expect(ipcRenderer.invoke).toHaveBeenCalledWith('agent-workspace:startOpenshellGateway', 'local-dev');
   });
 
+  test('deletes the named gateway through IPC', async () => {
+    vi.mocked(ipcRenderer.invoke).mockResolvedValue({ result: undefined });
+    await getInMainWorld('deleteOpenshellGateway')('local-dev');
+    expect(ipcRenderer.invoke).toHaveBeenCalledWith('agent-workspace:deleteOpenshellGateway', 'local-dev');
+  });
+
   test('saveDialog', async () => {
     vi.mocked(ipcRenderer.invoke).mockResolvedValue({ error: undefined, result: undefined });
 

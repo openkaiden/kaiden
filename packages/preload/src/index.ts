@@ -406,6 +406,10 @@ export function initExposure(): void {
     return ipcInvoke('agent-workspace:startOpenshellGateway', name);
   });
 
+  contextBridge.exposeInMainWorld('deleteOpenshellGateway', async (name: string): Promise<void> => {
+    return ipcInvoke('agent-workspace:deleteOpenshellGateway', name);
+  });
+
   contextBridge.exposeInMainWorld('getDefaultLocalGatewayDriver', async (): Promise<LocalGatewayDriver> => {
     return ipcInvoke('agent-workspace:getDefaultLocalGatewayDriver');
   });

@@ -305,6 +305,52 @@ describe('OpenshellGatewayManager', () => {
     });
   });
 
+  describe('deleteGateway', () => {
+    test('deletes the whole user gateway folder', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
+
+      await manager.deleteGateway('old-gw');
+
+      expect(rm).toHaveBeenCalledExactlyOnceWith(join(USER_GATEWAYS_DIR, 'old-gw'), { recursive: true, force: true });
+    });
+
+    test('clears active gateway when deleting the active one', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFile).mockResolvedValueOnce('old-gw');
+
+      await manager.deleteGateway('old-gw');
+
+      expect(rm).toHaveBeenCalledWith(join(USER_GATEWAYS_DIR, 'old-gw'), { recursive: true, force: true });
+      expect(rm).toHaveBeenCalledWith(join(USER_CONFIG, 'openshell', 'active_gateway'), { force: true });
+    });
+
+    test('succeeds when the gateway is already gone so a failed delete can be retried', async () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
+
+      await expect(manager.deleteGateway('gone-gw')).resolves.toBeUndefined();
+      expect(rm).toHaveBeenCalledExactlyOnceWith(join(USER_GATEWAYS_DIR, 'gone-gw'), {
+        recursive: true,
+        force: true,
+      });
+    });
+
+    test('throws when trying to delete a system gateway', async () => {
+      vi.stubEnv('OPENSHELL_SYSTEM_GATEWAY_DIR', SYSTEM_CONFIG_DIR);
+      manager = new OpenshellGatewayManager(gatewayConfig);
+      vi.mocked(existsSync).mockReturnValueOnce(false).mockReturnValueOnce(true);
+
+      await expect(manager.deleteGateway('system-gw')).rejects.toThrow(/installed by the system/);
+      expect(rm).not.toHaveBeenCalled();
+    });
+
+    test.each(['foo/bar', '..', ''])('rejects invalid gateway name %j', async name => {
+      await expect(manager.deleteGateway(name)).rejects.toThrow(/Invalid gateway name/);
+      expect(rm).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getActiveGateway', () => {
     test('reads active gateway name from user config', async () => {
       vi.mocked(readFile).mockResolvedValueOnce('my-active\n');

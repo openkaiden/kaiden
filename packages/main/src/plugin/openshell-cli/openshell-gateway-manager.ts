@@ -141,6 +141,25 @@ export class OpenshellGatewayManager {
     }
   }
 
+  /**
+   * Deletes the user registration of a gateway together with everything stored in its
+   * config folder (metadata and client certificates), unlike {@link removeGateway} which
+   * only drops the metadata. Succeeds when nothing is left to delete so a failed delete can be retried.
+   */
+  async deleteGateway(name: string): Promise<void> {
+    this.#validateGatewayName(name);
+    if ((await this.#gatewayMetadataSource(name)) === 'system') {
+      throw new Error(`Gateway '${name}' is installed by the system and cannot be removed from user config.`);
+    }
+
+    await rm(join(this.#userGatewaysDir(), name), { recursive: true, force: true });
+
+    const active = await this.getActiveGateway();
+    if (active === name) {
+      await this.#clearActiveGateway();
+    }
+  }
+
   async getActiveGateway(): Promise<string | undefined> {
     const userPath = join(this.#openshellConfigDir(), ACTIVE_GATEWAY_FILENAME);
     const userName = await this.#readTrimmedFile(userPath);
