@@ -18,6 +18,7 @@
 
 import { randomInt } from 'node:crypto';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import type { Disposable, ExtensionContext } from '@openkaiden/api';
@@ -26,17 +27,30 @@ import type { ContainerExtensionAPI, EndpointConnection } from '@openkaiden/cont
 import type Dockerode from 'dockerode';
 import { inject, injectable } from 'inversify';
 
+import { AdmissionHookHelper } from '/@/helper/admission-hook-helper';
 import { SocketHelper } from '/@/helper/socket-helper';
 import { ContainerExtensionAPISymbol, ExtensionContextSymbol } from '/@/inject/symbol';
 
-export const GATEWAY_IMAGE = 'ghcr.io/nvidia/openshell/gateway:0.0.71';
+export const GATEWAY_IMAGE =
+  'quay.io/ai-openshell/gateway:0.1.10@sha256:9ee945079d1f9b784d59232ba38e133b9b2797b821dc5cadb4abfccb51902f1d';
 const GATEWAY_LABEL = 'ai.openkaiden.openshell-podman-gateway';
 const GATEWAY_PORT_LABEL = 'ai.openkaiden.openshell-podman-gateway.port';
-const GATEWAY_NAME = 'kaiden';
+const GATEWAY_NAME = 'kaiden-podman';
 const LOG_PREFIX = '[openshell-podman-gateway]';
 
 const GATEWAY_CONFIG = `[openshell]
-version = 1
+version = 2
+
+[openshell.gateway]
+compute_driver = "podman"
+
+[openshell.drivers.podman]
+enable_bind_mounts = true
+# Since OpenShell 0.1.0: accepts driver config (such as mounts) from the caller's sandbox spec.
+allow_driver_config = true
+# Since OpenShell 0.1.0: admission rejects resources it cannot label, including host bind mounts.
+# Disabling it turns off label-based protection for external resources on this gateway.
+resource_admission = { enabled = false }
 
 [openshell.gateway.auth]
 allow_unauthenticated_users = true
@@ -45,11 +59,14 @@ allow_unauthenticated_users = true
 signing_key_path = "/kaiden/jwt/signing.pem"
 public_key_path = "/kaiden/jwt/public.pem"
 kid_path = "/kaiden/jwt/kid"
-ttl_secs = 0
 `;
 
 @injectable()
 export class GatewayContainerManager implements Disposable {
+  private static readonly GATEWAY_HOOK_LABEL = 'ai.openkaiden.openshell-podman-gateway.hook';
+  private static readonly GATEWAY_BINARY = '/usr/local/bin/openshell-gateway';
+  private static readonly HOOK_MOUNT_DIR = '/kaiden-hook';
+
   @inject(ContainerExtensionAPISymbol)
   private containerExtensionAPI!: ContainerExtensionAPI;
 
@@ -58,6 +75,9 @@ export class GatewayContainerManager implements Disposable {
 
   @inject(SocketHelper)
   private socketHelper!: SocketHelper;
+
+  @inject(AdmissionHookHelper)
+  private admissionHookHelper!: AdmissionHookHelper;
 
   #port: number | undefined;
   #disposed = false;
@@ -75,12 +95,6 @@ export class GatewayContainerManager implements Disposable {
         console.error(`${LOG_PREFIX} failed to setup gateway on endpoint change:`, err);
       });
     });
-
-    extensionApi.cli.onDidChange(() => {
-      this.trySetupGateway().catch((err: unknown) => {
-        console.error(`${LOG_PREFIX} failed to setup gateway on CLI change:`, err);
-      });
-    });
   }
 
   async trySetupGateway(): Promise<void> {
@@ -94,15 +108,9 @@ export class GatewayContainerManager implements Disposable {
       return;
     }
 
-    const cliPath = this.findOpenshellCliPath();
-    if (!cliPath) {
-      console.log(`${LOG_PREFIX} openshell CLI not available yet`);
-      return;
-    }
-
     try {
       const existing = await this.findExistingGatewayContainer(endpoints);
-      if (existing) {
+      if (existing?.hasHook) {
         if (existing.state !== 'running') {
           console.log(`${LOG_PREFIX} starting existing gateway container ${existing.containerId}`);
           const container = existing.dockerode.getContainer(existing.containerId);
@@ -113,14 +121,27 @@ export class GatewayContainerManager implements Disposable {
           );
         }
         this.#port = existing.port;
-        await this.doRegisterGateway(cliPath, existing.port);
+        await this.doRegisterGateway(existing.port);
         return;
       }
 
-      console.log(`${LOG_PREFIX} no existing gateway container found, creating one`);
-      const port = await this.createGatewayContainer(endpoints[0]!.dockerode);
+      const hookDir = this.admissionHookHelper.getHookDirectory();
+      if (!hookDir) {
+        throw new Error(`${this.admissionHookHelper.getAdmissionHookBinary()} binary not found, cannot create the gateway container`);
+      }
+
+      if (existing) {
+        // Containers created before the admission hook was introduced run the gateway directly
+        console.log(
+          `${LOG_PREFIX} replacing gateway container ${existing.containerId} that does not run the admission hook`,
+        );
+        await existing.dockerode.getContainer(existing.containerId).remove({ force: true });
+      } else {
+        console.log(`${LOG_PREFIX} no existing gateway container found, creating one`);
+      }
+      const port = await this.createGatewayContainer(existing?.dockerode ?? endpoints[0]!.dockerode, hookDir);
       this.#port = port;
-      await this.doRegisterGateway(cliPath, port);
+      await this.doRegisterGateway(port);
     } catch (err: unknown) {
       console.error(`${LOG_PREFIX} failed to ensure gateway container:`, err);
     }
@@ -128,7 +149,7 @@ export class GatewayContainerManager implements Disposable {
 
   private async findExistingGatewayContainer(
     endpoints: readonly EndpointConnection[],
-  ): Promise<{ dockerode: Dockerode; containerId: string; state: string; port: number } | undefined> {
+  ): Promise<{ dockerode: Dockerode; containerId: string; state: string; port: number; hasHook: boolean } | undefined> {
     for (const endpoint of endpoints) {
       const containers = await endpoint.dockerode.listContainers({ all: true });
       const existing = containers.find(c => c.Labels?.[GATEWAY_LABEL]);
@@ -142,13 +163,19 @@ export class GatewayContainerManager implements Disposable {
           return undefined;
         }
 
-        return { dockerode: endpoint.dockerode, containerId: existing.Id, state: existing.State, port };
+        return {
+          dockerode: endpoint.dockerode,
+          containerId: existing.Id,
+          state: existing.State,
+          port,
+          hasHook: existing.Labels?.[GatewayContainerManager.GATEWAY_HOOK_LABEL] === 'true',
+        };
       }
     }
     return undefined;
   }
 
-  private async createGatewayContainer(dockerode: Dockerode): Promise<number> {
+  private async createGatewayContainer(dockerode: Dockerode, hookDir: string): Promise<number> {
     await this.pullImage(dockerode);
 
     const gatewayDir = join(this.extensionContext.storagePath, 'gateway');
@@ -158,25 +185,33 @@ export class GatewayContainerManager implements Disposable {
 
     const port = randomInt(1024, 65536);
 
+    const info = await this.socketHelper.getInfo(dockerode);
+    const localDataDir = this.socketHelper.getLocalDataDir(info);
+    const systemDriveMountPath = this.getSystemDriveMountPath();
+
     const container = await dockerode.createContainer({
       Image: GATEWAY_IMAGE,
+      // The admission hook is the entrypoint: it serves the hook, registers it in a copy of the gateway config,
+      // then launches the gateway command given after '--'
+      Entrypoint: [`${GatewayContainerManager.HOOK_MOUNT_DIR}/${this.admissionHookHelper.getAdmissionHookBinary()}`],
       Cmd: [
+        'launch',
+        '--',
+        GatewayContainerManager.GATEWAY_BINARY,
         '--port',
         String(port),
         '--disable-tls',
-        '--drivers',
-        'podman',
         '--bind-address',
         '0.0.0.0',
-        '--log-level',
-        'trace',
         '--config',
         '/kaiden/gateway.toml',
       ],
       Labels: {
         [GATEWAY_LABEL]: 'true',
         [GATEWAY_PORT_LABEL]: String(port),
+        [GatewayContainerManager.GATEWAY_HOOK_LABEL]: 'true',
       },
+      ExposedPorts: { [`${port}`]: {} },
       HostConfig: {
         SecurityOpt: ['label=disable'],
         PortBindings: {
@@ -184,7 +219,7 @@ export class GatewayContainerManager implements Disposable {
         },
         Mounts: [
           {
-            Source: await this.socketHelper.getSocketPath(dockerode),
+            Source: this.socketHelper.getSocketPathFromInfo(info),
             Type: 'bind',
             Target: '/run/user/0/podman/podman.sock',
           },
@@ -194,13 +229,30 @@ export class GatewayContainerManager implements Disposable {
             Target: '/kaiden',
           },
           {
-            Source: '/root/.local/state',
+            Source: `${localDataDir}/state/openshell`,
             Type: 'bind',
-            Target: '/root/.local/state',
+            Target: '/root/.local/state/openshell',
+          },
+          {
+            Source: `${localDataDir}/share/openshell`,
+            Type: 'bind',
+            Target: '/root/.local/share/openshell',
+          },
+          {
+            Source: systemDriveMountPath,
+            Type: 'bind',
+            Target: systemDriveMountPath,
+          },
+          {
+            Source: hookDir,
+            Type: 'bind',
+            Target: GatewayContainerManager.HOOK_MOUNT_DIR,
+            ReadOnly: true,
           },
         ],
       },
       User: '0',
+      Env: ['LOGDIR=/kaiden', 'NO_COLOR=1'],
     });
 
     await container.start();
@@ -301,33 +353,41 @@ export class GatewayContainerManager implements Disposable {
     return promise;
   }
 
-  private async doRegisterGateway(cliPath: string, port: number): Promise<void> {
-    try {
-      await extensionApi.process.exec(cliPath, ['gateway', 'remove', GATEWAY_NAME]);
-    } catch {
-      // gateway may not exist yet
-    }
+  private async doRegisterGateway(port: number): Promise<void> {
+    const gatewayDir = join(this.getOpenshellGatewaysDir(), GATEWAY_NAME);
+    const metadata = {
+      name: GATEWAY_NAME,
+      gateway_endpoint: `http://localhost:${port}`,
+      is_remote: false,
+      gateway_port: 0,
+      auth_mode: 'plaintext',
+    };
 
     try {
-      await extensionApi.process.exec(cliPath, [
-        'gateway',
-        'add',
-        `http://localhost:${port}`,
-        '--name',
-        GATEWAY_NAME,
-        '--local',
-      ]);
+      await mkdir(gatewayDir, { recursive: true });
+      await writeFile(join(gatewayDir, 'metadata.json'), JSON.stringify(metadata, undefined, 2), 'utf-8');
       console.log(`${LOG_PREFIX} registered gateway '${GATEWAY_NAME}' at http://localhost:${port}`);
     } catch (err: unknown) {
       console.error(`${LOG_PREFIX} failed to register gateway:`, err);
     }
   }
 
-  private findOpenshellCliPath(): string | undefined {
-    console.log(extensionApi.cli.all);
-    const tool = extensionApi.cli.all.find(t => t.name === 'openshell');
-    console.log('tool', tool);
-    return tool?.path;
+  /**
+   * Path of the Windows system drive inside the Podman machine, derived from %SYSTEMDRIVE% (C: -> /mnt/c).
+   */
+  getSystemDriveMountPath(): string {
+    const match = /^([A-Za-z]):/.exec(process.env['SYSTEMDRIVE'] ?? '');
+    const letter = match?.[1].toLowerCase();
+    return letter ? `/mnt/${letter}` : '/mnt/c';
+  }
+
+  /**
+   * Mirrors the openshell CLI user config location: $XDG_CONFIG_HOME, then %APPDATA% (Roaming) on Windows.
+   */
+  getOpenshellGatewaysDir(): string {
+    const configRoot =
+      process.env['XDG_CONFIG_HOME'] ?? process.env['APPDATA'] ?? join(homedir(), 'AppData', 'Roaming');
+    return join(configRoot, 'openshell', 'gateways');
   }
 
   dispose(): void {

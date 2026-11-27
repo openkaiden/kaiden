@@ -18,9 +18,11 @@
 
 import { ContainerModule } from 'inversify';
 
+import { AdmissionHookHelper } from '/@/helper/admission-hook-helper';
 import { SocketHelper } from '/@/helper/socket-helper';
 
 const helpersModule = new ContainerModule(options => {
+  options.bind<AdmissionHookHelper>(AdmissionHookHelper).toSelf().inSingletonScope();
   options.bind<SocketHelper>(SocketHelper).toSelf().inSingletonScope();
 });
 

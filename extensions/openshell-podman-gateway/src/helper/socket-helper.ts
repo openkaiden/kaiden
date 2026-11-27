@@ -23,6 +23,9 @@ import { injectable } from 'inversify';
 import type { Info } from '/@/helper/podman-info';
 
 const UNIX_SOCKET_PREFIX = 'unix://';
+// Default user of a Podman machine running rootless
+const ROOTLESS_LOCAL_DATA_DIR = '/home/user/.local';
+const ROOTFUL_LOCAL_DATA_DIR = '/root/.local';
 
 @injectable()
 export class SocketHelper {
@@ -48,11 +51,21 @@ export class SocketHelper {
   }
 
   async getSocketPath(dockerode: Dockerode): Promise<string> {
-    const info = await this.getInfo(dockerode);
+    return this.getSocketPathFromInfo(await this.getInfo(dockerode));
+  }
+
+  getSocketPathFromInfo(info: Info): string {
     const path = info.host.remoteSocket.path;
     if (path.startsWith(UNIX_SOCKET_PREFIX)) {
       return path.slice(UNIX_SOCKET_PREFIX.length);
     }
     return path;
+  }
+
+  /**
+   * The .local folder of the user running the container engine in the Podman machine.
+   */
+  getLocalDataDir(info: Info): string {
+    return info.host.security.rootless ? ROOTLESS_LOCAL_DATA_DIR : ROOTFUL_LOCAL_DATA_DIR;
   }
 }
