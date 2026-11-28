@@ -58,8 +58,8 @@ importers:
         specifier: ^1.32.1
         version: 1.32.1(zod@4.3.6)
       '@nvidia/openshell-sdk':
-        specifier: npm:@openkaiden/opnshll-sdk@0.1.9
-        version: '@openkaiden/opnshll-sdk@0.1.9'
+        specifier: npm:@openkaiden/opnshll-sdk@0.1.10
+        version: '@openkaiden/opnshll-sdk@0.1.10'
       '@segment/analytics-node':
         specifier: ^2.3.0
         version: 2.3.0(encoding@0.1.13)
@@ -943,8 +943,8 @@ importers:
         specifier: ^4.0.25
         version: 4.0.25
       '@nvidia/openshell-sdk':
-        specifier: npm:@openkaiden/opnshll-sdk@0.1.9
-        version: '@openkaiden/opnshll-sdk@0.1.9'
+        specifier: npm:@openkaiden/opnshll-sdk@0.1.10
+        version: '@openkaiden/opnshll-sdk@0.1.10'
       '@openkaiden/workspace-configuration':
         specifier: ^0.16.0
         version: 0.16.0
@@ -1163,6 +1163,10 @@ packages:
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
 
+  '@ai-openshell/sdk@0.1.10':
+    resolution: {integrity: sha512-ugu1XQAS2rJl9Gy54ubDZQl+AlDCgxAZYVwPfzb+x7ZBw5yAnIj92dizEXduQ5np7FNQJzMdZ5PcCWVA+p6s+Q==}
+    engines: {node: '>=20.3'}
+
   '@ai-sdk/anthropic@4.0.76':
     resolution: {integrity: sha512-3sKHzUTs53rt396ulT4ghSEHVH4krWTHKVqBlA5Vr271l4jeFwI5z1P1WRFrrjwb0OWDADJv2MVSy1pF5/z5Vg==}
     engines: {node: '>=22'}
@@ -1339,6 +1343,9 @@ packages:
   '@bufbuild/protobuf@2.15.0':
     resolution: {integrity: sha512-DAheWUkVr/SJTWCc+lg9dhY0eN4SaWlf4+bG1KzHeXbnqt0AfB/NX0Z+VunGlM1ki1B4zVvye27MpKh/svySUA==}
 
+  '@bufbuild/protobuf@2.17.0':
+    resolution: {integrity: sha512-hcPkSz6D7MiTU/5VBBhK+kxaYDoOdQ6yJRFJ3kS8Nydp+VZXfg1vrpABKPNod8bXMufsVCmiUJVIKFzCzta4uw==}
+
   '@colors/colors@1.6.0':
     resolution: {integrity: sha512-Ir+AOibqzrIsL6ajt3Rz3LskB7OiMVHqltZmspbW/TJuTVuyOMirVqAkjfY6JISiLHgyNqicAC8AyHHGzNd/dA==}
     engines: {node: '>=0.1.90'}
@@ -1412,15 +1419,15 @@ packages:
     resolution: {integrity: sha512-aO5l99BQJ0X34ft8b0h7QFkQlqxC6e7ZPVmBKz13xM9O8obDaM1Cld4sQlJDXXU/VFuUzQ30mVtHjVz74TuStw==}
     engines: {node: '>=v18'}
 
-  '@connectrpc/connect-node@2.1.2':
-    resolution: {integrity: sha512-+i/aAOpsI8sIx1mbYp6d99zvxaUSF6t/jP9Ux9maAmjsZPgmIQ3JuIeYi0zJIP9zlCnBlJjkpPosshCgdRuThQ==}
-    engines: {node: '>=20'}
+  '@connectrpc/connect-node@2.3.0':
+    resolution: {integrity: sha512-kcQgV4GqFIESsl0MOHInC9/wNYU4aJDvG1OfGR5Lq6/l0gqycSGqEk+fixXGcUtPLc8vJBgS4V1nTmWlh4o9gw==}
+    engines: {node: '>=22'}
     peerDependencies:
       '@bufbuild/protobuf': ^2.7.0
-      '@connectrpc/connect': 2.1.2
+      '@connectrpc/connect': 2.3.0
 
-  '@connectrpc/connect@2.1.2':
-    resolution: {integrity: sha512-MXkBijtcX09R10Eb6sFeIetc6w6746eio6xtfuyVOH7oQAacT1X0GzMIQFux6Qy8cq3W/T5qX5Bei8YbFtmRGA==}
+  '@connectrpc/connect@2.3.0':
+    resolution: {integrity: sha512-rjAn8L9KbAZrkwiB8m1qzDsLs74hkYmwwM2iSWuxTPVOTRm/EZw31smKbQqPU50AXqJC5eKKpEnA6Uf/swQOgQ==}
     peerDependencies:
       '@bufbuild/protobuf': ^2.7.0
 
@@ -2058,8 +2065,8 @@ packages:
   '@openkaiden/mcp-registry-types@1.3.10':
     resolution: {integrity: sha512-3DJ7Pi+FtnkBC5ynYPDqK0jP9l9KkUS4GLgC/+uv0vTYRXXn/NrjOnqXqPqCmlyLTTYtwEegIR4X5vKUU2dDaw==}
 
-  '@openkaiden/opnshll-sdk@0.1.9':
-    resolution: {integrity: sha512-HMlC+X9NUEIAdH277GDPFmzkQ7yevgX6Ddv2eInmiDrG0TVrz5mqIaGp3Hzbjg1s8vyAK7jK6RATTcbz+K3x5A==}
+  '@openkaiden/opnshll-sdk@0.1.10':
+    resolution: {integrity: sha512-shssSSc5vl5xlH/ZrV/7oSM0mkInxW4YKmcumSxRgmfhyA/ikTyMyRmPpQUZgNYSiBOiSlpAtZ66kO79tUSrNA==}
     engines: {node: '>=20.3'}
 
   '@openkaiden/workspace-configuration@0.16.0':
@@ -7804,6 +7811,12 @@ snapshots:
     dependencies:
       zod: 4.3.6
 
+  '@ai-openshell/sdk@0.1.10':
+    dependencies:
+      '@bufbuild/protobuf': 2.17.0
+      '@connectrpc/connect': 2.3.0(@bufbuild/protobuf@2.17.0)
+      '@connectrpc/connect-node': 2.3.0(@bufbuild/protobuf@2.17.0)(@connectrpc/connect@2.3.0(@bufbuild/protobuf@2.17.0))
+
   '@ai-sdk/anthropic@4.0.76(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 4.0.25
@@ -7987,6 +8000,8 @@ snapshots:
 
   '@bufbuild/protobuf@2.15.0': {}
 
+  '@bufbuild/protobuf@2.17.0': {}
+
   '@colors/colors@1.6.0': {}
 
   '@commitlint/cli@20.4.2(@types/node@24.1.0)(typescript@5.9.3)':
@@ -8098,14 +8113,14 @@ snapshots:
       conventional-commits-parser: 6.3.0
       picocolors: 1.1.1
 
-  '@connectrpc/connect-node@2.1.2(@bufbuild/protobuf@2.15.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.15.0))':
+  '@connectrpc/connect-node@2.3.0(@bufbuild/protobuf@2.17.0)(@connectrpc/connect@2.3.0(@bufbuild/protobuf@2.17.0))':
     dependencies:
-      '@bufbuild/protobuf': 2.15.0
-      '@connectrpc/connect': 2.1.2(@bufbuild/protobuf@2.15.0)
+      '@bufbuild/protobuf': 2.17.0
+      '@connectrpc/connect': 2.3.0(@bufbuild/protobuf@2.17.0)
 
-  '@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.15.0)':
+  '@connectrpc/connect@2.3.0(@bufbuild/protobuf@2.17.0)':
     dependencies:
-      '@bufbuild/protobuf': 2.15.0
+      '@bufbuild/protobuf': 2.17.0
 
   '@csstools/color-helpers@6.0.2': {}
 
@@ -8872,11 +8887,9 @@ snapshots:
     dependencies:
       ajv: 8.18.0
 
-  '@openkaiden/opnshll-sdk@0.1.9':
+  '@openkaiden/opnshll-sdk@0.1.10':
     dependencies:
-      '@bufbuild/protobuf': 2.15.0
-      '@connectrpc/connect': 2.1.2(@bufbuild/protobuf@2.15.0)
-      '@connectrpc/connect-node': 2.1.2(@bufbuild/protobuf@2.15.0)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.15.0))
+      '@ai-openshell/sdk': 0.1.10
 
   '@openkaiden/workspace-configuration@0.16.0': {}
 
